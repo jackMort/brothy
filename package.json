@@ -1,0 +1,53 @@
+{
+  "name": "brothy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A calm terminal Markdown reader: folder tree, outline, live reload, 26 themes",
+  "keywords": ["markdown", "terminal", "tui", "reader", "viewer", "cli", "bun", "opentui", "notes"],
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Lech Twaróg",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jackMort/brothy.git"
+  },
+  "homepage": "https://github.com/jackMort/brothy#readme",
+  "bugs": {
+    "url": "https://github.com/jackMort/brothy/issues"
+  },
+  "os": ["darwin", "linux"],
+  "engines": {
+    "bun": ">=1.4"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "bin": {
+    "brothy": "src/cli.tsx"
+  },
+  "scripts": {
+    "start": "bun src/cli.tsx",
+    "dev": "bun src/cli.tsx examples",
+    "snapshot": "bun scripts/snapshot.tsx",
+    "screenshots": "bun scripts/screenshots.ts",
+    "demo": "bun scripts/demo.ts",
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit",
+    "build": "bun build --compile src/cli.tsx --outfile brothy"
+  },
+  "dependencies": {
+    "@opentui/core": "0.5.17",
+    "@opentui/react": "0.5.17",
+    "marked": "^18.1.0",
+    "react": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "bun-types": "^1.4.3",
+    "playwright": "^1.64.1",
+    "typescript": "^7.0.2"
+  }
+}
