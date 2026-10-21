@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is broken or renders wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected and what you saw. A screenshot or `bun run snapshot` output helps.
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal Markdown file (paste it) and the keys you pressed.
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: brothy version
+      description: Output of `brothy --version`
+    validations: { required: true }
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed via
+      options: [Release binary, From source]
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes:
+      label: OS and terminal
+      placeholder: "macOS 15, WezTerm 2025…; Linux, kitty…"
+    validations: { required: true }
+  - type: input
+    id: theme
+    attributes:
+      label: Theme and `$TERM` / `$COLORTERM`
+      placeholder: "dracula, xterm-256color / truecolor"

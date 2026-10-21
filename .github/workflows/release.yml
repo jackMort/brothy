@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Tag matches package.json
+        run: |
+          version="v$(bun -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json ($version)" >&2
+            exit 1
+          fi
+      # every platform's native OpenTUI package is needed to cross-compile
+      - run: bun install --frozen-lockfile --os '*' --cpu '*'
+      - run: bun run typecheck
+      - run: bun test
+      - name: Build binaries
+        run: |
+          mkdir dist
+          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            bun build --compile --target=bun-$t src/cli.tsx --outfile dist/brothy-$t
+          done
+          cd dist && sha256sum brothy-* > SHA256SUMS
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: dist/*
+          generate_release_notes: true
