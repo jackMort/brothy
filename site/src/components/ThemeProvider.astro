@@ -1,0 +1,8 @@
+---
+// Starlight's ThemeProvider, replaced: it runs in <head> before first paint, and sets both halves of the theme from
+// localStorage: `brothy-family` (default brothy) and `starlight-theme` (dark / light; with none stored, the system's;
+// a single-mode family's own mode wins). The script is built from src/themes.ts so the family list is never copied.
+import { headScript } from "../themes"
+---
+
+<script is:inline set:html={headScript}></script>

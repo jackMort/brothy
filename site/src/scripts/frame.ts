@@ -124,7 +124,7 @@ addEventListener("keydown", (e) => {
     "1": () => { view("files"); if (narrow.matches) drawer(true) },
     "2": () => { view("outline"); if (narrow.matches) drawer(true) },
     "3": () => { view("info"); if (narrow.matches) drawer(true) },
-    t: () => $("[data-theme-toggle]")?.click(),
+    t: () => $("[data-theme-open]")?.click(),
     "C-b": panelToggle,
     "/": () => $("site-search button[data-open-modal]")?.click(),
     "?": () => sheet?.showModal(),

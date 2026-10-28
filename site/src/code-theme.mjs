@@ -1,15 +1,18 @@
-// Code block colors for Starlight's Expressive Code: the brothy / brothy-light palettes (src/theme.ts) in a VS Code theme.
-const P = {
-  dark: { type: "dark", primary: "#59c9be", secondary: "#f2c65a", accent: "#ef7b63", success: "#9dcb82", info: "#89b4fa", text: "#f3efe7", muted: "#aaa39a", element: "#24211d", border: "#3b3630" },
-  light: { type: "light", primary: "#0f766e", secondary: "#8a5a00", accent: "#c2410c", success: "#3f6b1d", info: "#1d5fb8", text: "#2a2621", muted: "#6b645b", element: "#f0eadc", border: "#d9d1c0" },
-}
+// Code block colors for Starlight's Expressive Code, following whichever palette the page wears (src/themes.ts writes
+// the `--b-*` tokens, one block per theme). Shiki only takes hex colors, so the theme below uses one opaque stand-in
+// hex per role and `followPalette` swaps each stand-in for `var(--b-<role>)` in the rendered tokens: one pair of
+// themes (dark and light, as Starlight wants), no per-palette copies in the HTML.
+const ROLES = ["primary", "secondary", "accent", "success", "info", "text", "muted", "element"]
+/** stand-in for a role: unlikely to be anything else, still a valid hex */
+const stand = (role) => "#" + (ROLES.indexOf(role) + 1).toString(16).padStart(2, "0").repeat(3)
+const VARS = Object.fromEntries(ROLES.map((r) => [stand(r), `var(--b-${r})`]))
 
 export function codeTheme(mode) {
-  const c = P[mode]
+  const c = Object.fromEntries(ROLES.map((r) => [r, stand(r)]))
   const t = (scope, foreground, fontStyle) => ({ scope, settings: { foreground, ...(fontStyle ? { fontStyle } : {}) } })
   return {
     name: mode === "dark" ? "brothy" : "brothy-light",
-    type: c.type,
+    type: mode,
     colors: { "editor.background": c.element, "editor.foreground": c.text, "editorLineNumber.foreground": c.muted },
     tokenColors: [
       t(["comment", "punctuation.definition.comment"], c.muted, "italic"),
@@ -24,4 +27,20 @@ export function codeTheme(mode) {
       t(["punctuation", "meta.brace", "keyword.operator"], c.muted),
     ],
   }
+}
+
+/** Expressive Code plugin: the stand-in hexes in the token styles become the page's role variables. */
+export const followPalette = {
+  name: "follow-palette",
+  hooks: {
+    postprocessRenderedBlock: ({ renderData }) => {
+      const swap = (s) => s.replace(/#[0-9a-f]{6}\b/gi, (h) => VARS[h.toLowerCase()] ?? h)
+      const walk = (node) => {
+        const style = node.properties?.style
+        if (typeof style === "string" && style.startsWith("--")) node.properties.style = swap(style)
+        node.children?.forEach(walk)
+      }
+      walk(renderData.blockAst)
+    },
+  },
 }

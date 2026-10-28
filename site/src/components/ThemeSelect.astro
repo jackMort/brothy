@@ -1,30 +1,245 @@
 ---
-// The theme as a state word in the top line, `◐ dark` or `◐ light`; a click or `t` flips it. Stored where Starlight's
-// ThemeProvider reads it (localStorage `starlight-theme`), so the first paint is already right.
+// The theme in the top line, in two words: `◐ dark` flips dark / light within the family, the family's name opens the
+// picker (also `t`, from frame.ts), a popup modelled on brothy's `t` picker (src/overlay.tsx ThemePicker): a type-to-filter input, the
+// 22 families each with a dark and a light specimen in its own colors, and the mode switch. ↑ ↓ move, tab or ← →
+// set the mode, ⏎ applies, esc closes; a click on a name applies the shown mode, on a specimen that one. A single-mode
+// family (synthwave84, vesper) shows its missing side muted and struck through. The choice is kept in localStorage
+// (`brothy-family` and Starlight's `starlight-theme`) and set before first paint by ThemeProvider.astro.
 ---
 
 <button class="theme-word" type="button" data-theme-toggle aria-label="Switch theme"><span data-theme-word>dark</span></button>
+<button class="theme-fam" type="button" data-theme-open aria-haspopup="dialog" aria-label="Choose a theme (t)"><span data-theme-family>brothy</span></button>
 
-<script is:inline>
-  // set the word before paint (the theme itself is already set by Starlight's ThemeProvider)
-  document.querySelectorAll("[data-theme-word]").forEach((e) => (e.textContent = document.documentElement.dataset.theme === "light" ? "light" : "dark"))
-</script>
+<dialog class="tpick" aria-label="Choose a theme">
+  <div class="tpick-in">
+    <p class="tpick-h">Theme <span>esc closes</span></p>
+    <div class="tpick-q">
+      <input type="text" role="combobox" aria-expanded="true" aria-controls="tpick-list" aria-autocomplete="list" aria-label="Filter themes" placeholder="type to filter" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <span class="tpick-mode" role="group" aria-label="Mode">
+        <button type="button" tabindex="-1" data-mode="dark">dark</button><button type="button" tabindex="-1" data-mode="light">light</button>
+      </span>
+    </div>
+    <div class="tpick-board" aria-hidden="true"><span></span><span data-col="dark">dark</span><span data-col="light">light</span></div>
+    <ul class="tpick-list" id="tpick-list" role="listbox" aria-label="Themes"></ul>
+    <p class="tpick-f" data-tpick-status role="status">↑↓ move · tab dark / light · ⏎ apply</p>
+  </div>
+</dialog>
 
 <script>
+  import data from "../generated/families.json"
+  import type { Family, Mode } from "../themes"
+
+  const families: Family[] = data.families
+  const onlyModes: Record<string, Mode> = data.only as Record<string, Mode>
+
   const root = document.documentElement
-  const words = () => document.querySelectorAll<HTMLElement>("[data-theme-word]")
-  function set(theme: "dark" | "light", save: boolean) {
-    root.dataset.theme = theme
-    words().forEach((e) => (e.textContent = theme))
-    document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.setAttribute("aria-label", `Switch to the ${theme === "dark" ? "light" : "dark"} theme`))
-    if (save) try { localStorage.setItem("starlight-theme", theme) } catch {}
+  const store = {
+    get: (k: string) => { try { return localStorage.getItem(k) } catch { return null } },
+    set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch {} },
   }
-  set(root.dataset.theme === "light" ? "light" : "dark", false)
-  document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => set(root.dataset.theme === "light" ? "dark" : "light", true)))
+  const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!
+  const dlg = $<HTMLDialogElement>("dialog.tpick")
+  const input = dlg.querySelector<HTMLInputElement>("input")!
+  const list = dlg.querySelector<HTMLUListElement>(".tpick-list")!
+  const status = dlg.querySelector<HTMLElement>("[data-tpick-status]")!
+  const modeBtns = [...dlg.querySelectorAll<HTMLButtonElement>(".tpick-mode button")]
+  const cols = [...dlg.querySelectorAll<HTMLElement>("[data-col]")]
+  const MODES: Mode[] = ["dark", "light"]
+
+  const family = () => root.dataset.family && families.some((f) => f.name === root.dataset.family) ? root.dataset.family : "brothy"
+  const mode = (): Mode => (root.dataset.theme === "light" ? "light" : "dark")
+
+  // ---------- the state words ----------
+  function words() {
+    const f = family(), m = mode(), only = onlyModes[f]
+    document.querySelectorAll("[data-theme-word]").forEach((e) => (e.textContent = m))
+    document.querySelectorAll("[data-theme-family]").forEach((e) => (e.textContent = f))
+    document.querySelectorAll<HTMLElement>("[data-theme-toggle]").forEach((b) => {
+      b.setAttribute("aria-label", only ? `${f} is ${only}-only` : `Switch to the ${m === "dark" ? "light" : "dark"} theme`)
+      b.toggleAttribute("aria-disabled", !!only)
+      b.title = only ? `${f} is ${only}-only` : ""
+    })
+    document.querySelectorAll("[data-theme-open]").forEach((b) => b.setAttribute("aria-label", `Theme: ${f}, ${m}. Choose a theme (t)`))
+  }
+  /** Wear `name` in `m` (a single-mode family keeps its own mode); `save` keeps the choice. */
+  function apply(name: string, m: Mode, save: boolean) {
+    const only = onlyModes[name]
+    root.dataset.family = name
+    root.dataset.theme = only ?? m
+    words()
+    if (!save) return
+    store.set("brothy-family", name)
+    if (!only) store.set("starlight-theme", m) // a single-mode family leaves the dark / light choice alone
+  }
+  words()
+
+  document.querySelectorAll("[data-theme-toggle]").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (!onlyModes[family()]) apply(family(), mode() === "dark" ? "light" : "dark", true)
+    }),
+  )
   // with no stored choice, follow the system
   matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
-    let stored = ""
-    try { stored = localStorage.getItem("starlight-theme") ?? "" } catch {}
-    if (!stored) set(e.matches ? "light" : "dark", false)
+    if (!store.get("starlight-theme") && !onlyModes[family()]) apply(family(), e.matches ? "light" : "dark", false)
+  })
+
+  // ---------- the picker ----------
+  type Pick = { q: string; family: string; mode: Mode; orig: { family: string; mode: Mode } }
+  let p: Pick = { q: "", family: "brothy", mode: "dark", orig: { family: "brothy", mode: "dark" } }
+  let opener: HTMLElement | null = null
+
+  const slotStyle = (s: NonNullable<Family["dark"]>) => `--sb:${s.bg};--st:${s.text};--s1:${s.primary};--s2:${s.secondary};--s3:${s.accent}`
+  const rows = new Map<string, HTMLLIElement>()
+  for (const f of families) {
+    const li = document.createElement("li")
+    li.id = `tp-${f.name}`
+    li.setAttribute("role", "option")
+    li.dataset.family = f.name
+    const name = document.createElement("span")
+    name.className = "n"
+    li.append(name)
+    for (const m of MODES) {
+      const s = f[m]
+      const slot = document.createElement("span")
+      slot.className = "slot"
+      slot.dataset.mode = m
+      if (s) {
+        slot.style.cssText = slotStyle(s)
+        slot.innerHTML = '<i class="spec"> <b>Aa</b> <u>●</u><u>●</u><u>●</u> </i>'
+      } else slot.innerHTML = `<s>${m}</s>`
+      li.append(slot)
+    }
+    rows.set(f.name, li)
+  }
+
+  /** code-point indexes of `needle` in `hay` as a subsequence (case folded, the tightest span), as brothy's fuzzyHits */
+  function fuzzy(hay: string, needle: string): number[] | null {
+    const h = [...hay.toLowerCase()], n = [...needle.trim().toLowerCase()]
+    if (!n.length) return []
+    let i = 0, end = -1
+    for (let j = 0; j < h.length; j++) if (h[j] === n[i] && ++i === n.length) { end = j; break }
+    if (end < 0) return null
+    let k = n.length - 1, start = end
+    for (let j = end; j >= 0; j--) if (h[j] === n[k] && --k < 0) { start = j; break }
+    const hits: number[] = []
+    i = 0
+    for (let j = start; j <= end && i < n.length; j++) if (h[j] === n[i]) { hits.push(j); i++ }
+    return hits
+  }
+  /** the families whose name holds the query, the tightest and earliest match first, then theme order */
+  function filtered() {
+    const out: { f: Family; hits: number[]; score: number; i: number }[] = []
+    families.forEach((f, i) => {
+      const hits = fuzzy(f.name, p.q)
+      if (hits) out.push({ f, hits, score: hits.length ? (hits.at(-1)! - hits[0]!) * 2 + hits[0]! : 0, i })
+    })
+    return out.sort((a, b) => a.score - b.score || a.i - b.i)
+  }
+  /** the mode a family shows: the asked one, or its only one */
+  const shown = (name: string): Mode => onlyModes[name] ?? p.mode
+
+  function draw(scroll = true) {
+    const rs = filtered()
+    list.replaceChildren(...rs.map((r) => rows.get(r.f.name)!))
+    for (const r of rs) {
+      const li = rows.get(r.f.name)!, cur = r.f.name === p.family, m = shown(r.f.name)
+      li.setAttribute("aria-selected", String(cur))
+      li.classList.toggle("on", cur)
+      const n = li.querySelector<HTMLElement>(".n")!
+      n.replaceChildren(...[...r.f.name].map((ch, k) => { if (!r.hits.includes(k)) return ch; const b = document.createElement("b"); b.textContent = ch; return b }))
+      for (const sm of MODES) {
+        const slot = li.querySelector<HTMLElement>(`.slot[data-mode="${sm}"]`)!
+        slot.classList.toggle("cursor", cur && sm === m && !!r.f[sm])
+        slot.classList.toggle("current", !(cur && sm === m) && !!r.f[sm] && r.f.name === p.orig.family && sm === p.orig.mode)
+      }
+      const only = onlyModes[r.f.name]
+      li.setAttribute("aria-label", `${r.f.name}, ${only ? `${only} only` : m}${r.f.name === p.orig.family ? ", current" : ""}`)
+    }
+    if (!rs.length) list.innerHTML = '<li class="empty" role="presentation">no theme matches</li>'
+    const m = rows.has(p.family) && rs.some((r) => r.f.name === p.family) ? shown(p.family) : p.mode
+    modeBtns.forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.mode === m)); b.classList.toggle("only", !!onlyModes[p.family] && b.dataset.mode !== m) })
+    cols.forEach((c) => c.classList.toggle("on", c.dataset.col === m))
+    if (rs.some((r) => r.f.name === p.family)) input.setAttribute("aria-activedescendant", `tp-${p.family}`)
+    else input.removeAttribute("aria-activedescendant")
+    status.textContent = rs.length ? `${rs.length} ${rs.length === 1 ? "family" : "families"} · ${p.family}, ${m}` : "no theme matches"
+    if (scroll) rows.get(p.family)?.scrollIntoView({ block: "nearest" })
+  }
+
+  function move(d: number) {
+    const rs = filtered()
+    if (!rs.length) return
+    const i = rs.findIndex((r) => r.f.name === p.family)
+    p = { ...p, family: rs[i < 0 ? 0 : (i + d + rs.length) % rs.length]!.f.name }
+    draw()
+  }
+  function setMode(m?: Mode) {
+    if (onlyModes[p.family]) return
+    p = { ...p, mode: m ?? (p.mode === "dark" ? "light" : "dark") }
+    draw(false)
+  }
+  function choose(name: string, m: Mode) {
+    if (onlyModes[name] ? false : !families.find((f) => f.name === name)?.[m]) return
+    apply(name, m, true)
+    dlg.close()
+  }
+
+  function open() {
+    if (dlg.open) return
+    opener = document.activeElement as HTMLElement | null
+    const f = family(), m = mode()
+    p = { q: "", family: f, mode: m, orig: { family: f, mode: m } }
+    input.value = ""
+    draw(false)
+    dlg.showModal()
+    rows.get(p.family)?.scrollIntoView({ block: "center" })
+    input.focus()
+  }
+  document.querySelectorAll("[data-theme-open]").forEach((b) => b.addEventListener("click", open))
+  dlg.addEventListener("close", () => { if (opener?.isConnected && opener !== document.body) opener.focus() })
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close() })
+
+  input.addEventListener("input", () => {
+    p = { ...p, q: input.value }
+    const now = filtered()
+    // the highlight stays on its family while it is listed, else goes to the first row
+    if (now.length && !now.some((r) => r.f.name === p.family)) p = { ...p, family: now[0]!.f.name }
+    draw()
+  })
+  input.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return
+    const keys: Record<string, () => void> = {
+      ArrowDown: () => move(1),
+      ArrowUp: () => move(-1),
+      PageDown: () => move(8),
+      PageUp: () => move(-8),
+      Tab: () => setMode(),
+      ArrowLeft: () => setMode("dark"),
+      ArrowRight: () => setMode("light"),
+      Enter: () => { if (filtered().some((r) => r.f.name === p.family)) choose(p.family, shown(p.family)) },
+    }
+    const act = keys[e.key]
+    if (!act) return
+    e.preventDefault()
+    act()
+  })
+  modeBtns.forEach((b) => b.addEventListener("click", () => { setMode(b.dataset.mode as Mode); input.focus() }))
+
+  // a click on a name applies the shown mode, on a specimen that one; a missing side swallows it. The pointer
+  // moves the highlight only when it really moves (a list scrolling under a resting pointer does not).
+  list.addEventListener("click", (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLElement>("li[data-family]")
+    if (!li) return
+    const slot = (e.target as HTMLElement).closest<HTMLElement>(".slot")
+    const name = li.dataset.family!
+    if (slot) {
+      const m = slot.dataset.mode as Mode
+      if (families.find((f) => f.name === name)?.[m]) choose(name, m)
+    } else choose(name, shown(name))
+  })
+  list.addEventListener("pointermove", (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLElement>("li[data-family]")
+    if (!li || li.dataset.family === p.family) return
+    p = { ...p, family: li.dataset.family! }
+    draw(false)
   })
 </script>

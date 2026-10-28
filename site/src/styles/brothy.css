@@ -1,19 +1,11 @@
-/* brothy's screen as a docs site. Every color comes from the `brothy` (dark) and `brothy-light` palettes in
-   src/theme.ts; one face, IBM Plex Mono. The frame (top line, panel, footer) is laid out by the components in
+/* brothy's screen as a docs site. Every color is a `--b-*` token from the palette in use (src/theme.ts, via
+   src/generated/themes.css); one face, IBM Plex Mono. The frame (top line, panel, footer) is laid out by the components in
    src/components; this file draws it, and the document in brothy's Preview styles (headings, tables, kbd, callouts). */
 :root {
   --sl-font: "IBM Plex Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sl-font-mono: var(--sl-font);
 
-  /* brothy */
-  --b-primary: #59c9be; --b-secondary: #f2c65a; --b-accent: #ef7b63;
-  --b-error: #ef7b63; --b-warning: #f0a96b; --b-success: #9dcb82; --b-info: #89b4fa;
-  --b-text: #f3efe7; --b-muted: #aaa39a;
-  --b-bg: #181714; --b-element: #24211d;
-  --b-border: #3b3630; --b-subtle: #514a42;
-  /* the demo's frosted window: brothy's background at 74%, its edge and shadow */
-  --b-glass: rgba(24, 23, 20, 0.74); --b-glass-edge: rgba(243, 239, 231, 0.1); --b-shadow: rgba(0, 0, 0, 0.55);
-  --b-wash: 30%;
+  /* the palette: --b-* tokens, one block per theme in src/generated/themes.css (from src/theme.ts) */
 
   --sl-color-white: var(--b-text);
   --sl-color-gray-1: var(--b-text);
@@ -56,20 +48,8 @@
   --panel: 30ch; --gap: 4ch; --pad: 2ch; --measure: 80ch; --foot-h: 3.6rem;
   /* the same measure and pad in rem: 80 columns of IBM Plex Mono (0.6em) at the base size */
   --measure-rem: calc(80 * 0.6 * var(--sl-text-base)); --pad-rem: calc(2 * 0.6 * var(--sl-text-base));
-  color-scheme: dark;
 }
 
-/* brothy-light */
-:root[data-theme="light"] {
-  --b-primary: #0f766e; --b-secondary: #8a5a00; --b-accent: #c2410c;
-  --b-error: #b42318; --b-warning: #a15c07; --b-success: #3f6b1d; --b-info: #1d5fb8;
-  --b-text: #2a2621; --b-muted: #6b645b;
-  --b-bg: #fbf7ef; --b-element: #f0eadc;
-  --b-border: #d9d1c0; --b-subtle: #c9bfa9;
-  --b-glass: rgba(251, 247, 239, 0.8); --b-glass-edge: rgba(42, 38, 33, 0.12); --b-shadow: rgba(42, 38, 33, 0.22);
-  --b-wash: 22%;
-  color-scheme: light;
-}
 :root[data-theme="light"] .for-dark, :root:not([data-theme="light"]) .for-light { display: none; }
 
 html { scroll-padding-top: calc(var(--top-h) + 1.5rem); }
@@ -103,6 +83,11 @@ kbd {
 .state > a:hover { color: var(--b-text); }
 .theme-word { font: inherit; color: var(--b-primary); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
 .theme-word::before { content: "◐ "; color: var(--b-muted); }
+.theme-word[aria-disabled] { color: var(--b-muted); cursor: default; }
+.theme-fam { font: inherit; color: var(--b-muted); background: none; border: 0; padding: 0; margin-left: -1.5ch; cursor: pointer; white-space: nowrap; }
+.theme-fam::after { content: " ▾"; }
+.theme-fam:hover { color: var(--b-text); }
+@media (max-width: 599px) { .theme-fam { margin-left: -2ch; } .theme-fam [data-theme-family] { display: none; } .theme-fam::after { content: "▾"; } }
 
 /* Starlight's search, as a `/ search` word that opens its dialog */
 site-search > button[data-open-modal] {
@@ -185,6 +170,40 @@ dialog.sheet::backdrop { background: color-mix(in srgb, var(--b-bg) 70%, transpa
 .sheet dt kbd + kbd { margin-left: 0.5ch; }
 .sheet dd { margin: 0; }
 .sheet-f { margin: 1rem 0 0; }
+
+/* ---------- the theme picker (t): brothy's `t` list, in the page ---------- */
+dialog.tpick { margin: 10vh auto auto; border: 1px solid var(--b-border); background: var(--b-bg); color: var(--b-text); padding: 0; width: min(56ch, calc(100vw - 32px)); max-width: none; font-family: var(--sl-font); overflow: hidden; }
+dialog.tpick::backdrop { background: color-mix(in srgb, var(--b-bg) 70%, transparent); }
+.tpick-in { padding: 1rem 0 0.8rem; display: flex; flex-direction: column; }
+.tpick-h { margin: 0 2ch 0.7rem; font-weight: 600; color: var(--b-primary); display: flex; justify-content: space-between; gap: 2ch; }
+.tpick-h span, .tpick-f { color: var(--b-muted); font-weight: 400; }
+.tpick-q { display: flex; align-items: center; gap: 1ch; margin: 0 2ch; border-bottom: 1px solid var(--b-border); padding-bottom: 0.4rem; }
+.tpick-q::before { content: "›"; color: var(--b-primary); }
+.tpick-q input { flex: 1; min-width: 0; font: inherit; color: var(--b-text); background: none; border: 0; padding: 0; outline: 0; caret-color: var(--b-primary); }
+.tpick-q input::placeholder { color: var(--b-muted); opacity: 1; }
+.tpick-mode { display: flex; gap: 1ch; }
+.tpick-mode button { font: inherit; background: none; border: 0; padding: 0; color: var(--b-muted); cursor: pointer; }
+.tpick-mode button[aria-pressed="true"] { color: var(--b-primary); font-weight: 600; }
+.tpick-mode button.only { text-decoration: line-through; cursor: default; }
+.tpick-board, .tpick-list li:not(.empty) { display: grid; grid-template-columns: minmax(0, 1fr) 10ch 10ch; column-gap: 1ch; align-items: center; padding: 0 2ch; }
+.tpick-board { margin-top: 0.5rem; color: var(--b-muted); font-weight: 600; text-align: center; }
+.tpick-board .on { color: var(--b-primary); }
+.tpick-list { list-style: none; margin: 0.2rem 0 0; padding: 0; max-height: min(24rem, 55dvh); overflow-y: auto; scrollbar-width: thin; }
+.tpick-list li { cursor: pointer; line-height: 1.9; }
+.tpick-list li.on { background: var(--b-element); }
+.tpick-list .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpick-list li.on .n { font-weight: 600; }
+.tpick-list .n b { color: var(--b-primary); }
+.tpick-list .slot { text-align: center; border-inline: 2px solid transparent; line-height: 1.6; white-space: nowrap; }
+.tpick-list .slot.cursor { border-color: var(--b-primary); }
+.tpick-list .slot.current { border-color: var(--b-muted); }
+.tpick-list .slot s { color: var(--b-muted); cursor: default; }
+.tpick-list .spec { display: block; font-style: normal; background: var(--sb); color: var(--st); }
+.tpick-list .spec b { font-weight: 700; }
+.tpick-list .spec u { text-decoration: none; }
+.tpick-list .spec u:nth-of-type(1) { color: var(--s1); } .tpick-list .spec u:nth-of-type(2) { color: var(--s2); } .tpick-list .spec u:nth-of-type(3) { color: var(--s3); }
+.tpick-list .empty { padding: 0 2ch; color: var(--b-muted); }
+.tpick-f { margin: 0.7rem 2ch 0; }
 
 /* ---------- the page title: brothy's H1 ---------- */
 h1.page-title { display: grid; grid-template-columns: max-content minmax(0, 1fr); margin: 0; font-size: 1rem; line-height: 1.6; font-weight: 600; color: var(--b-primary); }
