@@ -43,7 +43,7 @@ export default defineConfig({
         { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" } },
         // IBM Plex Mono for everything; the few symbols it lacks come from a Fira Code subset of just those glyphs
         { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" } },
-        { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&text=%E2%96%B8%E2%96%BE%E2%97%8F%E2%94%81%E2%94%80%E2%94%82%E2%96%8C%E2%94%83%E2%80%BA%E2%8F%8E%C2%B7%E2%80%A2%E2%97%A6%E2%86%97%E2%89%A1%E2%97%90%E2%98%85%E2%87%84&display=swap" } },
+        { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&text=%E2%96%B8%E2%96%BE%E2%97%8F%E2%94%81%E2%94%80%E2%94%82%E2%96%8C%E2%94%83%E2%80%BA%E2%8F%8E%C2%B7%E2%80%A2%E2%97%A6%E2%86%97%E2%89%A1%E2%97%90%E2%98%85%E2%87%84%E2%86%AA%E2%86%BB%E2%8C%AB%E2%90%A3%E2%97%A1&display=swap" } },
       ],
       sidebar: [
         { label: "Getting started", items: ["getting-started/install", "getting-started/quick-start", "getting-started/the-screen"] },

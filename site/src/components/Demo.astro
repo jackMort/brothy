@@ -2,6 +2,7 @@
 // The front page demo, staged like a desktop shot: a still wallpaper in the brothy palette and a frosted terminal
 // window floating on it, the recorded tour (site/public/casts/tour-{dark,light}.cast) playing inside on a clear
 // canvas (src/scripts/player.ts), so the glass shows behind the text. It swaps casts with the theme, keeping the time.
+// On a phone a tap opens it full screen (src/scripts/fullscreen.ts).
 const base = import.meta.env.BASE_URL.replace(/\/$/, "")
 ---
 
@@ -17,7 +18,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "")
     role="group"
     aria-label="A short tour of brothy, recorded from the real UI. Space plays or pauses, the arrows seek."
   >
-    <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span>brothy ~/examples</span><span></span></div>
+    <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span>brothy ~/examples</span><span class="bar-end"><button type="button" class="full-close" data-full-close hidden aria-label="Close the full-screen tour"><kbd>esc</kbd> close</button></span></div>
     <div class="screen"><canvas aria-hidden="true"></canvas></div>
     <div class="ctl">
       <button type="button" data-play>play</button>
@@ -26,6 +27,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "")
       <span class="k"><kbd>space</kbd> play <kbd>←</kbd> <kbd>→</kbd> seek</span>
     </div>
   </div>
+  <p class="tap-note">tap the screen to watch it full screen</p>
   <p class="cast-note">
     <b>A short tour</b>, recorded from the real UI: reading a note, following links, the switcher, themes, then the opt-in AI
     (a TL;DR, asking your notes a question, explaining what changed on reload, a gloss in zen), the live reload and zen.
@@ -35,6 +37,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "")
 
 <script>
   import { mountCast } from "../scripts/player"
+  import { mountFullscreen } from "../scripts/fullscreen"
   const el = document.querySelector<HTMLElement>("[data-cast]")
   if (el) mountCast(el).catch(() => el.classList.add("is-broken"))
+  const stage = document.querySelector<HTMLElement>(".stage")
+  if (stage) mountFullscreen(stage)
 </script>

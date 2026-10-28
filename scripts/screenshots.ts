@@ -23,8 +23,14 @@ const SHOTS: Shot[] = [
   { name: "themes", size: "120x34", keys: `${HERO_KEYS} t down down`, title: "brothy ~/examples" }, // the board on dracula, all 22 families
   { name: "welcome", size: "120x34", keys: "", title: "brothy ~/drafts", path: "drafts" }, // an empty folder: the welcome page, recents from the sandbox
   { name: "keys", size: "110x30", keys: `${HERO_KEYS} ?`, title: "brothy ~/examples" },
-  { name: "keys-light", size: "110x30", keys: `${HERO_KEYS} ?`, theme: "brothy-light", title: "brothy ~/examples" }, // the docs site's Keys page in light mode
 ]
+/** The shots the docs site shows, each also as `<name>-light` in brothy-light: site/src/components/Shot.astro swaps them with the site's theme. */
+const SITE = ["screenshot", "switcher", "open", "zen", "links", "themes", "welcome", "keys"]
+for (const name of SITE) {
+  const s = SHOTS.find((x) => x.name === name)
+  if (!s) throw new Error(`screenshots: no shot ${name}`)
+  SHOTS.push({ ...s, name: `${name}-light`, theme: "brothy-light" })
+}
 
 // ---------- capture ----------
 async function capture(s: Shot, home: string, dir: string): Promise<Frame> {

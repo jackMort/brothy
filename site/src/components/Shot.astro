@@ -1,0 +1,16 @@
+---
+// A docs/ screenshot that follows the site's theme: `<Shot name="zen" alt="…" />` shows docs/zen.png in dark and
+// docs/zen-light.png (scripts/screenshots.ts, brothy-light) in light.
+import { Image } from "astro:assets"
+import type { ImageMetadata } from "astro"
+
+interface Props { name: string; alt: string }
+const { name, alt } = Astro.props
+const shots = import.meta.glob<{ default: ImageMetadata }>("../assets/docs/*.png", { eager: true })
+const dark = shots[`../assets/docs/${name}.png`]?.default
+const light = shots[`../assets/docs/${name}-light.png`]?.default
+if (!dark) throw new Error(`Shot: no docs/${name}.png`)
+---
+
+<Image src={dark} {alt} class:list={["shot", { "for-dark": light }]} />
+{light && <Image src={light} {alt} class="shot for-light" />}

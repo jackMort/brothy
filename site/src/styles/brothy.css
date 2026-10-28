@@ -316,13 +316,32 @@ starlight-tabs [role="tabpanel"] { margin-top: 0; }
 .win .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 2rem; padding: 0 12px; font-size: 12px; color: var(--b-muted); border-bottom: 1px solid var(--b-glass-edge); }
 .win .dots { display: flex; gap: 6px; }
 .win .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--b-subtle); opacity: 0.8; }
-.win .screen { padding: 10px 12px 4px; --cast-font: "IBM Plex Mono"; min-height: 6rem; }
+.win .screen { padding: 10px 12px 4px; --cast-font: "IBM Plex Mono", "Fira Code", monospace; min-height: 6rem; }
 .win canvas { display: block; width: 100%; cursor: pointer; }
 .win .ctl { display: flex; align-items: center; gap: 2ch; padding: 6px 12px 10px; font-size: 12px; color: var(--b-muted); white-space: nowrap; }
 .win .ctl button { font: inherit; color: var(--b-text); background: none; border: 0; padding: 0; cursor: pointer; min-width: 6ch; text-align: left; }
 .win .track { flex: 1; height: 12px; cursor: pointer;
   background: linear-gradient(var(--b-primary), var(--b-primary)) 0 50% / var(--p, 0%) 2px no-repeat, linear-gradient(var(--b-border), var(--b-border)) 0 50% / 100% 1px no-repeat; }
 .win.is-broken .screen::after { content: "the recording did not load"; color: var(--b-muted); }
+.win .bar-end { justify-self: end; }
+.full-close { font: inherit; color: var(--b-text); background: none; border: 0; padding: 0; cursor: pointer; }
+.full-close[hidden] { display: none; }
+.tap-note { display: none; text-align: center; color: var(--b-muted); font-size: var(--sl-text-xs); margin: 0.8rem 0 0; }
+
+/* the tour full screen (phones): the stage covers the page; the window is as wide as fits with its 30 rows
+   (104 columns of 0.6em at 1.28 line height: the canvas is 0.615 of its width tall, plus ~5rem of bar, padding and controls) */
+:root.demo-full { overflow: hidden; }
+.stage.is-full { position: fixed; inset: 0; z-index: 100; margin: 0; padding: 0; }
+.stage.is-full .cast-note, .stage.is-full .tap-note { display: none; }
+.stage.is-full .win { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(calc(100vw - 16px), calc((100vh - 5.5rem) * 1.626)); max-width: none; }
+.stage.is-full .win .ctl .k { display: inline; }
+@media (orientation: portrait) {
+  /* no landscape lock (iPhone Safari, or refused): turn the window sideways */
+  .stage.is-full .win { width: min(calc(100vh - 16px), calc((100vw - 5.5rem) * 1.626)); transform: translate(-50%, -50%) rotate(90deg); }
+  @supports (height: 100dvh) {
+    .stage.is-full .win { width: min(calc(100dvh - 16px), calc((100vw - 5.5rem) * 1.626)); }
+  }
+}
 .cast-note { text-align: center; color: var(--b-muted); font-size: var(--sl-text-sm); margin: 1.4rem auto 0; max-width: 70ch; }
 
 /* ---------- narrower: the panel's measure gives way, then the panel becomes a drawer ---------- */
@@ -355,6 +374,9 @@ starlight-tabs [role="tabpanel"] { margin-top: 0; }
   .stage { padding: 2.2rem 10px 2.6rem; }
   .win .screen { padding: 6px 6px 2px; }
   .win .ctl .k { display: none; }
+  .tap-note { display: block; }
+  .win canvas { cursor: zoom-in; }
+  .stage.is-full .win canvas { cursor: pointer; }
   .hints .spare2 { display: none; }
   /* two-column tables (keys, options) stack: the key, then what it does */
   .sl-markdown-content table:not(:has(th:nth-child(3))) { display: block; border-top: 1px solid var(--b-border); }
