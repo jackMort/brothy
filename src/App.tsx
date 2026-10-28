@@ -32,7 +32,7 @@ import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, link
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, diffSections, hhmm, parseDelta, quoteNeedle, reloadToast, type Change, type DeltaNote } from "./delta"
 import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
-export const VERSION = "0.1.1"
+export const VERSION = "0.2.0"
 
 /** Where keys go: the panel (when shown) or the document. */
 type Focus = "doc" | "panel"

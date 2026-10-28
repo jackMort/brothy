@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-28
+
 ### Added
 - `brothy -` (or `brothy` with a pipe and no path) reads Markdown from stdin: one document titled `stdin`, keys from `/dev/tty`; no Files tree, watcher or project record, and links resolve against the current folder's notes, scanned in the background after the first frame (or on first link use). The panel has only Outline and Info (`1` `2`), also after following a link and coming back with `H`. Input over 5 MB stops with `brothy: input too large (limit 5 MB)` before the rest is read.
 - `e` opens the note in `$VISUAL` / `$EDITOR` (fallback `vi`) at the line at the top of the view (exact in Source, from the nearest heading in Preview); VS Code, VSCodium and Cursor get `-g path:line` and Sublime Text `path:line` instead of `+line`. The reader resumes and reloads when the editor exits, and says so when it exits with an error; on a note followed from piped input the editor reads keys from `/dev/tty`.
@@ -58,6 +60,7 @@ First public release. Renamed to brothy: the command, binary and repo are `broth
 - Zen mode (`z`, settings `Z`): centered text, scroll or pages flow, spotlight, typewriter, teleprompter.
 - Prebuilt binaries for Linux and macOS (x64, arm64).
 
-[Unreleased]: https://github.com/jackMort/brothy/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/jackMort/brothy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jackMort/brothy/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/jackMort/brothy/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jackMort/brothy/releases/tag/v0.1.0

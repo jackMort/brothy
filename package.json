@@ -1,6 +1,6 @@
 {
   "name": "brothy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "A calm terminal Markdown reader: folder tree, outline, live reload, 42 themes",
   "keywords": ["markdown", "terminal", "tui", "reader", "viewer", "cli", "bun", "opentui", "notes"],
