@@ -1,11 +1,72 @@
 import { describe, expect, test } from "bun:test"
-import { parseFrontMatter, parseProperties, render, renderSource, stats, stripCode, wordStats, wrap, width } from "../src/markdown"
+import { HEADING_STYLES, parseFrontMatter, parseProperties, render, renderSource, stats, stripCode, wordStats, wrap, width, type HeadingStyle } from "../src/markdown"
 import { rankNotes, scanTree, visibleRows, folderCounts } from "../src/files"
 import { contrast, themes } from "../src/theme"
 import { join } from "node:path"
 
 const t = themes[0]!
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
+
+describe("heading styles", () => {
+  const src = "# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six\n"
+  const rowsOf = (style: HeadingStyle, s = src, w = 40) => text(render(s, w, t, { headings: style })).map((l) => l.trimEnd())
+  const expected: Record<HeadingStyle, string[]> = {
+    classic: ["One", "━━━" + "─".repeat(37), "", "## Two", "", "### Three", "", "#### Four", "", "##### Five", "", "###### Six"],
+    bars: ["█ One", "", "▌ Two", "", "┃ Three", "", "│ Four", "", "┆ Five", "", "┊ Six"],
+    ladder: ["██ One", "", "▓▓▓ Two", "", "▒▒▒▒ Three", "", "░░░░░ Four", "", "░░░░░░ Five", "", "░░░░░░░ Six"],
+    rules: ["━━ One " + "━".repeat(33), "", "── Two " + "─".repeat(33), "", "╌╌ Three", "", "Four", "", "Five", "", "Six"],
+  }
+  for (const style of HEADING_STYLES) {
+    describe(style, () => {
+      test("row text for H1..H6", () => expect(rowsOf(style)).toEqual(expected[style]))
+      test("the heading line points at the title row", () => {
+        const r = render(src, 40, t, { headings: style })
+        expect(r.headings.map((h) => h.depth)).toEqual([1, 2, 3, 4, 5, 6])
+        const names = ["One", "Two", "Three", "Four", "Five", "Six"]
+        r.headings.forEach((h, i) => {
+          expect(text(r)[h.line]).toContain(names[i]!)
+          expect(r.lines[h.line]!.heading).toBe(i)
+        })
+      })
+      test("wrapped long headings stay within the width and keep their prefix on every row", () => {
+        const long = "word ".repeat(30).trim()
+        for (const d of [1, 2, 3, 4, 6]) {
+          const rows = text(render(`${"#".repeat(d)} ${long}\n`, 30, t, { headings: style }))
+          expect(rows.filter((r) => r.includes("word")).length).toBeGreaterThan(1)
+          for (const r of rows) expect(width(r)).toBeLessThanOrEqual(30)
+        }
+      })
+      test("headings in a blockquote keep the │ prefix", () => {
+        const rows = rowsOf(style, "> ## Quoted heading that is long enough to wrap onto more rows than one\n> ### Deep\n", 30).filter((r) => r.trim())
+        expect(rows.length).toBeGreaterThan(2)
+        for (const r of rows) expect(r.startsWith("▎")).toBe(true)
+        for (const r of rows) expect(width(r)).toBeLessThanOrEqual(30)
+      })
+    })
+  }
+  test("rules: only the last row of a wrapped H1/H2 is filled", () => {
+    const rows = rowsOf("rules", "# aaa bbb ccc ddd eee fff ggg hhh\n", 20).filter((r) => r)
+    expect(rows.length).toBeGreaterThan(1)
+    rows.slice(0, -1).forEach((r) => expect(r).not.toContain("━━━"))
+    expect(rows[rows.length - 1]).toMatch(/━+$/)
+    expect(rows[0]!.startsWith("━━ ")).toBe(true)
+    expect(rows[1]!.startsWith("   ")).toBe(true)
+  })
+  test("bars and ladder indent continuation rows by the prefix", () => {
+    expect(rowsOf("bars", "## aaa bbb ccc ddd eee fff ggg hhh\n", 16)[1]).toStartWith("  ")
+    expect(rowsOf("ladder", "## aaa bbb ccc ddd eee fff ggg hhh\n", 16)[1]).toStartWith("    ")
+  })
+  test("colors follow the level in every style", () => {
+    const r = render("## Two\n", 40, t, { headings: "bars" })
+    const row = r.lines[0]!.spans
+    expect(row[0]!.fg).toBe(t.secondary)
+    expect(row.find((s) => s.text.includes("Two"))!.fg).toBe(t.secondary)
+    const q = render("## Two\n", 40, t, { headings: "rules" }).lines[0]!.spans
+    expect(q[0]!.fg).toBe(t.border)
+    expect(q.find((s) => s.text.includes("Two"))!.fg).toBe(t.secondary)
+  })
+  test("the default is classic", () => expect(text(render(src, 40, t))).toEqual(text(render(src, 40, t, { headings: "classic" }))))
+})
 
 describe("wrap", () => {
   test("never exceeds the width", () => {

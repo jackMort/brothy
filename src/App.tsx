@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode, type TreeRow } from "./files"
 import { ensureHighlights } from "./highlight"
 import { drop, go, keep, startHistory, stepTo, visit, type History } from "./history"
-import { A, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
+import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
 import { safe, safeLine } from "./spans"
 import { MAX_BYTES } from "./stdin"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
@@ -151,6 +151,7 @@ const KEYMAP = {
   source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview", hint: "source" },
   width: { modes: ["global"], keys: ["w"], label: "w", desc: "full width / measure", hint: "width" },
   minimap: { modes: ["global"], keys: ["m"], label: "m", desc: "minimap on / off (saved)", group: "Global" },
+  headings: { modes: ["global"], keys: ["#"], label: "#", desc: "heading style: classic · bars · ladder · rules (saved)", group: "Document" },
   transparent: { modes: ["global"], keys: ["S-t"], label: "T", desc: "transparent background (saved)" },
   zen: { modes: ["global"], keys: ["z"], label: "z", desc: "zen mode: only the text (esc leaves)", hint: "zen" },
   zenSettings: { modes: ["global"], keys: ["S-z"], label: "Z", desc: "zen settings (live preview)", hint: "settings" },
@@ -302,7 +303,7 @@ const isDown = (k: KeyEvent) => ["j", "down", "d", "space", "pagedown"].includes
 /** Bindings that only make sense with the panel; zen skips them. */
 const ZEN_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "links", "summarize", "explainChange", "edit", "minimap"]
 /** The welcome page has no panel and no note: these would only change the panel, the view or the measure out of sight. */
-const WELCOME_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "summarize", "zen", "zenSettings", "source", "width"]
+const WELCOME_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "summarize", "zen", "zenSettings", "source", "width", "headings"]
 
 // ------------------------------------------------------------- store
 
@@ -360,6 +361,8 @@ interface UI {
   wide: boolean
   /** braille minimap on (saved by m; drawn from MINI_MIN_W columns, never in zen) */
   minimap: boolean
+  /** heading style (saved by #) */
+  headings: HeadingStyle
   /** main surfaces unpainted: the terminal background shows through (saved by T) */
   transparent: boolean
   /** animations on (prop, else config `motion`; always off under `bun test` unless the prop is given) */
@@ -474,6 +477,7 @@ function initUI(root: string, initialFile: string | undefined, themeName: string
     hidden: cfg.sidebar?.hidden ?? false,
     wide: cfg.wide ?? false,
     minimap: cfg.minimap ?? true,
+    headings: cfg.headings ?? "classic",
     transparent: transparent ?? cfg.transparent ?? false,
     motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
     drawerOpen: false,
@@ -621,7 +625,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
           : { src: stdin, info: null, error: null },
     ),
     fm: cached(parseFrontMatter),
-    doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode) => render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
+    doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) => render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings })),
     source: cached((src: string, w: number, t: Theme, tree: FileNode) => renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
     stats: cached(stats),
     props: cached(parseProperties),
@@ -655,7 +659,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     // Source rows open with the line-number gutter (`gutter` columns), which draws no dots
     /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
     themeRows: cached((q: string) => filterFamilies(q)),
-    themeSample: cached((t: Theme, w: number, _hl: number) => sampleView(t, w)),
+    themeSample: cached((t: Theme, w: number, _hl: number, headings: HeadingStyle) => sampleView(t, w, headings)),
     themePane: cached(paneLines),
     /** the switcher's peek: the highlighted note read (one note at a time), then only its `peekWindow` rendered at the pane width */
     peekFile: cached((path: string, _mtime: number) => {
@@ -665,8 +669,8 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       const st = wordStats(fm.body) // stats() would lex the whole note
       return { lines: normalize(f.src).split("\n"), fm: fm.offset, hash: textHash(noteText(f.src)), words: st.words, minutes: st.minutes }
     }),
-    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode) =>
-      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null }),
+    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode, headings: HeadingStyle) =>
+      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
     ),
     mini: cached((view: Rendered, w: number, rows: number, gutter: number) =>
       miniInk(gutter ? view.plain.map((p) => p.slice(gutter)) : view.plain, view.lines.map((l) => l.fill !== undefined), w - gutter, rows),
@@ -722,7 +726,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const file = s.openPath ? memo.read(s.openPath, s.reload) : null
     const src = file?.src ?? ""
     const fm = memo.fm(src)
-    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree)
+    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headings)
     const view = s.source ? memo.source(src, L.CW, t, s.linkTree) : doc
     const st = memo.stats(fm.body)
     const filtered = s.filter.trim() !== ""
@@ -2006,6 +2010,11 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       set({ minimap })
       if (persist({ minimap })) flash(minimap ? "minimap on" : "minimap off")
     },
+    headings: () => {
+      const headings = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headings) + 1) % HEADING_STYLES.length]!
+      set({ headings })
+      if (persist({ headings })) flash(`headings · ${headings}`)
+    },
     transparent: () => {
       const transparent = !ui.current.transparent
       set({ transparent })
@@ -3031,7 +3040,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const peekW = switchSplit(W).peekW
   const peekNote = peekPath && peekDoc ? memo.peekFile(peekPath, peekDoc.mtime) : null
   const peekWin = peekNote && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc!, peekRow) : null
-  const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree) : undefined
+  const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headings) : undefined
   const peekSaved = peekPath ? s.summaries[peekPath] : undefined
   const peek =
     s.switcher && W >= PEEK_MIN_W
@@ -3141,7 +3150,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   // the board's rows under the header; hover holds the window where it is, keys and the wheel centre it again
   const pickTopShown = pick ? pickTop(pick, pickHl, Math.max(1, pickGeo.rows - 1), pickRows.length) : 0
   const pickT = pick ? pickTheme(pick) : null
-  const pickView = pickT && pickGeo.split && pickHl >= 0 ? memo.themeSample(pickT, pickGeo.peekW, s.hl) : null
+  const pickView = pickT && pickGeo.split && pickHl >= 0 ? memo.themeSample(pickT, pickGeo.peekW, s.hl, s.headings) : null
   // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
   useEffect(() => {
     if (!pickView || pickView === hlSample.current) return

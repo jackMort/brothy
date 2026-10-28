@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Heading styles: `#` cycles `classic` (the default) → `bars` (a level-colored `█ ▌ ┃ │ ┆ ┊` prefix) → `ladder` (shade glyphs `██ ▓▓▓ ▒▒▒▒ …` that thin with the level) → `rules` (H1 and H2 run a rule to the end of the measure, H3 gets `╌╌`, H4–H6 are bold color only) and saves it as `headings` in `config.json`. It applies to the document, zen, the `ctrl+p` peek and the theme picker sample; Source is unchanged.
+
 ## [0.2.0] - 2026-10-28
 
 ### Added

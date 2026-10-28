@@ -248,6 +248,7 @@ until then every link looks unresolved).
 | `w` | full width / 80-column measure (saved) |
 | `T` | transparent background: the terminal's own shows through; popups, the drawer and code blocks stay painted (saved) |
 | `m` | minimap on / off (saved; needs 110 columns) |
+| `#` | heading style: classic · bars · ladder · rules (saved) |
 | `z` | zen mode: only the text, centered (`esc` leaves; `s` shows the normal Source view) |
 | `Z` | zen settings popup (`↑↓` row, `space` toggle, `←→` adjust, `⏎` save, `esc` revert) |
 | `<` `>` · `+` `-` | in zen: narrower / wider text · teleprompter faster / slower (saved at once) |
@@ -272,7 +273,7 @@ until then every link looks unresolved).
 ## Config
 
 `~/.config/brothy/config.json` (or `$XDG_CONFIG_HOME/brothy/config.json` when
-that is an absolute path) holds `ai` (see AI), `theme` (a theme name, or a family's: `"one"` opens `one-dark`; a name brothy does not know is reported at start and `brothy` stands in), `sidebar`, `wide` (boolean, full-width text), `transparent` (boolean; `--transparent` wins for one run), `minimap` (boolean, default `true`; `m`), `motion` (boolean, default `true`; `"motion": false` draws the welcome page still, without its ink-in and steam) and `zen`, e.g.
+that is an absolute path) holds `ai` (see AI), `theme` (a theme name, or a family's: `"one"` opens `one-dark`; a name brothy does not know is reported at start and `brothy` stands in), `sidebar`, `wide` (boolean, full-width text), `transparent` (boolean; `--transparent` wins for one run), `minimap` (boolean, default `true`; `m`), `headings` (`"classic"` (default), `"bars"`, `"ladder"` or `"rules"`; `#`), `motion` (boolean, default `true`; `"motion": false` draws the welcome page still, without its ink-in and steam) and `zen`, e.g.
 `{"theme": "dracula", "sidebar": {"view": "files", "hidden": false}}`.
 `sidebar` replaces the old `folds`; existing `folds` are migrated once and
 dropped on the next save.

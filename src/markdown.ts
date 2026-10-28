@@ -117,7 +117,12 @@ interface LinkSink {
   exists?: (target: string) => boolean
 }
 
+export const HEADING_STYLES = ["classic", "bars", "ladder", "rules"] as const
+export type HeadingStyle = (typeof HEADING_STYLES)[number]
+
 export interface RenderOpts {
+  /** how headings are drawn (default "classic") */
+  headings?: HeadingStyle
   /** whether a wikilink target resolves to a note; unresolved links are drawn muted */
   exists?: (target: string) => boolean
 }
@@ -558,7 +563,11 @@ interface Ctx {
   headings: Heading[]
   pending: HighlightRequest[]
   sink: LinkSink
+  headingStyle: HeadingStyle
 }
+
+const BARS = ["█ ", "▌ ", "┃ ", "│ ", "┆ ", "┊ "]
+const LADDER = ["██ ", "▓▓▓ ", "▒▒▒▒ ", "░░░░░ ", "░░░░░░ ", "░░░░░░░ "]
 
 function emitRows(ctx: Ctx, rows: Span[][], extra: Partial<Line> = {}) {
   rows.forEach((spans, i) => ctx.lines.push(i === 0 ? { spans, ...extra } : { spans }))
@@ -626,7 +635,24 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         blank(ctx, rest)
         ctx.headings[idx]!.line = ctx.lines.length
         const p = pre()
-        if (h.depth === 1) {
+        const style = ctx.headingStyle
+        const rule = style === "rules" && h.depth <= 2
+        if (style === "bars" || style === "ladder") {
+          const text = (style === "bars" ? BARS : LADDER)[h.depth - 1]!
+          emitRows(ctx, wrap(styled, max, [...p, { text, fg }], [...rest, { text: pad(text.length) }]), { heading: idx })
+        } else if (rule || (style === "rules" && h.depth === 3)) {
+          const lead = h.depth === 1 ? "━━ " : h.depth === 2 ? "── " : "╌╌ "
+          const mark = { text: lead, fg: h.depth === 1 ? fg : h.depth === 2 ? t.border : t.textMuted }
+          // a rule row reserves " " and one fill cell, so the last row always has room for its fill
+          const rows = wrap(styled, rule ? max - 2 : max, [...p, mark], [...rest, { text: pad(lead.length) }])
+          if (rule) {
+            const last = rows[rows.length - 1]!
+            last.push({ text: " " }, { text: (h.depth === 1 ? "━" : "─").repeat(Math.max(0, max - spanWidth(last) - 1)), fg: h.depth === 1 ? fg : t.border })
+          }
+          emitRows(ctx, rows, { heading: idx })
+        } else if (style === "rules") {
+          emitRows(ctx, wrap(styled, max, p, rest), { heading: idx })
+        } else if (h.depth === 1) {
           const rows = wrap(styled, max, p, rest)
           emitRows(ctx, rows, { heading: idx })
           const tw = Math.max(0, Math.min(max - spanWidth(rest), maxOf(rows.map((r) => spanWidth(r) - spanWidth(rest)))))
@@ -904,7 +930,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
 /** Lay out a Markdown document into styled, wrapped terminal lines. */
 export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}): Rendered {
   const tokens = lexBlocks(stripComments(normalize(src)))
-  const ctx: Ctx = { t, lines: [], headings: [], pending: [], sink: { links: [], exists: opts.exists } }
+  const ctx: Ctx = { t, lines: [], headings: [], pending: [], sink: { links: [], exists: opts.exists }, headingStyle: opts.headings ?? "classic" }
   blocks(ctx, tokens, Math.max(10, max), [], [])
   while (ctx.lines.length && plainOf(ctx.lines[ctx.lines.length - 1]!.spans).trim() === "" && ctx.lines[ctx.lines.length - 1]!.fill === undefined)
     ctx.lines.pop()

@@ -137,6 +137,24 @@ describe("transparent", () => {
   })
 })
 
+describe("headings", () => {
+  test("loads a known style, drops anything else", () => {
+    for (const h of ["classic", "bars", "ladder", "rules"] as const) {
+      writeFileSync(file(), JSON.stringify({ headings: h }))
+      expect(loadConfig().headings).toBe(h)
+    }
+    for (const bad of ['{"headings":"fancy"}', '{"headings":1}', '{"headings":null}', '{"headings":true}']) {
+      writeFileSync(file(), bad)
+      expect(loadConfig().headings).toBeUndefined()
+    }
+  })
+  test("saving headings keeps the other keys", () => {
+    saveConfig({ theme: "brothy" })
+    saveConfig({ headings: "bars" })
+    expect(loadConfig()).toEqual({ theme: "brothy", headings: "bars" })
+  })
+})
+
 describe("wide", () => {
   test("loads a boolean, ignores other types", () => {
     writeFileSync(file(), '{"wide":true}')

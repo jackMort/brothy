@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync,
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join } from "node:path"
 import { normalizeAI, type AIConfig } from "./ai"
+import { HEADING_STYLES, type HeadingStyle } from "./markdown"
 import { pickZen, type ZenConfig } from "./zen"
 
 /** Panel views, in tab-strip (and `1 2 3`) order. */
@@ -28,6 +29,8 @@ export interface Config {
   motion?: boolean
   /** Braille minimap at the right edge (shown from 110 columns); default on. */
   minimap?: boolean
+  /** Heading style (`#` cycles); default classic. */
+  headings?: HeadingStyle
   /** Zen mode settings (whether zen is on is never saved). */
   zen?: Partial<ZenConfig>
   /** Opt-in AI summaries; never patched by brothy (keys come only from the environment). */
@@ -87,6 +90,7 @@ export function loadConfig(): Config {
   if (typeof raw.transparent === "boolean") out.transparent = raw.transparent
   if (typeof raw.motion === "boolean") out.motion = raw.motion
   if (typeof raw.minimap === "boolean") out.minimap = raw.minimap
+  if (typeof raw.headings === "string" && (HEADING_STYLES as readonly string[]).includes(raw.headings)) out.headings = raw.headings as HeadingStyle
   let folds: Partial<Record<View, boolean>> | undefined
   const f = raw.folds
   if (f && typeof f === "object" && !Array.isArray(f)) {

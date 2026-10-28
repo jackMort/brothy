@@ -932,6 +932,31 @@ test("w toggles full width in the normal view and persists it", async () => {
   expect(savedConfig().wide).toBe(false)
 })
 
+test("# cycles the heading style, toasts and persists it", async () => {
+  const s = await mount(tmp({ "a.md": "# Title\n\n## Sub\n\nbody" }), "a.md", { width: 120, height: 30 })
+  let f = await keys(s, "#")
+  expect(f).toContain("headings · bars")
+  expect(f).toContain("█ Title")
+  expect(savedConfig().headings).toBe("bars")
+  f = await keys(s, "#")
+  expect(f).toContain("headings · ladder")
+  expect(f).toContain("▓▓▓ Sub")
+  f = await keys(s, "#")
+  expect(f).toContain("headings · rules")
+  expect(f).toContain("── Sub ─")
+  f = await keys(s, "#")
+  expect(f).toContain("headings · classic")
+  expect(f).toContain("## Sub")
+  expect(savedConfig().headings).toBe("classic")
+})
+
+test("# does nothing on the welcome screen", async () => {
+  const f = await keys(await mount(tmp({ "x.txt": "" })), "#")
+  expect(f).toContain("No Markdown files found")
+  expect(f).not.toContain("headings ·")
+  expect(existsSync(join(cfgDir, "brothy", "config.json")) ? savedConfig().headings : undefined).toBeUndefined()
+})
+
 /** Background alpha of the first span containing `text` (0 = unpainted). */
 function bgAlpha(s: Setup, text: string): number {
   const span = s.captureSpans().lines.flatMap((l) => l.spans).find((x) => x.text.includes(text))

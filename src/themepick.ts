@@ -4,7 +4,7 @@
 // sample note rendered in the candidate theme on its own background. App holds the state and
 // applies the theme; nothing here saves config or re-themes the app.
 import { fuzzyHits } from "./files"
-import { A, render, width as sw, type Rendered, type Span } from "./markdown"
+import { A, render, width as sw, type HeadingStyle, type Rendered, type Span } from "./markdown"
 import { PEEK_MIN_W } from "./peek"
 import { contrast, themes, type Theme } from "./theme"
 
@@ -247,7 +247,7 @@ export const SAMPLE = [
 ].join("\n")
 
 /** The sample in theme `t` at `w` columns, as Preview renders it. */
-export const sampleView = (t: Theme, w: number): Rendered => render(SAMPLE, w, t)
+export const sampleView = (t: Theme, w: number, headings?: HeadingStyle): Rendered => render(SAMPLE, w, t, { headings })
 
 const ROLES = ["text", "textMuted", "primary", "secondary", "accent", "error", "warning", "success", "info"] as const
 const LABEL: Partial<Record<(typeof ROLES)[number], string>> = { textMuted: "muted" }
