@@ -147,11 +147,11 @@ export function shrinkFolder(folder: string, room: number): string {
 /** The header logo: Nerd Font md-bowl_mix (U+F0617), one cell at column 0. */
 export const LOGO = "\u{F0617}"
 
-/** The "brothy" wordmark, 3 rows of box-drawing. */
+/** The "brothy" wordmark, 3 rows of block elements (U+2580 family), 36 columns; there is no narrower form. */
 export const WORDMARK: readonly string[] = [
-  "┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻",
-  "┣┻┓┣┳┛┃ ┃ ┃ ┣━┫┗┳┛",
-  "┗━┛╹┗╸┗━┛ ╹ ╹ ╹ ╹ ", // trailing cell padded so all rows are equal width
+  "▄▄▄▄  ▄▄▄▄   ▄▄▄ ▄▄▄▄▄▄ ▄▄ ▄▄ ▄▄ ▄▄ ",
+  "██▄██ ██▄█▄ ██▀██  ██   ██▄██ ▀███▀ ",
+  "██▄█▀ ██ ██ ▀███▀  ██   ██ ██   █   ",
 ]
 export const WORDMARK_W = Math.max(...WORDMARK.map((l) => sw(l)))
 

@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format is based on
 - The recorded tour (docs site casts and README videos) shows the AI features too: TL;DR, ask, `D` on a live reload and the zen gloss, answered offline by a stand-in model (`scripts/fakeai.ts`) so recording needs no network or key; `examples/notes/stock.md` is the note they work on. The README shows `docs/demo.mp4` (the gif is its fallback), and the videos are staged like the site demo: the same wallpaper behind a frosted glass window.
 
 ### Changed
+- New wordmark: a chunky 3×36 block-letter `brothy` (the U+2580 block family) on the welcome page, the `?` sheet, `--version`, the docs site and the videos; the welcome art is as wide as the wordmark (36 columns, the bowl centred under it) and gives way to the text below that.
 - New default palette, Hōjicha: `brothy` and `brothy-light` move from teal / gold / coral to roasted-tea neutrals with one persimmon signature colour (H1, focus, the bowl), sand and dusty-plum H2 / H3, muted lavender links. Body text sits near 14:1, every content colour reaches 4.5:1 on the page, the side panel and code blocks, borders are easier to see, and error callouts no longer share the tip / H3 colour. The docs site, favicon and logo follow.
 
 ## [0.2.0] - 2026-10-28

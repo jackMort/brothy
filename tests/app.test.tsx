@@ -3906,7 +3906,7 @@ test("welcome: the wordmark over a bowl, today's message, keycaps, recent projec
   const s = await mount(empty, undefined, WELCOME)
   const f = await keys(s)
   const rows = f.split("\n")
-  expect(f).toContain("┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻")
+  expect(f).toContain("▄▄▄▄  ▄▄▄▄   ▄▄▄ ▄▄▄▄▄▄ ▄▄ ▄▄ ▄▄ ▄▄")
   expect(f).toContain("▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖")
   // the line is cut at the 80-column measure, and macOS's temp paths run past it
   expect(f).toContain(`No Markdown files found in ${empty}`.slice(0, 79))
@@ -3917,14 +3917,14 @@ test("welcome: the wordmark over a bowl, today's message, keycaps, recent projec
   expect(rows[head + 1]).toContain(basename(other))
   expect(rows[head + 1]).toContain("x") // the last note, right-aligned
   // v3's rows at 120×34: wordmark 4–6, rim 12, message 20, keycaps 22
-  expect(rows[4]).toContain("┏┓ ┳━┓")
+  expect(rows[4]).toContain("▄▄▄▄  ▄▄▄▄")
   expect(rows[12]).toContain("▗▄▄")
   expect(rows[20]).toContain("No Markdown files")
   expect(rows[22]).toContain("open a project")
   const sp = spansOf(s)
   const cap = sp.find((x) => x.text.includes(" o "))!
   expect([hex(cap.fg), hex(cap.bg)]).toEqual([t.accent, t.backgroundElement])
-  expect(hex(sp.find((x) => x.text.includes("┏┓"))!.fg)).toBe(t.primary)
+  expect(hex(sp.find((x) => x.text.includes("▄▄▄▄"))!.fg)).toBe(t.primary)
   expect(hex(sp.find((x) => x.text.includes("▗"))!.fg)).toBe(t.text) // rim
   expect(sp.some((x) => x.text.includes("▄") && hex(x.bg) === t.secondary)).toBe(true) // broth
   expect(hex(sp.find((x) => x.text.includes("████"))!.fg)).toBe(t.primary) // body
@@ -3943,7 +3943,7 @@ test("welcome at 80×24: the small bowl, no chopsticks, v3's rows", async () => 
   seedProjects([{ root: tmp({}), at: 3 }, { root: tmp({}), at: 2 }, { root: tmp({}), at: 1 }])
   const s = await mount(tmp({ "notes.txt": "" }), undefined, { width: 80, height: 24 })
   const rows = (await keys(s)).split("\n")
-  expect(rows[2]).toContain("┏┓ ┳━┓")
+  expect(rows[2]).toContain("▄▄▄▄  ▄▄▄▄")
   expect(rows[7]).toContain("▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖")
   expect(rows.join("\n")).not.toContain("▞")
   expect(rows[12]).toContain("No Markdown files")
@@ -4003,7 +4003,7 @@ test("welcome with motion: the wordmark and bowl ink in from border; the steam r
   setup = quietAct(await testRender(<App root={d} motion />, WELCOME))
   await setup.renderOnce()
   const s = setup
-  const markFg = () => hex(spansOf(s).find((x) => x.text.includes("┏┓"))!.fg)
+  const markFg = () => hex(spansOf(s).find((x) => x.text.includes("▄▄▄▄"))!.fg)
   expect(markFg()).toBe(t.border)
   const steam = () => s.captureCharFrame().split("\n").slice(7, 12).map((r) => r.replace(/▞/g, " ")).join("\n")
   const first = steam()
@@ -4021,7 +4021,7 @@ test("welcome without motion (tests): drawn still, inked, the same frame later",
   const t = themeByName("brothy")
   const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
   const a = await keys(s)
-  expect(hex(spansOf(s).find((x) => x.text.includes("┏┓"))!.fg)).toBe(t.primary)
+  expect(hex(spansOf(s).find((x) => x.text.includes("▄▄▄▄"))!.fg)).toBe(t.primary)
   expect(a).toMatch(/[⠁-⣿]/)
   await sleep(350)
   await s.renderOnce()
@@ -4087,7 +4087,7 @@ test("welcome with motion: a key in the middle of the ink-in shows the inked art
   await setup.renderOnce()
   const s = setup
   await keys(s, "x")
-  expect(hex(spansOf(s).find((x) => x.text.includes("┏┓"))!.fg)).toBe(t.primary)
+  expect(hex(spansOf(s).find((x) => x.text.includes("▄▄▄▄"))!.fg)).toBe(t.primary)
 })
 
 test("welcome at 60 columns: recent rows stay inside the measure and the hint lines up with them", async () => {

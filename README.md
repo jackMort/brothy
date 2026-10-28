@@ -4,9 +4,9 @@
 </picture>
 
 ```
-┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻
-┣┻┓┣┳┛┃ ┃ ┃ ┣━┫┗┳┛
-┗━┛╹┗╸┗━┛ ╹ ╹ ╹ ╹
+▄▄▄▄  ▄▄▄▄   ▄▄▄ ▄▄▄▄▄▄ ▄▄ ▄▄ ▄▄ ▄▄
+██▄██ ██▄█▄ ██▀██  ██   ██▄██ ▀███▀
+██▄█▀ ██ ██ ▀███▀  ██   ██ ██   █
 ```
 
 **A calm terminal Markdown reader.** Browse a folder of notes, jump anywhere with `ctrl+p`, read in

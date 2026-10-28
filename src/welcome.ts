@@ -22,6 +22,9 @@ export const BIG: WelcomeSize = { steamW: 22, steamH: 4, bowlW: 28, bowlH: 5, fo
 /** The bowl at 80×24: a 20-cell rim, three body rows, 16×2 cells of steam, no foot and no chopsticks. */
 export const SMALL: WelcomeSize = { steamW: 16, steamH: 2, bowlW: 18, bowlH: 3, foot: false, sticks: false }
 
+/** Cells the art spans: the bowl's rim, or the wordmark when that is wider (it is, for both bowls: 36). */
+export const artWidth = (size: WelcomeSize) => Math.max(size.bowlW + 2, WORDMARK_W)
+
 /** braille dot bits by [row][column] inside a cell */
 const BRAILLE = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]] as const
 /** quadrant blocks by bits: 1 top-left, 2 top-right, 4 bottom-left, 8 bottom-right */
@@ -66,11 +69,12 @@ export interface ArtCell {
   broth?: boolean
 }
 
-/** The art, `bowlW + 2` cells wide: the wordmark, then (with `bowl`) the steam field over the bowl. */
+/** The art, `artWidth` cells wide: the wordmark, then (with `bowl`) the steam field over the bowl. */
 export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean; bowl?: boolean } = {}): ArtCell[][] {
   const { steam = true, bowl = true } = o
   const w = size.bowlW
-  const AW = w + 2
+  const AW = artWidth(size)
+  const ox = (AW - (w + 2)) >> 1 // the bowl centred under a wider wordmark
   const cx = AW >> 1
   // the big bowl keeps its steam rows (the chopsticks stand in them); the small one gives them up
   const steamH = steam || size.sticks ? size.steamH : 0
@@ -88,7 +92,7 @@ export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean
       [...r].forEach((ch, i) => ch !== " " && put(cx - (size.steamW >> 1) + i, rim - size.steamH + cy, { ch, role: "steam", row: cy + 5 - size.steamH })),
     )
   // rim: one cell wider than the body each side, rounded at the ends; the broth fills the top half of its inner cells
-  for (let i = 0; i < w + 2; i++) put(i, rim, { ch: i === 0 ? "▗" : i === w + 1 ? "▖" : "▄", role: "edge", broth: i >= 2 && i < w })
+  for (let i = 0; i < w + 2; i++) put(ox + i, rim, { ch: i === 0 ? "▗" : i === w + 1 ? "▖" : "▄", role: "edge", broth: i >= 2 && i < w })
   // body: a quarter ellipse at 2×2 pixels per cell, so the last row is still about half the rim
   const PH = size.bowlH * 2
   const px = (r: number, c: number) => (Math.abs(c + 0.5 - w) <= w * Math.sqrt(1 - ((r + 0.5) / (PH * 1.12)) ** 2) ? 1 : 0)
@@ -96,7 +100,7 @@ export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean
     for (let c = 0; c < w; c++) {
       const [r, p] = [cy * 2, c * 2]
       const ch = QUAD[px(r, p) | (px(r, p + 1) << 1) | (px(r + 1, p) << 2) | (px(r + 1, p + 1) << 3)]!
-      if (ch !== " ") put(1 + c, rim + 1 + cy, { ch, role: "body" })
+      if (ch !== " ") put(ox + 1 + c, rim + 1 + cy, { ch, role: "body" })
     }
   if (size.foot) {
     const fw = Math.round(w * 0.4)
@@ -143,8 +147,8 @@ function pageHeight(f: Omit<WelcomeFit, "top" | "height" | "hint">, hint: boolea
 export function welcomeFit(CW: number, CH: number, recents: number): WelcomeFit {
   const n = Math.min(recents, WELCOME_RECENTS)
   const tries: [Omit<WelcomeFit, "top" | "height" | "hint">, boolean][] = []
-  if (CW >= BIG.bowlW + 2) tries.push([{ size: BIG, steam: true, bowl: true, mark: true, recents: n }, true])
-  if (CW >= SMALL.bowlW + 2) {
+  if (CW >= artWidth(BIG)) tries.push([{ size: BIG, steam: true, bowl: true, mark: true, recents: n }, true])
+  if (CW >= artWidth(SMALL)) {
     tries.push([{ size: SMALL, steam: true, bowl: true, mark: true, recents: n }, true])
     for (let k = n; k >= 0; k--) tries.push([{ size: SMALL, steam: false, bowl: true, mark: true, recents: k }, true])
   }

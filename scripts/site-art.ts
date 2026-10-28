@@ -1,21 +1,19 @@
 // The docs site's art, drawn from the app's own source: bun scripts/site-art.ts writes site/src/art.json.
-//   wordmark: WORDMARK (src/status.ts) as SVG, each heavy box-drawing glyph turned into rectangles, so no font is needed
+//   wordmark: WORDMARK (src/status.ts) as SVG, each half-block glyph turned into rectangles, so no font is needed
 //   bowl:     welcomeArt(BIG) (src/welcome.ts) as SVG, quadrant blocks as rectangles, one path per role
 //   steam:    STEAM_FRAMES ticks of steamRows over the bowl, played back by the site (motion allowed only)
 // The site build runs without the root's dependencies, so the output is committed; tests/site-art.test.ts keeps it current.
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { WORDMARK } from "../src/status"
-import { BIG, STILL_TICK, steamRows, welcomeArt } from "../src/welcome"
+import { BIG, STILL_TICK, artWidth, steamRows, welcomeArt } from "../src/welcome"
 
 /** a cell in SVG units: the terminal's 1:2 cell */
 const CW = 10, CH = 20
-/** heavy stroke width */
-const T = 3.2
 export const STEAM_FRAMES = 120
 
-/** arms of the heavy box-drawing glyphs the wordmark uses: u(p) d(own) l(eft) r(ight) */
-const ARMS: Record<string, string> = { "┏": "dr", "┓": "dl", "┳": "dlr", "━": "lr", "┣": "udr", "┻": "ulr", "┃": "ud", "┫": "udl", "┛": "ul", "┗": "ur", "╺": "r", "╸": "l", "╹": "u", "╻": "d" }
+/** the half-block glyphs the wordmark uses: which halves of the cell are ink (top, bottom) */
+const HALVES: Record<string, [boolean, boolean]> = { "▀": [true, false], "▄": [false, true], "█": [true, true] }
 const QUAD = [" ", "▘", "▝", "▀", "▖", "▌", "▞", "▛", "▗", "▚", "▐", "▜", "▄", "▙", "▟", "█"]
 
 const n = (v: number) => +v.toFixed(2)
@@ -25,20 +23,18 @@ export function siteArt() {
   let mark = ""
   WORDMARK.forEach((line, row) =>
     [...line].forEach((ch, col) => {
-      const a = ARMS[ch]
-      if (!a) {
-        if (ch !== " ") throw new Error(`site-art: no arms for ${ch}`)
+      const h = HALVES[ch]
+      if (!h) {
+        if (ch !== " ") throw new Error(`site-art: no halves for ${ch}`)
         return
       }
-      const cx = col * CW + CW / 2, cy = row * CH + CH / 2, h = T / 2
-      mark += rect(cx - h, cy - h, T, T)
-      if (a.includes("u")) mark += rect(cx - h, row * CH, T, CH / 2)
-      if (a.includes("d")) mark += rect(cx - h, cy, T, CH / 2)
-      if (a.includes("l")) mark += rect(col * CW, cy - h, CW / 2, T)
-      if (a.includes("r")) mark += rect(cx, cy - h, CW / 2, T)
+      if (h[0]) mark += rect(col * CW, row * CH, CW, CH / 2)
+      if (h[1]) mark += rect(col * CW, row * CH + CH / 2, CW, CH / 2)
     }),
   )
-  const art = welcomeArt(BIG, STILL_TICK, { steam: false }).slice(WORDMARK.length)
+  // the bowl alone: the art is as wide as the wordmark, the bowl sits centred in it
+  const ox = (artWidth(BIG) - (BIG.bowlW + 2)) >> 1
+  const art = welcomeArt(BIG, STILL_TICK, { steam: false }).slice(WORDMARK.length).map((r) => r.slice(ox, ox + BIG.bowlW + 2))
   const paths = { body: "", edge: "", broth: "" }
   art.forEach((row, y) =>
     row.forEach((c, x) => {

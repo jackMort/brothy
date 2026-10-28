@@ -7,7 +7,7 @@ import { A, width as sw, type Span } from "./markdown"
 import { safe, safeLine } from "./spans"
 import { WORDMARK, truncate, truncateLeft } from "./status"
 import { chip, groupColor, inkAt, keycaps, steamColors } from "./chrome"
-import { BIG, welcomeArt, welcomeFit, type ArtCell } from "./welcome"
+import { BIG, artWidth, welcomeArt, welcomeFit, type ArtCell } from "./welcome"
 import type { HelpLayout, HelpLine } from "./help"
 import { stem } from "./files"
 import { tildify, type OpenRow } from "./projects"
@@ -837,7 +837,7 @@ export function Welcome({ t, CW, CH, root, recents, hl, tick, ink, keys, home, o
   for (let i = 0; i < fit.top; i++) line([])
   if (fit.mark) {
     const art = welcomeArt(fit.size, tick, { steam: fit.steam, bowl: fit.bowl })
-    const x = Math.max(0, (CW >> 1) - ((fit.size.bowlW + 2) >> 1))
+    const x = Math.max(0, (CW >> 1) - (artWidth(fit.size) >> 1))
     for (const r of art) line([{ text: " ".repeat(x) }, ...artSpans(t, r, ink)])
     line([])
   }

@@ -16,51 +16,51 @@ test("steamRows: v3's particle field, braille or blank, the same for the same ti
   expect(steamRows(8, 22, 4)).not.toEqual(a)
 })
 
-test("welcomeArt BIG: wordmark, steam over a 30-cell bowl with chopsticks and a foot", () => {
+test("welcomeArt BIG: wordmark (36 cells), steam over a 30-cell bowl centred under it with chopsticks and a foot", () => {
   const rows = welcomeArt(BIG, STILL_TICK)
   const t = text(rows)
   expect(t).toHaveLength(15)
-  for (const r of t) expect([...r]).toHaveLength(30)
-  expect(t.slice(0, 3)).toEqual(WORDMARK.map((l) => (" ".repeat(6) + l).padEnd(30)))
+  for (const r of t) expect([...r]).toHaveLength(36)
+  expect(t.slice(0, 3)).toEqual([...WORDMARK])
   expect(t.slice(8)).toEqual([
-    "▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖",
-    " ████████████████████████████ ",
-    " ▐██████████████████████████▌ ",
-    "  ▀████████████████████████▀  ",
-    "   ▝▜████████████████████▛▘   ",
-    "      ▀▜██████████████▛▀      ",
-    "          ▝▀▀▀▀▀▀▀▀▀▘         ",
+    "   ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖   ",
+    "    ████████████████████████████    ",
+    "    ▐██████████████████████████▌    ",
+    "     ▀████████████████████████▀     ",
+    "      ▝▜████████████████████▛▘      ",
+    "         ▀▜██████████████▛▀         ",
+    "             ▝▀▀▀▀▀▀▀▀▀▘            ",
   ])
   // chopsticks rest on the broth, right of the steam
-  expect(t.slice(3, 8).map((r) => r.slice(24))).toEqual(["    ▞ ", "   ▞ ▞", "  ▞ ▞ ", " ▞ ▞  ", "▞ ▞   "])
+  expect(t.slice(3, 8).map((r) => r.slice(27, 33))).toEqual(["    ▞ ", "   ▞ ▞", "  ▞ ▞ ", " ▞ ▞  ", "▞ ▞   "])
   // the steam field (22×4) sits on the rim, centred
-  expect(t.slice(4, 8).map((r) => r.slice(4, 24))).toEqual(steamRows(STILL_TICK, 22, 4).map((r) => r.slice(0, 20)))
+  expect(t.slice(4, 8).map((r) => r.slice(7, 27))).toEqual(steamRows(STILL_TICK, 22, 4).map((r) => r.slice(0, 20)))
   // roles: the broth is the top half of the rim's inner cells
-  expect(rows[8]!.map((c) => (c.broth ? "b" : ".")).join("")).toBe("..bbbbbbbbbbbbbbbbbbbbbbbbbb..")
-  expect(rows[8]![0]!.role).toBe("edge")
-  expect(rows[9]![5]!.role).toBe("body")
-  expect(rows[0]![6]!.role).toBe("mark")
-  expect(rows[3]![28]!.role).toBe("edge")
+  expect(rows[8]!.map((c) => (c.broth ? "b" : ".")).join("")).toBe("....." + "b".repeat(26) + ".....")
+  expect(rows[8]![3]!.role).toBe("edge")
+  expect(rows[9]![8]!.role).toBe("body")
+  expect(rows[0]![0]!.role).toBe("mark")
+  expect(rows[3]![31]!.role).toBe("edge")
   expect(rows[7]!.find((c) => c.role === "steam")!.row).toBe(4) // the bottom steam row takes the last colour
 })
 
-test("welcomeArt SMALL: a 20-cell bowl, two rows of steam, no foot and no chopsticks", () => {
+test("welcomeArt SMALL: a 20-cell bowl centred under the wordmark, two rows of steam, no foot and no chopsticks", () => {
   const t = text(welcomeArt(SMALL, STILL_TICK))
   expect(t).toEqual([
-    ...WORDMARK.map((l) => (" " + l).padEnd(20)),
-    "  " + steamRows(STILL_TICK, 16, 2)[0] + "  ",
-    "  " + steamRows(STILL_TICK, 16, 2)[1] + "  ",
-    "▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖",
-    " ██████████████████ ",
-    " ▝▜██████████████▛▘ ",
-    "   ▝▀██████████▀▘   ",
+    ...WORDMARK,
+    " ".repeat(10) + steamRows(STILL_TICK, 16, 2)[0] + " ".repeat(10),
+    " ".repeat(10) + steamRows(STILL_TICK, 16, 2)[1] + " ".repeat(10),
+    "        ▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖        ",
+    "         ██████████████████         ",
+    "         ▝▜██████████████▛▘         ",
+    "           ▝▀██████████▀▘           ",
   ])
 })
 
 test("welcomeArt: without steam the field is blank; without the bowl only the wordmark is left", () => {
   const still = text(welcomeArt(BIG, STILL_TICK, { steam: false }))
   expect(still.slice(4, 8).every((r) => !/[⠁-⣿]/.test(r))).toBe(true)
-  expect(text(welcomeArt(SMALL, 0, { bowl: false }))).toEqual(WORDMARK.map((l) => (" " + l).padEnd(20)))
+  expect(text(welcomeArt(SMALL, 0, { bowl: false }))).toEqual([...WORDMARK])
 })
 
 test("welcomeFit: v3's rows at 120×34 (CH 30) and 80×24 (CH 21) with 3 recent projects", () => {
@@ -81,7 +81,7 @@ test("welcomeFit: shrinks the bowl, then drops steam, recent rows, the bowl and 
   expect(seen).toContain("small false 0 true true")
   expect(seen.at(-1)).toBe("small false 0 false false")
   expect(welcomeFit(80, 3, 5)).toMatchObject({ mark: false, hint: false, height: 3 })
-  // narrow: the big bowl needs 30 columns
-  expect(welcomeFit(29, 40, 0).size).toBe(SMALL)
-  expect(welcomeFit(19, 40, 0).bowl).toBe(false)
+  // narrow: the art is as wide as the wordmark, 36 columns, and gives way to the text below that
+  expect(welcomeFit(36, 40, 0)).toMatchObject({ mark: true, bowl: true })
+  expect(welcomeFit(35, 40, 0)).toMatchObject({ mark: false, bowl: false })
 })

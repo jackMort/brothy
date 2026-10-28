@@ -17,7 +17,7 @@ describe("cli", () => {
     const r = await run("--version")
     expect(r.code).toBe(0)
     const lines = r.out.trimEnd().split("\n")
-    expect(lines.slice(0, 3).join("\n")).toContain("┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻")
+    expect(lines.slice(0, 3).join("\n")).toContain("▄▄▄▄  ▄▄▄▄   ▄▄▄ ▄▄▄▄▄▄ ▄▄ ▄▄ ▄▄ ▄▄")
     expect(lines.at(-1)).toMatch(/^\d+\.\d+\.\d+/)
   })
   test("--help prints usage", async () => {

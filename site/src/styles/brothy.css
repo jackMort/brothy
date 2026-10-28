@@ -297,7 +297,7 @@ starlight-tabs [role="tabpanel"] { margin-top: 0; }
 
 .welcome { display: grid; justify-items: center; padding: 3.5rem var(--pad) 1rem; text-align: center; }
 .welcome .art { display: grid; justify-items: center; gap: 0.9rem; }
-.welcome .wordmark { width: min(300px, 72vw); height: auto; display: block; fill: var(--b-primary); }
+.welcome .wordmark { width: min(340px, 76vw); height: auto; display: block; fill: var(--b-primary); }
 .welcome .bowl { width: min(210px, 50vw); height: auto; display: block; }
 .bowl .b-body { fill: var(--b-primary); }
 .bowl .b-edge { fill: var(--b-text); }
