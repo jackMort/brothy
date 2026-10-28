@@ -10,8 +10,8 @@ export type Session = Awaited<ReturnType<typeof testRender>>
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-export async function mount(o: { root: string; initialFile?: string; theme?: string; transparent?: boolean; stdin?: string; motion?: boolean; width: number; height: number }): Promise<Session> {
-  const s = await testRender(<App root={o.root} initialFile={o.initialFile} themeName={o.theme} transparent={o.transparent} stdin={o.stdin} motion={o.motion ?? false} />, { width: o.width, height: o.height })
+export async function mount(o: { root: string; initialFile?: string; theme?: string; transparent?: boolean; stdin?: string; motion?: boolean; fetch?: typeof fetch; width: number; height: number }): Promise<Session> {
+  const s = await testRender(<App root={o.root} initialFile={o.initialFile} themeName={o.theme} transparent={o.transparent} stdin={o.stdin} motion={o.motion ?? false} fetch={o.fetch} />, { width: o.width, height: o.height })
   await s.renderOnce()
   return s
 }

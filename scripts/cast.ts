@@ -6,6 +6,7 @@
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ROOT, sandbox } from "./pipeline"
+import { STOCK, fakeFetch, stockEdit, writeAIConfig } from "./fakeai"
 import type { Frame } from "./session"
 
 const COLS = 104, ROWS = 30
@@ -16,7 +17,7 @@ type Mode = keyof typeof THEMES
 
 interface Step { keys?: string; gap?: number; hold: number; write?: [string, (s: string) => string] }
 
-// read, panel, links and history, outline, switcher, themes, live reload, zen
+// read, panel, links and history, outline, switcher, themes, AI (TL;DR, ask), live reload + D, zen + gloss
 const TOUR: Step[] = [
   { hold: 1500 },
   { keys: "j j j j j j", gap: 150, hold: 500 },
@@ -40,13 +41,26 @@ const TOUR: Step[] = [
   { keys: "down down down", gap: 650, hold: 700 },
   { keys: "right", hold: 1200 },
   { keys: "esc", hold: 1000 },
+  // AI: the TL;DR streams into Info, then a question finds its section
   { keys: "g", hold: 500 },
+  { keys: "a", hold: 5000 },
+  { keys: "C-p", hold: 900 },
+  { keys: "type:?how\\slong\\sshould\\sbroth\\ssimmer", hold: 900 },
+  { keys: "enter", hold: 3200 },
+  { keys: "enter", hold: 2000 },
+  // saved in another window: Info lists what changed, D explains it, ⏎ jumps
   {
-    write: ["examples/README.md", (s) => s.replace("# Welcome to brothy\n", "# Welcome to brothy\n\n> [!success] Just saved in another window\n> brothy reloads the note the moment it changes on disk.\n")],
-    hold: 2600,
+    write: [STOCK, stockEdit],
+    hold: 2400,
   },
+  { keys: "3", hold: 1800 },
+  { keys: "D", hold: 4800 },
+  { keys: "enter", hold: 2200 },
+  // zen: a gloss under the reading line
   { keys: "z", hold: 1200 },
-  { keys: "j j j j j j", gap: 280, hold: 900 },
+  { keys: "j j j j j j j j j j j j j j j", gap: 230, hold: 900 },
+  { keys: "a", hold: 5200 },
+  { keys: "esc", hold: 1200 },
   { keys: "z", hold: 1500 },
 ]
 
@@ -87,7 +101,8 @@ function cast(frames: { t: number; f: Frame }[], mode: Mode): string {
 async function record(mode: Mode, home: string, out: string) {
   const { frame, frameKey, mount, press, settle, sleep } = await import("./session")
   const { shutdownHighlighter } = await import("../src/highlight")
-  const s = await mount({ root: join(home, "examples"), theme: THEMES[mode], width: COLS, height: ROWS })
+  writeAIConfig(home)
+  const s = await mount({ root: join(home, "examples"), theme: THEMES[mode], width: COLS, height: ROWS, fetch: fakeFetch() })
   await settle(s)
   let rnd = 7 // mulberry32: same jitter every run
   const jitter = () => { rnd = (rnd + 0x6d2b79f5) | 0; let x = Math.imul(rnd ^ (rnd >>> 15), 1 | rnd); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296 - 0.5 }
@@ -107,13 +122,15 @@ async function record(mode: Mode, home: string, out: string) {
       await sleep(Math.max(1, Math.min(1000 / 30 - (performance.now() - at), end - performance.now())))
     } while (performance.now() < end)
   }
+  let n = 0
   for (const st of TOUR) {
     if (st.write) { const p = join(home, st.write[0]); writeFileSync(p, st.write[1](readFileSync(p, "utf8"))) }
     for (const k of (st.keys ?? "").split(" ").filter(Boolean)) {
-      if (k.startsWith("type:")) for (const ch of k.slice(5)) { await press(s, `type:${ch}`); await run(TYPE_GAP * (1 + jitter())) }
+      if (k.startsWith("type:")) for (const ch of k.slice(5).replaceAll("\\s", " ")) { await press(s, `type:${ch}`); await run(TYPE_GAP * (1 + jitter())) }
       else { await press(s, k); await run(st.gap ?? 200) }
     }
     await run(st.hold)
+    if (process.env.CAST_TEXT) { mkdirSync(process.env.CAST_TEXT, { recursive: true }); writeFileSync(join(process.env.CAST_TEXT, `${String(n++).padStart(2, "0")}.txt`), `${st.keys ?? "write"} @${((performance.now() - t0) / 1000).toFixed(1)}s\n${s.captureCharFrame()}`) }
   }
   const text = cast(frames, mode)
   mkdirSync(OUT, { recursive: true })
