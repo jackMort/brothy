@@ -1,45 +1,69 @@
 ---
-// The splash hero: wordmark, title, tagline, actions and the screenshot (dark / light), in two columns from 60rem.
-import { Image } from "astro:assets"
-import { LinkButton } from "@astrojs/starlight/components"
+// The front page is brothy's welcome page: the wordmark over the bowl with its steam (art.json, drawn from the app's
+// own WORDMARK and welcomeArt by scripts/site-art.ts), the title and tagline, the actions as keycaps (`attrs.data-key`
+// names the key) and a "Start here" list that ↑ ↓ ⏎ move through, as the welcome page's recent projects do.
+import { getEntry } from "astro:content"
+import art from "../art.json"
 
 const { data } = Astro.locals.starlightRoute.entry
-const { tagline, image, actions = [] } = data.hero || {}
-const shots = image && "dark" in image ? { dark: image.dark, light: image.light } : image && "file" in image ? { dark: image.file } : {}
-const WORDMARK = ["┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻", "┣┻┓┣┳┛┃ ┃ ┃ ┣━┫┗┳┛", "┗━┛╹┗╸┗━┛ ╹ ╹ ╹ ╹ "].join("\n")
+const { tagline, actions = [] } = data.hero ?? {}
+const base = import.meta.env.BASE_URL.replace(/\/$/, "")
+const START = ["getting-started/install", "getting-started/quick-start", "keys", "usage/reading", "themes/theme-picker", "ai/setup"]
+const start = await Promise.all(
+  START.map(async (id) => {
+    const e = await getEntry("docs", id)
+    if (!e) throw new Error(`Hero: no docs page ${id}`)
+    const words = (e.body ?? "").replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length
+    return { id, title: e.data.title, href: `${base}/${id}/`, min: Math.max(1, Math.round(words / 220)) }
+  }),
+)
 ---
 
-<div class="hero">
-  <div class="copy">
-    <pre class="wordmark" aria-hidden="true">{WORDMARK}</pre>
-    <h1 id="_top" data-page-title set:html={data.title} />
-    {tagline && <p class="tagline" set:html={tagline} />}
-    {
-      actions.length > 0 && (
-        <div class="actions">
-          {actions.map(({ link: href, text, variant, icon }) => (
-            <LinkButton {href} {variant} icon={icon?.name}>{text}</LinkButton>
-          ))}
-        </div>
-      )
-    }
-    <ul class="badges"><li>macOS · Linux</li><li>single binary</li><li>Apache-2.0</li></ul>
+<section class="welcome" data-head="Welcome">
+  <div class="art" aria-hidden="true">
+    <svg class="wordmark" viewBox={`0 0 ${art.wordmark.w} ${art.wordmark.h}`}><path d={art.wordmark.d} /></svg>
+    <svg class="bowl" viewBox={`0 0 ${art.bowl.w} ${art.bowl.h}`}>
+      <g class="b-steam" data-steam></g>
+      <path class="b-broth" d={art.bowl.broth} />
+      <path class="b-edge" d={art.bowl.edge} />
+      <path class="b-body" d={art.bowl.body} />
+    </svg>
   </div>
-  <div class="shot">
-    {shots.dark && <Image src={shots.dark} widths={[640, 960, 1280]} sizes="(min-width: 60rem) 45vw, 100vw" loading="eager" fetchpriority="high" alt={image?.alt ?? ""} class:list={{ "for-dark": Boolean(shots.light) }} />}
-    {shots.light && <Image src={shots.light} widths={[640, 960, 1280]} sizes="(min-width: 60rem) 45vw, 100vw" loading="eager" alt={image?.alt ?? ""} class="for-light" />}
-  </div>
-</div>
+  <h1 id="_top" data-page-title set:html={data.title} />
+  {tagline && <p class="sub" set:html={tagline} />}
+  {
+    actions.length > 0 && (
+      <ul class="caps">
+        {actions.map(({ link, text, attrs }) => (
+          <li>
+            <a href={link}>{attrs?.["data-key"] && <kbd>{attrs["data-key"]}</kbd>} {text}</a>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+  <nav class="start" aria-label="Start here" data-start>
+    <div class="hd"><span>Start here</span><span>{start.length}</span></div>
+    <ol>
+      {
+        start.map((s, i) => (
+          <li>
+            <a href={s.href} class:list={{ on: i === 0 }}>
+              <span class="t">{s.title.toLowerCase()}</span>
+              <span class="path">{s.id}</span>
+              <span class="min">{s.min} min</span>
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+    <div class="ft"><kbd>↑</kbd> <kbd>↓</kbd> move <kbd>⏎</kbd> open</div>
+  </nav>
+</section>
 
-<style>
-  .hero { display: grid; gap: 2.5rem; align-items: center; padding: 2rem 0 1rem; }
-  @media (min-width: 60rem) { .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 3rem; padding: 3rem 0 1.5rem; } }
-  .wordmark { font: 700 clamp(1.1rem, 5.2vw, 1.9rem) / 1.05 var(--sl-font-mono); color: var(--b-primary); margin: 0 0 1.5rem; white-space: pre; background: none; border: 0; padding: 0; overflow: hidden; }
-  h1 { font-size: clamp(1.9rem, 5.6vw, 3rem); line-height: 1.12; letter-spacing: -0.02em; color: var(--sl-color-white); margin: 0; }
-  .tagline { margin: 1.1rem 0 0; font-size: clamp(1.02rem, 2.6vw, 1.2rem); color: var(--b-muted); max-width: 34rem; }
-  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
-  .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; margin: 1.5rem 0 0; font: 500 0.78rem var(--sl-font-mono); color: var(--b-muted); }
-  .badges li { border: 1px solid var(--b-border); border-radius: 0.4rem; padding: 0.15rem 0.55rem; background: var(--b-element); }
-  :global(:root[data-theme="light"]) .for-dark, :global(:root:not([data-theme="light"])) .for-light { display: none; }
-  .shot img { width: 100%; height: auto; display: block; }
-</style>
+<script>
+  import { cell, steam } from "../art.json" // named imports: only the steam frames reach the page's script
+  import { mountSteam } from "../scripts/steam"
+  const g = document.querySelector<SVGGElement>("[data-steam]")
+  if (g) mountSteam(g, steam, cell)
+</script>

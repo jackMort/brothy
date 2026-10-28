@@ -1,0 +1,19 @@
+---
+// End of a page: the pager as two rows (previous, next) and the source link, in the document's own style.
+const { pagination, editUrl } = Astro.locals.starlightRoute
+const { prev, next } = pagination
+---
+
+{
+  (prev || next || editUrl) && (
+    <footer class="page-foot">
+      {(prev || next) && (
+        <nav class="pager" aria-label="Pages">
+          {prev ? <a href={prev.href} rel="prev"><span class="dir">← previous</span><span class="lbl">{prev.label}</span></a> : <span />}
+          {next ? <a href={next.href} rel="next" class="next"><span class="dir">next →</span><span class="lbl">{next.label}</span></a> : <span />}
+        </nav>
+      )}
+      {editUrl && <p class="edit"><a href={editUrl.href}>edit this page ↗</a></p>}
+    </footer>
+  )
+}

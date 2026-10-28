@@ -4,57 +4,27 @@ description: Browse a folder of notes, jump anywhere with ctrl+p, read in zen, a
 template: splash
 editUrl: false
 hero:
-  tagline: Browse a folder of notes, jump anywhere with <kbd class="key">ctrl+p</kbd>, read in zen, and, only if you ask, let a model summarize, gloss or answer. Obsidian-flavored, live reload, 42 themes.
-  image:
-    alt: brothy showing a folder tree beside a rendered note with a callout, highlighted code and a table
-    dark: ../../assets/docs/screenshot.png
-    light: ../../assets/docs/outline-light.png
+  tagline: Browse a folder of notes, jump anywhere with <kbd>ctrl+p</kbd>, read in zen, and, only if you ask, let a model summarize, gloss or answer. Obsidian-flavored, live reload, 42 themes.
   actions:
-    - text: Install
+    - text: install
       link: "#install"
-      icon: right-arrow
-    - text: GitHub
+      attrs: { data-key: "i" }
+    - text: play the tour
+      link: "#tour"
+      attrs: { data-key: "space" }
+    - text: keys
+      link: /brothy/keys/
+      attrs: { data-key: "?" }
+    - text: github ↗
       link: https://github.com/jackMort/brothy
-      variant: minimal
-      icon: github
 ---
 
 {/* Mirrors README § Features and Install: update both. */}
 
-import { CardGrid, Tabs, TabItem } from "@astrojs/starlight/components"
+import { Tabs, TabItem } from "@astrojs/starlight/components"
 import Demo from "../../components/Demo.astro"
-import KeyCard from "../../components/KeyCard.astro"
-
-## A one-minute tour
-
-Reading a note, following links, the switcher, themes, the live reload and zen.
 
 <Demo />
-
-## Quiet by default, quick when you need it
-
-A reader for a folder of notes, not an editor.
-
-<CardGrid>
-  <KeyCard keys="42" title="42 themes" color="primary">
-    22 families, each with a dark and a light twin, picked on a <kbd>t</kbd> board with a live sample note. Transparent background with <kbd>T</kbd>. [Themes](/brothy/themes/theme-picker/)
-  </KeyCard>
-  <KeyCard keys="^P" title="Go anywhere" color="secondary">
-    <kbd>ctrl+p</kbd> searches notes, headings and text across the whole vault, with a peek pane: path, length, outline, cached TL;DR and first lines. [Navigating notes](/brothy/usage/navigating-notes/)
-  </KeyCard>
-  <KeyCard keys="z" title="Zen" color="accent">
-    Only the text, centred. Scroll or pages flow, spotlight, typewriter and teleprompter, with settings under <kbd>Z</kbd>. [Zen mode](/brothy/usage/zen-mode/)
-  </KeyCard>
-  <KeyCard keys="[[ ]]" title="Links & Obsidian" color="info">
-    Wikilinks, embeds, callouts, `==highlights==`, `%%comments%%`, dataview blocks. <kbd>f</kbd> labels the links on screen; <kbd>H</kbd> <kbd>L</kbd> go back and forward. [Obsidian notes](/brothy/usage/obsidian-notes/)
-  </KeyCard>
-  <KeyCard keys="a" title="AI, only if you ask" color="success">
-    Off until you add an `ai` block. <kbd>a</kbd> streams a TL;DR into Info; local models first (Ollama, LM Studio), keys from the environment only. [AI](/brothy/ai/setup/)
-  </KeyCard>
-  <KeyCard keys="↻" title="Live reload" color="warning">
-    Survives atomic saves. The sections that changed on disk are listed in Info with `+added −removed` counts, no AI needed. [Reading](/brothy/usage/reading/)
-  </KeyCard>
-</CardGrid>
 
 ## Install
 
@@ -69,7 +39,7 @@ macOS or Linux, in a terminal with true color and Unicode.
     brothy ~/notes
     ```
   </TabItem>
-  <TabItem label="Binary download">
+  <TabItem label="binary">
     ```sh
     # download brothy-<os>-<arch> and SHA256SUMS from the releases page, then:
     sha256sum -c --ignore-missing SHA256SUMS     # shasum -a 256 -c on macOS
@@ -78,7 +48,7 @@ macOS or Linux, in a terminal with true color and Unicode.
     ```
     On macOS, clear the quarantine flag first if it is blocked: `xattr -d com.apple.quarantine brothy-darwin-arm64`.
   </TabItem>
-  <TabItem label="From source (bun)">
+  <TabItem label="from source">
     ```sh
     # needs Bun 1.4 or newer
     git clone https://github.com/jackMort/brothy.git && cd brothy
@@ -88,4 +58,49 @@ macOS or Linux, in a terminal with true color and Unicode.
   </TabItem>
 </Tabs>
 
-brothy is not published to npm; releases ship prebuilt binaries only. Then press <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key. [All install details](/brothy/getting-started/install/).
+brothy is not published to npm; releases ship prebuilt binaries only. [All install details](/brothy/getting-started/install/).
+
+## Quick start
+
+```sh
+brothy                # browse the current folder
+brothy ~/notes        # browse a folder
+brothy README.md      # open one file (its folder fills the panel)
+brothy -t dracula     # pick a theme (a family name opens its dark theme: -t one)
+curl -s … | brothy    # read a pipe
+```
+
+Then <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key, <kbd>ctrl+p</kbd> to go anywhere, <kbd>t</kbd> for themes, <kbd>z</kbd> for zen.
+
+## Features
+
+<div class="two">
+<div>
+
+### Reading
+
+- Preview and raw Source (<kbd>s</kbd>), find (<kbd>/</kbd> <kbd>n</kbd> <kbd>N</kbd>), live reload with the sections that changed listed in Info. [Reading](/brothy/usage/reading/)
+- Obsidian notes: wikilinks, embeds, callouts, `==highlights==`, `%%comments%%`, dataview blocks. [Obsidian notes](/brothy/usage/obsidian-notes/)
+- Zen (<kbd>z</kbd>): only the text, with scroll or pages flow, spotlight, typewriter and teleprompter. [Zen mode](/brothy/usage/zen-mode/)
+- A braille minimap from 110 columns (<kbd>m</kbd>), find hits in a lane beside it.
+
+</div>
+<div>
+
+### Navigation
+
+- Files / Outline / Info panel (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) with fuzzy filter, folder counts and a reading marker.
+- <kbd>ctrl+p</kbd> over the whole vault (notes, headings, text), with a peek pane. [Navigating notes](/brothy/usage/navigating-notes/)
+- <kbd>f</kbd> labels the links on screen; <kbd>H</kbd> <kbd>L</kbd> go back and forward.
+- <kbd>e</kbd> opens your `$EDITOR` at the line you are reading; `brothy -` reads a pipe.
+
+</div>
+</div>
+
+### Looks
+
+42 themes in 22 families, picked on a dark | light board (<kbd>t</kbd>) with a live sample note; a transparent background (<kbd>T</kbd>) and a full-width toggle (<kbd>w</kbd>). [Themes](/brothy/themes/theme-picker/)
+
+:::tip[AI, only if you ask]
+Off until you add an `ai` block. <kbd>a</kbd> streams a TL;DR into Info, <kbd>D</kbd> explains what changed on disk, `?` in <kbd>ctrl+p</kbd> asks your vault. Local models first (Ollama, LM Studio); keys from the environment only; nothing is sent on its own. [AI](/brothy/ai/setup/)
+:::

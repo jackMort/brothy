@@ -1,0 +1,69 @@
+---
+// The panel: ¹Files ²Outline ³Info, as in brothy. Files is the sidebar config as a tree (folders open along the
+// current page's path, with counts), Outline is the page's table of contents, Info its stats and source.
+import type { StarlightRouteData } from "@astrojs/starlight/route-data"
+
+type SidebarEntry = StarlightRouteData["sidebar"][number]
+
+const { sidebar, toc, entry, editUrl } = Astro.locals.starlightRoute
+const name = (e: SidebarEntry) => (e.type === "link" ? (e.href.replace(/\/$/, "").split("/").pop() || e.label) : e.label).toLowerCase().replace(/\s+/g, "-")
+const count = (e: SidebarEntry): number => (e.type === "link" ? 1 : e.entries.reduce((n, c) => n + count(c), 0))
+const current = (e: SidebarEntry): boolean => (e.type === "link" ? e.isCurrent : e.entries.some(current))
+const body = entry.body ?? ""
+const words = body.replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length
+const sections = toc?.items.reduce((n, i) => n + 1 + i.children.length, 0) ?? 0
+const items = toc?.items ?? []
+---
+
+<div class="tabs" role="tablist" aria-label="Panel">
+  <button role="tab" aria-selected="true" aria-controls="panel-files" data-tab="files"><sup>1</sup>Files</button>
+  <button role="tab" aria-selected="false" aria-controls="panel-outline" data-tab="outline" tabindex="-1"><sup>2</sup>Outline</button>
+  <button role="tab" aria-selected="false" aria-controls="panel-info" data-tab="info" tabindex="-1"><sup>3</sup>Info</button>
+</div>
+<div class="tabrule"></div>
+
+<div role="tabpanel" id="panel-files" data-panel="files">
+  <ul class="tree">
+    {
+      sidebar.map(function node(e: SidebarEntry) {
+        return e.type === "link" ? (
+          <li>
+            <a href={e.href} title={e.label} aria-current={e.isCurrent ? "page" : undefined} class:list={{ cur: e.isCurrent }}>
+              <span class="mk">{e.isCurrent ? "●" : ""}</span>
+              <span class="nm">{name(e)}</span>
+            </a>
+          </li>
+        ) : (
+          <li>
+            <details open={current(e) || undefined}>
+              <summary title={e.label}><span class="mk" /><span class="nm">{name(e)}</span><em>{count(e)}</em></summary>
+              <ul>{e.entries.map(node)}</ul>
+            </details>
+          </li>
+        )
+      })
+    }
+  </ul>
+</div>
+
+<div role="tabpanel" id="panel-outline" data-panel="outline" hidden>
+  <nav class="outline" aria-label="On this page">
+    {
+      items.flatMap((i) => [i, ...i.children]).map((i) => (
+        <a href={`#${i.slug}`} class={`d${i.depth}`}>{i.text}</a>
+      ))
+    }
+  </nav>
+</div>
+
+<div role="tabpanel" id="panel-info" data-panel="info" hidden>
+  <dl class="info">
+    <dt>title</dt><dd>{entry.data.title}</dd>
+    <dt>words</dt><dd>{words.toLocaleString("en")}</dd>
+    <dt>read</dt><dd>{Math.max(1, Math.round(words / 220))} min</dd>
+    <dt>sections</dt><dd>{sections}</dd>
+    {editUrl && <><dt>source</dt><dd><a href={editUrl.href}>{entry.filePath?.split("/").pop() ?? "edit"} ↗</a></dd></>}
+    <dt>license</dt><dd>Apache-2.0</dd>
+  </dl>
+  {entry.data.description && <p class="info-desc">{entry.data.description}</p>}
+</div>

@@ -23,6 +23,7 @@ const SHOTS: Shot[] = [
   { name: "themes", size: "120x34", keys: `${HERO_KEYS} t down down`, title: "brothy ~/examples" }, // the board on dracula, all 22 families
   { name: "welcome", size: "120x34", keys: "", title: "brothy ~/drafts", path: "drafts" }, // an empty folder: the welcome page, recents from the sandbox
   { name: "keys", size: "110x30", keys: `${HERO_KEYS} ?`, title: "brothy ~/examples" },
+  { name: "keys-light", size: "110x30", keys: `${HERO_KEYS} ?`, theme: "brothy-light", title: "brothy ~/examples" }, // the docs site's Keys page in light mode
 ]
 
 // ---------- capture ----------

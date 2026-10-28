@@ -1,0 +1,55 @@
+---
+// brothy's screen as the page: the top line, the panel at the left (a drawer with a scrim below 900px, hidden with
+// ^b), the document at an 80-column measure, and a fixed footer with the key hints and the progress line. `?` opens a
+// sheet of the keys the site understands.
+const { hasSidebar, entry } = Astro.locals.starlightRoute
+const hero = Boolean(entry.data.hero)
+const words = (entry.body ?? "").replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length
+const minutes = Math.max(1, Math.round(words / 220))
+
+const HINTS: [string, string, string?][] = hero
+  ? [["↑ ↓ ⏎", "start"], ...(entry.id === "404" ? [] : [["space", "tour"] as [string, string]]), ["/", "search"], ["t", "theme"], ["?", "keys", "spare"]]
+  : [["j k", "scroll"], ["[ ]", "section"], ["/", "search"], ["1 2 3", "panel", "spare"], ["^b", "panel", "spare2"], ["t", "theme"], ["?", "keys", "spare"]]
+const SHEET: [string, string][] = [
+  ["j k", "scroll"], ["g G", "top · bottom"], ["[ ]", "previous · next section"], ["/", "search the docs"],
+  ["1 2 3", "Files · Outline · Info"], ["ctrl+b", "hide / show the panel"], ["t", "dark · light"],
+  ["space", "play / pause the tour (front page)"], ["esc", "close the drawer"], ["?", "this sheet"],
+]
+---
+
+<script is:inline>
+  try { if (localStorage.getItem("brothy-panel-hidden")) document.documentElement.classList.add("panel-hidden") } catch {}
+</script>
+<div class:list={["frame", { "has-panel": hasSidebar, splash: hero }]}>
+  <header class="top"><slot name="header" /><div class="rule"></div></header>
+  {
+    hasSidebar && (
+      <>
+        <aside class="panel" id="panel" aria-label="Docs">
+          <slot name="sidebar" />
+        </aside>
+        <div class="scrim" aria-hidden="true" />
+      </>
+    )
+  }
+  <div class="main-frame"><slot /></div>
+</div>
+
+<footer class="foot" data-minutes={minutes}>
+  <div class="hints" aria-hidden="true">
+    {HINTS.map(([k, w, c]) => <span class={c}><b>{k}</b> {w}</span>)}
+  </div>
+  <div class="prog"><i></i><span data-read>0%</span></div>
+</footer>
+
+<dialog class="sheet" aria-label="Keys">
+  <div class="sheet-in">
+    <p class="sheet-h">Keys <span>any key closes</span></p>
+    <dl>{SHEET.map(([k, w]) => <><dt>{k.split(" ").map((p) => <kbd>{p}</kbd>)}</dt><dd>{w}</dd></>)}</dl>
+    <p class="sheet-f">brothy's own keys: <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/keys/`}>keyboard reference</a></p>
+  </div>
+</dialog>
+
+<script>
+  import "../scripts/frame"
+</script>

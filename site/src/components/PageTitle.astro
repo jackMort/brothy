@@ -1,0 +1,8 @@
+---
+// The page title as brothy draws an H1: primary and bold, a heavy rule under the words and a light one to the end of
+// the measure; the description under it, muted.
+const { title, description } = Astro.locals.starlightRoute.entry.data
+---
+
+<h1 id="_top" class="page-title"><span>{title}</span></h1>
+{description && <p class="lede">{description}</p>}

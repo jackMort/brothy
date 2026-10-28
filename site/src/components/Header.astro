@@ -1,0 +1,32 @@
+---
+// The top line, as in brothy: the logo and "brothy docs" over the panel, the running head `Title › section` from the
+// text column's left edge (the section follows the reading position), then the state cluster: search, links, the
+// theme word. Below 900px the panel is a drawer and ≡ opens it.
+import { logos } from "virtual:starlight/user-images"
+import Search from "virtual:starlight/components/Search"
+import ThemeSelect from "virtual:starlight/components/ThemeSelect"
+
+const { entry, hasSidebar } = Astro.locals.starlightRoute
+const base = import.meta.env.BASE_URL.replace(/\/$/, "")
+const hero = Boolean(entry.data.hero)
+const title = hero ? "brothy" : entry.data.title
+---
+
+<div class="top-in">
+  <a class="brand" href={`${base}/`}>
+    {logos.dark && <img class="logo for-dark" src={logos.dark.src} alt="" width="20" height="20" />}
+    {logos.light && <img class="logo for-light" src={logos.light.src} alt="" width="20" height="20" />}
+    <b>brothy</b><span class="docs">docs</span>
+  </a>
+  <div class="head">
+    {hasSidebar && <button class="drawer-btn" type="button" data-drawer aria-controls="panel" aria-expanded="false" aria-label="Files, Outline, Info">≡</button>}
+    <span class="title">{title}</span><span class="sep" data-section-sep hidden>›</span><span data-section></span>
+  </div>
+  <nav class="state" aria-label="Site">
+    <Search />
+    <a class="opt" href={`${base}/getting-started/install/`}>install</a>
+    <a class="opt" href={`${base}/keys/`}>keys</a>
+    <a class="gh" href="https://github.com/jackMort/brothy">github ↗</a>
+    <ThemeSelect />
+  </nav>
+</div>

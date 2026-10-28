@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brothy-mark-dark.svg">
+  <img src="docs/brothy-mark-light.svg" alt="" width="56" height="56">
+</picture>
+
 ```
 ┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻
 ┣┻┓┣┳┛┃ ┃ ┃ ┣━┫┗┳┛

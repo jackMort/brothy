@@ -1,0 +1,30 @@
+---
+// The theme as a state word in the top line, `◐ dark` or `◐ light`; a click or `t` flips it. Stored where Starlight's
+// ThemeProvider reads it (localStorage `starlight-theme`), so the first paint is already right.
+---
+
+<button class="theme-word" type="button" data-theme-toggle aria-label="Switch theme"><span data-theme-word>dark</span></button>
+
+<script is:inline>
+  // set the word before paint (the theme itself is already set by Starlight's ThemeProvider)
+  document.querySelectorAll("[data-theme-word]").forEach((e) => (e.textContent = document.documentElement.dataset.theme === "light" ? "light" : "dark"))
+</script>
+
+<script>
+  const root = document.documentElement
+  const words = () => document.querySelectorAll<HTMLElement>("[data-theme-word]")
+  function set(theme: "dark" | "light", save: boolean) {
+    root.dataset.theme = theme
+    words().forEach((e) => (e.textContent = theme))
+    document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.setAttribute("aria-label", `Switch to the ${theme === "dark" ? "light" : "dark"} theme`))
+    if (save) try { localStorage.setItem("starlight-theme", theme) } catch {}
+  }
+  set(root.dataset.theme === "light" ? "light" : "dark", false)
+  document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => set(root.dataset.theme === "light" ? "dark" : "light", true)))
+  // with no stored choice, follow the system
+  matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
+    let stored = ""
+    try { stored = localStorage.getItem("starlight-theme") ?? "" } catch {}
+    if (!stored) set(e.matches ? "light" : "dark", false)
+  })
+</script>
