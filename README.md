@@ -19,9 +19,11 @@ zen, and — only if you ask — let a model summarize, gloss or answer. Obsidia
 [![Release](https://img.shields.io/github/v/release/jackMort/brothy)](https://github.com/jackMort/brothy/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-![brothy showing a folder tree beside a rendered note with a callout, highlighted code and a table](docs/screenshot.png)
+<video src="https://github.com/jackMort/brothy/raw/main/docs/demo.mp4" poster="https://github.com/jackMort/brothy/raw/main/docs/screenshot.png" controls muted loop playsinline width="100%">
+  <a href="docs/demo.mp4"><img src="docs/demo.gif" alt="A tour of brothy: reading a note, following links, the switcher, themes, the opt-in AI (TL;DR, ask, explain a reload, zen gloss), live reload, zen mode"></a>
+</video>
 
-![A tour of brothy: reading a note, following links, the switcher, themes, the opt-in AI (TL;DR, ask, explain a reload, zen gloss), live reload, zen mode](docs/demo.gif)
+![brothy showing a folder tree beside a rendered note with a callout, highlighted code and a table](docs/screenshot.png)
 
 brothy is styled after [Noodle](https://noodlerest.dev): a top line that says
 where you are, a tabbed panel (Files / Outline / Info), the document at a

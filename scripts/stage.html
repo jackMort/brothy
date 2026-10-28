@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- The compositor scripts/demo.ts screenshots in headless Chromium: backdrop with steam, title/end cards, the app window
+<!-- The compositor scripts/demo.ts screenshots in headless Chromium: the site wallpaper, title/end cards, the app window
      (pre-rendered PNG frames) under a CSS 3D camera with theme sweeps, glow and floor reflection, and keycap captions.
      init(config) once, then draw(shot) per output frame (shapes in scripts/demo.ts `Shot`). -->
 <html>
@@ -10,13 +10,27 @@
   @font-face { font-family: "Mono"; src: url("file:///usr/share/fonts/TTF/JetBrainsMonoNerdFontMono-Bold.ttf"); font-weight: 700; }
   * { box-sizing: border-box; }
   html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--back); font-family: "Mono", "JetBrains Mono", monospace; }
-  #bg, #steam, #stage, .card, #cap { position: absolute; }
-  #bg { inset: 0; }
-  #steam { inset: 0; width: 1920px; height: 1080px; }
+  #bg, #stage, .card, #cap { position: absolute; }
+  /* the docs site's wallpaper (site/src/styles/brothy.css .stage .wall), held still: rules, palette washes, grain */
+  #bg { inset: 0; background:
+    repeating-linear-gradient(0deg, transparent 0 35px, color-mix(in srgb, var(--text) 4%, transparent) 35px 36px),
+    radial-gradient(38% 55% at 18% 30%, color-mix(in srgb, var(--primary) 30%, transparent), transparent 70%),
+    radial-gradient(34% 50% at 84% 72%, color-mix(in srgb, var(--secondary) 20%, transparent), transparent 70%),
+    radial-gradient(30% 40% at 62% 8%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--bg), var(--element) 50%, var(--bg)); }
+  #bg::after { content: ""; position: absolute; inset: 0; opacity: 0.5; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
   #stage { inset: 0; perspective: 2000px; perspective-origin: 960px 480px; }
-  #win { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 12px; }
-  #win .layer, #win img, #sheen { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 12px; }
-  #sheen { mix-blend-mode: screen; pointer-events: none; }
+  /* the frosted window: each layer tints with its theme's background; the backdrop is blurred once, here */
+  #win { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 12px; overflow: hidden;
+         -webkit-backdrop-filter: blur(30px) saturate(1.35); backdrop-filter: blur(30px) saturate(1.35);
+         box-shadow: inset 0 0 0 1px rgba(243,239,231,0.1), 0 40px 80px -30px rgba(0,0,0,0.55), 0 12px 24px -12px rgba(0,0,0,0.55); }
+  #win .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #win .layer img { position: absolute; left: 0; width: 100%; top: var(--bar); height: calc(100% - var(--bar)); }
+  #win .bar { position: absolute; left: 0; top: 0; width: 100%; height: var(--bar); display: flex; align-items: center; justify-content: center;
+              font-size: 13px; border-bottom: 1px solid rgba(128,128,128,0.18); }
+  #win .bar i { position: absolute; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: currentColor; opacity: 0.35; }
+  #sheen { position: absolute; inset: 0; width: 100%; height: 100%; mix-blend-mode: screen; pointer-events: none; }
   .card { left: 0; top: 0; width: 1920px; height: 1080px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .wm { margin: 0; font-size: 76px; line-height: 1.08; font-weight: 700; color: var(--primary); white-space: pre;
         text-shadow: 0 0 34px color-mix(in srgb, var(--primary) 45%, transparent); }
@@ -40,7 +54,6 @@
 </head>
 <body>
 <div id="bg"></div>
-<svg id="steam" viewBox="0 0 1920 1080"><defs><filter id="blur" x="-50%" y="-20%" width="200%" height="140%"><feGaussianBlur stdDeviation="11"/></filter></defs><g id="wisps" filter="url(#blur)"></g></svg>
 <div id="title" class="card"><pre class="wm"></pre><div class="line"></div></div>
 <div id="stage"><div id="win"><div id="sheen"></div></div></div>
 <div id="end" class="card"><pre class="wm"></pre><div class="line"></div><div class="chip"></div></div>
@@ -49,10 +62,6 @@
 const $ = (s) => document.querySelector(s)
 let C = null
 const layers = []
-
-// mulberry32: the steam is the same every run
-function rng(seed) { return () => { seed = (seed + 0x6d2b79f5) | 0; let x = Math.imul(seed ^ (seed >>> 15), 1 | seed); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296 } }
-let WISPS = []
 
 window.init = (config) => {
   C = config
@@ -64,48 +73,18 @@ window.init = (config) => {
   $("#end .chip").innerHTML = config.install
   $("#win").style.width = config.ww + "px"
   $("#win").style.height = config.wh + "px"
-  const R = rng(7)
-  WISPS = Array.from({ length: 11 }, (_, i) => ({ x: 100 + (i + R() * 0.8) * (1720 / 11), life: 10 + R() * 7, phase: R(), w: 22 + R() * 30, amp: 24 + R() * 36, freq: 0.004 + R() * 0.004, len: 380 + R() * 320, a: 0.07 + R() * 0.06 }))
-  const g = $("#wisps")
-  g.innerHTML = WISPS.map(() => `<path fill="#f3e6d8"/>`).join("")
-}
-
-function backdrop(t) {
-  // the gradient holds still (a drifting one costs the GIF dearly); the steam is the motion
-  if (!$("#bg").style.background)
-    $("#bg").style.background =
-      `radial-gradient(60% 70% at 50% 36%, ${C.vars.glowA} 0%, transparent 70%),` +
-      `radial-gradient(55% 60% at 64% 80%, ${C.vars.glowB} 0%, transparent 72%), var(--back)`
-  // each wisp: a tapered ribbon (filled outline) along a swaying curve that widens and curls as it rises
-  const paths = $("#wisps").children
-  WISPS.forEach((w, i) => {
-    const u = ((t / w.life + w.phase) % 1 + 1) % 1 // 0..1 through its rise
-    const head = 1160 - u * (1080 + w.len + 200), N = 18, mid = []
-    for (let k = 0; k <= N; k++) {
-      const y = head + (k / N) * w.len, rise = Math.max(0, 1160 - y) / 1160
-      const x = w.x + (w.amp * (0.4 + rise)) * Math.sin(y * w.freq + t * 0.45 + i * 1.3) + 0.5 * w.amp * Math.sin(y * w.freq * 2.3 - t * 0.3 + i)
-      mid.push([x, y])
-    }
-    const left = [], right = []
-    mid.forEach(([x, y], k) => {
-      const [px, py] = mid[Math.max(0, k - 1)], [nx, ny] = mid[Math.min(N, k + 1)]
-      const dx = nx - px, dy = ny - py, l = Math.hypot(dx, dy) || 1
-      const half = (w.w / 2) * (0.6 + u) * Math.sin(Math.PI * k / N) ** 0.9
-      left.push(`${(x - (dy / l) * half).toFixed(1)} ${(y + (dx / l) * half).toFixed(1)}`)
-      right.unshift(`${(x + (dy / l) * half).toFixed(1)} ${(y - (dx / l) * half).toFixed(1)}`)
-    })
-    const p = paths[i]
-    p.setAttribute("d", "M" + left.join(" L") + " L" + right.join(" L") + "Z")
-    p.setAttribute("fill-opacity", (w.a * Math.sin(Math.PI * u) ** 1.4).toFixed(4))
-  })
+  r.setProperty("--bar", config.bar + "px")
 }
 
 function layerEl(i) {
   while (layers.length <= i) {
     const d = document.createElement("div"); d.className = "layer"
-    const img = document.createElement("img"); d.appendChild(img)
+    const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = "<i></i><i></i><i></i><span></span>"
+    bar.querySelectorAll("i").forEach((e, k) => (e.style.left = 14 + k * 20 + "px"))
+    bar.querySelector("span").textContent = C.title
+    const img = document.createElement("img"); d.append(bar, img)
     $("#win").insertBefore(d, $("#sheen"))
-    layers.push({ d, img, src: "" })
+    layers.push({ d, img, bar, src: "" })
   }
   return layers[i]
 }
@@ -114,7 +93,6 @@ const SOFT = 7
 const edge = (p) => -SOFT + p * (100 + 2 * SOFT)
 
 window.draw = async (s) => {
-  backdrop(s.t)
   const card = (el, c) => { el.style.opacity = c ? c.o : 0; el.style.transform = c ? `translateY(${c.y}px) scale(${c.s})` : "" ; el.style.visibility = c && c.o > 0.001 ? "visible" : "hidden" }
   card($("#title"), s.title)
   card($("#end"), s.end)
@@ -124,13 +102,11 @@ window.draw = async (s) => {
     win.style.visibility = "visible"
     win.style.opacity = s.win.o
     win.style.transform = s.win.tf
-    const g = s.win.glow
-    const a = (k) => Math.round(Math.min(1, s.win.glowA * k) * 255).toString(16).padStart(2, "0")
-    win.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.05), 0 40px 90px -12px rgba(0,0,0,0.7), 0 0 50px 2px ${g}${a(0.26)}, 0 0 200px 30px ${g}${a(0.22)}`
     win.style.webkitBoxReflect = s.win.reflect > 0.002 ? `below 18px linear-gradient(transparent 58%, rgba(255,255,255,${(s.win.reflect * 0.3).toFixed(3)}))` : "none"
     s.win.layers.forEach((l, i) => {
       const L = layerEl(i)
       L.d.style.display = "block"
+      L.d.style.background = l.glass; L.bar.style.color = l.ink
       if (L.src !== l.src) { L.img.src = l.src; L.src = l.src; waits.push(L.img.decode().catch(() => {})) }
       const m = l.p >= 1 ? "none" : `linear-gradient(115deg, #000 ${edge(l.p) - SOFT}%, transparent ${edge(l.p) + SOFT}%)`
       L.d.style.webkitMaskImage = m

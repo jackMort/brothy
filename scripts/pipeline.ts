@@ -75,6 +75,16 @@ function grid(f: Frame, bg: string, fg: string): string {
   return `<g shape-rendering="crispEdges">${rects.join("")}${lines.join("")}</g><g text-rendering="geometricPrecision">${texts.join("")}</g>`
 }
 
+/**
+ * Just the cells, on a transparent canvas (`PAD` around): the video compositor (scripts/stage.html) draws the frosted window and
+ * its title bar in HTML, so only the text and the painted fills (code, popups) are in the image. `bg` is the theme's background:
+ * cells with it draw nothing, and dim text mixes toward it.
+ */
+export function bare(f: Frame, bg: string, fg: string): { w: number; h: number; body: string } {
+  const w = f.cols * CW + 2 * PAD, h = f.rows * CH + 2 * PAD
+  return { w, h, body: `<g transform="translate(${PAD} ${PAD})" font-family="${STACK}" font-size="${FS}" xml:space="preserve">${grid(f, bg, fg)}</g>` }
+}
+
 export interface Win { w: number; h: number; body: string; bg: string; fg: string; accent: string }
 
 /** The frame's background and text colors (most common), and the accent (the logo's color). */

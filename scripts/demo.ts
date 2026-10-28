@@ -21,7 +21,7 @@ import {
   mixHex, onScreen, outBack, outCubic, outQuart, pressDepth, span, tilt, transform,
 } from "./cinema"
 import { STOCK, fakeFetch, stockEdit, writeAIConfig } from "./fakeai"
-import { BAR, CH, CW, DOCS, PAD, ROOT, mix, pngCommand, sandbox, svgDoc, window } from "./pipeline"
+import { BAR, CH, CW, DOCS, PAD, ROOT, mix, pngCommand, sandbox, svgDoc, bare } from "./pipeline"
 import type { Frame } from "./session"
 
 const COLS = 110, ROWS = 26
@@ -95,9 +95,6 @@ const FULL: Step[] = [
   { keys: "t type:brothy", gap: 120, cap: cap("t", "type to filter"), cam: [6, 1, 98, 22], hold: 500 },
   { keys: "left", cap: cap("←", "dark"), hold: 600 },
   { keys: "enter", cap: cap("⏎", "back to brothy"), cam: "full", hold: 1000 },
-  // transparent
-  { keys: "T", cap: cap("T", "transparent background"), hold: 1500 },
-  { keys: "T", cap: cap("T", "opaque again"), hold: 900 },
   // source
   { keys: "s", cap: cap("s", "Markdown source"), hold: 1500 },
   { keys: "s", cap: cap("s", "back to the preview"), hold: 800 },
@@ -162,7 +159,7 @@ async function record(cut: Cut, home: string, out: string) {
   const { frame, frameKey, mount, press, settle, sleep } = await import("./session")
   const { shutdownHighlighter } = await import("../src/highlight")
   writeAIConfig(home)
-  const s = await mount({ root: join(home, "examples"), initialFile: cut.initialFile && join(home, cut.initialFile), width: COLS, height: ROWS, fetch: fakeFetch() })
+  const s = await mount({ root: join(home, "examples"), initialFile: cut.initialFile && join(home, cut.initialFile), width: COLS, height: ROWS, fetch: fakeFetch(), transparent: true })
   await settle(s)
   let rnd = 42 // mulberry32: same jitter every run
   const jitter = () => { rnd = (rnd + 0x6d2b79f5) | 0; let x = Math.imul(rnd ^ (rnd >>> 15), 1 | rnd); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296 - 0.5 }
@@ -201,16 +198,6 @@ async function record(cut: Cut, home: string, out: string) {
 const base = themes[0]! // brothy: the canvas is the same whatever theme the app shows
 const BACK = mix(base.background, "#000000", 0.55)
 
-/** A desktop behind the transparent terminal: dusk gradient and two soft glows. */
-const wallpaper = (w: number, h: number) => `
-  <defs>
-    <linearGradient id="wp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b1d3f"/><stop offset="0.55" stop-color="#1b2338"/><stop offset="1" stop-color="#11302f"/></linearGradient>
-    <filter id="wb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
-  </defs>
-  <rect width="${w}" height="${h}" fill="url(#wp)"/>
-  <circle cx="${w * 0.78}" cy="${h * 0.3}" r="${h * 0.28}" fill="#c0703a" opacity="0.32" filter="url(#wb)"/>
-  <circle cx="${w * 0.2}" cy="${h * 0.8}" r="${h * 0.3}" fill="#2f8f86" opacity="0.28" filter="url(#wb)"/>`
-
 /** The theme a frame is drawn in: the one whose colors cover the most cells (a scrim or popup dims some, never all). */
 function themeOf(f: Frame) {
   let best = base, most = -1
@@ -223,9 +210,6 @@ function themeOf(f: Frame) {
   return best
 }
 
-/** A transparent frame: most cells have no background. */
-const isClear = (f: Frame) => { const cells = f.lines.flat(); return cells.filter((c) => !c.bg).length > cells.length / 2 }
-
 async function pool<T>(items: T[], n: number, fn: (x: T, i: number) => Promise<void>) {
   let next = 0
   await Promise.all(Array.from({ length: n }, async () => { for (let i = next++; i < items.length; i = next++) await fn(items[i]!, i) }))
@@ -234,23 +218,22 @@ async function pool<T>(items: T[], n: number, fn: (x: T, i: number) => Promise<v
 /** Each frame as a window PNG (ZOOM×), plus how it enters (a change of theme or transparency sweeps) and the theme's accent. */
 async function stills(rec: Recording, dir: string): Promise<{ stills: Still[]; ww: number; wh: number }> {
   mkdirSync(dir, { recursive: true })
-  let lastBg = base.background, lastFg = base.text, prev = ""
+  let prev = ""
   let ww = 0, wh = 0
   const jobs: { svg: string; png: string }[] = []
+  const rgba = (hex: string, a: number) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(",")},${a})`
   const out = rec.frames.map((r, i): Still => {
-    const clear = isClear(r.f)
-    const win = window(r.f, TITLE, `f${i}`, { shadow: false, ...(clear ? { bg: lastBg, fg: lastFg, wallpaper } : {}) })
-    if (!clear) { lastBg = win.bg; lastFg = win.fg }
-    ww = win.w; wh = win.h
     const theme = themeOf(r.f), accent = theme.primary
-    const look = `${theme.name}${clear ? " clear" : ""}`
+    const win = bare(r.f, theme.background, theme.text)
+    ww = win.w; wh = BAR + win.h
+    const look = theme.name
     const png = join(dir, `${String(i).padStart(5, "0")}.png`)
     if (!existsSync(png)) {
       const svg = png.replace(/\.png$/, ".svg")
       writeFileSync(svg, svgDoc(win.w, win.h, win.body))
       jobs.push({ svg, png })
     }
-    const st = { src: `file://${png}`, t: r.t, sweep: i > 0 && look !== prev, accent }
+    const st: Still = { src: `file://${png}`, t: r.t, sweep: i > 0 && look !== prev, accent, glass: rgba(theme.background, theme.mode === "light" ? 0.8 : 0.74), ink: mix(theme.text, theme.background, 0.45) }
     prev = look
     return st
   })
@@ -268,7 +251,7 @@ interface Shot {
   t: number
   title: { o: number; y: number; s: number } | null
   end: { o: number; y: number; s: number } | null
-  win: { o: number; tf: string; reflect: number; glow: string; glowA: number; layers: { src: string; p: number; accent: string }[] } | null
+  win: { o: number; tf: string; reflect: number; glow: string; glowA: number; layers: { src: string; p: number; accent: string; glass?: string; ink?: string }[] } | null
   cap: { keys: { k: string; d: number }[]; text: string; o: number; y: number; s: number } | null
 }
 
@@ -358,12 +341,14 @@ async function composite(frames: Shot[], L: Layout, dir: string, only?: number[]
   }
   mkdirSync(dir, { recursive: true })
   const config = {
-    ww: L.ww, wh: L.wh, wordmark: WORDMARK, tagline: "a calm terminal Markdown reader", url: "github.com/jackMort/brothy",
-    install: "<b>bun install</b> · <b>brothy</b> [folder]",
+    ww: L.ww, wh: L.wh, wordmark: WORDMARK, tagline: "a calm terminal Markdown reader", url: "github.com/jackMort/brothy · releases",
+    title: TITLE, bar: BAR,
+    install: "download a binary, then <b>brothy ~/notes</b>",
     vars: {
       back: BACK, primary: base.primary, ink: mix(base.text, BACK, 0.08), mute: mix(base.text, BACK, 0.45),
       "cap-hi": mix(BACK, "#ffffff", 0.2), "cap-lo": mix(BACK, "#ffffff", 0.11), "cap-side": mix(BACK, "#ffffff", 0.03),
-      glowA: mix(BACK, base.primary, 0.2), glowB: mix(BACK, base.secondary, 0.16),
+      // the site's wallpaper (site/src/styles/brothy.css .stage .wall), brothy dark
+      bg: base.background, element: base.backgroundElement, text: base.text, secondary: base.secondary, accent: base.accent,
     },
   }
   const workers = Math.max(1, Math.min(8, cpus().length - 2))
@@ -446,7 +431,7 @@ try {
     const x264 = (o: string, w: number, crf: number) => ["-vf", `scale=${w}:-2:flags=lanczos,format=yuv420p`, "-c:v", "libx264", "-preset", "slow", "-crf", String(crf), "-movflags", "+faststart", o]
     if (name === "full") {
       const mp4 = join(DOCS, "demo.mp4")
-      ff(x264(mp4, 1920, 24))
+      ff(x264(mp4, 1920, 26)) // under the 10 MB the README player loads comfortably
       console.log(`docs/demo.mp4 ${mb(mp4)} MB`)
     } else {
       const mp4 = join(DOCS, "demo-short.mp4"), gif = join(DOCS, "demo.gif")

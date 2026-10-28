@@ -113,22 +113,22 @@ export function capsOf(key: string): string[] {
 
 // ---------- frames shown in the window ----------
 /** One app frame as the window shows it: its image, when it appears, how (sweep = theme change) and the theme accent. */
-export interface Still { src: string; t: number; sweep: boolean; accent: string }
+export interface Still { src: string; t: number; sweep: boolean; accent: string; /** the glass tint behind the frame (CSS color) and the title bar's ink */ glass?: string; ink?: string }
 export const SWEEP = 0.6
 
 /**
  * The images stacked in the window at time `t` (bottom first), each with its sweep progress (1 = fully shown). A sweep belongs
  * to the run of frames that starts with it, so later frames of that run (a fading hint, a moving cursor) keep sweeping in.
  */
-export function layersAt(stills: Still[], t: number, max = 6): { src: string; p: number; accent: string }[] {
+export function layersAt(stills: Still[], t: number, max = 6): { src: string; p: number; accent: string; glass?: string; ink?: string }[] {
   let k = 0
   for (let i = 0; i < stills.length && stills[i]!.t <= t; i++) k = i
-  const out: { src: string; p: number; accent: string }[] = []
+  const out: { src: string; p: number; accent: string; glass?: string; ink?: string }[] = []
   for (let j = k; j >= 0 && out.length < max;) {
     let g = j // first frame of j's run
     while (g > 0 && !stills[g]!.sweep) g--
     const p = stills[g]!.sweep && g > 0 ? inOutSine(clamp01((t - stills[g]!.t) / SWEEP)) : 1
-    out.unshift({ src: stills[j]!.src, p, accent: stills[j]!.accent })
+    out.unshift({ src: stills[j]!.src, p, accent: stills[j]!.accent, glass: stills[j]!.glass, ink: stills[j]!.ink })
     if (p >= 1) break
     j = g - 1
   }
