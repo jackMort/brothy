@@ -20,6 +20,7 @@ import {
   FLAT, INTRO_FROM, OUTRO_TO, camTrack, capsOf, clamp01, frameRect, homeCam, inCubic, inOutCubic, layersAt, lerp, lerpPose,
   mixHex, onScreen, outBack, outCubic, outQuart, pressDepth, span, tilt, transform,
 } from "./cinema"
+import { STOCK, fakeFetch, stockEdit, writeAIConfig } from "./fakeai"
 import { BAR, CH, CW, DOCS, PAD, ROOT, mix, pngCommand, sandbox, svgDoc, window } from "./pipeline"
 import type { Frame } from "./session"
 
@@ -53,11 +54,11 @@ interface Step {
 
 const cap = (keys: string | string[], text: string): Cap => ({ keys: Array.isArray(keys) ? keys : [keys], text })
 
-// a success callout: its ✓ is in JetBrains Mono (the note callout's ✎ is in no font the PNGs are drawn with)
+// stock.md is edited on disk (scripts/fakeai.ts): Info lists the changed sections, D explains them
 const RELOAD: Step = {
-  write: ["examples/README.md", (s) => s.replace("# Welcome to brothy\n", "# Welcome to brothy\n\n> [!success] Just saved in another window\n> brothy reloads the note the moment it changes on disk.\n")],
+  write: [STOCK, stockEdit],
   cap: { keys: [], text: "saved in your editor: live reload" },
-  cam: [32, 3, 77, 4],
+  cam: [0, 3, 34, 14],
   hold: 2300,
 }
 
@@ -104,12 +105,23 @@ const FULL: Step[] = [
   { keys: "o", cap: cap("o", "open a recent project or a path"), cam: [24, 8, 62, 8], hold: 1300 },
   { keys: "type:~/examples", hold: 600 },
   { keys: "enter", cap: cap("⏎", "open"), cam: "full", hold: 1100 },
-  // live reload
-  { keys: "g", cap: cap("g", "top"), hold: 600 },
+  // AI: the config's `ai` block points at scripts/fakeai.ts, which answers offline
+  { keys: "g", cap: cap("g", "top"), hold: 500 },
+  { keys: "a", cap: cap("a", "TL;DR from your own model"), cam: [0, 3, 34, 14], hold: 4800 },
+  { keys: "C-p", cap: cap(["ctrl", "p"], "go to anything"), cam: [6, 1, 98, 21], hold: 800 },
+  { keys: "type:?how\\slong\\sshould\\sbroth\\ssimmer", cap: cap("?", "ask a question"), hold: 700 },
+  { keys: "enter", cap: cap("⏎", "ask: only the question is sent"), hold: 3000 },
+  { keys: "enter", cap: cap("⏎", "open the answer"), cam: "full", hold: 1800 },
+  // live reload, then D explains what changed
   RELOAD,
-  // zen
+  { keys: "3", cap: cap("3", "info lists what changed"), hold: 1400 },
+  { keys: "D", cap: cap("D", "explain the change"), hold: 4600 },
+  { keys: "enter", cap: cap("⏎", "jump to it"), cam: "full", hold: 1800 },
+  // zen, with a gloss under the reading line
   { keys: "z", cap: cap("z", "zen mode"), cam: [19, 12, 70, 10], hold: 1100 },
-  { keys: "j j j j j j", gap: 280, cap: cap(["j", "k"], "read"), hold: 800 },
+  { keys: "j j j j j j j j j j j j j j j", gap: 230, cap: cap(["j", "k"], "read"), hold: 800 },
+  { keys: "a", cap: cap("a", "gloss this section"), hold: 5000 },
+  { keys: "esc", cap: cap("esc", "hide it"), hold: 1000 },
   { keys: "z", cap: cap("z", "leave zen"), cam: "full", hold: 1300 },
 ]
 
@@ -122,7 +134,7 @@ const SHORT: Step[] = [
   { keys: "enter", cap: cap("⏎", "open"), cam: "full", hold: 800 },
   { keys: "t", cap: cap("t", "pick a theme · ←→ dark / light"), cam: [6, 1, 98, 22], hold: 600 },
   // the pane shows the family; esc keeps brothy: applying (the full cut does) sweeps the window twice and the GIF
-  // outgrows GIF_MAX
+  // outgrows GIF_MAX (a TL;DR step in this cut did too: the AI features are in the full cut and the site casts)
   { keys: "down down down", gap: 450, cap: cap(["↑", "↓"], "family, shown in the pane"), hold: 700 },
   { keys: "esc", cap: cap("esc", "keep yours"), cam: "full", hold: 450 },
   { keys: "z", cap: cap("z", "zen mode"), cam: [19, 3, 70, 14], hold: 700 }, // from row 3 the zen heading row stays in the frame
@@ -149,7 +161,8 @@ interface Recording { frames: Rec[]; marks: number[]; presses: { t: number; key:
 async function record(cut: Cut, home: string, out: string) {
   const { frame, frameKey, mount, press, settle, sleep } = await import("./session")
   const { shutdownHighlighter } = await import("../src/highlight")
-  const s = await mount({ root: join(home, "examples"), initialFile: cut.initialFile && join(home, cut.initialFile), width: COLS, height: ROWS })
+  writeAIConfig(home)
+  const s = await mount({ root: join(home, "examples"), initialFile: cut.initialFile && join(home, cut.initialFile), width: COLS, height: ROWS, fetch: fakeFetch() })
   await settle(s)
   let rnd = 42 // mulberry32: same jitter every run
   const jitter = () => { rnd = (rnd + 0x6d2b79f5) | 0; let x = Math.imul(rnd ^ (rnd >>> 15), 1 | rnd); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296 - 0.5 }
@@ -174,7 +187,7 @@ async function record(cut: Cut, home: string, out: string) {
     marks.push(now())
     if (st.write) { const p = join(home, st.write[0]); writeFileSync(p, st.write[1](readFileSync(p, "utf8"))) }
     for (const k of (st.keys ?? "").split(" ").filter(Boolean)) {
-      if (k.startsWith("type:")) for (const ch of k.slice(5)) { await press(s, `type:${ch}`); await run(TYPE_GAP * (1 + jitter())) }
+      if (k.startsWith("type:")) for (const ch of k.slice(5).replaceAll("\\s", " ")) { await press(s, `type:${ch}`); await run(TYPE_GAP * (1 + jitter())) }
       else { presses.push({ t: now(), key: k }); await press(s, k); await run(st.gap ?? 200) }
     }
     await run(st.hold)

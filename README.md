@@ -21,7 +21,7 @@ zen, and — only if you ask — let a model summarize, gloss or answer. Obsidia
 
 ![brothy showing a folder tree beside a rendered note with a callout, highlighted code and a table](docs/screenshot.png)
 
-![A one-minute tour of brothy: reading a note, following links, the switcher, themes, zen mode](docs/demo.gif)
+![A tour of brothy: reading a note, following links, the switcher, themes, the opt-in AI (TL;DR, ask, explain a reload, zen gloss), live reload, zen mode](docs/demo.gif)
 
 brothy is styled after [Noodle](https://noodlerest.dev): a top line that says
 where you are, a tabbed panel (Files / Outline / Info), the document at a
