@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format is based on
 - `bun run cast` (`scripts/cast.ts`) records the demo as `site/public/casts/tour-{dark,light}.cast` by playing a scripted tour of the real UI headlessly.
 - The recorded tour (docs site casts and README videos) shows the AI features too: TL;DR, ask, `D` on a live reload and the zen gloss, answered offline by a stand-in model (`scripts/fakeai.ts`) so recording needs no network or key; `examples/notes/stock.md` is the note they work on. The README shows `docs/demo.mp4` (the gif is its fallback), and the videos are staged like the site demo: the same wallpaper behind a frosted glass window.
 
+### Changed
+- New default palette, Hōjicha: `brothy` and `brothy-light` move from teal / gold / coral to roasted-tea neutrals with one persimmon signature colour (H1, focus, the bowl), sand and dusty-plum H2 / H3, muted lavender links. Body text sits near 14:1, every content colour reaches 4.5:1 on the page, the side panel and code blocks, borders are easier to see, and error callouts no longer share the tip / H3 colour. The docs site, favicon and logo follow.
+
 ## [0.2.0] - 2026-10-28
 
 ### Added

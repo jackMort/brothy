@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { CLEAR, contrast, contrastOn, mix, surface, themeByName, themes } from "../src/theme"
+import { closestPair, HOUSE, HOUSE_APART, HOUSE_TEXT, ratios, worst } from "../scripts/contrast"
 
 test("contrastOn picks dark text on light backgrounds and light on dark", () => {
   expect(contrastOn("#ffffff")).toBe("#1a1a1a")
@@ -61,6 +62,15 @@ test("themes: contrast floors on background and backgroundPanel", () => {
     for (const [k, min] of floors)
       for (const bg of ["background", "backgroundPanel"] as const)
         expect(contrast(t[k], t[bg]), `${t.name} ${k} on ${bg}`).toBeGreaterThanOrEqual(min)
+})
+
+test("the house themes: body text about 14:1, every content role 4.5:1 on page, panel and code fill, visible borders, no two accents alike", () => {
+  for (const t of [themeByName("brothy"), themeByName("brothy-light")]) {
+    for (const [k, , floor] of HOUSE) expect(worst(t, k), `${t.name} ${k}`).toBeGreaterThanOrEqual(floor)
+    expect(ratios(t, "text").bg, `${t.name} text on the page`).toBeGreaterThanOrEqual(HOUSE_TEXT)
+    const c = closestPair(t)
+    expect(c.dE, `${t.name} ${c.pair.join(" / ")}`).toBeGreaterThanOrEqual(HOUSE_APART)
+  }
 })
 
 test("themeByName falls back to brothy", () => {

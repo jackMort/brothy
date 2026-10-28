@@ -9,8 +9,8 @@ interface Cast { cols: number; rows: number; ev: { t: number; d: string }[]; dur
 type Mode = "dark" | "light"
 
 /** brothy / brothy-light background and text, as the cast's SGR writes them */
-const BG: Record<Mode, string> = { dark: "24,23,20", light: "251,247,239" }
-const FG: Record<Mode, string> = { dark: "243,239,231", light: "42,38,33" }
+const BG: Record<Mode, string> = { dark: "23,22,21", light: "246,244,240" }
+const FG: Record<Mode, string> = { dark: "231,226,218", light: "36,32,28" }
 const mode = (): Mode => (document.documentElement.dataset.theme === "light" ? "light" : "dark")
 
 async function load(url: string): Promise<Cast> {
