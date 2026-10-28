@@ -111,6 +111,18 @@ export function capsOf(key: string): string[] {
   return [key]
 }
 
+// ---------- wallpaper ----------
+/**
+ * The photo behind the window: `BROTHY_WALLPAPER=<image path>` (never committed: it is third-party art), as a file URL; null when
+ * it is unset or not a file, and the compositor draws the generated wallpaper from the theme's own washes instead.
+ */
+export function wallpaperUrl(env: Record<string, string | undefined>, exists: (p: string) => boolean = (p) => Bun.file(p).size > 0): string | null {
+  const p = env.BROTHY_WALLPAPER?.trim()
+  if (!p) return null
+  const abs = p.startsWith("/") ? p : `${process.cwd()}/${p}`
+  try { return exists(abs) ? `file://${encodeURI(abs)}` : null } catch { return null }
+}
+
 // ---------- frames shown in the window ----------
 /** One app frame as the window shows it: its image, when it appears, how (sweep = theme change) and the theme accent. */
 export interface Still { src: string; t: number; sweep: boolean; accent: string; /** the glass tint behind the frame (CSS color) and the title bar's ink */ glass?: string; ink?: string }

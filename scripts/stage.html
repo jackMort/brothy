@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- The compositor scripts/demo.ts screenshots in headless Chromium: the site wallpaper, title/end cards, the app window
+<!-- The compositor scripts/demo.ts screenshots in headless Chromium: the wallpaper, title/end cards, the app window
      (pre-rendered PNG frames) under a CSS 3D camera with theme sweeps, glow and floor reflection, and keycap captions.
      init(config) once, then draw(shot) per output frame (shapes in scripts/demo.ts `Shot`). -->
 <html>
@@ -18,13 +18,13 @@
     radial-gradient(34% 50% at 84% 72%, color-mix(in srgb, var(--secondary) 20%, transparent), transparent 70%),
     radial-gradient(30% 40% at 62% 8%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
     linear-gradient(180deg, var(--bg), var(--element) 50%, var(--bg)); }
+  #bg.photo::after { display: none; }
   #bg::after { content: ""; position: absolute; inset: 0; opacity: 0.5; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
   #stage { inset: 0; perspective: 2000px; perspective-origin: 960px 480px; }
-  /* the frosted window: each layer tints with its theme's background; the backdrop is blurred once, here */
+  /* the window: solid, each layer in its theme's background (a sweep wipes one over the other) */
   #win { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 12px; overflow: hidden;
-         -webkit-backdrop-filter: blur(30px) saturate(1.35); backdrop-filter: blur(30px) saturate(1.35);
-         box-shadow: inset 0 0 0 1px rgba(243,239,231,0.1), 0 40px 80px -30px rgba(0,0,0,0.55), 0 12px 24px -12px rgba(0,0,0,0.55); }
+         box-shadow: inset 0 0 0 1px rgba(243,239,231,0.1), 0 40px 80px -30px rgba(0,0,0,0.6), 0 12px 24px -12px rgba(0,0,0,0.5); }
   #win .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
   #win .layer img { position: absolute; left: 0; width: 100%; top: var(--bar); height: calc(100% - var(--bar)); }
   #win .bar { position: absolute; left: 0; top: 0; width: 100%; height: var(--bar); display: flex; align-items: center; justify-content: center;
@@ -63,7 +63,7 @@ const $ = (s) => document.querySelector(s)
 let C = null
 const layers = []
 
-window.init = (config) => {
+window.init = async (config) => {
   C = config
   const r = document.documentElement.style
   for (const [k, v] of Object.entries(config.vars)) r.setProperty(`--${k}`, v)
@@ -74,6 +74,13 @@ window.init = (config) => {
   $("#win").style.width = config.ww + "px"
   $("#win").style.height = config.wh + "px"
   r.setProperty("--bar", config.bar + "px")
+  if (config.wall) {
+    // BROTHY_WALLPAPER: a photo, cropped to cover and darkened a little so the window reads; the generated wallpaper otherwise
+    const img = new Image(); img.src = config.wall
+    await img.decode()
+    $("#bg").classList.add("photo")
+    $("#bg").style.background = `radial-gradient(70% 70% at 50% 50%, rgba(0,0,0,0.28), transparent 80%), linear-gradient(rgba(0,0,0,0.24), rgba(0,0,0,0.24)), url("${config.wall}") center / cover no-repeat`
+  }
 }
 
 function layerEl(i) {

@@ -14,7 +14,7 @@ bun run typecheck                 # bunx tsc --noEmit (covers src, scripts, test
 bun run build                     # compile single binary ./brothy (tree-sitter parsers are embedded); delete it after checking
 bun run snapshot examples --size 100x30 --keys "tab j s"   # headless frame dump
 bun run screenshots               # docs/*.{svg,png} (needs resvg, the only converter: rsvg-convert and magick merge words and set ligatures, so a missing resvg fails with install hints); helpers in scripts/session.tsx, scripts/pipeline.ts
-bun run demo [-- short|full]      # docs/demo.gif + demo-short.mp4 / demo.mp4: real-time session, then a CSS 3D compositor (scripts/cinema.ts, scripts/stage.html) in headless Chromium via Playwright (fetched on first run); needs resvg, ffmpeg; ~8 min
+bun run demo [-- short|full]      # docs/demo.gif + demo-short.mp4 / demo.mp4: real-time session, then a CSS 3D compositor (scripts/cinema.ts, scripts/stage.html) in headless Chromium via Playwright (fetched on first run); needs resvg, ffmpeg; ~25 min; the window is solid on the site's generated wallpaper (theme.ts washes), or on a photo with `BROTHY_WALLPAPER=<image> bun run demo` (never commit the image)
 bun run cast [dark|light]       # site/public/casts/tour-*.cast: scripts/cast.ts plays a scripted tour of the real UI headlessly, asciicast v2, 104x30
 cd site && bun install && bun run dev|build   # docs site (Astro Starlight; deployed by pages.yml; screenshots via the src/assets/docs symlink to ../docs); root typecheck/test ignore it
 bun scripts/contrast.ts [theme…]  # WCAG table of each role on page / panel / code fill + the closest accent pair (default brothy brothy-light; ✗ = below the house floors tests/theme.test.ts enforces for them)

@@ -17,7 +17,7 @@ import { WORDMARK } from "../src/status"
 import { themes } from "../src/theme"
 import {
   type Cam, type Layout, type Move, type Pose, type Rect, type Still,
-  FLAT, INTRO_FROM, OUTRO_TO, camTrack, capsOf, clamp01, frameRect, homeCam, inCubic, inOutCubic, layersAt, lerp, lerpPose,
+  FLAT, INTRO_FROM, wallpaperUrl, OUTRO_TO, camTrack, capsOf, clamp01, frameRect, homeCam, inCubic, inOutCubic, layersAt, lerp, lerpPose,
   mixHex, onScreen, outBack, outCubic, outQuart, pressDepth, span, tilt, transform,
 } from "./cinema"
 import { STOCK, fakeFetch, stockEdit, writeAIConfig } from "./fakeai"
@@ -159,7 +159,7 @@ async function record(cut: Cut, home: string, out: string) {
   const { frame, frameKey, mount, press, settle, sleep } = await import("./session")
   const { shutdownHighlighter } = await import("../src/highlight")
   writeAIConfig(home)
-  const s = await mount({ root: join(home, "examples"), initialFile: cut.initialFile && join(home, cut.initialFile), width: COLS, height: ROWS, fetch: fakeFetch(), transparent: true })
+  const s = await mount({ root: join(home, "examples"), initialFile: cut.initialFile && join(home, cut.initialFile), width: COLS, height: ROWS, fetch: fakeFetch() })
   await settle(s)
   let rnd = 42 // mulberry32: same jitter every run
   const jitter = () => { rnd = (rnd + 0x6d2b79f5) | 0; let x = Math.imul(rnd ^ (rnd >>> 15), 1 | rnd); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296 - 0.5 }
@@ -221,7 +221,6 @@ async function stills(rec: Recording, dir: string): Promise<{ stills: Still[]; w
   let prev = ""
   let ww = 0, wh = 0
   const jobs: { svg: string; png: string }[] = []
-  const rgba = (hex: string, a: number) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(",")},${a})`
   const out = rec.frames.map((r, i): Still => {
     const theme = themeOf(r.f), accent = theme.primary
     const win = bare(r.f, theme.background, theme.text)
@@ -233,7 +232,7 @@ async function stills(rec: Recording, dir: string): Promise<{ stills: Still[]; w
       writeFileSync(svg, svgDoc(win.w, win.h, win.body))
       jobs.push({ svg, png })
     }
-    const st: Still = { src: `file://${png}`, t: r.t, sweep: i > 0 && look !== prev, accent, glass: rgba(theme.background, theme.mode === "light" ? 0.8 : 0.74), ink: mix(theme.text, theme.background, 0.45) }
+    const st: Still = { src: `file://${png}`, t: r.t, sweep: i > 0 && look !== prev, accent, glass: theme.background, ink: mix(theme.text, theme.background, 0.45) }
     prev = look
     return st
   })
@@ -342,7 +341,7 @@ async function composite(frames: Shot[], L: Layout, dir: string, only?: number[]
   mkdirSync(dir, { recursive: true })
   const config = {
     ww: L.ww, wh: L.wh, wordmark: WORDMARK, tagline: "a calm terminal Markdown reader", url: "github.com/jackMort/brothy · releases",
-    title: TITLE, bar: BAR,
+    title: TITLE, bar: BAR, wall: wallpaperUrl(process.env),
     install: "download a binary, then <b>brothy ~/notes</b>",
     vars: {
       back: BACK, primary: base.primary, ink: mix(base.text, BACK, 0.08), mute: mix(base.text, BACK, 0.45),
