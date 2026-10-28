@@ -1,0 +1,73 @@
+/* brothy palettes (src/theme.ts: `brothy` dark, `brothy-light`) on Starlight's custom properties.
+   Every color on the site comes from these two palettes. */
+:root {
+  --sl-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* brothy */
+  --b-primary: #59c9be; --b-secondary: #f2c65a; --b-accent: #ef7b63;
+  --b-error: #ef7b63; --b-warning: #f0a96b; --b-success: #9dcb82; --b-info: #89b4fa;
+  --b-text: #f3efe7; --b-muted: #aaa39a;
+  --b-bg: #181714; --b-element: #24211d;
+  --b-border: #3b3630; --b-subtle: #514a42;
+
+  --sl-color-white: var(--b-text);
+  --sl-color-gray-1: var(--b-text);
+  --sl-color-gray-2: var(--b-text);
+  --sl-color-gray-3: var(--b-muted);
+  --sl-color-gray-4: var(--b-muted);
+  --sl-color-gray-5: var(--b-subtle);
+  --sl-color-gray-6: var(--b-element);
+  --sl-color-gray-7: var(--b-bg);
+  --sl-color-black: var(--b-bg);
+
+  --sl-color-orange: var(--b-warning); --sl-color-orange-high: var(--b-warning); --sl-color-orange-low: var(--b-element);
+  --sl-color-green: var(--b-success); --sl-color-green-high: var(--b-success); --sl-color-green-low: var(--b-element);
+  --sl-color-blue: var(--b-info); --sl-color-blue-high: var(--b-info); --sl-color-blue-low: var(--b-element);
+  --sl-color-purple: var(--b-secondary); --sl-color-purple-high: var(--b-secondary); --sl-color-purple-low: var(--b-element);
+  --sl-color-red: var(--b-error); --sl-color-red-high: var(--b-error); --sl-color-red-low: var(--b-element);
+  --sl-color-accent: var(--b-primary); --sl-color-accent-high: var(--b-primary); --sl-color-accent-low: var(--b-element);
+
+  --sl-color-text: var(--b-text);
+  --sl-color-text-accent: var(--b-primary);
+  --sl-color-text-invert: var(--b-bg);
+  --sl-color-bg: var(--b-bg);
+  --sl-color-bg-nav: var(--b-bg);
+  --sl-color-bg-sidebar: var(--b-bg);
+  --sl-color-bg-inline-code: var(--b-element);
+  --sl-color-bg-accent: var(--b-primary);
+  --sl-color-hairline-light: var(--b-border);
+  --sl-color-hairline: var(--b-border);
+  --sl-color-hairline-shade: var(--b-border);
+  --sl-color-backdrop-overlay: var(--b-bg);
+  --sl-shadow-md: none; --sl-shadow-lg: none;
+  --on-primary: var(--b-bg);
+}
+
+/* brothy-light */
+:root[data-theme="light"] {
+  --b-primary: #0f766e; --b-secondary: #8a5a00; --b-accent: #c2410c;
+  --b-error: #b42318; --b-warning: #a15c07; --b-success: #3f6b1d; --b-info: #1d5fb8;
+  --b-text: #2a2621; --b-muted: #6b645b;
+  --b-bg: #fbf7ef; --b-element: #f0eadc;
+  --b-border: #d9d1c0; --b-subtle: #c9bfa9;
+}
+
+/* ---- chrome ---- */
+.site-title { font-family: var(--sl-font-mono); font-weight: 700; }
+.site-title img, .site-title svg { color: var(--b-primary); }
+header.header { border-bottom-color: var(--b-border); }
+.sidebar-content a[aria-current="page"], .sidebar-content a[aria-current="page"]:hover { background: var(--b-primary); color: var(--on-primary); font-weight: 600; }
+.sl-markdown-content :not(pre) > code { border: 1px solid var(--b-border); color: var(--b-secondary); }
+.sl-markdown-content kbd, kbd.key {
+  font-family: var(--sl-font-mono); font-size: 0.8em; border: 1px solid var(--b-subtle); border-bottom-width: 2px;
+  border-radius: 0.3rem; padding: 0 0.3rem; background: var(--b-bg); color: var(--b-text);
+}
+.sl-markdown-content table { border: 1px solid var(--b-border); }
+.sl-markdown-content :is(th, td) { border-color: var(--b-border); }
+.sl-markdown-content th { background: var(--b-element); }
+.sl-markdown-content :not(a) > img { border-radius: 0.6rem; border: 1px solid var(--b-border); }
+.starlight-aside { border-radius: 0.25rem; }
+.sl-link-button.primary { background: var(--b-primary); border-color: var(--b-primary); color: var(--on-primary); border-radius: 999rem; }
+.sl-link-button.secondary, .sl-link-button.minimal { color: var(--b-text); border-color: var(--b-subtle); border-radius: 999rem; background: transparent; }
+.sl-link-button.secondary:hover, .sl-link-button.minimal:hover { border-color: var(--b-text); }

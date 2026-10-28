@@ -1,0 +1,23 @@
+---
+title: Zen mode
+description: "Only the text, centred: scroll or pages flow, spotlight, typewriter and teleprompter."
+---
+
+<!-- Mirrors README § Keys (zen) and Config (zen): update both. -->
+
+![Zen mode: only the text, centered](../../../assets/docs/zen.png)
+
+<kbd>z</kbd> enters zen: only the text, centred. <kbd>esc</kbd> leaves; <kbd>s</kbd> shows the normal Source view. <kbd>Z</kbd> opens the settings popup (<kbd>↑</kbd> <kbd>↓</kbd> row, <kbd>space</kbd> toggle, <kbd>←</kbd> <kbd>→</kbd> adjust, <kbd>⏎</kbd> save, <kbd>esc</kbd> revert). In zen, <kbd>[</kbd> and <kbd>]</kbd> move by section.
+
+| Setting | Does |
+| --- | --- |
+| Flow | `scroll`, or `pages`: one section per page, short ones centred |
+| Spotlight | dims the lines outside the section you are reading |
+| Typewriter | keeps the reading line on the middle row |
+| Ghost chrome | the top line and hints fade out after a moment |
+| Teleprompter | <kbd>space</kbd> starts and pauses auto-scroll at the set words per minute |
+| Measure | the text width in columns, or the whole pane |
+
+Spotlight, typewriter and the teleprompter are for the scroll flow. While reading, <kbd>&lt;</kbd> <kbd>&gt;</kbd> make the text narrower or wider and <kbd>+</kbd> <kbd>-</kbd> change the teleprompter speed (saved at once). With an `ai` block, <kbd>a</kbd> [glosses the section](/brothy/ai/zen-gloss/) you are reading.
+
+Zen always starts off; its settings are saved under `zen` in [`config.json`](/brothy/config/zen-settings/).

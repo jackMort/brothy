@@ -36,6 +36,7 @@
     "snapshot": "bun scripts/snapshot.tsx",
     "screenshots": "bun scripts/screenshots.ts",
     "demo": "bun scripts/demo.ts",
+    "cast": "bun scripts/cast.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
     "build": "bun build --compile src/cli.tsx --outfile brothy"

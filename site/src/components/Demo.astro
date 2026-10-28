@@ -1,0 +1,67 @@
+---
+// The front page demo: asciinema-player in a terminal-window frame. Plays tour-dark.cast or tour-light.cast (scripts/cast.ts)
+// to match Starlight's theme and swaps when it changes, keeping the position.
+import "asciinema-player/dist/bundle/asciinema-player.css"
+const base = import.meta.env.BASE_URL.replace(/\/$/, "")
+---
+
+<div class="term">
+  <div class="bar"><i></i><i></i><i></i><b>brothy ~/examples</b></div>
+  <div id="tour" class="screen" data-dark={`${base}/casts/tour-dark.cast`} data-light={`${base}/casts/tour-light.cast`}></div>
+</div>
+<p class="cap">Recorded from the real UI and played by <a href="https://docs.asciinema.org/manual/player/">asciinema-player</a>: pause it and select the text.</p>
+
+<script>
+  import * as AsciinemaPlayer from "asciinema-player"
+
+  const el = document.getElementById("tour")!
+  const root = document.documentElement
+  let player: any = null
+  let mode = ""
+
+  const current = () => (root.dataset.theme === "light" ? "light" : "dark")
+
+  async function mount(start = 0, play = false) {
+    mode = current()
+    try { await document.fonts.load('14px "JetBrains Mono"') } catch {}
+    if (mode !== current()) return // the theme changed while the font loaded: the observer remounts
+    player?.dispose()
+    el.replaceChildren()
+    player = AsciinemaPlayer.create(el.dataset[mode]!, el, {
+      cols: 104, rows: 30, fit: "width", theme: "brothy", poster: "npt:0:01", startAt: start, autoPlay: play,
+      idleTimeLimit: 2, preload: true, terminalFontFamily: '"JetBrains Mono", ui-monospace, monospace', controls: true,
+    })
+  }
+
+  async function swap() {
+    if (mode === current()) return
+    let at = 0, playing = false
+    try { at = await player.getCurrentTime(); playing = !player.el?.classList.contains("ap-paused") && at > 0 && !!player.el?.querySelector(".ap-player.ap-playing") } catch {}
+    await mount(at, playing)
+  }
+
+  mount()
+  new MutationObserver(swap).observe(root, { attributes: true, attributeFilter: ["data-theme"] })
+</script>
+
+<style is:global>
+  .term { border: 1px solid var(--b-subtle); border-radius: 0.75rem; overflow: hidden; background: var(--b-element); max-width: 62rem; margin: 0 auto; }
+  .term .bar { display: flex; align-items: center; gap: 0.4rem; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--b-border); font: 400 0.78rem var(--sl-font-mono); color: var(--b-muted); }
+  .term .bar > * { margin: 0 !important; }
+  .term .bar i { flex: none; align-self: center; width: 0.7rem; height: 0.7rem; border-radius: 50%; display: inline-block; background: var(--b-subtle); }
+  .term .bar b { flex: 1; text-align: center; font-weight: 400; padding-right: 2.6rem; }
+  .term .screen { min-height: 12rem; background: var(--b-bg); }
+  .cap { text-align: center; margin: 1rem 0 0 !important; color: var(--b-muted); font-size: 0.9rem; }
+  /* the player's colors come from the page palette; the cast carries its own truecolor cells */
+  .ap-player.asciinema-player-theme-brothy {
+    --term-color-foreground: var(--b-text); --term-color-background: var(--b-bg);
+    --term-color-0: var(--b-bg); --term-color-1: var(--b-error); --term-color-2: var(--b-success); --term-color-3: var(--b-secondary);
+    --term-color-4: var(--b-info); --term-color-5: var(--b-accent); --term-color-6: var(--b-primary); --term-color-7: var(--b-text);
+    --term-color-8: var(--b-subtle); --term-color-9: var(--b-error); --term-color-10: var(--b-success); --term-color-11: var(--b-secondary);
+    --term-color-12: var(--b-info); --term-color-13: var(--b-accent); --term-color-14: var(--b-primary); --term-color-15: var(--b-text);
+  }
+  .ap-player { margin: 0; }
+  .ap-control-bar { color: var(--b-text); }
+  .ap-control-bar .ap-progressbar .ap-bar span.ap-gutter-fill, .ap-control-bar .ap-progressbar .ap-bar .ap-marker-container .ap-marker.ap-marker-past:hover::before { background-color: var(--b-primary); }
+  .ap-big-play-button svg .ap-play-btn-fill { fill: var(--b-primary); }
+</style>

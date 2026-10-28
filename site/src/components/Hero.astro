@@ -1,0 +1,45 @@
+---
+// The splash hero: wordmark, title, tagline, actions and the screenshot (dark / light), in two columns from 60rem.
+import { Image } from "astro:assets"
+import { LinkButton } from "@astrojs/starlight/components"
+
+const { data } = Astro.locals.starlightRoute.entry
+const { tagline, image, actions = [] } = data.hero || {}
+const shots = image && "dark" in image ? { dark: image.dark, light: image.light } : image && "file" in image ? { dark: image.file } : {}
+const WORDMARK = ["┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻", "┣┻┓┣┳┛┃ ┃ ┃ ┣━┫┗┳┛", "┗━┛╹┗╸┗━┛ ╹ ╹ ╹ ╹ "].join("\n")
+---
+
+<div class="hero">
+  <div class="copy">
+    <pre class="wordmark" aria-hidden="true">{WORDMARK}</pre>
+    <h1 id="_top" data-page-title set:html={data.title} />
+    {tagline && <p class="tagline" set:html={tagline} />}
+    {
+      actions.length > 0 && (
+        <div class="actions">
+          {actions.map(({ link: href, text, variant, icon }) => (
+            <LinkButton {href} {variant} icon={icon?.name}>{text}</LinkButton>
+          ))}
+        </div>
+      )
+    }
+    <ul class="badges"><li>macOS · Linux</li><li>single binary</li><li>Apache-2.0</li></ul>
+  </div>
+  <div class="shot">
+    {shots.dark && <Image src={shots.dark} widths={[640, 960, 1280]} sizes="(min-width: 60rem) 45vw, 100vw" loading="eager" fetchpriority="high" alt={image?.alt ?? ""} class:list={{ "for-dark": Boolean(shots.light) }} />}
+    {shots.light && <Image src={shots.light} widths={[640, 960, 1280]} sizes="(min-width: 60rem) 45vw, 100vw" loading="eager" alt={image?.alt ?? ""} class="for-light" />}
+  </div>
+</div>
+
+<style>
+  .hero { display: grid; gap: 2.5rem; align-items: center; padding: 2rem 0 1rem; }
+  @media (min-width: 60rem) { .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 3rem; padding: 3rem 0 1.5rem; } }
+  .wordmark { font: 700 clamp(1.1rem, 5.2vw, 1.9rem) / 1.05 var(--sl-font-mono); color: var(--b-primary); margin: 0 0 1.5rem; white-space: pre; background: none; border: 0; padding: 0; overflow: hidden; }
+  h1 { font-size: clamp(1.9rem, 5.6vw, 3rem); line-height: 1.12; letter-spacing: -0.02em; color: var(--sl-color-white); margin: 0; }
+  .tagline { margin: 1.1rem 0 0; font-size: clamp(1.02rem, 2.6vw, 1.2rem); color: var(--b-muted); max-width: 34rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; margin: 1.5rem 0 0; font: 500 0.78rem var(--sl-font-mono); color: var(--b-muted); }
+  .badges li { border: 1px solid var(--b-border); border-radius: 0.4rem; padding: 0.15rem 0.55rem; background: var(--b-element); }
+  :global(:root[data-theme="light"]) .for-dark, :global(:root:not([data-theme="light"])) .for-light { display: none; }
+  .shot img { width: 100%; height: auto; display: block; }
+</style>

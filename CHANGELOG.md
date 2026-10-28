@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 - Heading styles: `#` cycles `classic` (the default) → `bars` (a level-colored `█ ▌ ┃ │ ┆ ┊` prefix) → `ladder` (shade glyphs `██ ▓▓▓ ▒▒▒▒ …` that thin with the level) → `rules` (H1 and H2 run a rule to the end of the measure, H3 gets `╌╌`, H4–H6 are bold color only) and saves it as `headings` in `config.json`. It applies to the document, zen, the `ctrl+p` peek and the theme picker sample; Source is unchanged.
+- A docs site (Astro Starlight, `site/`) at https://jackmort.github.io/brothy/: the front page with a live asciinema demo, install, and pages for every feature, the keys, themes, config and AI, built from the README and changelog and deployed by `.github/workflows/pages.yml`. It follows the `brothy` / `brothy-light` palettes. (In the repository's Pages settings choose GitHub Actions as the source.)
+- `bun run cast` (`scripts/cast.ts`) records the demo as `site/public/casts/tour-{dark,light}.cast` by playing a scripted tour of the real UI headlessly.
 
 ## [0.2.0] - 2026-10-28
 

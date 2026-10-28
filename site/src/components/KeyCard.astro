@@ -1,0 +1,18 @@
+---
+// A feature card whose icon is a key cap: `<KeyCard keys="^P" title="Go anywhere" color="secondary">text</KeyCard>`.
+interface Props { keys: string; title: string; color?: "primary" | "secondary" | "accent" | "info" | "success" | "warning" }
+const { keys, title, color = "primary" } = Astro.props
+---
+
+<article class="card" style={`--c: var(--b-${color})`}>
+  <h3><span class="ic" aria-hidden="true">{keys}</span>{title}</h3>
+  <div class="body"><slot /></div>
+</article>
+
+<style>
+  .card { border: 1px solid var(--b-border); background: var(--b-element); border-radius: 0.6rem; padding: 1.25rem 1.25rem 1.1rem; height: 100%; }
+  h3 { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin: 0 0 0.6rem; color: var(--sl-color-white); }
+  .ic { flex: none; display: inline-grid; place-items: center; min-width: 2.1rem; height: 2.1rem; padding: 0 0.35rem; border-radius: 0.45rem; border: 1px solid var(--b-subtle); background: var(--b-bg); color: var(--c); font: 700 0.8rem var(--sl-font-mono); }
+  .body { color: var(--b-muted); font-size: 0.95rem; }
+  .body :global(p) { margin: 0; }
+</style>

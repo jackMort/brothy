@@ -1,0 +1,91 @@
+---
+title: A calm terminal Markdown reader.
+description: Browse a folder of notes, jump anywhere with ctrl+p, read in zen, and, only if you ask, let a model summarize, gloss or answer. Obsidian-flavored, live reload, 42 themes.
+template: splash
+editUrl: false
+hero:
+  tagline: Browse a folder of notes, jump anywhere with <kbd class="key">ctrl+p</kbd>, read in zen, and, only if you ask, let a model summarize, gloss or answer. Obsidian-flavored, live reload, 42 themes.
+  image:
+    alt: brothy showing a folder tree beside a rendered note with a callout, highlighted code and a table
+    dark: ../../assets/docs/screenshot.png
+    light: ../../assets/docs/outline-light.png
+  actions:
+    - text: Install
+      link: "#install"
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/jackMort/brothy
+      variant: minimal
+      icon: github
+---
+
+{/* Mirrors README § Features and Install: update both. */}
+
+import { CardGrid, Tabs, TabItem } from "@astrojs/starlight/components"
+import Demo from "../../components/Demo.astro"
+import KeyCard from "../../components/KeyCard.astro"
+
+## A one-minute tour
+
+Reading a note, following links, the switcher, themes, the live reload and zen.
+
+<Demo />
+
+## Quiet by default, quick when you need it
+
+A reader for a folder of notes, not an editor.
+
+<CardGrid>
+  <KeyCard keys="42" title="42 themes" color="primary">
+    22 families, each with a dark and a light twin, picked on a <kbd>t</kbd> board with a live sample note. Transparent background with <kbd>T</kbd>. [Themes](/brothy/themes/theme-picker/)
+  </KeyCard>
+  <KeyCard keys="^P" title="Go anywhere" color="secondary">
+    <kbd>ctrl+p</kbd> searches notes, headings and text across the whole vault, with a peek pane: path, length, outline, cached TL;DR and first lines. [Navigating notes](/brothy/usage/navigating-notes/)
+  </KeyCard>
+  <KeyCard keys="z" title="Zen" color="accent">
+    Only the text, centred. Scroll or pages flow, spotlight, typewriter and teleprompter, with settings under <kbd>Z</kbd>. [Zen mode](/brothy/usage/zen-mode/)
+  </KeyCard>
+  <KeyCard keys="[[ ]]" title="Links & Obsidian" color="info">
+    Wikilinks, embeds, callouts, `==highlights==`, `%%comments%%`, dataview blocks. <kbd>f</kbd> labels the links on screen; <kbd>H</kbd> <kbd>L</kbd> go back and forward. [Obsidian notes](/brothy/usage/obsidian-notes/)
+  </KeyCard>
+  <KeyCard keys="a" title="AI, only if you ask" color="success">
+    Off until you add an `ai` block. <kbd>a</kbd> streams a TL;DR into Info; local models first (Ollama, LM Studio), keys from the environment only. [AI](/brothy/ai/setup/)
+  </KeyCard>
+  <KeyCard keys="↻" title="Live reload" color="warning">
+    Survives atomic saves. The sections that changed on disk are listed in Info with `+added −removed` counts, no AI needed. [Reading](/brothy/usage/reading/)
+  </KeyCard>
+</CardGrid>
+
+## Install
+
+macOS or Linux, in a terminal with true color and Unicode.
+
+<Tabs>
+  <TabItem label="curl">
+    ```sh
+    # pick your platform: linux | darwin, x64 | arm64
+    curl -fLo brothy https://github.com/jackMort/brothy/releases/latest/download/brothy-linux-x64
+    chmod +x brothy && mv brothy ~/.local/bin/brothy
+    brothy ~/notes
+    ```
+  </TabItem>
+  <TabItem label="Binary download">
+    ```sh
+    # download brothy-<os>-<arch> and SHA256SUMS from the releases page, then:
+    sha256sum -c --ignore-missing SHA256SUMS     # shasum -a 256 -c on macOS
+    chmod +x brothy-linux-x64
+    mv brothy-linux-x64 ~/.local/bin/brothy
+    ```
+    On macOS, clear the quarantine flag first if it is blocked: `xattr -d com.apple.quarantine brothy-darwin-arm64`.
+  </TabItem>
+  <TabItem label="From source (bun)">
+    ```sh
+    # needs Bun 1.4 or newer
+    git clone https://github.com/jackMort/brothy.git && cd brothy
+    bun install
+    bun run build                # single binary ./brothy, parsers embedded
+    ```
+  </TabItem>
+</Tabs>
+
+brothy is not published to npm; releases ship prebuilt binaries only. Then press <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key. [All install details](/brothy/getting-started/install/).

@@ -1,0 +1,69 @@
+---
+title: Keyboard reference
+description: "Every key brothy understands, grouped Global, Document, Zen, Panel and AI."
+---
+
+<!-- Mirrors README § Keys: update both. -->
+
+Press <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key in the app, grouped Global · Document · Zen · Panel · AI, in two columns from 100 columns (<kbd>j</kbd> <kbd>k</kbd> scroll, any other key closes).
+
+![The keys sheet, grouped Global, Document, Zen, Panel and AI](../../assets/docs/keys.png)
+
+## Global
+
+| Key | Action |
+| --- | --- |
+| <kbd>ctrl+p</kbd> | go to a note, heading or text across the vault (<kbd>↑</kbd> <kbd>↓</kbd> pick, <kbd>tab</kbd> next section, <kbd>⏎</kbd> open, <kbd>esc</kbd> close); empty: recent notes; start with `?` to ask a question ([AI](/brothy/ai/ask-your-vault/)) |
+| <kbd>o</kbd> | open another project: recent folders (newest first, fuzzy filter) or, for a query starting with `/` `~` `.`, any folder or note (<kbd>tab</kbd> completes, <kbd>⏎</kbd> opens) |
+| <kbd>t</kbd> | theme picker (type to filter, <kbd>↑</kbd> <kbd>↓</kbd> family, <kbd>←</kbd> <kbd>→</kbd> / <kbd>tab</kbd> dark · light, <kbd>⏎</kbd> apply and save, a click on a specimen applies it, <kbd>esc</kbd> close) |
+| <kbd>T</kbd> | transparent background: the terminal's own shows through; popups, the drawer and code blocks stay painted (saved) |
+| <kbd>H</kbd> <kbd>L</kbd> | back / forward through the notes opened |
+| <kbd>r</kbd> | rescan files, reload the note and re-read the `ai` block |
+| <kbd>?</kbd> | hints; press twice for all keys |
+| <kbd>q</kbd> | quit |
+
+## Document
+
+| Key | Action |
+| --- | --- |
+| <kbd>j</kbd> <kbd>k</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | move / scroll |
+| <kbd>d</kbd> <kbd>u</kbd> · <kbd>space</kbd> <kbd>b</kbd> | half page · full page |
+| <kbd>g</kbd> <kbd>G</kbd> | top · bottom |
+| <kbd>[</kbd> <kbd>]</kbd> | previous · next heading (zen: section) |
+| <kbd>/</kbd> | filter notes (panel focused) · find in document (<kbd>↑</kbd> <kbd>↓</kbd> pick a row, <kbd>⏎</kbd> apply, <kbd>esc</kbd> clear) |
+| <kbd>n</kbd> <kbd>N</kbd> | next · previous match |
+| <kbd>s</kbd> | toggle Source / Preview |
+| <kbd>f</kbd> | label the links on screen; type a label to open the note (and jump to its heading) · <kbd>esc</kbd> cancels |
+| <kbd>e</kbd> | edit the note in `$VISUAL` / `$EDITOR` (fallback `vi`) at the top line ([details](/brothy/usage/pipes-and-editor/)) |
+| <kbd>#</kbd> | heading style: classic · bars · ladder · rules (saved) |
+| <kbd>w</kbd> | full width / 80-column measure (saved) |
+| <kbd>m</kbd> | minimap on / off (saved; needs 110 columns) |
+| <kbd>esc</kbd> | per context: clear find / filter · hide the zen gloss · leave zen · close the drawer |
+
+## Zen
+
+| Key | Action |
+| --- | --- |
+| <kbd>z</kbd> | zen mode: only the text, centred (<kbd>esc</kbd> leaves; <kbd>s</kbd> shows the normal Source view) |
+| <kbd>Z</kbd> | zen settings popup (<kbd>↑</kbd> <kbd>↓</kbd> row, <kbd>space</kbd> toggle, <kbd>←</kbd> <kbd>→</kbd> adjust, <kbd>⏎</kbd> save, <kbd>esc</kbd> revert) |
+| <kbd>&lt;</kbd> <kbd>&gt;</kbd> · <kbd>+</kbd> <kbd>-</kbd> | in zen: narrower / wider text · teleprompter faster / slower (saved at once) |
+
+## Panel
+
+| Key | Action |
+| --- | --- |
+| <kbd>tab</kbd> | panel ⇄ document |
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> | Files · Outline · Info view |
+| <kbd>h</kbd> · <kbd>l</kbd> | focus the panel · peek (Outline) / expand |
+| <kbd>-</kbd> | Files: tidy the tree (collapse all but the open note's path) |
+| <kbd>⏎</kbd> | open, expand or jump (Info: open the link or jump to the changed section; <kbd>j</kbd> <kbd>k</kbd> move between them) |
+| <kbd>ctrl+b</kbd> | hide / show the panel (a drawer below 100 columns) |
+
+## AI
+
+These need an [`ai` block](/brothy/ai/setup/) in the config.
+
+| Key | Action |
+| --- | --- |
+| <kbd>a</kbd> | summarize the note into the Info tab (<kbd>a</kbd> again cancels); in zen, gloss the section you are reading |
+| <kbd>D</kbd> | explain what changed on disk since the note was opened, in the Info tab (<kbd>D</kbd> again cancels; <kbd>⏎</kbd> on a changed section jumps to it) |

@@ -1,0 +1,36 @@
+---
+title: Navigating notes
+description: "The panel, the ctrl+p switcher, projects, link labels, history and the welcome page."
+---
+
+<!-- Mirrors README § Features (Navigation), Screen (Welcome): update both. -->
+
+![The Ctrl-P switcher finding a heading across notes](../../../assets/docs/switcher.png)
+
+## The panel
+
+Files, Outline and Info (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) with a fuzzy filter, folder counts and a reading marker. <kbd>tab</kbd> moves between panel and document, <kbd>ctrl+b</kbd> hides or shows the panel (a drawer below 100 columns).
+
+## The switcher
+
+<kbd>ctrl+p</kbd> goes to a note, heading or text across the whole vault (<kbd>↑</kbd> <kbd>↓</kbd> pick, <kbd>tab</kbd> next section, <kbd>⏎</kbd> open, <kbd>esc</kbd> close). Empty, it lists recent notes. From 100 columns a peek pane shows the highlighted note: its path and length, its outline around the hit, its TL;DR when one is cached and still fresh, and its first lines. The pane never sends a request, and only the part shown is rendered, so a note of several MB peeks quickly.
+
+A query that starts with `?` [asks your vault a question](/brothy/ai/ask-your-vault/).
+
+## Projects
+
+<kbd>o</kbd> opens another project: recent folders (newest first, fuzzy filter) or, for a query starting with `/`, `~` or `.`, any folder or note. <kbd>tab</kbd> completes and <kbd>⏎</kbd> opens: a folder as the workspace, a note on its own, a recent project at the note and line it was left at. See [Recent projects](/brothy/config/recent-projects/).
+
+![The Open picker listing recent projects](../../../assets/docs/open.png)
+
+## Links and history
+
+<kbd>f</kbd> labels the links on screen; type a label to open the note (and jump to its heading), <kbd>esc</kbd> cancels. <kbd>H</kbd> and <kbd>L</kbd> go back and forward through the notes you opened.
+
+![Link labels overlaid on links, to follow one by key](../../../assets/docs/links.png)
+
+## The welcome page
+
+With no note open (a folder with no Markdown, say) brothy shows the wordmark over a bowl of broth with rising steam, the keys to start (<kbd>o</kbd> <kbd>t</kbd> <kbd>?</kbd> <kbd>q</kbd>) and your recent projects (<kbd>↑</kbd> <kbd>↓</kbd> <kbd>⏎</kbd> or a click opens one). The steam stops on any key or a resize. The panel, `a`, `s`, `w`, `z` and `Z` keys wait for a note.
+
+![The welcome page: a bowl of broth with steam and recent projects](../../../assets/docs/welcome.png)

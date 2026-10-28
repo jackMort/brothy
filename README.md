@@ -8,6 +8,8 @@
 zen, and — only if you ask — let a model summarize, gloss or answer. Obsidian-flavored, live reload,
 42 themes.
 
+**Docs: https://jackmort.github.io/brothy/**
+
 [![CI](https://github.com/jackMort/brothy/actions/workflows/ci.yml/badge.svg)](https://github.com/jackMort/brothy/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jackMort/brothy)](https://github.com/jackMort/brothy/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
