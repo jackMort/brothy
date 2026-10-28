@@ -1,4 +1,5 @@
-// The house theme, brothy (dark) and brothy-light, follows the shape of Noodle's themes (github.com/wilfredinni/noodle, Apache-2.0).
+// The house theme, brothy (dark) and brothy-light ("Hōjicha": roasted-tea neutrals with one persimmon signature colour),
+// is original; it follows the shape of Noodle's themes (github.com/wilfredinni/noodle, Apache-2.0).
 // Additional palettes adapted from opencode (github.com/sst/opencode, MIT, © 2025 opencode);
 // ayu (ayu-theme/ayu-colors, © Konstantin Pschera; ayu-theme/vscode-ayu, © 2016 Ike Kurghinyan),
 // nightfox / dayfox (EdenEast/nightfox.nvim, © 2021 James Simpson), nightowl / Light Owl
@@ -7,9 +8,11 @@
 // (scottmckendry/cyberdream.nvim, © 2023 Scott McKendry), melange (savq/melange-nvim, © 2021 Sergio
 // Alejandro Vargas), synthwave84 (robb0wen/synthwave-vscode, © 2019 Robb Owen) and vesper
 // (raunofreiberg/vesper, © 2023 Rauno Freiberg), all MIT, are adapted from their upstream palettes;
-// brothy-light is original. Slots are tuned so text, textMuted, primary, secondary and accent reach
+// Slots are tuned so text, textMuted, primary, secondary and accent reach
 // 4.5:1 and error, warning, success and info 3:1 on both background and backgroundPanel, and every content
-// slot keeps 3:1 (text 4.5:1) on backgroundElement, the code-block fill (tests/theme.test.ts).
+// slot keeps 3:1 (text 4.5:1) on backgroundElement, the code-block fill (tests/theme.test.ts). The house theme is held to
+// more: text about 14:1, every content slot 4.5:1 on all three surfaces, borders 1.5:1, no two accents alike
+// (scripts/contrast.ts prints the table).
 // Dark themes come first, then their '-light' twins; the theme picker shows them in this order. A family
 // may have only one mode (synthwave84 and vesper are dark-only).
 export interface Theme {
@@ -36,21 +39,21 @@ export const themes: Theme[] = [
   {
     name: "brothy",
     mode: "dark",
-    primary: "#59c9be",
-    secondary: "#f2c65a",
-    accent: "#ef7b63",
-    error: "#ef7b63",
-    warning: "#f0a96b",
-    success: "#9dcb82",
-    info: "#89b4fa",
-    text: "#f3efe7",
-    textMuted: "#aaa39a",
-    background: "#181714",
-    backgroundPanel: "#181714",
-    backgroundElement: "#24211d",
-    border: "#3b3630",
-    borderActive: "#59c9be",
-    borderSubtle: "#514a42",
+    primary: "#fe9962",
+    secondary: "#e3c9a2",
+    accent: "#c69bab",
+    error: "#eb6a6b",
+    warning: "#d3b474",
+    success: "#93b493",
+    info: "#9fa8d1",
+    text: "#e7e2da",
+    textMuted: "#9d9892",
+    background: "#171615",
+    backgroundPanel: "#171615",
+    backgroundElement: "#23211f",
+    border: "#423f3c",
+    borderActive: "#fe9962",
+    borderSubtle: "#534f4b",
   },
   {
     name: "catppuccin",
@@ -454,21 +457,21 @@ export const themes: Theme[] = [
   {
     name: "brothy-light",
     mode: "light",
-    primary: "#0f766e",
-    secondary: "#8a5a00",
-    accent: "#c2410c",
-    error: "#b42318",
-    warning: "#a15c07",
-    success: "#3f6b1d",
-    info: "#1d5fb8",
-    text: "#2a2621",
-    textMuted: "#6b645b",
-    background: "#fbf7ef",
-    backgroundPanel: "#fbf7ef",
-    backgroundElement: "#f0eadc",
-    border: "#d9d1c0",
-    borderActive: "#0f766e",
-    borderSubtle: "#c9bfa9",
+    primary: "#a94503",
+    secondary: "#573e26",
+    accent: "#834b62",
+    error: "#af1d25",
+    warning: "#845d02",
+    success: "#416b42",
+    info: "#4d568e",
+    text: "#24201c",
+    textMuted: "#635e59",
+    background: "#f6f4f0",
+    backgroundPanel: "#f6f4f0",
+    backgroundElement: "#ebe7e0",
+    border: "#c4c0bb",
+    borderActive: "#a94503",
+    borderSubtle: "#b2ada6",
   },
   {
     name: "catppuccin-light",

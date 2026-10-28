@@ -6,13 +6,13 @@
   --sl-font-mono: var(--sl-font);
 
   /* brothy */
-  --b-primary: #59c9be; --b-secondary: #f2c65a; --b-accent: #ef7b63;
-  --b-error: #ef7b63; --b-warning: #f0a96b; --b-success: #9dcb82; --b-info: #89b4fa;
-  --b-text: #f3efe7; --b-muted: #aaa39a;
-  --b-bg: #181714; --b-element: #24211d;
-  --b-border: #3b3630; --b-subtle: #514a42;
+  --b-primary: #fe9962; --b-secondary: #e3c9a2; --b-accent: #c69bab;
+  --b-error: #eb6a6b; --b-warning: #d3b474; --b-success: #93b493; --b-info: #9fa8d1;
+  --b-text: #e7e2da; --b-muted: #9d9892;
+  --b-bg: #171615; --b-element: #23211f;
+  --b-border: #423f3c; --b-subtle: #534f4b;
   /* the demo's frosted window: brothy's background at 74%, its edge and shadow */
-  --b-glass: rgba(24, 23, 20, 0.74); --b-glass-edge: rgba(243, 239, 231, 0.1); --b-shadow: rgba(0, 0, 0, 0.55);
+  --b-glass: rgba(23, 22, 21, 0.74); --b-glass-edge: rgba(231, 226, 218, 0.1); --b-shadow: rgba(0, 0, 0, 0.55);
   --b-wash: 30%;
 
   --sl-color-white: var(--b-text);
@@ -61,12 +61,12 @@
 
 /* brothy-light */
 :root[data-theme="light"] {
-  --b-primary: #0f766e; --b-secondary: #8a5a00; --b-accent: #c2410c;
-  --b-error: #b42318; --b-warning: #a15c07; --b-success: #3f6b1d; --b-info: #1d5fb8;
-  --b-text: #2a2621; --b-muted: #6b645b;
-  --b-bg: #fbf7ef; --b-element: #f0eadc;
-  --b-border: #d9d1c0; --b-subtle: #c9bfa9;
-  --b-glass: rgba(251, 247, 239, 0.8); --b-glass-edge: rgba(42, 38, 33, 0.12); --b-shadow: rgba(42, 38, 33, 0.22);
+  --b-primary: #a94503; --b-secondary: #573e26; --b-accent: #834b62;
+  --b-error: #af1d25; --b-warning: #845d02; --b-success: #416b42; --b-info: #4d568e;
+  --b-text: #24201c; --b-muted: #635e59;
+  --b-bg: #f6f4f0; --b-element: #ebe7e0;
+  --b-border: #c4c0bb; --b-subtle: #b2ada6;
+  --b-glass: rgba(246, 244, 240, 0.8); --b-glass-edge: rgba(36, 32, 28, 0.12); --b-shadow: rgba(36, 32, 28, 0.22);
   --b-wash: 22%;
   color-scheme: light;
 }

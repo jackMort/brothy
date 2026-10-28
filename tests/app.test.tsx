@@ -113,7 +113,8 @@ async function keys(s: Setup, ...ks: string[]) {
 const topLine = (frame: string) => Number(/\brow (\d+)/.exec(frame.split("\n")[2]!)?.[1]) + 2
 
 /** brothy's primary: the fill of a selected sidebar row */
-const PRIMARY = "#59c9be"
+const B = themeByName("brothy") // the default theme the tests render in
+const PRIMARY = B.primary
 const hex = (c: { r: number; g: number; b: number; a: number }) =>
   c.a === 0 ? null : "#" + [c.r, c.g, c.b].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("")
 /** Per screen row, the text drawn on background `bg` (rows without any are dropped). */
@@ -809,7 +810,7 @@ test("a truncated scan says so in Files", async () => {
   const s = await mount(d, "a.md", { width: 100, height: 30 })
   const f = await keys(s)
   expect(f.replace(/\s+/g, " ")).toContain("scan stopped at 20k entries — some notes missing")
-  expect(spansOf(s).some((sp) => sp.text.includes("scan") && hex(sp.fg) === "#f0a96b")).toBe(true) // brothy warning
+  expect(spansOf(s).some((sp) => sp.text.includes("scan") && hex(sp.fg) === B.warning)).toBe(true) // brothy warning
 })
 
 test("a complete scan shows no truncation note", async () => {
@@ -836,7 +837,7 @@ test("panel tabs: superscript numbers in textMuted; the rule under the active ta
 test("code blocks are highlighted once the parser answers, without moving the document", async () => {
   const s = await mount(tmp({ "a.md": "# T\n\n```ts\nconst a = 1 // note\n```\n\nafter\n" }), "a.md")
   const before = await keys(s)
-  const SECONDARY = "#f2c65a" // brothy keyword color
+  const SECONDARY = B.secondary // brothy keyword color
   for (const end = Date.now() + 5000; Date.now() < end; await sleep(25)) {
     await s.renderOnce()
     if (spansOf(s).some((sp) => sp.text.includes("const") && hex(sp.fg) === SECONDARY)) break
@@ -1195,7 +1196,7 @@ test("spotlight dims every section but the current one", async () => {
   )
   await keys(s, "z")
   const bright = docFg(s, "alpha")
-  expect(docFg(s, "bravo")).toBe(mix(bright!, "#181714", 0.6)) // brothy background
+  expect(docFg(s, "bravo")).toBe(mix(bright!, B.background, 0.6)) // brothy background
   await keys(s, "]")
   expect(docFg(s, "bravo")).toBe(bright)
   expect(docFg(s, "alpha")).not.toBe(bright)
@@ -1204,7 +1205,7 @@ test("spotlight dims every section but the current one", async () => {
   const codeBright = codeBg()
   await keys(s, "]")
   expect(codeBg()).not.toBe(codeBright)
-  expect(codeBg()).toBe(mix(codeBright!, "#181714", 0.6))
+  expect(codeBg()).toBe(mix(codeBright!, B.background, 0.6))
 })
 
 test("spotlight off leaves every section bright", async () => {
@@ -1400,7 +1401,7 @@ test("the drawer dims the document (scrim); the top row stays bright", async () 
   const bright = loremFg()!
   const top = row0()
   await keys(s, "tab")
-  expect(loremFg()).toBe(mix(bright, "#181714", 0.62))
+  expect(loremFg()).toBe(mix(bright, B.background, 0.62))
   expect(row0()).toEqual(top)
 })
 
@@ -1408,7 +1409,7 @@ test("the drawer is raised and has a ▏ edge; a click on the scrim closes it", 
   const s = await mount(tmp({ "a.md": "# alpha" }), "a.md", { width: 80, height: 24 })
   const f = await keys(s, "tab")
   expect(f.split("\n")[5]![36]).toBe("▏") // DW = round(80 × 0.45) = 36
-  expect(s.captureSpans().lines[5]!.spans.some((sp) => hex(sp.bg) === "#24211d")).toBe(true) // backgroundElement
+  expect(s.captureSpans().lines[5]!.spans.some((sp) => hex(sp.bg) === B.backgroundElement)).toBe(true) // backgroundElement
   await s.mockMouse.click(70, 10)
   expect(panelShown(await keys(s))).toBe(false)
 })
@@ -1521,7 +1522,7 @@ test("the Outline marks the reading heading with ▸ and dims the headings above
   const f = await keys(s, "2", "tab", "]", "]", "]")
   expect(f).toContain("▸ Section 4")
   const read = spansOf(s).find((sp) => sp.text.includes("Section 1"))!
-  expect(hex(read.fg)).toBe(mix("#f3efe7", "#181714", 0.35)) // brothy text, mixed 35% toward the background
+  expect(hex(read.fg)).toBe(mix(B.text, B.background, 0.35)) // brothy text, mixed 35% toward the background
 })
 
 test("l peeks: the document jumps and the panel keeps focus", async () => {
@@ -1556,10 +1557,10 @@ test("Info shows properties with tag chips, resolved and unresolved links, and s
   const f = await keys(s, "3")
   for (const x of ["title", "Calm", "#focus", "#reading", "Links", "→ b", "→ nowhere?", "1 heading · 1/2 tasks"]) expect(f).toContain(x)
   expect(f).toMatch(/\d+ words · \d+ min read/)
-  expect(hex(spansOf(s).find((sp) => sp.text.includes("#focus"))!.fg)).toBe("#f2c65a") // secondary
+  expect(hex(spansOf(s).find((sp) => sp.text.includes("#focus"))!.fg)).toBe(B.secondary) // secondary
   // the document also shows `[[nowhere]]`, so look only at the panel's link row
   const linkRow = s.captureSpans().lines.find((l) => l.spans.map((sp) => sp.text).join("").includes("→ nowhere"))!
-  expect(linkRow.spans.some((sp) => sp.text.includes("nowhere") && hex(sp.fg) === "#aaa39a")).toBe(true) // textMuted
+  expect(linkRow.spans.some((sp) => sp.text.includes("nowhere") && hex(sp.fg) === B.textMuted)).toBe(true) // textMuted
 })
 
 test("⏎ on a link opens it and focuses the document; j moves between links", async () => {
@@ -1675,7 +1676,7 @@ test("? shows the hints first; a second ? opens the Keybindings popup", async ()
 test("n without a query is an error toast in the error color; ok toasts don't replace it; esc dismisses it", async () => {
   const s = await mount(tmp({ "a.md": "# a" }), "a.md")
   expect((await keys(s, "n")).split("\n")[HINT_ROW]).toContain("✗ nothing to find · / to search")
-  expect(spansOf(s).some((sp) => sp.text.includes("✗") && hex(sp.fg) === "#ef7b63")).toBe(true)
+  expect(spansOf(s).some((sp) => sp.text.includes("✗") && hex(sp.fg) === B.error)).toBe(true)
   expect((await keys(s, "t", "enter")).split("\n")[HINT_ROW]).toContain("✗")
   expect((await keys(s, "esc")).split("\n")[HINT_ROW]).not.toContain("✗")
 })
@@ -1756,11 +1757,11 @@ test("󰘗 sits at column 0 of row 0", async () => {
 test("󰘗 is muted while watching, primary after a live reload, muted again after a second; absent when the file is gone", async () => {
   const root = tmp({ "a.md": "# one" })
   const s = await mount(root, "a.md")
-  expect(row0Fg(s, "󰘗")).toBe("#aaa39a")
+  expect(row0Fg(s, "󰘗")).toBe(B.textMuted)
   writeFileSync(join(root, "a.md"), "# two")
   await waitFrame(s, (f) => f.includes("two"))
   expect(row0Fg(s, "󰘗")).toBe(PRIMARY)
-  await waitFor(s, () => row0Fg(s, "󰘗") === "#aaa39a")
+  await waitFor(s, () => row0Fg(s, "󰘗") === B.textMuted)
   rmSync(join(root, "a.md"))
   await waitFrame(s, (f) => Array.from(f.split("\n")[0]!)[0] !== "󰘗")
 })
@@ -1790,9 +1791,9 @@ test("Source's flag ends at the text's right edge, not the terminal's", async ()
 test("the title is dimmed while the note's own heading is on screen, and bold again after scrolling past it", async () => {
   const s = await mount(tmp({ "calm.md": "---\ntitle: Calm\n---\n# Calm\n\n" + "text\n\n".repeat(80) }), "calm.md")
   await keys(s)
-  expect(row0Fg(s, "Calm")).toBe("#aaa39a")
+  expect(row0Fg(s, "Calm")).toBe(B.textMuted)
   await keys(s, "space", "space", "space")
-  expect(row0Fg(s, "Calm")).toBe("#f3efe7")
+  expect(row0Fg(s, "Calm")).toBe(B.text)
 })
 
 test("the gap row carries a faint rule over the text column only", async () => {
@@ -1834,7 +1835,7 @@ const linkVault = () => tmp({ "a.md": linkNote, "b.md": longB, "c.md": "# Sea no
 test("f labels the links on screen; typing a label opens the note", async () => {
   const s = await mount(linkVault(), "a.md")
   expect(await keys(s, "f")).toContain("see a and sea and dope and j › Part two")
-  expect(onBg(s, "#f0a96b").join("")).toBe("asdj") // brothy warning fill under the four labels
+  expect(onBg(s, B.warning).join("")).toBe("asdj") // brothy warning fill under the four labels
   expect(await keys(s, "a")).toContain("Bee")
 })
 
@@ -1900,7 +1901,7 @@ test("labels gone stale (live reload) end label mode: the footer drops them and 
 test("unresolved wikilinks are drawn muted in the document", async () => {
   const s = await mount(linkVault(), "a.md")
   const nope = s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes("nope"))!
-  expect(hex(nope.fg)).toBe("#aaa39a") // brothy textMuted
+  expect(hex(nope.fg)).toBe(B.textMuted) // brothy textMuted
 })
 
 test("the doc footer offers f links, and drops it first when narrow", async () => {
@@ -1925,7 +1926,7 @@ test("a single note inside a vault resolves links against the vault root", async
   mkdirSync(join(v, ".obsidian"))
   const s = await mount(join(v, "Journal"), "a.md")
   const b = s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text === "b")!
-  expect(hex(b.fg)).toBe("#89b4fa") // brothy info: resolved, not muted
+  expect(hex(b.fg)).toBe(B.info) // brothy info: resolved, not muted
   expect(await keys(s, "f", "s")).toContain("Sea note")
 })
 

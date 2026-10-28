@@ -1,7 +1,7 @@
 // Code block colors for Starlight's Expressive Code: the brothy / brothy-light palettes (src/theme.ts) in a VS Code theme.
 const P = {
-  dark: { type: "dark", primary: "#59c9be", secondary: "#f2c65a", accent: "#ef7b63", success: "#9dcb82", info: "#89b4fa", text: "#f3efe7", muted: "#aaa39a", element: "#24211d", border: "#3b3630" },
-  light: { type: "light", primary: "#0f766e", secondary: "#8a5a00", accent: "#c2410c", success: "#3f6b1d", info: "#1d5fb8", text: "#2a2621", muted: "#6b645b", element: "#f0eadc", border: "#d9d1c0" },
+  dark: { type: "dark", primary: "#fe9962", secondary: "#e3c9a2", accent: "#c69bab", success: "#93b493", info: "#9fa8d1", text: "#e7e2da", muted: "#9d9892", element: "#23211f", border: "#423f3c" },
+  light: { type: "light", primary: "#a94503", secondary: "#573e26", accent: "#834b62", success: "#416b42", info: "#4d568e", text: "#24201c", muted: "#635e59", element: "#ebe7e0", border: "#c4c0bb" },
 }
 
 export function codeTheme(mode) {

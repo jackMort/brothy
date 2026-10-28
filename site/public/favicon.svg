@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <!-- brothy favicon: the bowl on a filled brothy tile, built for 16 and 32 px (whole-pixel edges at 16) -->
-  <rect width="32" height="32" rx="7" fill="#181714"/>
-  <g fill="none" stroke="#aaa39a" stroke-width="2.2" stroke-linecap="round">
+  <rect width="32" height="32" rx="7" fill="#171615"/>
+  <g fill="none" stroke="#9d9892" stroke-width="2.2" stroke-linecap="round">
     <path d="M12 12c-1.6-1.3-1.6-2.7 0-4s1.6-2.7 0-4"/>
     <path d="M20 12c-1.6-1.3-1.6-2.7 0-4s1.6-2.7 0-4"/>
   </g>
-  <rect x="6" y="13" width="20" height="2" fill="#f2c65a"/>
-  <rect x="4" y="15" width="24" height="2.6" rx="1.3" fill="#f3efe7"/>
-  <path d="M5 18.5h22a11 8.5 0 0 1-6 7.4V28h-10v-2.1a11 8.5 0 0 1-6-7.4z" fill="#59c9be"/>
+  <rect x="6" y="13" width="20" height="2" fill="#e3c9a2"/>
+  <rect x="4" y="15" width="24" height="2.6" rx="1.3" fill="#e7e2da"/>
+  <path d="M5 18.5h22a11 8.5 0 0 1-6 7.4V28h-10v-2.1a11 8.5 0 0 1-6-7.4z" fill="#fe9962"/>
 </svg>
