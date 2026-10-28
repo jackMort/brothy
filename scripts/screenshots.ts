@@ -6,7 +6,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { WORDMARK } from "../src/status"
 import { themes } from "../src/theme"
-import { DOCS, FAMILY, MARGIN, ROOT, STACK, esc, luma, mix, sandbox, svgDoc, toPng, window, type Win } from "./pipeline"
+import { DOCS, FAMILY, blockRects, MARGIN, ROOT, STACK, esc, luma, mix, sandbox, svgDoc, toPng, window, type Win } from "./pipeline"
 import type { Frame } from "./session"
 
 const HERO_KEYS = "tab k enter j j enter" // focus the panel, expand notes/, open simmering.md
@@ -63,7 +63,7 @@ function social(hero: Win): string {
   const W = 1280, H = 640
   const sc = 0.62
   const wx = W - hero.w * sc - 40, wy = 96
-  const wm = WORDMARK.map((l, i) => `<text x="64" y="${190 + i * 25}" font-size="19" fill="${themes[0]!.primary}">${esc(l)}</text>`).join("")
+  const wm = WORDMARK.map((l, i) => [...l].map((ch, j) => blockRects(ch, 64 + j * 11.4, 168 + i * 25, 11.4, 25, themes[0]!.primary)).join("")).join("")
   const dark = luma(hero.bg) < 128
   const base = dark ? mix(hero.bg, "#000000", 0.55) : mix(hero.bg, "#000000", 0.08)
   const sub = mix(hero.fg, base, 0.15)

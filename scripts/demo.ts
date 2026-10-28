@@ -303,7 +303,7 @@ function shots(cut: Cut, rec: Recording, st: Still[], L: Layout, fps: number): S
     const layers = layersAt(st, r)
     glow = mixHex(glow, layers.at(-1)!.accent, 1 - Math.exp(-1 / fps / 0.3))
     const win = t >= introAt && pose.o > 0.001
-      ? { o: pose.o, tf: transform(L, c, pose), reflect: tilt(pose) * pose.o, glow, glowA: pose.o, layers }
+      ? { o: Math.min(1, pose.o * 6), tf: transform(L, c, pose), reflect: tilt(pose) * pose.o, glow, glowA: pose.o, layers }
       : null
 
     let capShot: Shot["cap"] = null

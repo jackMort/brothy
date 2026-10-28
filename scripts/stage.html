@@ -32,8 +32,8 @@
   #win .bar i { position: absolute; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: currentColor; opacity: 0.35; }
   #sheen { position: absolute; inset: 0; width: 100%; height: 100%; mix-blend-mode: screen; pointer-events: none; }
   .card { left: 0; top: 0; width: 1920px; height: 1080px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .wm { margin: 0; font-size: 56px; line-height: 1; font-weight: 700; color: var(--primary); white-space: pre;
-        text-shadow: 0 0 34px color-mix(in srgb, var(--primary) 45%, transparent); }
+  .wm { margin: 0; line-height: 0; filter: drop-shadow(0 0 17px color-mix(in srgb, var(--primary) 45%, transparent)); }
+  .wm svg { display: block; fill: var(--primary); }
   .line { margin-top: 30px; font-size: 30px; color: var(--ink); letter-spacing: 0.01em; }
   .chip { margin-top: 22px; font-size: 22px; color: var(--mute); padding: 10px 20px; border-radius: 12px;
           background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
@@ -67,7 +67,17 @@ window.init = async (config) => {
   C = config
   const r = document.documentElement.style
   for (const [k, v] of Object.entries(config.vars)) r.setProperty(`--${k}`, v)
-  document.querySelectorAll(".wm").forEach((e) => (e.textContent = config.wordmark.join("\n")))
+  // the wordmark's block glyphs as rects with a hair of overlap: a font's blocks show seams between the cells
+  const CWm = 34, CHm = 56, H = 0.5
+  const BITS = { "▘": 1, "▝": 2, "▀": 3, "▖": 4, "▌": 5, "▞": 6, "▛": 7, "▗": 8, "▚": 9, "▐": 10, "▜": 11, "▄": 12, "▙": 13, "▟": 14, "█": 15 }
+  let rects = ""
+  config.wordmark.forEach((line, row) => [...line].forEach((ch, col) => {
+    const bits = BITS[ch] || 0
+    for (const [dx, dy, b] of [[0, 0, 1], [1, 0, 2], [0, 1, 4], [1, 1, 8]])
+      if (bits & b) rects += `<rect x="${col * CWm + dx * CWm / 2 - H}" y="${row * CHm + dy * CHm / 2 - H}" width="${CWm / 2 + 2 * H}" height="${CHm / 2 + 2 * H}"/>`
+  }))
+  const W36 = Math.max(...config.wordmark.map((l) => [...l].length)) * CWm
+  document.querySelectorAll(".wm").forEach((e) => (e.innerHTML = `<svg width="${W36}" height="${config.wordmark.length * CHm}" viewBox="0 0 ${W36} ${config.wordmark.length * CHm}">${rects}</svg>`))
   $("#title .line").textContent = config.tagline
   $("#end .line").textContent = config.url
   $("#end .chip").innerHTML = config.install

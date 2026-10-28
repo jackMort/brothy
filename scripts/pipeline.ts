@@ -30,11 +30,28 @@ export function mostCommon(xs: (string | null)[]): string | null {
 // ---------- frame → SVG ----------
 const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
+/** Block elements as quadrant bits (1 top-left, 2 top-right, 4 bottom-left, 8 bottom-right): drawn as rects, since a font's block glyphs show seams between cells. */
+const BLOCKS: Record<string, number> = { "▘": 1, "▝": 2, "▀": 3, "▖": 4, "▌": 5, "▞": 6, "▛": 7, "▗": 8, "▚": 9, "▐": 10, "▜": 11, "▄": 12, "▙": 13, "▟": 14, "█": 15 }
+/** how far a block rect reaches into its neighbours, in px: no hairline between touching cells */
+const HAIR = 0.4
+
+/** The rects of block glyph `ch` in a `w`×`h` cell at (x, y), as SVG `<rect>`s; "" for anything else. */
+export function blockRects(ch: string, x: number, y: number, w: number, h: number, fill: string): string {
+  const bits = BLOCKS[ch]
+  if (!bits) return ""
+  const hw = w / 2, hh = h / 2
+  return ([[0, 0, 1], [1, 0, 2], [0, 1, 4], [1, 1, 8]] as const)
+    .filter(([, , b]) => bits & b)
+    .map(([dx, dy]) => `<rect x="${+(x + dx * hw - (dx ? HAIR : HAIR)).toFixed(2)}" y="${+(y + dy * hh - HAIR).toFixed(2)}" width="${+(hw + 2 * HAIR).toFixed(2)}" height="${+(hh + 2 * HAIR).toFixed(2)}" fill="${fill}"/>`)
+    .join("")
+}
+
 /** The cells: background runs (cells whose bg is `bg` or transparent draw none), text, underline / strikethrough. */
 function grid(f: Frame, bg: string, fg: string): string {
   const rects: string[] = []
   const texts: string[] = []
   const lines: string[] = []
+  const blocks: string[] = []
   f.lines.forEach((cells, row) => {
     const y = row * CH
     let col = 0
@@ -56,7 +73,8 @@ function grid(f: Frame, bg: string, fg: string): string {
       let c = col
       for (const { segment: g } of seg.segment(s.t)) {
         const gw = Bun.stringWidth(g)
-        if (g.trim() !== "" && gw > 0) {
+        if (BLOCKS[g]) blocks.push(blockRects(g, c * CW, y, CW, CH, color))
+        else if (g.trim() !== "" && gw > 0) {
           if ([...g].length === 1) single.push({ x: c * CW, ch: g })
           else multi.push(`<text x="${c * CW}" y="${y + CH - 5.5}" fill="${color}"${attrs}>${esc(g)}</text>`)
         }
@@ -72,7 +90,7 @@ function grid(f: Frame, bg: string, fg: string): string {
     }
     flush()
   })
-  return `<g shape-rendering="crispEdges">${rects.join("")}${lines.join("")}</g><g text-rendering="geometricPrecision">${texts.join("")}</g>`
+  return `<g shape-rendering="crispEdges">${rects.join("")}${lines.join("")}</g><g>${blocks.join("")}</g><g text-rendering="geometricPrecision">${texts.join("")}</g>`
 }
 
 /**
