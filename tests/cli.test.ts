@@ -94,7 +94,8 @@ describe("cli", () => {
       rmSync(d, { recursive: true, force: true })
     }
   })
-  test("- without a terminal for keys exits 1 with the reason", async () => {
+  // util-linux setsid detaches /dev/tty; macOS has no setsid
+  test.skipIf(!Bun.which("setsid"))("- without a terminal for keys exits 1 with the reason", async () => {
     // no controlling terminal: setsid detaches /dev/tty
     const p = Bun.spawn(["setsid", "-w", "bun", cli, "-"], { cwd: root, stdout: "pipe", stderr: "pipe", stdin: new Blob(["# hi\n"]) })
     const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited])
