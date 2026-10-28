@@ -13,7 +13,7 @@ description: "The 42 themes in 22 families, and where the palettes come from."
 
 ## On this site
 
-The site wears brothy's own palettes too, all 22 families, and it starts in `brothy` (following your system's dark or light). Press <kbd>t</kbd>, or click the family name in the top line, for the same picker as in the app: type to filter, <kbd>↑</kbd> <kbd>↓</kbd> to move, <kbd>tab</kbd> or <kbd>←</kbd> <kbd>→</kbd> for dark · light, <kbd>⏎</kbd> to apply, <kbd>esc</kbd> to close. The `◐ dark` / `◐ light` word flips the mode within the family. Synthwave84 and vesper are dark-only, so their light side is struck through. Your choice stays in this browser. The recorded tour on the front page keeps the `brothy` colors it was recorded in.
+The site wears brothy's own palettes too, all 22 families, and it starts in `brothy` (following your system's dark or light). Press <kbd>t</kbd>, or click the family name in the top line, for the same picker as in the app: type to filter, <kbd>↑</kbd> <kbd>↓</kbd> to move, <kbd>tab</kbd> or <kbd>←</kbd> <kbd>→</kbd> for dark · light, <kbd>⏎</kbd> to save, <kbd>esc</kbd> to close. The page wears the highlighted theme as you move (with the arrow keys, or the mouse once it moves), and <kbd>esc</kbd> puts your saved theme back. The `◐ dark` / `◐ light` word flips the mode within the family. Synthwave84 and vesper are dark-only, so their light side is struck through. Your choice stays in this browser. The recorded tour and the screenshots keep the `brothy` colors they were recorded in.
 
 ## Credits
 

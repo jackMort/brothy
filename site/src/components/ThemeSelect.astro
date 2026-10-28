@@ -2,7 +2,9 @@
 // The theme in the top line, in two words: `◐ dark` flips dark / light within the family, the family's name opens the
 // picker (also `t`, from frame.ts), a popup modelled on brothy's `t` picker (src/overlay.tsx ThemePicker): a type-to-filter input, the
 // 22 families each with a dark and a light specimen in its own colors, and the mode switch. ↑ ↓ move, tab or ← →
-// set the mode, ⏎ applies, esc closes; a click on a name applies the shown mode, on a specimen that one. A single-mode
+// set the mode, ⏎ applies, esc closes; a click on a name applies the shown mode, on a specimen that one. Moving
+// through the list (keys, or the pointer once it really moves) wears that theme on the whole page at once; ⏎ or a
+// click saves it, esc or any other close puts the saved theme back. A single-mode
 // family (synthwave84, vesper) shows its missing side muted and struck through. The choice is kept in localStorage
 // (`brothy-family` and Starlight's `starlight-theme`) and set before first paint by ThemeProvider.astro.
 ---
@@ -87,6 +89,9 @@
   type Pick = { q: string; family: string; mode: Mode; orig: { family: string; mode: Mode } }
   let p: Pick = { q: "", family: "brothy", mode: "dark", orig: { family: "brothy", mode: "dark" } }
   let opener: HTMLElement | null = null
+  /** the picker is open: the highlighted theme is worn on the page; `saved` is what esc puts back */
+  let live = false, committed = false
+  let saved = { family: "brothy", mode: "dark" as Mode }
 
   const slotStyle = (s: NonNullable<Family["dark"]>) => `--sb:${s.bg};--st:${s.text};--s1:${s.primary};--s2:${s.secondary};--s3:${s.accent}`
   const rows = new Map<string, HTMLLIElement>()
@@ -163,6 +168,7 @@
     else input.removeAttribute("aria-activedescendant")
     status.textContent = rs.length ? `${rs.length} ${rs.length === 1 ? "family" : "families"} · ${p.family}, ${m}` : "no theme matches"
     if (scroll) rows.get(p.family)?.scrollIntoView({ block: "nearest" })
+    if (live && rs.some((r) => r.f.name === p.family)) apply(p.family, shown(p.family), false)
   }
 
   function move(d: number) {
@@ -179,6 +185,7 @@
   }
   function choose(name: string, m: Mode) {
     if (onlyModes[name] ? false : !families.find((f) => f.name === name)?.[m]) return
+    committed = true
     apply(name, m, true)
     dlg.close()
   }
@@ -187,15 +194,22 @@
     if (dlg.open) return
     opener = document.activeElement as HTMLElement | null
     const f = family(), m = mode()
+    saved = { family: f, mode: m }
+    committed = false
     p = { q: "", family: f, mode: m, orig: { family: f, mode: m } }
     input.value = ""
     draw(false)
     dlg.showModal()
+    live = true
     rows.get(p.family)?.scrollIntoView({ block: "center" })
     input.focus()
   }
   document.querySelectorAll("[data-theme-open]").forEach((b) => b.addEventListener("click", open))
-  dlg.addEventListener("close", () => { if (opener?.isConnected && opener !== document.body) opener.focus() })
+  dlg.addEventListener("close", () => {
+    live = false
+    if (!committed) apply(saved.family, saved.mode, false)
+    if (opener?.isConnected && opener !== document.body) opener.focus()
+  })
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close() })
 
   input.addEventListener("input", () => {
@@ -236,7 +250,12 @@
       if (families.find((f) => f.name === name)?.[m]) choose(name, m)
     } else choose(name, shown(name))
   })
+  // Only a pointer that really moved follows: a list scrolling or redrawing under a resting pointer makes the
+  // browser send moves at the same cell (brothy's usePointer().moved guard, src/overlay.tsx).
+  let at = { x: -1, y: -1 }, moved = false
+  addEventListener("pointermove", (e) => { moved = e.clientX !== at.x || e.clientY !== at.y; at = { x: e.clientX, y: e.clientY } }, { capture: true, passive: true })
   list.addEventListener("pointermove", (e) => {
+    if (!moved) return
     const li = (e.target as HTMLElement).closest<HTMLElement>("li[data-family]")
     if (!li || li.dataset.family === p.family) return
     p = { ...p, family: li.dataset.family! }
