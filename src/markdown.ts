@@ -46,7 +46,7 @@ export interface FrontMatter {
 export const width = (s: string) => Bun.stringWidth(s)
 
 /** Drop a BOM and unify line endings so every later stage can split on "\n". */
-const normalize = (s: string) => safe(s.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"))
+export const normalize = (s: string) => safe(s.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"))
 
 /** Obsidian `==highlight==`: no space just inside either mark, one line at most. */
 const highlightExt: TokenizerExtension = {
@@ -1246,6 +1246,14 @@ export interface Stats {
   minutes: number
 }
 
+/** `stats`' words and reading minutes alone, without lexing (the Ctrl-P peek); `src` already normalized and without comments. */
+function countWords(src: string): { words: number; minutes: number } {
+  const words = (src.replace(/```[\s\S]*?```/g, "").replace(/\[[ xX]\]/g, "").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
+  return { words, minutes: Math.max(1, Math.round(words / 220)) }
+}
+/** The same `words` and `minutes` as `stats(src)`. */
+export const wordStats = (src: string) => countWords(stripComments(normalize(src)))
+
 export function stats(src: string): Stats {
   const lines = normalize(src).split("\n").length
   src = stripComments(normalize(src))
@@ -1273,8 +1281,7 @@ export function stats(src: string): Stats {
     }
   }
   walk(tokens)
-  s.words = (src.replace(/```[\s\S]*?```/g, "").replace(/\[[ xX]\]/g, "").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
-  s.minutes = Math.max(1, Math.round(s.words / 220))
+  Object.assign(s, countWords(src))
   // wikilinks (`[[note]]`, `![[embed]]`) are links too; marked leaves them as text
   s.links += (stripCode(src).match(/!?\[\[[^\[\]\n]+\]\]/g) ?? []).length
   return s

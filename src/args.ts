@@ -1,7 +1,12 @@
-import { themes } from "./theme"
+import { FAMILIES, resolveTheme } from "./themepick"
 
 export interface Args {
   path: string
+  /** `-`: read the document from stdin */
+  stdin: boolean
+  /** a path (or `-`) was on the command line; without one the CLI reads a piped stdin */
+  given: boolean
+  /** a theme or family name (`resolveTheme`), kept as typed */
   theme?: string
   transparent: boolean
   help: boolean
@@ -10,9 +15,9 @@ export interface Args {
 
 /** Pure CLI argument parser: returns the parsed options or `{ error }`. */
 export function parseArgs(argv: string[]): Args | { error: string } {
-  const out: Args = { path: ".", theme: undefined, transparent: false, help: false, version: false }
+  const out: Args = { path: ".", stdin: false, given: false, theme: undefined, transparent: false, help: false, version: false }
   const paths: string[] = []
-  const names = themes.map((t) => t.name)
+  const names = `a family (${FAMILIES.map((f) => f.name).join(", ")}) or one of its themes (<family>-light, one-dark)`
   let theme: string | undefined
   let transparent = false
   let optionsDone = false
@@ -36,7 +41,7 @@ export function parseArgs(argv: string[]): Args | { error: string } {
       const eq = a.startsWith("--theme=")
       const value = eq ? a.slice(8) : argv[++i]
       if (!value || (!eq && value.startsWith("-"))) {
-        fail(`option ${eq ? "--theme" : a} requires a value (one of: ${names.join(", ")})`)
+        fail(`option ${eq ? "--theme" : a} requires a value: ${names}`)
         if (!eq && value?.startsWith("-")) i--
       } else theme = value
     } else {
@@ -44,7 +49,8 @@ export function parseArgs(argv: string[]): Args | { error: string } {
     }
   }
   if (error) return { error }
-  if (theme !== undefined && !names.includes(theme)) return { error: `unknown theme "${theme}" (one of: ${names.join(", ")})` }
+  if (theme !== undefined && !resolveTheme(theme)) return { error: `unknown theme "${theme}": ${names}` }
   if (paths.length > 1) return { error: "expected at most one path" }
-  return { ...out, path: paths[0] ?? ".", theme, transparent }
+  const stdin = paths[0] === "-"
+  return { ...out, path: stdin ? "." : (paths[0] ?? "."), stdin, given: paths.length > 0, theme, transparent }
 }

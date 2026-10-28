@@ -1,6 +1,7 @@
 // Panel views (Outline, Info): pure row data. Span styling stays in App; Files rows come from files.ts.
 
 import { dirname, resolve, sep } from "node:path"
+import type { Change, DeltaNote } from "./delta"
 import { fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
 import { stripCode, wrap, width as sw, type LinkTarget, type Property, type Stats } from "./markdown"
 import { safeLine } from "./spans"
@@ -69,6 +70,10 @@ export type InfoItem =
   | { kind: "more"; n: number }
   | { kind: "stat"; text: string }
   | { kind: "blank" }
+  | { kind: "tldr"; status: string }
+  | { kind: "summary"; text: string; muted: boolean }
+  | { kind: "changes"; status: string }
+  | { kind: "change"; mark: "~" | "+" | "−"; text: string; counts: string; at: number; stop: boolean }
 
 export interface LinkRef {
   target: string
@@ -119,9 +124,84 @@ export function wrapProperty(key: string, value: string | string[], width: numbe
   return rows
 }
 
-/** The Info view, top to bottom: properties, links, then three stat lines. */
-export function infoItems(props: Property[], st: Stats, links: LinkRef[], width: number, file: FileMeta | null, now = Date.now()): InfoItem[] {
-  const out: InfoItem[] = []
+/** Summary text rows shown at most; the last is cut with `…`. */
+export const SUMMARY_ROWS = 8
+export type SummaryState = "none" | "streaming" | "fresh" | "outdated"
+/** What the Info tab shows for the note's TL;DR; `model` is the display name. */
+export interface SummaryView {
+  text: string
+  state: SummaryState
+  model: string
+}
+
+const OUTDATED = " · outdated · a to refresh"
+
+/** The TL;DR label row (muted suffix by state) and the wrapped text (spec: Mockups, Variant A). */
+export function tldrItems(sv: SummaryView, width: number): InfoItem[] {
+  const label = "TL;DR"
+  const status =
+    sv.state === "streaming"
+      ? " · summarizing…"
+      : sv.state === "fresh"
+        ? truncate(" · " + sv.model, width - sw(label))
+        : sv.state === "outdated"
+          ? sw(label + OUTDATED) <= width ? OUTDATED : " · outdated · a"
+          : ""
+  const out: InfoItem[] = [{ kind: "tldr", status }]
+  if (sv.state === "none") return [...out, { kind: "summary", text: "a to summarize", muted: true }]
+  const rows = wrap([{ text: safeLine(sv.text) }], width).map((r) => r.map((s) => s.text).join(""))
+  const shown = rows.slice(0, SUMMARY_ROWS)
+  if (rows.length > SUMMARY_ROWS) shown[SUMMARY_ROWS - 1] = truncate(shown[SUMMARY_ROWS - 1]! + "…", width)
+  for (const text of shown) out.push({ kind: "summary", text, muted: sv.state === "outdated" })
+  return out
+}
+
+/** Change rows shown at most; the rest are counted in a `+ n more sections` row. */
+export const MAX_CHANGE_ROWS = 8
+/** Summary rows under the `Changed` label; the last is cut with `…`. */
+export const CHANGE_SUMMARY_ROWS = 3
+export type ChangeState = "idle" | "loading" | "result"
+/** What Info shows for a live reload: `label` is the baseline's HH:MM (idle) or the model's display name (result). */
+export interface ChangeView {
+  state: ChangeState
+  label: string
+  changes: readonly Change[]
+  summary: string
+  notes: readonly (DeltaNote | undefined)[]
+}
+const MARK = { edited: "~", added: "+", removed: "−" } as const
+
+/** `+a −r`, one side omitted when zero. */
+export const changeCounts = (c: Pick<Change, "plus" | "minus">) => [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
+
+/** The `Changed` block (spec: Strings): label, summary, then a row per change with its model line under it. */
+export function changeItems(cv: ChangeView, title: string, width: number): InfoItem[] {
+  const label = "Changed"
+  const status = cv.state === "loading" ? " · explaining…" : cv.state === "result" ? truncate(" · " + cv.label, width - sw(label)) : ` · since ${cv.label}`
+  const out: InfoItem[] = [{ kind: "changes", status }]
+  if (cv.state !== "idle" && cv.summary) {
+    const rows = wrap([{ text: safeLine(cv.summary) }], width).map((r) => r.map((s) => s.text).join(""))
+    const shown = rows.slice(0, CHANGE_SUMMARY_ROWS)
+    if (rows.length > CHANGE_SUMMARY_ROWS) shown[CHANGE_SUMMARY_ROWS - 1] = truncate(shown[CHANGE_SUMMARY_ROWS - 1]! + "…", width)
+    for (const text of shown) out.push({ kind: "summary", text, muted: true })
+  }
+  cv.changes.slice(0, MAX_CHANGE_ROWS).forEach((c, at) => {
+    const counts = changeCounts(c)
+    const room = Math.max(1, width - 2 - (counts ? sw(counts) + 1 : 0))
+    const name = truncate(safeLine(c.index < 0 || !c.path.length ? title : c.path.at(-1)!), room)
+    const text = name + " ".repeat(Math.max(0, room - sw(name)) + (counts ? 1 : 0))
+    out.push({ kind: "change", mark: MARK[c.status], text, counts, at, stop: c.status !== "removed" })
+    const what = cv.state === "idle" ? undefined : cv.notes[at]?.what
+    if (what) out.push({ kind: "summary", text: truncate("    " + safeLine(what), width), muted: true })
+  })
+  if (cv.changes.length > MAX_CHANGE_ROWS) out.push({ kind: "stat", text: `+ ${cv.changes.length - MAX_CHANGE_ROWS} more sections` })
+  return out
+}
+
+/** The Info view, top to bottom: the TL;DR block (AI on), the Changed block (after a reload), properties, links, then three stat lines. */
+export function infoItems(props: Property[], st: Stats, links: LinkRef[], width: number, file: FileMeta | null, now = Date.now(), summary?: SummaryView, changes?: { view: ChangeView; title: string }): InfoItem[] {
+  const out: InfoItem[] = summary ? [...tldrItems(summary, width), { kind: "blank" }] : []
+  if (changes) out.push(...changeItems(changes.view, changes.title, width), { kind: "blank" })
   const rank = (k: string) => {
     const i = ORDER.indexOf(k.toLowerCase())
     return i < 0 ? ORDER.length : i

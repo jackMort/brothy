@@ -101,10 +101,12 @@ export function transform(L: Layout, c: Cam, p: Pose): string {
 /** How far a key is down `dt` seconds after it was pressed: quick press, a short hold, softer release. */
 export const pressDepth = (dt: number) => (dt < 0 ? 0 : dt < 0.05 ? dt / 0.05 : dt < 0.13 ? 1 : Math.max(0, 1 - (dt - 0.13) / 0.16))
 
-/** The caps a storyboard key presses (`C-p` presses both `ctrl` and `p`). */
+/** The caps a storyboard key presses (`C-p` presses both `ctrl` and `p`, `down` the `↓` cap). */
 export function capsOf(key: string): string[] {
   if (key === "enter") return ["⏎"]
   if (key === "space") return ["space"]
+  const arrow = ({ up: "↑", down: "↓", left: "←", right: "→" } as Record<string, string>)[key]
+  if (arrow) return [arrow]
   if (key.startsWith("C-")) return ["ctrl", key.slice(2)]
   return [key]
 }

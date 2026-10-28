@@ -25,11 +25,14 @@ describe("cli", () => {
     expect(r.code).toBe(0)
     expect(r.out).toContain("usage: brothy")
     expect(r.out).toContain("--transparent")
+    expect(r.out).toContain("-h, --help")
   })
-  test("--help lists dark and light themes on lines that fit 80 columns", async () => {
+  test("--help lists the theme families on lines that fit 80 columns", async () => {
     const r = await run("--help")
-    expect(r.out).toMatch(/dark:\s+brothy, catppuccin/)
-    expect(r.out).toMatch(/light:\s+brothy-light, catppuccin-light/)
+    expect(r.out).toMatch(/brothy, catppuccin, dracula/)
+    expect(r.out).toContain("one,")
+    expect(r.out).toContain("vesper")
+    expect(r.out).not.toContain("catppuccin-light")
     for (const l of r.out.split("\n")) expect(l.length, l).toBeLessThanOrEqual(80)
   })
   test("unknown flag exits 1 with a clean message", async () => {
@@ -37,6 +40,11 @@ describe("cli", () => {
     expect(r.code).toBe(1)
     expect(r.err).toContain("--bogus")
     expect(r.err).not.toContain("at ")
+  })
+  test("a family name passes the theme check", async () => {
+    const r = await run("-t", "one", "/definitely/not/here")
+    expect(r.code).toBe(1)
+    expect(r.err).toContain("no such file")
   })
   test("unknown theme exits 1", async () => {
     const r = await run("-t", "nope", "examples")
@@ -85,5 +93,17 @@ describe("cli", () => {
       chmodSync(dir, 0o700)
       rmSync(d, { recursive: true, force: true })
     }
+  })
+  test("- without a terminal for keys exits 1 with the reason", async () => {
+    // no controlling terminal: setsid detaches /dev/tty
+    const p = Bun.spawn(["setsid", "-w", "bun", cli, "-"], { cwd: root, stdout: "pipe", stderr: "pipe", stdin: new Blob(["# hi\n"]) })
+    const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited])
+    expect(code).toBe(1)
+    expect(err).toContain("brothy:")
+    expect(err).toMatch(/terminal/)
+    expect(err).not.toContain("at ")
+  })
+  test("--help documents -", async () => {
+    expect((await run("--help")).out).toContain("-              read Markdown from stdin")
   })
 })

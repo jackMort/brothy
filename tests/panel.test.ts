@@ -4,7 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { scanTree } from "../src/files"
 import type { Stats } from "../src/markdown"
-import { extractLinks, findHeading, fmtAge, headingKey, infoItems, linkDest, noteIndex, outlineRows, resolveLink, wrapProperty } from "../src/panel"
+import type { Change } from "../src/delta"
+import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, findHeading, fmtAge, headingKey, infoItems, linkDest, noteIndex, outlineRows, resolveLink, tldrItems, wrapProperty, type ChangeView, type InfoItem } from "../src/panel"
 
 const made: string[] = []
 afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
@@ -185,4 +186,127 @@ describe("findHeading", () => {
     expect(findHeading(hs, "intro")).toBe(0)
     expect(findHeading(hs, "missing")).toBeNull()
   })
+})
+
+describe("TL;DR block", () => {
+  const TEXT = "A tour of brothy, a terminal Markdown reader with Files, Outline and Info beside a calm text column. It covers live reload, find, themes and installing with bun."
+  const rows = (items: ReturnType<typeof tldrItems>) => items.map((it) => (it.kind === "tldr" ? "TL;DR" + it.status : it.kind === "summary" ? it.text : `<${it.kind}>`))
+
+  test("none: label and a muted hint", () => {
+    expect(tldrItems({ text: "", state: "none", model: "" }, 30)).toEqual([{ kind: "tldr", status: "" }, { kind: "summary", text: "a to summarize", muted: true }])
+  })
+  test("fresh at 30 columns matches the mockup", () => {
+    expect(rows(tldrItems({ text: TEXT, state: "fresh", model: "claude-haiku-5-5" }, 30))).toEqual([
+      "TL;DR · claude-haiku-5-5",
+      "A tour of brothy, a terminal",
+      "Markdown reader with Files,",
+      "Outline and Info beside a calm",
+      "text column. It covers live",
+      "reload, find, themes and",
+      "installing with bun.",
+    ])
+  })
+  test("outdated at 38 columns matches the drawer mockup, muted", () => {
+    const items = tldrItems({ text: TEXT, state: "outdated", model: "m" }, 38)
+    expect(rows(items)).toEqual([
+      "TL;DR · outdated · a to refresh",
+      "A tour of brothy, a terminal Markdown",
+      "reader with Files, Outline and Info",
+      "beside a calm text column. It covers",
+      "live reload, find, themes and",
+      "installing with bun.",
+    ])
+    expect(items.slice(1).every((it) => it.kind === "summary" && it.muted)).toBe(true)
+  })
+  test("outdated suffix shortens when the full one doesn't fit", () => {
+    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 30)[0]).toEqual({ kind: "tldr", status: " · outdated · a" })
+    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 31)[0]).toEqual({ kind: "tldr", status: " · outdated · a to refresh" })
+  })
+  test("streaming label; fresh text not muted", () => {
+    const items = tldrItems({ text: "Partial", state: "streaming", model: "" }, 30)
+    expect(items).toEqual([{ kind: "tldr", status: " · summarizing…" }, { kind: "summary", text: "Partial", muted: false }])
+  })
+  test("a long model name is cut to the width", () => {
+    const [label] = tldrItems({ text: "x", state: "fresh", model: "a-very-long-model-name-that-overflows" }, 30)
+    expect(label).toEqual({ kind: "tldr", status: " · a-very-long-model-nam…" })
+  })
+  test("at most 8 text rows, the last cut with …", () => {
+    const items = tldrItems({ text: "word ".repeat(200), state: "fresh", model: "m" }, 30)
+    expect(items.length).toBe(1 + SUMMARY_ROWS)
+    const last = items.at(-1)!
+    expect(last.kind === "summary" && last.text.endsWith("…") && Bun.stringWidth(last.text) <= 30).toBe(true)
+  })
+  test("control characters never reach a row", () => {
+    const items = tldrItems({ text: "bad\x1b[2Jtext", state: "fresh", model: "m" }, 30)
+    expect(rows(items)[1]).not.toContain("\x1b")
+  })
+  test("infoItems puts the block and a blank row before Properties; nothing when AI is off", () => {
+    const props: [string, string][] = [["title", "Welcome"]]
+    const on = infoItems(props, STATS, [], 30, null, 0, { text: "", state: "none", model: "" })
+    expect(on.slice(0, 3).map((i) => i.kind)).toEqual(["tldr", "summary", "blank"])
+    expect(on[3]!.kind).toBe("prop")
+    expect(infoItems(props, STATS, [], 30, null, 0)[0]!.kind).toBe("prop")
+  })
+})
+
+const chg = (status: Change["status"], name: string, plus: number, minus: number, index = 0): Change => ({
+  status, index, path: index < 0 ? [] : ["Doc", name], key: headingKey(name), ord: 0, plus, minus, hunks: [], rewritten: false, newText: "",
+})
+const SAMPLE = [chg("edited", "Why another reader?", 2, 1), chg("added", "Install on macOS", 9, 0, 1), chg("removed", "Pager notes", 0, 14, 2)]
+const idle: ChangeView = { state: "idle", label: "14:02", changes: SAMPLE, summary: "", notes: [] }
+const rowOf = (it: InfoItem) =>
+  it.kind === "changes" ? "Changed" + it.status : it.kind === "change" ? it.mark + " " + it.text + it.counts : it.kind === "summary" || it.kind === "stat" ? it.text : it.kind
+
+describe("changeItems", () => {
+  test("idle: label with the baseline time, one row per change, counts right-aligned", () => {
+    const items = changeItems(idle, "Welcome", 30)
+    expect(items.map(rowOf)).toEqual([
+      "Changed · since 14:02",
+      "~ Why another reader?    +2 −1",
+      "+ Install on macOS          +9",
+      "− Pager notes              −14",
+    ])
+    expect(items.filter((i) => i.kind === "change").map((i) => (i as { stop: boolean }).stop)).toEqual([true, true, false])
+    expect(items.filter((i) => i.kind === "change").map((i) => (i as { at: number }).at)).toEqual([0, 1, 2])
+  })
+  test("loading: explaining…, the streamed summary and notes so far", () => {
+    const items = changeItems({ ...idle, state: "loading", summary: "Adds macOS", notes: [{ what: "feature list trimmed" }] }, "Welcome", 30)
+    expect(items.map(rowOf).slice(0, 4)).toEqual(["Changed · explaining…", "Adds macOS", "~ Why another reader?    +2 −1", "    feature list trimmed"])
+  })
+  test("result: model name, summary at most 3 rows, one muted line under each explained change", () => {
+    const long = "Adds macOS install steps and drops the old pager notes, then rewrites the intro twice over and again."
+    const items = changeItems({ state: "result", label: "claude-haiku-5-5", changes: SAMPLE, summary: long, notes: [{ what: "feature list trimmed" }, { what: "brew and bun steps" }, undefined] }, "Welcome", 30)
+    const rows = items.map(rowOf)
+    expect(rows[0]).toBe("Changed · claude-haiku-5-5")
+    expect(items.slice(1, 4).every((i) => i.kind === "summary" && i.muted)).toBe(true)
+    expect(rows[3]!.endsWith("…")).toBe(true)
+    expect(rows.slice(4)).toEqual(["~ Why another reader?    +2 −1", "    feature list trimmed", "+ Install on macOS          +9", "    brew and bun steps", "− Pager notes              −14"])
+  })
+  test("the lead-in is named by the note title", () => {
+    expect(changeItems({ ...idle, changes: [chg("edited", "", 1, 0, -1)] }, "Welcome", 30).map(rowOf)[1]).toBe("~ Welcome" + " ".repeat(19) + "+1")
+  })
+  test("at most 8 change rows, then + n more sections", () => {
+    const many = Array.from({ length: 11 }, (_, i) => chg("edited", `S${i}`, 1, 0, i))
+    const items = changeItems({ ...idle, changes: many }, "W", 30)
+    expect(items.filter((i) => i.kind === "change").length).toBe(MAX_CHANGE_ROWS)
+    expect(rowOf(items.at(-1)!)).toBe("+ 3 more sections")
+  })
+  test("narrow: long headings are cut with …, rows never exceed the width", () => {
+    const items = changeItems({ ...idle, changes: [chg("edited", "A very long heading that cannot fit", 12, 345)] }, "W", 20)
+    const row = rowOf(items[1]!)
+    expect(Bun.stringWidth(row)).toBe(20)
+    expect(row).toContain("…")
+    expect(row.endsWith("+12 −345")).toBe(true)
+  })
+  test("heading text is made terminal-safe", () => {
+    const items = changeItems({ ...idle, changes: [chg("edited", "bad\x1b[31m", 1, 0)] }, "W", 30)
+    expect(rowOf(items[1]!)).not.toContain("\x1b")
+  })
+})
+
+test("infoItems puts the Changed block under the TL;DR and above the properties", () => {
+  const items = infoItems([["title", "T"]], STATS, [], 30, null, 0, { text: "Sum.", state: "fresh", model: "m" }, { view: idle, title: "T" })
+  const kinds = items.map((i) => i.kind)
+  expect(kinds.indexOf("tldr")).toBeLessThan(kinds.indexOf("changes"))
+  expect(kinds.indexOf("changes")).toBeLessThan(kinds.indexOf("prop"))
 })

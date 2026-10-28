@@ -1,22 +1,35 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
-import { existsSync, readFileSync, statSync } from "node:fs"
+import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode, type TreeRow } from "./files"
 import { ensureHighlights } from "./highlight"
 import { drop, go, keep, startHistory, stepTo, visit, type History } from "./history"
-import { A, parseFrontMatter, parseProperties, pendingHighlights, render, renderSource, stats, width as sw, wrap, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats } from "./markdown"
+import { A, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
 import { safe, safeLine } from "./spans"
+import { MAX_BYTES } from "./stdin"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
-import { OpenPicker, Overlay, PickerInput, PickerList, Switcher, ZenSettings, fitHits, hitSpans as markHits, type PickerItem } from "./overlay"
+import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, fitHits, hitSpans as markHits, usePointer, type PickerItem } from "./overlay"
+import { helpLayout, type HelpGroup } from "./help"
+import { STEAM_MS, STILL_TICK, WELCOME_RECENTS, welcomeFit } from "./welcome"
+import { INK_MS, INK_STEPS } from "./chrome"
 import { fsDirIO, loadProjects, openRows, projectName, remember as rememberProject, saveProjects, tildify, type OpenRow, type ProjectEntry } from "./projects"
-import { emptyIndex, firstHit, fsIO, hitOrdinal, refreshIndex, nextSection, recentSection, remember, searchVault, stepRow, switchRows, type SwitchRow, type VaultIndex } from "./vault"
+import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, isStop, refreshIndex, nextSection, recentSection, remember, searchVault, stepRow, switchRows, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit, type VaultIndex } from "./vault"
+import { MINI_COLS, MINI_MIN_W, MINI_W, miniCells, miniColors, miniInk, miniJump } from "./minimap"
+import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "./peek"
+import { filterFamilies, onlyMode, paneLines, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, sampleView, themeSplit, type ThemePick } from "./themepick"
 import { VIEWS, loadConfig, saveConfig, type Config, type SidebarConfig, type View } from "./config"
-import { cached, findLines, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, stepMatch, stripLayout, thumb, visibleLinks, type Geometry, type LinkSpot } from "./nav"
+import { cached, copiedCount, findLines, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry, type LinkSpot } from "./nav"
 import { watchPath } from "./watch"
-import { LOGO, LOGO_HOLD, errText, tooSmall, WORDMARK, WORDMARK_W, fitWordmark, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type Toast, type ToastKind } from "./status"
-import { extractLinks, findHeading, fmtNum, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type FileMeta, type InfoItem, type LinkRef, type OutlineRow } from "./panel"
+import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
+import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, resolveAI, shortModel, stripThink, summarize, type AIConfig, type AITarget, type Failure } from "./ai"
+import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askCandidates, askLocate, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, type AskState, type Candidate } from "./ask"
+import { isFresh, loadGlosses, loadSummaries, saveGlosses, saveSummaries, textHash, type Gloss, type Glosses, type Summaries } from "./summaries"
+import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, glossTarget, parseGlossStyle, type GlossState, type GlossStyle, type GlossTarget } from "./gloss"
+import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type Toast, type ToastKind } from "./status"
+import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type OutlineRow, type SummaryState, type SummaryView } from "./panel"
+import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, diffSections, hhmm, parseDelta, quoteNeedle, reloadToast, type Change, type DeltaNote } from "./delta"
 import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
 export const VERSION = "0.1.1"
@@ -34,12 +47,32 @@ export interface AppProps {
   themeName?: string
   /** `--transparent`: wins over the config for this run (a live toggle still saves). */
   transparent?: boolean
+  /** injected by tests; the CLI uses the global fetch */
+  fetch?: typeof fetch
+  /** runs the editor and waits (tests stub it; the default is `runEditor`); `piped`: keys come from /dev/tty */
+  edit?: (argv: string[], piped: boolean) => EditResult | void
+  /** Markdown piped on stdin: the only document, with no Files tree, watcher or project record */
+  stdin?: string
+  /** ms after mount before a piped document's links start scanning in the background (tests delay it) */
+  linkScanDelay?: number
+  /** animations; tests and snapshots run without them unless this says true (default: config `motion`, on) */
+  motion?: boolean
 }
 
-/** Files above this are refused rather than rendered. */
-const MAX_BYTES = 5 * 1024 * 1024
+/** The open path of the piped document: relative, so it can never be a file on disk. */
+export const STDIN = "stdin"
+
 /** Sidebar j/k opens the file under the cursor once it rests this long. */
 const OPEN_DELAY = 100
+/** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
+const MAX_JOBS = 3
+/** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
+type JobKind = "tldr" | "gloss" | "delta" | "ask"
+const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
+/** streamed summary text re-renders at most this often (ms) */
+const AI_FRAME = 100
+/** No candidates: one shared empty list, so the ask memos hold */
+const NO_CANDS: readonly Candidate[] = []
 /** Reading measure: the document never wraps wider than this. */
 const MEASURE = 80
 /** Below this width the panel is a drawer over the text instead of a column beside it. */
@@ -106,15 +139,18 @@ interface KeyDef {
   short?: string
   /** footer word */
   hint?: string
+  /** help group, when not the one its first mode puts it in (`HELP_SECTIONS`) */
+  group?: string
 }
 
 /** Tree indent stops growing here; deeper rows keep this indent and cut the name. */
 const MAX_DEPTH = 6
 
 const KEYMAP = {
-  views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", short: "1 2 3", desc: "show Files · Outline · Info", hint: "files/outline/info" },
+  views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", short: "1 2 3", desc: "Files · Outline · Info (piped: 1 2 only)", hint: "files/outline/info" },
   source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview", hint: "source" },
   width: { modes: ["global"], keys: ["w"], label: "w", desc: "full width / measure", hint: "width" },
+  minimap: { modes: ["global"], keys: ["m"], label: "m", desc: "minimap on / off (saved)", group: "Global" },
   transparent: { modes: ["global"], keys: ["S-t"], label: "T", desc: "transparent background (saved)" },
   zen: { modes: ["global"], keys: ["z"], label: "z", desc: "zen mode: only the text (esc leaves)", hint: "zen" },
   zenSettings: { modes: ["global"], keys: ["S-z"], label: "Z", desc: "zen settings (live preview)", hint: "settings" },
@@ -123,13 +159,16 @@ const KEYMAP = {
   switcher: { modes: ["global"], keys: ["C-p"], label: "^p", desc: "go to a note, heading or text (the whole vault)", hint: "go to" },
   open: { modes: ["global"], keys: ["o"], label: "o", desc: "open a recent project or any path (folder or note)", hint: "open" },
   focus: { modes: ["global"], keys: ["tab"], label: "tab", desc: "panel ⇄ document", hint: "focus" },
-  theme: { modes: ["global"], keys: ["t"], label: "t", desc: "pick theme", hint: "theme" },
-  reload: { modes: ["global"], keys: ["r"], label: "r", desc: "reload files" },
-  clear: { modes: ["global"], keys: ["escape"], label: "esc", desc: "clear find · leave zen · panel: clear filter, else back to the document" },
+  theme: { modes: ["global"], keys: ["t"], label: "t", desc: "pick theme · ←→ dark / light", hint: "theme" },
+  reload: { modes: ["global"], keys: ["r"], label: "r", desc: "reload files and AI config" },
+  clear: { modes: ["global"], keys: ["escape"], label: "esc", desc: "clear find · hide gloss · leave zen · panel: clear filter, else back to the document" },
   help: { modes: ["global"], keys: ["?"], label: "?", desc: "key hints · twice: all keys", hint: "keys" },
   quit: { modes: ["global"], keys: ["q", "C-c"], label: "q", desc: "quit", hint: "quit" },
   histBack: { modes: ["global"], keys: ["S-h"], label: "H", short: "H L", desc: "back to the previous note", hint: "history" },
   histForward: { modes: ["global"], keys: ["S-l"], label: "L", desc: "forward to the next note" },
+  summarize: { modes: ["global"], keys: ["a"], label: "a", desc: "summarize the note (Info tab)", hint: "summarize", group: "AI" },
+  explainChange: { modes: ["global"], keys: ["S-d"], label: "D", desc: "explain what changed on disk", hint: "changes", group: "AI" },
+  edit: { modes: ["global"], keys: ["e"], label: "e", desc: "edit the note in $EDITOR at the top line", hint: "edit" },
 
   docLine: { modes: ["doc"], keys: ["j", "down", "k", "up"], label: "j k ↑ ↓", short: "j k", desc: "scroll a line", hint: "scroll" },
   docHalf: { modes: ["doc"], keys: ["d", "C-d", "u", "C-u"], label: "d u", short: "d/u", desc: "half page down / up", hint: "half page" },
@@ -147,13 +186,14 @@ const KEYMAP = {
   zenSection: { modes: ["zen"], keys: ["]", "}", "[", "{"], label: "[ ]", desc: "previous / next section", hint: "section" },
   zenMeasure: { modes: ["zen"], keys: ["<", ">"], label: "< >", desc: "narrower / wider text (saved)" },
   zenSpeed: { modes: ["zen"], keys: ["+", "-"], label: "+ -", desc: "teleprompter faster / slower (saved)" },
+  zenGloss: { modes: ["zen"], keys: ["a"], label: "a", desc: "gloss: explain the section you're reading (AI)", hint: "gloss" },
 
   outlineMove: { modes: ["outline"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Outline: move", hint: "move" },
   outlineJump: { modes: ["outline"], keys: ["return", "enter"], label: "⏎", desc: "Outline: jump to heading and read", hint: "jump" },
   outlinePeek: { modes: ["outline"], keys: ["l", "right"], label: "l", desc: "Outline: jump, keep the panel focused", hint: "peek" },
 
-  infoMove: { modes: ["info"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Info: move between links (scroll without links)", hint: "links" },
-  infoOpen: { modes: ["info"], keys: ["return", "enter"], label: "⏎", desc: "Info: open the link", hint: "open" },
+  infoMove: { modes: ["info"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Info: move between links and changes (scroll without them)", hint: "links" },
+  infoOpen: { modes: ["info"], keys: ["return", "enter"], label: "⏎", desc: "Info: open the link · jump to the change", hint: "open" },
 
   filesMove: {
     modes: ["files"],
@@ -193,6 +233,7 @@ const KEYMAP = {
   swOpen: { modes: ["switch"], keys: ["return", "enter"], label: "⏎", hint: "open" },
   swClose: { modes: ["switch"], keys: ["escape"], label: "esc", hint: "close" },
   swErase: { modes: ["switch"], keys: ["backspace"], label: "⌫" },
+  swAsk: { modes: ["switch"], keys: [], label: "^p ?", desc: "ask: a ? query finds the section that answers", group: "AI" },
   opType: { modes: ["open"], keys: [], label: "type", hint: "filter · path" },
   opMove: { modes: ["open"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
   opComplete: { modes: ["open"], keys: ["tab"], label: "tab", hint: "complete" },
@@ -203,9 +244,12 @@ const KEYMAP = {
   labelErase: { modes: ["label"], keys: ["backspace"], label: "⌫", hint: "erase" },
   labelCancel: { modes: ["label"], keys: ["escape"], label: "esc", hint: "cancel" },
 
-  themeMove: { modes: ["theme"], keys: ["down", "j", "up", "k", "g", "S-g"], label: "↑↓", hint: "preview" },
+  themeType: { modes: ["theme"], keys: [], label: "type", hint: "filter" },
+  themeMove: { modes: ["theme"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
+  themeMode: { modes: ["theme"], keys: ["tab", "left", "right"], label: "←→", hint: "dark/light" },
   themeApply: { modes: ["theme"], keys: ["return", "enter"], label: "⏎", hint: "apply" },
-  themeRevert: { modes: ["theme"], keys: ["escape"], label: "esc", hint: "revert" },
+  themeClose: { modes: ["theme"], keys: ["escape"], label: "esc", hint: "close" },
+  themeErase: { modes: ["theme"], keys: ["backspace"], label: "⌫" },
 
   zsMove: { modes: ["zenSettings"], keys: ["down", "j", "up", "k"], label: "↑↓", hint: "move" },
   zsToggle: { modes: ["zenSettings"], keys: ["space"], label: "space", hint: "toggle" },
@@ -216,19 +260,21 @@ const KEYMAP = {
 type KeyId = keyof typeof KEYMAP
 const KEY_IDS = Object.keys(KEYMAP) as KeyId[]
 const keyDef = (id: KeyId): KeyDef => KEYMAP[id]
+/** The welcome page's keycaps: [binding, word]. */
+const WELCOME_KEYS: [KeyId, string][] = [["open", "open a project"], ["theme", "theme"], ["help", "keys"], ["quit", "quit"]]
 
 /** Footer hints per context: a binding, optionally with a context-specific word. */
 type Hint = KeyId | [KeyId, string]
 const FOOTERS: Record<Ctx, Hint[]> = {
-  doc: ["docLine", "docPage", "docHeading", ["slash", "find"], "docMatch", "links", "histBack", ["focus", "panel"], "help"],
+  doc: ["docLine", "docPage", "docHeading", ["slash", "find"], "docMatch", "links", "histBack", "edit", ["focus", "panel"], "help"],
   "panel:files": ["filesMove", "filesOpen", "filesUp", ["slash", "filter"], ["views", "view"], ["focus", "document"], "help"],
   "panel:outline": ["outlineMove", "outlineJump", "outlinePeek", ["slash", "filter"], ["focus", "document"], "help"],
-  "panel:info": ["infoMove", "infoOpen", ["focus", "document"], "help"],
+  "panel:info": ["infoMove", "infoOpen", "summarize", "explainChange", ["focus", "document"], "help"],
   filter: ["filterType", "filterMove", "filterOpen", "filterClear"],
-  zen: ["zenLine", "zenSection", "zenSettings", ["zen", "leave"], "help"],
+  zen: ["zenLine", "zenSection", "zenGloss", "zenSettings", ["zen", "leave"], "help"],
   help: ["helpScroll", "helpClose"],
   prompt: ["promptMove", "promptApply", "promptClear"],
-  theme: ["themeMove", "themeApply", "themeRevert"],
+  theme: ["themeType", "themeMove", "themeMode", "themeApply", "themeClose"],
   zenSettings: ["zsMove", "zsToggle", "zsAdjust", "zsSave", "zsRevert"],
   label: ["labelType", "labelErase", "labelCancel"],
   switch: ["swType", "swMove", "swSection", "swOpen", "swClose"],
@@ -240,29 +286,34 @@ const HELP_SECTIONS: [readonly Mode[], string][] = [
   [["doc"], "Document"],
   [["zen"], "Zen"],
   [["files", "outline", "info", "filter"], "Panel"],
+  [[], "AI"],
 ]
-const HELP_ROWS: [string, string][] = HELP_SECTIONS.flatMap(([modes, title], i) => [
-  ...(i ? ([["", ""]] as [string, string][]) : []),
-  [title, ""] as [string, string],
-  ...KEY_IDS.map(keyDef)
-    .filter((d) => d.desc && modes.includes(d.modes[0]!))
-    .map((d) => [d.label, d.desc!] as [string, string]),
-])
-// popup chrome: panel padding 1 + title row + gap 1
-/** The wordmark atop the popup (+1 gap row): only when the popup's inner width and the height (3 list rows still left) allow. */
-const helpMark = (W: number, H: number) => fitWordmark(Math.min(70, W - 2) - 10, H - 2 - 4 - 3 - 1)
-const HELP_VIS = (W: number, H: number) => Math.max(3, Math.min(HELP_ROWS.length, H - 2 - 4 - (helpMark(W, H) ? WORDMARK.length + 1 : 0)))
+/** The `? ?` sheet's groups: a binding with a description goes to its `group`, else to its first mode's section. */
+const HELP_GROUPS: HelpGroup[] = HELP_SECTIONS.map(([modes, title]) => ({
+  title,
+  entries: KEY_IDS.map(keyDef)
+    .filter((d) => d.desc && (d.group ? d.group === title : modes.includes(d.modes[0]!)))
+    .map((d) => ({ keys: d.label, desc: d.desc! })),
+}))
 
 /** Direction of a paired binding (j/k, d/u, space/b, …): true for the "forward" key. */
 const isDown = (k: KeyEvent) => ["j", "down", "d", "space", "pagedown"].includes(k.name) || (k.ctrl && k.name === "f")
 
 /** Bindings that only make sense with the panel; zen skips them. */
-const ZEN_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "links"]
+const ZEN_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "links", "summarize", "explainChange", "edit", "minimap"]
+/** The welcome page has no panel and no note: these would only change the panel, the view or the measure out of sight. */
+const WELCOME_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "summarize", "zen", "zenSettings", "source", "width"]
 
 // ------------------------------------------------------------- store
 
 /** Where a note was left: its scroll entry (Preview or Source key) at that moment. */
 type Spot = { key: string; top: number; geo: Geometry }
+/** The open note's body (`noteText`) and properties when it was opened or last explained; memory only. */
+type Baseline = { path: string; text: string; props: string; at: number }
+/** `D` for `path`: the changes sent, the text and properties they lead to, and the reply once it is in. */
+type DeltaState = { path: string; changes: Change[]; text: string; props: string; result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null }
+const NO_CHANGES: Change[] = []
+const NO_NOTES: (DeltaNote | undefined)[] = []
 
 /**
  * All UI state lives in one mutable store read at call time, so key handlers never act
@@ -270,12 +321,17 @@ type Spot = { key: string; top: number; geo: Geometry }
  */
 interface UI {
   themeIdx: number
-  themeOrig: number | null
+  /** the `t` picker while open; the app keeps `themeIdx` until ⏎ */
+  themePick: ThemePick | null
   /** the workspace folder (Files lists it; `o` replaces it) */
   root: string
   tree: FileNode
   /** where wikilinks resolve: the enclosing vault when a single note was opened inside one, else `tree` */
   linkTree: FileNode
+  /** a piped document's `linkTree` is a placeholder until the first link use scans the folder */
+  linkLazy: boolean
+  /** the session started on stdin and no `o` has replaced it, whichever note is open: no Files tab, no saved view, no project record */
+  piped: boolean
   /** that vault's root when it differs from `root` (rescanned on reload) */
   linkRoot: string | null
   /** open folders (session only; the open note's path is always added) */
@@ -302,8 +358,12 @@ interface UI {
   hidden: boolean
   /** full pane width instead of the fixed measure */
   wide: boolean
+  /** braille minimap on (saved by m; drawn from MINI_MIN_W columns, never in zen) */
+  minimap: boolean
   /** main surfaces unpainted: the terminal background shows through (saved by T) */
   transparent: boolean
+  /** animations on (prop, else config `motion`; always off under `bun test` unless the prop is given) */
+  motion: boolean
   /** drawer open (below DRAWER_BELOW; never saved) */
   drawerOpen: boolean
   /** panel view shown */
@@ -330,7 +390,8 @@ interface UI {
   /** zen settings popup open: what to restore on esc */
   zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
   /** `C-p` popup: query, highlighted row, first visible row */
-  switcher: { q: string; hl: number; top: number } | null
+  /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
+  switcher: { q: string; hl: number; top: number; ask?: AskState } | null
   /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */
   opener: { q: string; hl: number; top: number; list: ProjectEntry[] } | null
   /** notes the document had focus with, newest first (this run only) */
@@ -352,9 +413,21 @@ interface UI {
   hintAt: number | null
   /** the context those hints are for */
   hintCtx: Ctx
+  /** the config's `ai` block, re-read on every `a` (null: AI off) */
+  ai: AIConfig | null
+  /** summaries.json, loaded once at start, keyed by absolute note path */
+  summaries: Summaries
+  /** glosses.json, read on the first zen entry (or zen `a`) with an `ai` block; null: not read yet */
+  glosses: Glosses | null
+  /** the zen gloss sheet: its section id, cache key, label, the section's text hash when shown, and when it began fading */
+  gloss: { id: string; key: string; heading: string; hash: string; fadeAt: number | null } | null
+  /** what the open note's change list compares against (dropped on leaving the note) */
+  baseline: Baseline | null
+  /** the explanation running or shown for `baseline.path` */
+  delta: DeltaState | null
 }
 
-type Workspace = Pick<UI, "root" | "tree" | "linkTree" | "linkRoot" | "openPath" | "expanded">
+type Workspace = Pick<UI, "root" | "tree" | "linkTree" | "linkLazy" | "piped" | "linkRoot" | "openPath" | "expanded">
 
 /**
  * What a folder (and optionally a note in it) opens as, by the CLI's rules: a `single` note inside a
@@ -369,19 +442,25 @@ function workspace(root: string, note?: string | null, single = false): Workspac
     const top = tree.children.filter((c) => !c.dir)
     openPath = (top.find((c) => /^readme\./i.test(c.name)) ?? top[0] ?? firstFile(tree))?.path ?? null
   }
-  return { root, tree, linkTree: linkRoot ? scanTree(linkRoot) : tree, linkRoot, openPath, expanded: new Set(openPath ? ancestorsOf(tree, openPath) : []) }
+  return { root, tree, linkTree: linkRoot ? scanTree(linkRoot) : tree, linkLazy: false, piped: false, linkRoot, openPath, expanded: new Set(openPath ? ancestorsOf(tree, openPath) : []) }
+}
+
+/** The piped document: an empty Files tree; links resolve against the notes under `root`, scanned on first use (`ensureLinks`). */
+function stdinWorkspace(root: string): Workspace {
+  const tree: FileNode = { name: basename(root) || root, path: root, rel: "", dir: true, children: [] }
+  return { root, tree, linkTree: tree, linkLazy: true, piped: true, linkRoot: null, openPath: STDIN, expanded: new Set() }
 }
 
 /** The folder a workspace is recorded under: the vault a single note was opened in, else the root. */
 const projectRoot = (s: Pick<UI, "root" | "linkRoot">) => s.linkRoot ?? s.root
 
-function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined): UI {
-  const w = workspace(root, initialFile, true)
+function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined): UI {
+  const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
   const openPath = w.openPath
   const cfg = loadConfig()
   return {
-    themeIdx: Math.max(0, themes.findIndex((x) => x.name === themeName)),
-    themeOrig: null,
+    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
+    themePick: null,
     ...w,
     filter: "",
     filterTyping: false,
@@ -394,9 +473,11 @@ function initUI(root: string, initialFile: string | undefined, themeName: string
     focus: "doc",
     hidden: cfg.sidebar?.hidden ?? false,
     wide: cfg.wide ?? false,
+    minimap: cfg.minimap ?? true,
     transparent: transparent ?? cfg.transparent ?? false,
+    motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
     drawerOpen: false,
-    view: cfg.sidebar?.view ?? "files",
+    view: piped ? "outline" : (cfg.sidebar?.view ?? "files"),
     hl: 0,
     prompt: null,
     labels: null,
@@ -423,6 +504,12 @@ function initUI(root: string, initialFile: string | undefined, themeName: string
     toast: null,
     hintAt: null,
     hintCtx: "doc",
+    ai: cfg.ai ?? null,
+    summaries: loadSummaries(),
+    glosses: null,
+    gloss: null,
+    baseline: null,
+    delta: null,
   }
 }
 
@@ -433,10 +520,12 @@ function initUI(root: string, initialFile: string | undefined, themeName: string
  * The document wraps at `CW` = min(available, MEASURE), centered (`wide` / zen "full": the
  * area minus a 2-column margin each side). Zen (unless Source is shown) drops the panel.
  */
-function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen" | "source" | "zenCfg" | "wide">) {
+function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen" | "source" | "zenCfg" | "wide" | "minimap" | "openPath">) {
   const zen = s.zen && !s.source
   const mode: "inline" | "drawer" = W < DRAWER_BELOW ? "drawer" : "inline"
-  const shown = !zen && (mode === "drawer" ? s.drawerOpen : !s.hidden)
+  // the welcome page (no note open) has the whole width: no panel, drawer or minimap; the saved sidebar is left alone
+  const welcome = !s.openPath
+  const shown = !zen && !welcome && (mode === "drawer" ? s.drawerOpen : !s.hidden)
   const SW = Math.min(40, Math.max(24, Math.round(W * 0.27)))
   /** drawer width; its `▏` edge is one more column */
   const DW = Math.min(W - 8, Math.max(28, Math.min(40, Math.round(W * 0.45))))
@@ -445,7 +534,16 @@ function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen
   const bodyH = Math.max(4, H - 3 - gap)
   const areaW = W - 2 - (inline ? SW + 1 : 0)
   const want = zen ? s.zenCfg.measure : s.wide ? "full" : MEASURE
-  const CW = Math.max(20, want === "full" ? areaW - 4 : Math.min(want, areaW - 4))
+  let CW = Math.max(20, want === "full" ? areaW - 4 : Math.min(want, areaW - 4))
+  let padL = Math.max(0, Math.floor((areaW - CW) / 2))
+  // the minimap takes the last MINI_W columns (the right margin and padding): the text keeps its
+  // column while it fits left of the minimap's gap, then the measure shrinks (left margin kept)
+  const mini = s.minimap && !zen && !welcome && W >= MINI_MIN_W
+  if (mini) {
+    const room = W - MINI_W - 1 - (inline ? SW + 1 : 0)
+    CW = Math.max(20, Math.min(CW, room - 2))
+    padL = Math.max(0, Math.min(padL, room - CW))
+  }
   return {
     zen,
     mode,
@@ -461,7 +559,9 @@ function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen
     CW,
     CH: bodyH,
     /** document left margin inside its area */
-    padL: Math.max(0, Math.floor((areaW - CW) / 2)),
+    padL,
+    /** the braille minimap is drawn at the right edge */
+    mini,
     /** visible rows of the `/` popup list: panel padding 2, title, input, two gaps */
     PH: Math.max(1, Math.min(16, H - 2 - 6)),
   }
@@ -469,14 +569,15 @@ function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen
 
 // ------------------------------------------------------------- app
 
-export function App({ root: startRoot, initialFile, themeName, transparent }: AppProps) {
+export function App({ root: startRoot, initialFile, themeName, transparent, fetch: fetchImpl = globalThis.fetch, edit: editImpl, stdin, linkScanDelay = 0, motion }: AppProps) {
   const renderer = useRenderer()
+  const pointer = usePointer()
   const { width: W, height: H } = useTerminalDimensions()
   const dims = useRef({ W, H })
   dims.current = { W, H }
 
   const ui = useRef<UI>(null as unknown as UI)
-  if (!ui.current) ui.current = initUI(startRoot, initialFile, themeName, transparent)
+  if (!ui.current) ui.current = initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion)
   const [, bump] = useState(0)
   const set = (patch: Partial<UI>) => {
     Object.assign(ui.current, patch)
@@ -508,7 +609,17 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     ),
     // relative paths resolve against the workspace folder; the current project is not listed
     open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) => openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current })),
-    read: cached(readDoc),
+    // the welcome page's recent projects: the `o` picker's rows with an empty query, header first; read again
+    // after every workspace switch (`watchGen`) and a dropped missing one (`gen`)
+    recents: cached((root: string, _gen: number, _watchGen: number) =>
+      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS)),
+    read: cached((path: string, nonce: number): DocFile =>
+      path !== STDIN || stdin === undefined
+        ? readDoc(path, nonce)
+        : Buffer.byteLength(stdin) > MAX_BYTES
+          ? { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
+          : { src: stdin, info: null, error: null },
+    ),
     fm: cached(parseFrontMatter),
     doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode) => render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
     source: cached((src: string, w: number, t: Theme, tree: FileNode) => renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
@@ -516,8 +627,23 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     props: cached(parseProperties),
     linkTargets: cached(extractLinks),
     links: cached((targets: string[], tree: FileNode, from: string | null): LinkRef[] => targets.map((target) => ({ target, path: resolveLink(target, tree, from) }))),
-    info: cached((p: Property[], st: Stats, l: LinkRef[], w: number, f: FileMeta | null) => infoItems(p, st, l, w, f)),
-    linkIdx: cached((items: InfoItem[]) => items.flatMap((it, i) => (it.kind === "link" ? [i] : []))),
+    info: cached(
+      (p: Property[], st: Stats, l: LinkRef[], w: number, f: FileMeta | null, sText: string, sState: SummaryState | "", sModel: string,
+        cState: ChangeState | "", cLabel: string, cChanges: readonly Change[], cSummary: string, cNotes: readonly (DeltaNote | undefined)[], title: string) =>
+        infoItems(p, st, l, w, f, undefined, sState ? { text: sText, state: sState, model: sModel } : undefined,
+          cState ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title } : undefined),
+    ),
+    note: cached(noteText),
+    diff: cached(diffSections),
+    propsKey: cached((fm: FrontMatter) => JSON.stringify(fm.entries)),
+    partial: cached((raw: string, changes: Change[]) => parseDelta(raw, changes, true)),
+    hash: cached((src: string) => textHash(noteText(src))),
+    clean: cached(cleanSummary),
+    gloss: cached(glossTarget),
+    glossHash: cached(textHash),
+    glossClean: cached(cleanSummary),
+    // Info cursor stops: links and change rows (removed sections are not stops)
+    linkIdx: cached((items: InfoItem[]) => items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : []))),
     rows: cached(visibleRows),
     outline: cached(outlineRows),
     rank: cached((tree: FileNode, q: string) => {
@@ -526,8 +652,39 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     }),
     matches: cached((view: Rendered, q: string) => findLines(view.lines.map(lineText), q)),
     geo: cached((view: Rendered): Geometry => ({ heads: view.headings.map((h) => h.line), total: view.lines.length })),
+    // Source rows open with the line-number gutter (`gutter` columns), which draws no dots
+    /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
+    themeRows: cached((q: string) => filterFamilies(q)),
+    themeSample: cached((t: Theme, w: number, _hl: number) => sampleView(t, w)),
+    themePane: cached(paneLines),
+    /** the switcher's peek: the highlighted note read (one note at a time), then only its `peekWindow` rendered at the pane width */
+    peekFile: cached((path: string, _mtime: number) => {
+      const f = readDoc(path, _mtime)
+      if (f.error) return null
+      const fm = parseFrontMatter(f.src)
+      const st = wordStats(fm.body) // stats() would lex the whole note
+      return { lines: normalize(f.src).split("\n"), fm: fm.offset, hash: textHash(noteText(f.src)), words: st.words, minutes: st.minutes }
+    }),
+    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode) =>
+      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null }),
+    ),
+    mini: cached((view: Rendered, w: number, rows: number, gutter: number) =>
+      miniInk(gutter ? view.plain.map((p) => p.slice(gutter)) : view.plain, view.lines.map((l) => l.fill !== undefined), w - gutter, rows),
+    ),
     words: cached((view: Rendered) => wordSuffix(view.plain)),
     ranges: cached((view: Rendered) => sectionRanges(view.headings.map((h) => h.line), view.lines.length)),
+    /** where an ask would go: null without an `ai` block, else the host or why not */
+    host: cached((ai: AIConfig | null) => {
+      if (!ai) return null
+      const r = resolveAI(ai, process.env)
+      return "error" in r ? { error: r.error } : { host: r.host }
+    }),
+    cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) => askCandidates(ix, tree, queries)),
+    cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) => rerankCost(question, cands, ix)),
+    ask: cached(
+      (question: string, cut: boolean, target: { host: string } | { error: string } | null, state: AskState | undefined, cands: readonly Candidate[], cost: string, indexing: boolean) =>
+        askRows({ question, cut, target, state, cands, cost, indexing }),
+    ),
   }).current
   /** The match list last derived, to remap `matchLine` when the lines are re-wrapped. */
   const matchSeen = useRef<{ matches: number[]; query: string }>({ matches: [], query: "" })
@@ -542,9 +699,20 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     ghost?: ReturnType<typeof setTimeout>
     hints?: ReturnType<typeof setTimeout>
     logo?: ReturnType<typeof setTimeout>
+    ai?: ReturnType<typeof setTimeout>
+    gloss?: ReturnType<typeof setTimeout>
+    steam?: ReturnType<typeof setTimeout>
   }>({})
+  /** AI requests in flight by `jobKey`: the raw streamed text and how to cancel it */
+  const jobs = useRef(new Map<string, { kind: JobKind; raw: string; abort: AbortController }>())
+  /** tier 0 queries per question (foldSame), this session only: asking again sends nothing */
+  const askMemo = useRef(new Map<string, { queries: string[]; model: string }>())
+  /** tier 1 orders per question + candidate list, this session only */
+  const rerankMemo = useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>())
   /** the context the hints were last poked for */
   const ctxSeen = useRef<Ctx | null>(null)
+  /** the note and section the gloss auto-show last ran for (null: outside zen) */
+  const glossSeen = useRef<string | null>(null)
 
   /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. */
   const derive = () => {
@@ -569,11 +737,51 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
         : []
     const props = memo.props(src)
     const links = memo.links(memo.linkTargets(fm.body), s.linkTree, s.openPath)
-    const infoRows = memo.info(props, st, links, L.PNW - 2, file?.info ?? null)
+    const saved = s.openPath ? s.summaries[s.openPath] : undefined
+    const job = s.openPath ? jobs.current.get(jobKey("tldr", s.openPath)) : undefined
+    // primitives into memo.info, never a fresh object, so the single-entry memo holds
+    const sv: SummaryView | null =
+      !s.ai || !s.openPath || !file || file.error
+        ? null
+        : job
+          ? { text: memo.clean(job.raw), state: "streaming", model: "" }
+          : saved
+            ? { text: saved.summary, state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated", model: shortModel(saved.model) }
+            : { text: "", state: "none", model: "" }
+    const title = noteTitle(props, s.openPath ?? "")
+    // a live reload's changes: the open note against the text it had when it opened (memory only)
+    const base = s.baseline && s.baseline.path === s.openPath && file && !file.error ? s.baseline : null
+    const after = memo.note(src)
+    const propsKey = memo.propsKey(fm)
+    const changes = base ? memo.diff(base.text, after) : NO_CHANGES
+    const propsChanged = !!base && propsKey !== base.props
+    const dl = s.delta && s.delta.path === s.openPath ? s.delta : null
+    const dJob = dl ? jobs.current.get(jobKey("delta", dl.path)) : undefined
+    const live = dl && dJob ? memo.partial(dJob.raw, dl.changes) : null
+    // loading, else the reply while nothing changed since the explained text, else the idle list
+    const cv: ChangeView | null =
+      dl && dJob
+        ? { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
+        : dl?.result && changes !== null && !changes.length // null: too large to compare, not unchanged
+          ? { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
+          : base && changes?.length
+            ? { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
+            : null
+    const infoRows = memo.info(props, st, links, L.PNW - 2, file?.info ?? null, sv?.text ?? "", sv?.state ?? "", sv?.model ?? "",
+      cv?.state ?? "", cv?.label ?? "", cv?.changes ?? NO_CHANGES, cv?.summary ?? "", cv?.notes ?? NO_NOTES, title)
     const linkRows = memo.linkIdx(infoRows)
-    const swRows: SwitchRow[] = s.switcher ? memo.switch(vault.current.ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath) : []
-    // the highlight always sits on a hit (results change under it while typing or indexing)
-    const swHl = s.switcher && swRows[s.switcher.hl] && swRows[s.switcher.hl]!.kind !== "header" ? s.switcher.hl : firstHit(swRows)
+    const question = s.switcher ? questionOf(s.switcher.q) : null
+    const askState = s.switcher?.ask
+    // ranking waits for a complete index, then re-runs whenever it changes (ixVer)
+    const askCands = question && askState?.queries && !s.indexing ? memo.cands(vault.current.ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
+    const askCost = question && askCands.length ? memo.cost(question.text, askCands, vault.current.ix, s.ixVer) : ""
+    const swRows: SwitchRow[] = !s.switcher
+      ? []
+      : question
+        ? memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null)
+        : memo.switch(vault.current.ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
+    // the highlight always sits on a stop (results change under it while typing or indexing)
+    const swHl = s.switcher && swRows[s.switcher.hl] && isStop(swRows[s.switcher.hl]!) ? s.switcher.hl : firstHit(swRows)
     const opRows: OpenRow[] = s.opener ? memo.open(s.opener.list, s.opener.q, s.root, projectRoot(s)) : []
     const opHl = s.opener && opRows[s.opener.hl] && opRows[s.opener.hl]!.kind !== "header" ? s.opener.hl : firstHit(opRows)
     const filterRow = (s.view === "files" && (s.filterTyping || s.filter !== "")) || (s.view === "outline" && (s.filterTyping || s.outlineFilter !== ""))
@@ -620,6 +828,22 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     let currentHeading = -1
     for (let i = 0; i < hs.length; i++) if (hs[i]!.line <= top + 1) currentHeading = i
     const oRows = memo.outline(view.headings, currentHeading, s.outlineFilter)
+    // zen gloss: the section under the reading line (currentHeading is sectionOf(view.headings, top)) and the sheet on screen
+    // only with an ai block, or a gloss still running (`a` cancels it after the block goes)
+    const glossing = !!s.ai || [...jobs.current.keys()].some((k) => k.startsWith("gloss:"))
+    const gHere: GlossTarget | null = L.zen && glossing && s.openPath && file && !file.error ? memo.gloss(src, currentHeading, s.openPath, title) : null
+    const gHash = memo.glossHash(gHere?.text ?? "")
+    const gStyle: GlossStyle = parseGlossStyle(s.ai?.gloss)
+    let sheet: { state: GlossState; heading: string; text: string; fadeAt: number | null } | null = null
+    const g = L.zen && s.ai ? s.gloss : null
+    if (g) {
+      const job = jobs.current.get(jobKey("gloss", g.id))
+      const e = s.glosses?.[g.key]
+      // the sheet's own section: the live hash while it is the reading section, else the one taken when it was shown
+      const hash = gHere?.id === g.id ? gHash : g.hash
+      if (job) sheet = { state: "loading", heading: g.heading, text: memo.glossClean(job.raw), fadeAt: g.fadeAt }
+      else if (e) sheet = { state: isFresh(e, hash, PROMPTS.gloss) ? "result" : "outdated", heading: g.heading, text: e.gloss, fadeAt: g.fadeAt }
+    }
     const sideFocus: View | null = L.shown && s.focus === "panel" ? s.view : null
     const ranges = memo.ranges(view)
     /** Spotlight: the section kept bright (the one holding the reading / top line) */
@@ -655,6 +879,8 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       linkRows,
       swRows,
       swHl,
+      question,
+      askCands,
       opRows,
       opHl,
       infoCur: clampIdx(s.infoCur, linkRows.length),
@@ -671,8 +897,17 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       win,
       matches,
       matchIdx: matchIndex(matches, s.matchLine),
-      title: noteTitle(props, s.openPath ?? ""),
+      title,
+      changes,
+      propsChanged,
+      after,
+      propsKey,
+      cv,
       currentHeading,
+      gHere,
+      gHash,
+      gStyle,
+      sheet,
       sideFocus,
       oRows,
       outlineCur: clampIdx(s.outlineCur, oRows.length),
@@ -681,7 +916,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
 
   // ---------------------------------------------------- actions
   /** Re-render through a fade: wait out `hold` after `at()`, then step every GHOST_STEP until hidden, then `done()`. */
-  const runFade = (slot: "ghost" | "hints" | "toast", at: () => number | null, hold: number, done: () => void) => {
+  const runFade = (slot: "ghost" | "hints" | "toast" | "gloss", at: () => number | null, hold: number, done: () => void) => {
     clearTimeout(timers.current[slot])
     const tick = () => {
       const a = at()
@@ -702,6 +937,153 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     if (next === ui.current.toast) return
     set({ toast: next })
     runFade("toast", () => ui.current.toast?.at ?? null, TOAST_HOLD[kind], () => set({ toast: null }))
+  }
+
+  /** one redraw per AI_FRAME while text streams in */
+  const aiRedraw = () => {
+    if (timers.current.ai) return
+    timers.current.ai = setTimeout(() => {
+      timers.current.ai = undefined
+      if (alive.current) bump((x) => x + 1)
+    }, AI_FRAME)
+  }
+
+  /** glosses.json is read once, and only when zen meets an `ai` block (auto-show needs it). */
+  const ensureGlosses = () => {
+    if (ui.current.ai && ui.current.glosses === null) set({ glosses: loadGlosses() })
+  }
+
+  /** The reading line left the sheet's section: fade it out over GHOST_STEPS, then drop it. */
+  const fadeGloss = () => {
+    const g = ui.current.gloss
+    if (!g || g.fadeAt !== null) return
+    set({ gloss: { ...g, fadeAt: Date.now() } })
+    runFade("gloss", () => ui.current.gloss?.fadeAt ?? null, 0, () => set({ gloss: null }))
+  }
+
+  /** The reading line entered another section (or note, or zen): fade the old sheet; show a fresh cached gloss or a running stream. */
+  const glossEntered = () => {
+    const { s, gHere, gHash, gStyle } = derive()
+    const g = s.gloss
+    if (g && g.id !== gHere?.id) fadeGloss()
+    if (!gHere || !s.ai || !s.glosses || (g?.id === gHere.id && g.fadeAt === null)) return
+    const key = glossKey(gHere.id, gStyle)
+    const e = s.glosses[key]
+    // outdated or missing glosses never appear by themselves: they need `a`
+    if (jobs.current.has(jobKey("gloss", gHere.id)) || (e && isFresh(e, gHash, PROMPTS.gloss)))
+      set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+  }
+
+  /** Send section `g` in `style`; the result is cached under its own section and style whatever is under the reading line by then. */
+  const startGloss = (g: GlossTarget, style: GlossStyle, title: string, target: AITarget, model: string) => {
+    const hash = textHash(g.text) // taken now: a section edited meanwhile shows the result as outdated
+    const key = glossKey(g.id, style)
+    const jk = jobKey("gloss", g.id)
+    const job = { kind: "gloss" as const, raw: "", abort: new AbortController() }
+    jobs.current.set(jk, job)
+    set({ gloss: { id: g.id, key, heading: g.heading, hash, fadeAt: null } })
+    const req = glossRequest(style, title, g.trail, g.text, target.maxChars)
+    void chat(target, { ...req, maxOut: GLOSS_MAX, clean: cleanSummary }, {
+      fetch: fetchImpl,
+      signal: job.abort.signal,
+      onDelta: (raw) => {
+        job.raw = raw
+        aiRedraw()
+      },
+    }).then((r) => {
+      if (jobs.current.get(jk) !== job) return // cancelled
+      jobs.current.delete(jk)
+      if (!alive.current) return
+      if (r.ok) {
+        const entry: Gloss = { hash, v: PROMPTS.gloss, gloss: r.text, model, at: Date.now() }
+        set({ glosses: { ...(ui.current.glosses ?? {}), [key]: entry } })
+        // sectionId starts with the open path, and STDIN is the only relative one: a piped document lives for this run only
+        if (!g.id.startsWith(`${STDIN}#`)) saveGlosses({ [key]: entry })
+      } else if ("failure" in r) {
+        // the sheet closes; the cached gloss returns only when the reading line re-enters the section (or on `a`)
+        if (ui.current.gloss?.id === g.id) set({ gloss: null })
+        const here = derive().gHere?.id === g.id
+        bump((x) => x + 1)
+        flash(aiError(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "gloss", note: here ? undefined : safeLine(g.heading) }), "error")
+      }
+    })
+  }
+
+  /** Send `text` for `path`; the result is cached for that path whatever note is current by then. */
+  const startSummary = (path: string, text: string, target: AITarget, model: string) => {
+    const hash = textHash(text) // taken now: a note edited meanwhile shows the result as outdated
+    const key = jobKey("tldr", path)
+    const job = { kind: "tldr" as const, raw: "", abort: new AbortController() }
+    jobs.current.set(key, job)
+    bump((x) => x + 1)
+    void summarize(target, text, {
+      fetch: fetchImpl,
+      signal: job.abort.signal,
+      onDelta: (raw) => {
+        job.raw = raw
+        aiRedraw()
+      },
+    }).then((r) => {
+      if (jobs.current.get(key) !== job) return // cancelled
+      jobs.current.delete(key)
+      if (!alive.current) return
+      if (r.ok) {
+        const entry = { hash, v: PROMPT_V, summary: r.text, model, at: Date.now() }
+        set({ summaries: { ...ui.current.summaries, [path]: entry } })
+        if (path !== STDIN) saveSummaries({ [path]: entry }) // a piped document lives for this run only
+      } else if ("failure" in r) {
+        const note = ui.current.openPath === path ? undefined : stem(basename(path))
+        bump((x) => x + 1)
+        flash(aiError(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key, note }), "error")
+      }
+    })
+  }
+
+  /** Forget the open note's baseline and explanation; a `D` still running for it is cancelled. */
+  const dropDelta = () => {
+    const s = ui.current
+    if (s.delta) {
+      const key = jobKey("delta", s.delta.path)
+      jobs.current.get(key)?.abort.abort()
+      jobs.current.delete(key)
+    }
+    if (s.baseline || s.delta) set({ baseline: null, delta: null })
+  }
+
+  /** Send the changed hunks of `path`; on success the baseline moves to the sent text, so later edits list anew. */
+  const startDelta = (path: string, changes: Change[], text: string, props: string, title: string, target: AITarget, model: string) => {
+    const key = jobKey("delta", path)
+    const job = { kind: "delta" as const, raw: "", abort: new AbortController() }
+    jobs.current.set(key, job)
+    set({ delta: { path, changes, text, props, result: null } })
+    const user = deltaMessage(title, changes, Math.min(target.maxChars, DELTA_MAX))
+    void chat(target, { system: DELTA_PROMPT, user, maxOut: MAX_DELTA, clean: (r) => stripThink(r).trim() }, {
+      fetch: fetchImpl,
+      signal: job.abort.signal,
+      onDelta: (raw) => {
+        job.raw = raw
+        aiRedraw()
+      },
+    }).then((r) => {
+      if (jobs.current.get(key) !== job) return // cancelled, or the note was left
+      jobs.current.delete(key)
+      if (!alive.current) return
+      const s = ui.current
+      if (s.delta?.path !== path) return bump((x) => x + 1)
+      const fail = (f: Failure) => {
+        set({ delta: null })
+        flash(aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "explanation" }), "error")
+      }
+      // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
+      const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(job.raw, changes, true) : null
+      if (!r.ok && !cut) return "failure" in r ? fail(r.failure) : set({ delta: null })
+      const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
+      if (!parsed) return fail({ kind: "invalid" })
+      // edits made during the request now differ from the moved baseline and list as a new idle
+      // change set; the reply is kept only when it still describes the note as it is
+      const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
+      set({ baseline, delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null })
+    })
   }
 
   const setTop = (n: number) => {
@@ -793,9 +1175,13 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   /** Switch the panel view (saved). The Outline cursor starts on the heading being read. */
   const selectView = (v: View) => {
     if (v === ui.current.view) return
+    if (v === "files" && ui.current.piped) v = "outline" // a piped session has no Files tab
     set({ view: v, filterTyping: false, outlineFilter: "", ...(v === "outline" ? { outlineCur: Math.max(0, derive().oRows.findIndex((r) => r.current)) } : {}) })
-    saveSidebar({ view: v })
+    if (!ui.current.piped) saveSidebar({ view: v })
   }
+
+  /** The tabs, in `1 2 3` order: a piped session has no Files, also on a note followed from it. */
+  const panelViews = (): readonly View[] => (ui.current.piped ? VIEWS.filter((v) => v !== "files") : VIEWS)
 
   /** Show the panel (unhide it inline, open the drawer) and focus it; Files lands on the open note. */
   const focusPanel = (v?: View) => {
@@ -820,10 +1206,18 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     set({ focus: "doc", drawerOpen: false, filterTyping: false, recent: remember(s.recent, s.openPath), history: keep(s.history) })
   }
   /** Open a resolved Info link and read it; an unresolved one only says so, and Info keeps focus. */
+  /** A piped document scans the working folder for links the first time one is used. */
+  const ensureLinks = () => {
+    const s = ui.current
+    if (s.linkLazy) set({ linkTree: scanTree(s.root), linkLazy: false })
+  }
+
   const openLink = (it: Extract<InfoItem, { kind: "link" }>) => {
-    if (!it.path) return flash(`no note named “${it.target}”`)
+    ensureLinks()
+    const path = it.path ?? resolveLink(it.target, ui.current.linkTree, ui.current.openPath)
+    if (!path) return flash(`no note named “${it.target}”`)
     set({ history: keep(ui.current.history) }) // a note followed from stays in history
-    openFile(it.path)
+    openFile(path)
     focusDoc()
   }
 
@@ -836,6 +1230,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   }
 
   const startLabels = () => {
+    ensureLinks()
     const d = derive()
     if (d.s.source) return flash("links: preview only (s)")
     const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
@@ -846,6 +1241,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
 
   /** Open where `l` leads: the note, then its heading; a URL or a missing target only says so. */
   const followLink = (l: LinkTarget) => {
+    ensureLinks()
     const s = ui.current
     const dest = linkDest(l, s.openPath, s.linkTree)
     if (dest.url) return flash(dest.url)
@@ -868,7 +1264,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     const name = (p: string) => stem(basename(p))
     for (let i = stepTo(h, dir); i !== null; i = stepTo(h, dir)) {
       const e = h.entries[i]!
-      if (!existsSync(e.path)) {
+      if (e.path !== STDIN && !existsSync(e.path)) { // the piped document is relative, never on disk
         gone.push(`“${name(e.path)}” is gone`)
         h = drop(h, i)
         continue
@@ -948,11 +1344,32 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     }
   }
 
-  const openTheme = () => set({ themeOrig: ui.current.themeIdx })
-  const revertTheme = () => set({ themeIdx: ui.current.themeOrig ?? ui.current.themeIdx, themeOrig: null })
+  /** Scroll to change `at` of the Changed block: the reply's quote when it is in that section, else its heading. */
+  const jumpChange = (at: number) => {
+    const { cv, view, s } = derive()
+    const c = cv?.changes[at]
+    if (!c || c.status === "removed") return
+    const hs = view.headings
+    // rows listed while a request runs come from the sent text: a heading that moved is found again by key
+    const i = c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key ? c.index : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
+    const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
+    const to = hs[i + 1]?.line ?? view.lines.length
+    const quote = cv!.notes[at]?.quote
+    const line = quote ? findQuote(view.plain, from, to, quoteNeedle(quote, s.source)) : null
+    setTop(line === null ? from : Math.max(from, line - 1))
+    focusDoc()
+  }
+
+  // `t` picker: the app stays in its theme while you move (only the pane shows the candidate); ⏎ applies and saves, esc changes nothing
+  const openTheme = () => set({ themePick: pickStart(themes[ui.current.themeIdx]!) })
+  const closeTheme = () => set({ themePick: null })
+  const themeSet = (p: ThemePick) => set({ themePick: p })
+  /** ⏎ or a click: the candidate becomes the theme; with no row listed nothing happens */
   const applyTheme = () => {
-    const name = themes[ui.current.themeIdx]!.name
-    set({ themeOrig: null })
+    const p = ui.current.themePick
+    if (!p || pickIndex(p, filterFamilies(p.q)) < 0) return
+    const name = pickTheme(p).name
+    set({ themeIdx: themes.findIndex((x) => x.name === name), themePick: null })
     if (persist({ theme: name })) flash(`theme · ${name}`, "ok")
   }
 
@@ -971,7 +1388,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   /** Context id now: an open popup, else zen, else the panel view or the document. */
   const currentCtx = (): Ctx => {
     const s = ui.current
-    if (s.themeOrig !== null) return "theme"
+    if (s.themePick) return "theme"
     if (s.zenOrig !== null) return "zenSettings"
     if (s.opener) return "open"
     if (s.switcher) return "switch"
@@ -993,7 +1410,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     if (on && !s.zen && !s.source) { const d = derive(); zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo } }
     if (!on && zenBack.current) scrolls.current.set(zenBack.current.key, { ...zenBack.current })
     if (!on) zenBack.current = null
-    set({ zen: on, ghostAt: null, filterTyping: false, ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : {}) })
+    if (on) ensureGlosses()
+    else clearTimeout(timers.current.gloss)
+    set({ zen: on, ghostAt: null, filterTyping: false, ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : { gloss: null }) })
     if (on && ui.current.zenCfg.ghost) pokeGhost()
   }
   /** Change zen settings (clamped); `save` writes them to the config at once. False when that save failed. */
@@ -1067,10 +1486,123 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     if (ui.current.prompt) set({ prompt: null, query: "", matchLine: null })
   }
 
-  /** New query: the highlight goes back to the first hit. */
+  /** Abort a running ask (tier 0 or 1): nobody would see its result. */
+  const dropAsk = () => {
+    const job = jobs.current.get(jobKey("ask"))
+    if (!job) return
+    job.abort.abort()
+    jobs.current.delete(jobKey("ask"))
+  }
+  const closeSwitcher = () => {
+    dropAsk()
+    set({ switcher: null })
+  }
+  /** New query: the highlight goes back to the first hit; a changed query drops the answers and aborts their request. */
   const swType = (q: string) => {
+    if (ui.current.switcher?.q !== q) dropAsk()
     set({ switcher: { q, hl: 0, top: 0 } })
     set({ switcher: { q, hl: Math.max(0, firstHit(derive().swRows)), top: 0 } })
+  }
+  /** New ask state for the open switcher; the highlight goes to its first stop. */
+  const setAsk = (ask: AskState | undefined) => {
+    const sw = ui.current.switcher
+    if (!sw) return
+    set({ switcher: { ...sw, ask, hl: 0, top: 0 } })
+    set({ switcher: { ...ui.current.switcher!, hl: Math.max(0, firstHit(derive().swRows)) } })
+  }
+  /**
+   * `⏎` on the ask row (tier 0): only the question goes out; the model's queries come back and
+   * the answers are sections the local index finds for them. Applied only to the same query string.
+   */
+  const askStart = () => {
+    const sw = ui.current.switcher
+    const qn = sw ? questionOf(sw.q) : null
+    if (!sw || !qn || [...qn.text].length < ASK_MIN) return
+    const ai = loadConfig().ai ?? null // re-read: editing config.json applies without a restart
+    set({ ai })
+    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    dropAsk() // at most one ask
+    const question = qn.text
+    const known = askMemo.current.get(foldSame(question))
+    if (known) return setAsk({ question, phase: "result", queries: known.queries, model: known.model })
+    if (jobs.current.size >= MAX_JOBS) {
+      const busy = `AI busy · ${MAX_JOBS} requests running`
+      flash(busy)
+      return setAsk({ question, phase: "error", error: busy })
+    }
+    const target = resolveAI(ai, process.env)
+    if ("error" in target) return flash(target.error, "error")
+    const asked = sw.q
+    const job = { kind: "ask" as const, raw: "", abort: new AbortController() }
+    jobs.current.set(jobKey("ask"), job)
+    setAsk({ question, phase: "asking" })
+    void chat(target, { system: ASK_PROMPT, user: question, maxOut: 1000, clean: (r) => stripThink(r).trim() }, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
+      if (jobs.current.get(jobKey("ask")) !== job) return // aborted: edited, closed or asked again
+      jobs.current.delete(jobKey("ask"))
+      if (!alive.current || ui.current.switcher?.q !== asked) return
+      const queries = r.ok ? parseQueries(r.raw) : null
+      if (queries) {
+        putNewest(askMemo.current, foldSame(question), { queries, model: ai.model }, ASK_MEMO)
+        return setAsk({ question, phase: "result", queries, model: ai.model })
+      }
+      let f: Failure
+      if (r.ok) f = { kind: "invalid" }
+      else if ("failure" in r) f = r.failure
+      else return
+      const msg = aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" })
+      flash(msg, "error")
+      setAsk({ question, phase: "error", error: msg })
+    })
+  }
+  /**
+   * `⏎` on the rerank row (tier 1): the question and the candidates' excerpts go out; the model
+   * only orders ids it was sent. Applied only to the same query and the same candidate list.
+   */
+  const askRerank = () => {
+    const sw = ui.current.switcher
+    const st = sw?.ask
+    if (!sw || !st || (st.phase !== "result" && st.phase !== "reranked")) return
+    const { askCands } = derive()
+    const ids = askCands.map((c) => c.id)
+    const user = rerankMessage(st.question, askCands, vault.current.ix)
+    // keyed on exactly what would be sent, so an edited candidate is asked again
+    const memoKey = `${textHash(ids.join("\n"))}\n${textHash(user)}`
+    const known = rerankMemo.current.get(memoKey)
+    if (known) return setAsk({ ...st, phase: "reranked", order: known.order, why: known.why })
+    const ai = loadConfig().ai ?? null
+    set({ ai })
+    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    dropAsk()
+    if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
+    const target = resolveAI(ai, process.env)
+    if ("error" in target) return flash(target.error, "error")
+    const asked = sw.q
+    const job = { kind: "ask" as const, raw: "", abort: new AbortController() }
+    jobs.current.set(jobKey("ask"), job)
+    setAsk({ ...st, phase: "reranking" })
+    void chat(target, { system: RERANK_PROMPT, user, maxOut: 2000, clean: (r) => stripThink(r).trim() }, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
+      if (jobs.current.get(jobKey("ask")) !== job) return
+      jobs.current.delete(jobKey("ask"))
+      const now = ui.current.switcher
+      if (!alive.current || now?.q !== asked || !now.ask) return
+      const back: AskState = { ...now.ask, phase: "result" }
+      // the index changed under the request: these ids are no longer the list on screen
+      if (derive().askCands.map((c) => c.id).join("\n") !== ids.join("\n")) return setAsk(back)
+      if (!r.ok) {
+        setAsk(back)
+        if ("failure" in r) flash(aiError(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" }), "error")
+        return
+      }
+      const picked = parseRerank(r.raw, ids.length)
+      if (!picked) {
+        setAsk(back)
+        return flash("AI: no usable ranking")
+      }
+      const order = picked.map((p) => ids[p.i]!)
+      const why = Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why]))
+      putNewest(rerankMemo.current, memoKey, { order, why, model: ai.model }, RERANK_MEMO)
+      setAsk({ ...now.ask, phase: "reranked", order, why })
+    })
   }
   /** Highlight row `hl`, scrolling so it (and its section title, when it is the first hit) stays in view. */
   const swGo = (hl: number) => {
@@ -1101,22 +1633,16 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     set({ indexing: null, ixVer: ui.current.ixVer + 1 })
   }
   const openSwitcher = () => {
+    ensureLinks()
     set({ labels: null })
     swType("")
     indexVault()
   }
-  /** Open what row `row` points at: the note, its heading, or its first match in the hit's section. */
-  const switchTo = (row: SwitchRow | undefined) => {
-    if (!row || row.kind === "header") return
-    const q = ui.current.switcher?.q.trim() ?? ""
-    set({ switcher: null })
-    openFile(row.path)
-    focusDoc()
-    if (row.kind === "note") return
-    if (row.kind === "heading") {
-      const h = derive().view.headings[row.heading]
-      return h ? setTop(h.line) : flash(`no heading “${row.text}”`)
-    }
+  /**
+   * Select `q`'s occurrence for text hit `row` in the open note: in Source from its source row; in
+   * Preview by counting matches from the start of its section (`hitOrdinal` on `doc`).
+   */
+  const jumpToText = (row: TextHit, q: string, doc: NoteDoc | undefined) => {
     set({ query: q, matchLine: null })
     const { view, matches, s } = derive()
     // Source rows map to source lines; Preview has no such map, so the hit is found by counting
@@ -1124,12 +1650,55 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     const from = s.source ? (view.srcRow?.[row.line] ?? 0) : row.heading === null ? 0 : (view.headings[row.heading]?.line ?? 0)
     const end = s.source ? Infinity : (view.headings[row.heading === null ? 0 : row.heading + 1]?.line ?? Infinity)
     const inSection = matches.filter((x) => x >= from && x < end)
-    const doc = vault.current.ix.docs.get(row.path)
     const k = s.source || !doc ? 0 : hitOrdinal(doc, row, q)
     const m = inSection[Math.min(k, inSection.length - 1)] ?? matches.find((x) => x >= from)
     if (m !== undefined) return showMatch(m)
     setTop(from)
     flash(s.source ? `no match for “${q}”` : `“${q}” is not in the preview · s shows the source`, "error")
+  }
+  /** Open what row `row` points at: the note, its heading, or its first match in the hit's section. */
+  const switchTo = (row: SwitchRow | undefined) => {
+    if (!row || (row.kind !== "note" && row.kind !== "heading" && row.kind !== "text")) return
+    const q = ui.current.switcher?.q.trim() ?? ""
+    closeSwitcher()
+    openFile(row.path)
+    focusDoc()
+    if (row.kind === "note") return
+    if (row.kind === "heading") {
+      const h = derive().view.headings[row.heading]
+      return h ? setTop(h.line) : flash(`no heading “${row.text}”`)
+    }
+    jumpToText(row, q, vault.current.ix.docs.get(row.path))
+  }
+  /**
+   * Open an Ask answer. The note may have changed since it was indexed: its section is found again
+   * by heading key and occurrence, then the first line there holding the answer's query (find
+   * highlights it); with no such line, the heading; with the heading gone, the note as it was left.
+   */
+  const answerTo = (row: AnswerRow) => {
+    closeSwitcher()
+    openFile(row.path)
+    focusDoc()
+    const { file } = derive()
+    if (!file || file.error) return // the read error is on screen
+    const doc = indexNote(file.src, 0, Buffer.byteLength(file.src))
+    const at = askLocate(doc, row)
+    if (!at) return flash("heading gone")
+    const heading = at.heading < 0 ? null : at.heading
+    if (at.line !== null)
+      return jumpToText({ kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] }, row.query, doc)
+    if (heading === null) return
+    const h = derive().view.headings[heading]
+    return h ? setTop(h.line) : flash("heading gone")
+  }
+  /** `⏎` or a click on row `i`: in ask mode it asks, or opens an answer; otherwise the hit opens. */
+  const swActivate = (i: number) => {
+    const { swRows, question } = derive()
+    const row = swRows[i]
+    if (!question) return switchTo(row)
+    if (row?.kind === "answer") return answerTo(row)
+    if (row?.kind === "askAction") return row.act === "ask" ? askStart() : askRerank()
+    if (!ui.current.switcher?.ask) askStart() // AI off or no key: re-read the config and say why
   }
 
   /**
@@ -1139,6 +1708,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
    */
   const recordProject = () => {
     const s = ui.current
+    if (s.piped) return
     const key = `${s.openPath}:preview`
     const spot = !s.openPath ? undefined : zenBack.current?.key === key ? zenBack.current : scrolls.current.get(key)
     const pos = spot ? { top: spot.top, geo: spot.geo } : { top: 0 }
@@ -1164,11 +1734,13 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       return flash(`cannot open ${tildify(root)}: ${errText(e)}`, "error")
     }
     const keepNote = note && existsSync(note) ? note : null
+    dropAsk() // the big set below closes the switcher
     recordProject()
     clearTimeout(timers.current.open)
     stopRolling()
     zenBack.current = null
     dropIndex() // a build still running sees it is stale and stops
+    dropDelta() // even when `o` reopens the same note: the effect takes a fresh baseline
     sidebarSeen.current = { rows: null, cursorPath: null }
     const w = workspace(root, keepNote, single && !!keepNote)
     const s = ui.current
@@ -1248,34 +1820,96 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     switchWorkspace(dirname(r.path), r.path, 0, true)
   }
 
-  const helpGo = (n: number) => set({ helpTop: Math.max(0, Math.min(HELP_ROWS.length - HELP_VIS(dims.current.W, dims.current.H), n)) })
+  /** The welcome page's recent rows (header first) and how many of them are on screen. */
+  const welcomeRows = () => {
+    const rows = memo.recents(ui.current.root, welcome.current.gen, ui.current.watchGen)
+    const { L } = derive()
+    return { rows, shown: rows.length ? welcomeFit(L.CW, L.CH, rows.length - 1).recents : 0 }
+  }
+  /** Welcome: open recent row `i` (row 0 is the header); a missing folder is dropped from the list instead. */
+  const welcomeOpen = (i: number) => {
+    const r = welcomeRows().rows[i]
+    if (!r || r.kind !== "recent") return
+    if (r.missing) {
+      saveProjects(loadProjects().filter((e) => e.root !== r.entry.root))
+      welcome.current.gen++
+      return flash(`“${r.name}” is gone`, "error")
+    }
+    switchWorkspace(r.entry.root, r.entry.lastNote, r.entry.top, false, r.entry.geo)
+  }
+  /** Welcome keys: ↑ ↓ move the selection over the rows on screen, ⏎ opens it. */
+  const welcomeKey = (k: KeyEvent) => {
+    const { shown } = welcomeRows()
+    if (!shown) return false
+    const w = welcome.current
+    if (k.name === "up" || k.name === "down") w.hl = Math.max(1, Math.min(shown, w.hl + (k.name === "down" ? 1 : -1)))
+    else if (k.name === "return" || k.name === "enter") welcomeOpen(w.hl)
+    else return false
+    bump((x) => x + 1)
+    return true
+  }
+
+  const helpGo = (n: number) => {
+    const l = helpLayout(HELP_GROUPS, dims.current.W, dims.current.H)
+    set({ helpTop: Math.max(0, Math.min(l.rows - l.vis, n)) })
+  }
 
   // ---------------------------------------------------- live reload
   const { openPath, watchGen } = ui.current
   useEffect(() => {
-    if (!openPath) return
+    if (!openPath || openPath === STDIN) return
     return watchPath(openPath, {
       change: () => {
         set({ reload: ui.current.reload + 1, reloadedAt: Date.now() })
         clearTimeout(timers.current.logo)
         timers.current.logo = setTimeout(() => bump((x) => x + 1), LOGO_HOLD + 20)
-        flash("reloaded from disk")
+        const d = derive()
+        // a shown explanation goes once the list moves on, or once it can't be compared
+        const dl = d.s.delta
+        if (dl?.result && (d.changes === null || d.changes.length) && !jobs.current.has(jobKey("delta", dl.path))) set({ delta: null })
+        flash(reloadToast(d.changes, d.propsChanged, !!d.s.ai))
       },
       error: (msg) => flash(msg, "error"),
     })
   }, [openPath, watchGen])
-  // a failed read is a toast too (the document shows the message as well)
+  // a failed read is a toast too (the document shows the message as well); the change list
+  // compares against the text the note had when it opened: leaving it or a failed read drops it
   const { reload } = ui.current
   useEffect(() => {
     const f = derive().file
     if (f?.error && openPath) flash(`cannot open “${basename(openPath)}”: ${f.error}`, "error")
+    if (!openPath || !f || f.error) return dropDelta()
+    if (ui.current.baseline?.path === openPath) return
+    dropDelta()
+    set({ baseline: { path: openPath, text: memo.note(f.src), props: memo.propsKey(memo.fm(f.src)), at: Date.now() } })
   }, [openPath, reload])
   // the start is a project opened too
   useEffect(recordProject, [])
+  // `--theme` is checked by the CLI, so a name nothing resolves came from config.json (brothy stands in)
+  useEffect(() => {
+    if (themeName !== undefined && !resolveTheme(themeName)) flash(`unknown theme "${themeName}" in config`, "error")
+  }, [])
+  // a piped document's links resolve once the cwd scan has run: start it after the first frame, unless a link got there first
+  useEffect(() => {
+    if (!ui.current.linkLazy) return
+    const id = setTimeout(ensureLinks, linkScanDelay)
+    return () => clearTimeout(id)
+  }, [])
   // SIGTERM / SIGHUP (the terminal closing) end the renderer without `quit`
   useEffect(() => {
     renderer.on("destroy", leave)
     return () => void renderer.off("destroy", leave)
+  }, [])
+  // copy on select: a finished mouse drag goes to the clipboard over OSC 52
+  useEffect(() => {
+    const copy = (sel: { getSelectedText(): string }) => {
+      const text = selectedText(sel.getSelectedText())
+      if (!text) return
+      if (renderer.copyToClipboardOSC52(text)) flash(`copied ${plural(...copiedCount(text))}`, "ok")
+      else flash("copy: the terminal has no clipboard (OSC 52)", "error")
+    }
+    renderer.on("selection", copy)
+    return () => void renderer.off("selection", copy)
   }, [])
   // a build still running after unmount must not touch the store
   useEffect(() => () => void (vault.current = { ...vault.current }), [])
@@ -1286,12 +1920,47 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     clearTimeout(timers.current.roll)
     clearTimeout(timers.current.ghost)
     clearTimeout(timers.current.logo)
+    clearTimeout(timers.current.ai)
+    clearTimeout(timers.current.gloss)
+    clearTimeout(timers.current.steam)
+    for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
   }, [])
 
   // code blocks render plain first; once their parser results land, re-render the document
   const alive = useRef(true)
   const hlSeen = useRef<Rendered | null>(null)
+  const hlSample = useRef<Rendered | null>(null)
   useEffect(() => () => void (alive.current = false), [])
+
+  // welcome: the wordmark and bowl ink in once (INK_MS frames) and the steam rises every STEAM_MS, until a key,
+  // a resize or a note opening stops it for good (`stopWelcome`); with motion off it is drawn still and inked
+  const welcome = useRef({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle" as "idle" | "live" | "done", at: 0, W, H })
+  const stopWelcome = () => {
+    const w = welcome.current
+    if (w.run !== "live") return
+    w.run = "done"
+    w.ink = INK_STEPS - 1
+    clearTimeout(timers.current.steam)
+    timers.current.steam = undefined
+    bump((x) => x + 1) // a key that changes nothing else still shows the inked art
+  }
+  useEffect(() => {
+    const w = welcome.current
+    if (ui.current.openPath || (w.run === "live" && (w.W !== W || w.H !== H))) return stopWelcome()
+    if (w.run !== "idle" || !ui.current.motion) return
+    Object.assign(w, { run: "live", tick: 0, ink: 0, at: Date.now(), W, H })
+    bump((x) => x + 1) // the first frame, in border
+    const step = () => {
+      timers.current.steam = undefined
+      if (!alive.current || w.run !== "live") return
+      const ms = Date.now() - w.at
+      w.ink = Math.min(INK_STEPS - 1, Math.floor(ms / INK_MS))
+      w.tick = Math.floor(ms / STEAM_MS)
+      bump((x) => x + 1)
+      timers.current.steam = setTimeout(step, w.ink < INK_STEPS - 1 ? INK_MS : STEAM_MS)
+    }
+    timers.current.steam = setTimeout(step, INK_MS)
+  })
   useEffect(() => {
     const doc = derive().doc
     if (doc === hlSeen.current) return
@@ -1306,7 +1975,8 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   // ---------------------------------------------------- keys
   const actions: Record<KeyId, (k: KeyEvent) => void> = {
     views: (k) => {
-      const v = VIEWS[Number(k.name) - 1]!
+      const v = panelViews()[Number(k.name) - 1]
+      if (!v) return
       if (derive().sideFocus) selectView(v)
       else focusPanel(v)
     },
@@ -1330,6 +2000,12 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       set({ wide })
       if (persist({ wide })) flash(wide ? "full width" : "measure 80")
     },
+    minimap: () => {
+      if (dims.current.W < MINI_MIN_W) return flash(`minimap needs ${MINI_MIN_W} columns`)
+      const minimap = !ui.current.minimap
+      set({ minimap })
+      if (persist({ minimap })) flash(minimap ? "minimap on" : "minimap off")
+    },
     transparent: () => {
       const transparent = !ui.current.transparent
       set({ transparent })
@@ -1347,30 +2023,112 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     theme: openTheme,
     reload: () => {
       const s = ui.current
-      const tree = scanTree(s.root)
+      const piped = s.piped
+      const tree = piped ? s.tree : scanTree(s.root)
       // folders that are gone are forgotten; the open note's path stays open
       const folders = folderCounts(tree)
       const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
       if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
-      const linkTree = s.linkRoot ? scanTree(s.linkRoot) : tree
-      set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1 })
+      const linkTree = piped ? (s.linkLazy ? s.linkTree : scanTree(s.root)) : s.linkRoot ? scanTree(s.linkRoot) : tree
+      set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1, ai: loadConfig().ai ?? null })
+      if (ui.current.zen) ensureGlosses()
       dropIndex()
       flash("reloaded")
     },
     clear: () => {
-      const { s, sideFocus } = derive()
+      const { s, sideFocus, sheet } = derive()
       if (sideFocus) {
         if (sideFocus === "files" && s.filter) return set({ filter: "" })
         if (sideFocus === "outline" && s.outlineFilter) return set({ outlineFilter: "" })
         return focusDoc()
       }
+      // a gloss on screen goes first; it stays hidden until the reading line leaves its section (a fading one falls through)
+      if (sheet && sheet.fadeAt === null) return set({ gloss: null })
       if (s.toast?.kind === "error") set({ toast: null })
       if (s.query) set({ query: "", matchLine: null })
       else if (derive().L.zen) toggleZen(false)
     },
-    help: () => (hintsVisible() ? set({ help: true, helpTop: 0 }) : pokeHints(currentCtx())),
+    // the welcome page shows no hints, so ? opens the sheet at once
+    help: () => (hintsVisible() || !ui.current.openPath ? set({ help: true, helpTop: 0 }) : pokeHints(currentCtx())),
     histBack: () => histMove(-1),
     histForward: () => histMove(1),
+    summarize: () => {
+      const ai = loadConfig().ai ?? null // re-read: editing config.json applies without a restart
+      set({ ai })
+      focusPanel("info")
+      const s = ui.current
+      const path = s.openPath
+      const key = path ? jobKey("tldr", path) : ""
+      const running = path ? jobs.current.get(key) : undefined
+      if (running) { // a running request is cancelled first, whatever the config or the note now say
+        running.abort.abort()
+        jobs.current.delete(key)
+        bump((x) => x + 1)
+        return flash("summary cancelled")
+      }
+      if (!ai) return flash(`AI off · set "ai" in config.json`)
+      const file = path ? memo.read(path, s.reload) : null
+      const text = file && !file.error ? noteText(file.src) : ""
+      if (!path || !text) return flash("nothing to summarize")
+      if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
+      const target = resolveAI(ai, process.env)
+      if ("error" in target) return flash(target.error, "error")
+      startSummary(path, text, target, ai.model) // a fresh summary is regenerated too: `a` is the explicit ask
+    },
+    explainChange: () => {
+      const ai = loadConfig().ai ?? null // re-read, as `a` does
+      set({ ai })
+      const d = derive()
+      const path = d.s.openPath
+      const key = path ? jobKey("delta", path) : ""
+      const running = jobs.current.get(key)
+      // cancel first: a request stays cancellable after its `ai` block goes or the note is reverted
+      if (running) {
+        running.abort.abort()
+        jobs.current.delete(key)
+        set({ delta: null })
+        return flash("explanation cancelled")
+      }
+      if (!ai) return flash(`AI off · set "ai" in config.json`)
+      if (d.changes === null) return flash("too large to compare")
+      const base = d.s.baseline?.path === path ? d.s.baseline : null
+      if (!path || !base || !d.changes.length) return flash(`no changes since ${hhmm(base?.at ?? Date.now())}`)
+      if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
+      const target = resolveAI(ai, process.env)
+      if ("error" in target) return flash(target.error, "error")
+      focusPanel("info")
+      startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
+    },
+    edit: () => {
+      const s = ui.current
+      if (!s.openPath) return flash("no note to edit", "error")
+      if (s.openPath === STDIN) return flash("stdin · nothing to edit")
+      const d = derive()
+      const src = memo.read(s.openPath, s.reload)?.src ?? ""
+      const line = sourceLineAt({ source: s.source, top: d.top, srcRow: d.view.srcRow, headings: d.view.headings, scan: sourceScan(src, themes[s.themeIdx]!).headings, offset: parseFrontMatter(src).offset })
+      const argv = editorCommand(process.env, s.openPath, line)
+      const run =
+        editImpl ??
+        ((a: string[], piped: boolean) =>
+          runEditor(a, piped, {
+            openTTY: () => openSync("/dev/tty", "r"),
+            close: closeSync,
+            spawn: (argv, stdin) => Bun.spawnSync(argv, { stdio: [stdin, "inherit", "inherit"] }),
+            suspend: () => renderer.suspend(),
+            resume: () => renderer.resume(),
+          }))
+      let res: EditResult | void
+      try {
+        res = run(argv, s.piped)
+      } catch (e) {
+        return flash(`cannot run ${argv[0]}: ${errText(e)}`, "error")
+      }
+      if (res && "error" in res) return flash(res.error, "error")
+      set({ reload: s.reload + 1 }) // a failed editor may still have saved
+      const ed = basename(argv[0]!)
+      if (res && res.code !== 0) return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")
+      flash(`edited · ${basename(s.openPath)}`)
+    },
     quit: () => {
       leave()
       renderer.destroy()
@@ -1411,6 +2169,35 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       const toTop = (k.name === "g" && !k.shift) || k.name === "home"
       if (derive().pg) return goPage(toTop ? 0 : Infinity)
       setTop(toTop ? 0 : derive().maxTop)
+    },
+    zenGloss: () => {
+      const ai = loadConfig().ai ?? null // re-read: editing config.json applies without a restart
+      set({ ai })
+      const here = derive().gHere
+      const jk = here ? jobKey("gloss", here.id) : ""
+      const running = jobs.current.get(jk)
+      // cancel first: a request stays cancellable after its `ai` block goes
+      if (here && running) {
+        running.abort.abort()
+        jobs.current.delete(jk)
+        if (ui.current.gloss?.id === here.id) set({ gloss: null })
+        bump((x) => x + 1)
+        return flash("gloss cancelled")
+      }
+      if (!ai) return flash(`AI off · set "ai" in config.json`)
+      ensureGlosses()
+      const { s, gHere, gHash, gStyle, title } = derive()
+      if (!gHere) return flash("nothing to gloss here")
+      const key = glossKey(gHere.id, gStyle)
+      const e = s.glosses?.[key]
+      const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
+      // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
+      if (e && !shown && isFresh(e, gHash, PROMPTS.gloss)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+      // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
+      if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
+      const target = resolveAI(ai, process.env)
+      if ("error" in target) return flash(target.error, "error")
+      startGloss(gHere, gStyle, title, target, ai.model)
     },
     zenSection: (k) => {
       stopRolling()
@@ -1459,6 +2246,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       const { infoRows, linkRows, infoCur } = derive()
       const it = infoRows[linkRows[infoCur] ?? -1]
       if (it?.kind === "link") openLink(it)
+      else if (it?.kind === "change") jumpChange(it.at)
     },
 
     filesMove: (k) => {
@@ -1534,7 +2322,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     },
 
     helpScroll: (k) => {
-      const vis = HELP_VIS(dims.current.W, dims.current.H)
+      const vis = helpLayout(HELP_GROUPS, dims.current.W, dims.current.H).vis
       const top = ui.current.helpTop
       if (k.name === "g" || k.name === "home") return helpGo(k.shift ? Infinity : 0)
       if (k.name === "end") return helpGo(Infinity)
@@ -1556,18 +2344,16 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       swGo(stepRow(swRows, swHl, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1))
     },
     swSection: () => {
-      const { swRows, swHl } = derive()
-      swGo(nextSection(swRows, swHl))
+      const { swRows, swHl, question } = derive()
+      swGo(question ? askSection(swRows, swHl) : nextSection(swRows, swHl))
     },
-    swOpen: () => {
-      const { swRows, swHl } = derive()
-      switchTo(swRows[swHl])
-    },
-    swClose: () => set({ switcher: null }),
+    swOpen: () => swActivate(derive().swHl),
+    swClose: closeSwitcher,
     swErase: () => {
       const sw = ui.current.switcher
       if (sw) swType([...sw.q].slice(0, -1).join(""))
     },
+    swAsk: () => {}, // help only: a `?` query is typed like any other
     opType: () => {},
     opMove: (k) => {
       const { opRows, opHl } = derive()
@@ -1584,13 +2370,16 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       if (op) opType([...op.q].slice(0, -1).join(""))
     },
 
-    themeMove: (k) => {
-      const n = themes.length
-      const i = ui.current.themeIdx
-      set({ themeIdx: k.name === "g" ? (k.shift ? n - 1 : 0) : (i + (isDown(k) ? 1 : -1) + n) % n })
-    },
+    themeType: () => {},
+    themeMove: (k) => themeSet(pickMove(ui.current.themePick!, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
+    // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
+    themeMode: (k) => themeSet(pickMode(ui.current.themePick!, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
     themeApply: applyTheme,
-    themeRevert: revertTheme,
+    themeClose: closeTheme,
+    themeErase: () => {
+      const p = ui.current.themePick!
+      themeSet(pickQuery(p, [...p.q].slice(0, -1).join("")))
+    },
 
     zsMove: (k) => set({ zenRow: clampIdx(ui.current.zenRow + (isDown(k) ? 1 : -1), ZEN_ROWS.length) }),
     zsToggle: () => zenEdit(ui.current.zenRow, 0),
@@ -1625,9 +2414,14 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   useKeyboard((key: KeyEvent) => {
     // C-c quits the same way from every popup and mode (OpenTUI would only end the renderer)
     if (matchKey("C-c", key)) return actions.quit(key)
+    stopWelcome()
     const s = ui.current
     if (s.zen && s.zenCfg.ghost) pokeGhost()
-    if (s.themeOrig !== null) return void dispatch(["theme"], key)
+    if (s.themePick) {
+      if (dispatch(["theme"], key)) return
+      if (key.sequence && !key.ctrl && !key.meta && /^[^\x00-\x1f\x7f]+$/.test(key.sequence)) themeSet(pickQuery(s.themePick, s.themePick.q + key.sequence))
+      return
+    }
     if (s.zenOrig !== null) return void dispatch(["zenSettings"], key)
     if (s.opener) {
       if (dispatch(["open"], key)) return
@@ -1664,14 +2458,15 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     }
     // zen bindings shadow the document ones; n / N and the global keys fall through
     if (derive().L.zen) return void dispatch(["zen", "global", "doc"], key, ZEN_OFF)
-    dispatch(["global", modeOf(docMode())], key)
+    if (!s.openPath && docMode() === "doc" && welcomeKey(key)) return
+    dispatch(["global", modeOf(docMode())], key, s.openPath ? undefined : WELCOME_OFF)
   })
 
   // ---------------------------------------------------- render
   const d = derive()
-  const { s, L, t, file, doc, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win } = d
+  const { s, L, t, file, doc, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, question, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win, sheet } = d
   const { SW, bodyH, CW, CH, padL } = L
-  const { filter, cursor, query, prompt, help, themeOrig, themeIdx } = s
+  const { filter, cursor, query, prompt, help } = s
 
   // a note reached through a link outside the opened folder is named from its vault's root
   const outside = openPath !== null && s.linkRoot !== null && relative(s.root, openPath).startsWith("..")
@@ -1707,19 +2502,19 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   }
 
   // the strip's compact/full choice follows the inline panel width (SW), also in the wider drawer
-  const strip = stripLayout(L.SW)
+  const strip = stripLayout(L.SW, panelViews())
   const stripSpans: Span[] = []
   for (const lb of strip.labels) {
     const at = 1 + spansWidth(stripSpans) // panelRow adds col 0
     if (lb.x0 > at) stripSpans.push({ text: " ".repeat(lb.x0 - at) })
-    if (lb.digit) stripSpans.push({ text: lb.digit + " ", fg: t.textMuted })
+    stripSpans.push({ text: lb.digit, fg: t.textMuted })
     const active = lb.view === s.view
     stripSpans.push({ text: lb.text, fg: active ? (sideFocus ? t.primary : t.text) : t.textMuted, attr: active ? 1 : 0 })
   }
-  const activeLabel = strip.labels.find((lb) => lb.view === s.view)!
+  const activeLabel = strip.labels.find((lb) => lb.view === s.view) ?? strip.labels[0]!
   const rule: Span[] = [
     { text: "─".repeat(activeLabel.lx), fg: t.border },
-    { text: "━".repeat(activeLabel.x1 - activeLabel.lx), fg: sideFocus ? t.primary : t.textMuted },
+    { text: "━".repeat(activeLabel.x1 - activeLabel.lx), fg: sideFocus ? t.accent : t.textMuted },
     { text: "─".repeat(Math.max(0, PNW - 1 - activeLabel.x1)), fg: t.border },
   ]
   const panelX = L.inline ? 1 : 0
@@ -1832,6 +2627,18 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
           ]
         case "label":
           return [{ text: it.text, fg: t.textMuted, attr: 1 }]
+        case "tldr":
+          return [{ text: "TL;DR", fg: t.textMuted, attr: 1 }, { text: it.status, fg: t.textMuted }]
+        case "summary":
+          return [{ text: it.text, fg: it.muted ? t.textMuted : t.text }]
+        case "changes":
+          return [{ text: "Changed", fg: t.textMuted, attr: 1 }, { text: it.status, fg: t.textMuted }]
+        case "change":
+          return [
+            { text: it.mark + " ", fg: it.mark === "~" ? t.warning : it.mark === "+" ? t.success : t.textMuted },
+            { text: it.text, fg: it.stop ? t.text : t.textMuted },
+            { text: it.counts, fg: t.textMuted },
+          ]
         case "link":
           return [
             { text: "→ ", fg: t.textMuted },
@@ -1866,12 +2673,13 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
             sel: sideFocus === "info" && idx === curItem,
             thumb: on(i),
             onDown:
-              it.kind === "link"
+              it.kind === "link" || (it.kind === "change" && it.stop)
                 ? (e) => {
                     if (e.button !== MouseButton.LEFT) return
                     focusPanel()
                     set({ infoCur: linkRows.indexOf(idx) })
-                    openLink(it)
+                    if (it.kind === "link") openLink(it)
+                    else jumpChange(it.at)
                   }
                 : undefined,
           }),
@@ -1924,21 +2732,26 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   const scrim = L.mode === "drawer" && L.shown
   let content: ReactNode
   if (!openPath) {
-    const emptyMsg = `No Markdown files found in ${safeLine(s.root)}`
-    const emptyMark = fitWordmark(L.CW, L.CH - 2)
+    const { rows: recents, shown } = welcomeRows()
+    const w = welcome.current
+    w.hl = Math.max(1, Math.min(shown, w.hl))
     content = (
-      <box key="empty" style={{ flexDirection: "column", paddingLeft: L.zen ? 2 : 0 }}>
-        {emptyMark ? (
-          <>
-            {Array.from({ length: Math.floor((L.CH - emptyMark.length - 2) / 2) }, (_, i) => <Row key={"pad" + i} spans={[]} />)}
-            {emptyMark.map((l, i) => <Row key={"wm" + i} spans={[{ text: " ".repeat(Math.floor((L.CW - WORDMARK_W) / 2)) + l, fg: t.primary }]} />)}
-            <Row spans={[]} />
-            <Row spans={[{ text: " ".repeat(Math.max(0, Math.floor((L.CW - sw(emptyMsg)) / 2))) + truncate(emptyMsg, L.CW), fg: t.textMuted }]} />
-          </>
-        ) : (
-          <text fg={t.textMuted}>{emptyMsg}</text>
-        )}
-      </box>
+      <Welcome
+        t={t}
+        CW={L.CW}
+        CH={L.CH}
+        root={s.root}
+        recents={recents}
+        hl={w.hl}
+        tick={w.tick}
+        ink={w.ink}
+        keys={WELCOME_KEYS.map(([id, word]) => [keyDef(id).label, word])}
+        onHover={(i) => {
+          w.hl = i
+          bump((x) => x + 1)
+        }}
+        onActivate={welcomeOpen}
+      />
     )
   } else if (file?.error) {
     content = (
@@ -1951,13 +2764,27 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   } else if (L.zen) {
     // a 2-column gutter left of the text carries the typewriter marker
     const gutter = mix(t.textMuted, t.background, 0.4)
+    // the gloss sheet: a rule and GLOSS_ROWS muted rows over the bottom body rows, faded toward the background
+    const sheetK = !sheet || sheet.fadeAt === null ? 0 : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
+    const ink = (c: typeof t.text) => mix(c, t.background, sheetK)
+    const sheetAt = sheet ? CH - 1 - GLOSS_ROWS : CH
+    const rule = sheet ? glossRule(sheet.state, sheet.heading, CW) : null
+    const glossed = sheet ? glossRows(sheet.text, CW) : []
     content = (
       <box key="zen-lines" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
         {Array.from({ length: CH }, (_, i) => {
+          if (rule && i >= sheetAt) {
+            const r = i - sheetAt
+            const spans: Span[] = r
+              ? [{ text: glossed[r - 1] ?? "", fg: ink(t.textMuted) }]
+              : [{ text: rule[0], fg: ink(t.border) }, { text: rule[1], fg: ink(t.textMuted) }, { text: rule[2], fg: ink(t.border) }]
+            return <Row key={"gloss" + r} spans={[{ text: "  " }, ...spans]} />
+          }
           const n = win.first + i
           const l = n >= win.lo && n < win.hi ? view.lines[n] : undefined
           let spans = l?.spans ?? []
-          if (l && spot && (n < spot[0] || n >= spot[1])) spans = dimSpans(spans, t, SPOT_DIM)
+          const dim = !!l && !!spot && (n < spot[0] || n >= spot[1])
+          if (dim) spans = dimSpans(spans, t, SPOT_DIM)
           return <Row key={n} spans={[{ text: tw && n === top ? "▸ " : "  ", fg: gutter }, ...markMatches(spans, query, t)]} />
         })}
       </box>
@@ -1989,6 +2816,25 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       {content}
     </box>
   )
+  // the minimap: a gap column, two braille cells and the find lane, over the body rows
+  const miniInkData = L.mini && openPath && !file?.error ? memo.mini(view, CW, bodyH, view.srcRow ? String(view.srcRow.length).length + 2 : 0) : null
+  const mc = miniColors(t)
+  const miniEl = L.mini ? (
+    <box
+      key="mini"
+      style={{ width: MINI_W - 1, height: bodyH, flexDirection: "column", flexShrink: 0 }}
+      onMouseDown={(e: MouseEvent) => {
+        if (e.button !== MouseButton.LEFT || !miniInkData) return
+        setTop(miniJump(e.y - 1 - L.gap, miniInkData, CH, maxTop))
+      }}
+    >
+      {miniInkData
+        ? miniCells(miniInkData, { top, h: CH, heads: memo.geo(view).heads, hits: matches, total: view.lines.length, lane: !!query }).map((row, i) => (
+            <Row key={i} spans={row.map((c) => ({ text: c.ch, fg: mc[c.kind], bg: c.band ? t.backgroundElement : undefined }))} />
+          ))
+        : null}
+    </box>
+  ) : null
 
   // zen chrome: faded toward the background (`k` 0 = full color)
   const fade = (spans: Span[], k: number): Span[] => spans.map((sp) => ({ ...sp, fg: mix(sp.fg ?? t.text, t.background, k) }))
@@ -2107,11 +2953,20 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     pokeHints(ctxNow)
   })
 
+  // zen gloss: runs when the reading line changes section (not on every scroll tick)
+  const glossAt = L.zen && openPath ? `${openPath}\0${currentHeading}` : null
+  useEffect(() => {
+    if (glossAt === glossSeen.current) return
+    glossSeen.current = glossAt
+    glossEntered()
+  })
+
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
   const pinned = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"].includes(ctxNow)
   let hintK: number | null = null
   if (pinned) hintK = 0
-  else if (s.hintAt !== null && s.hintCtx === ctxNow) {
+  // the welcome page has its own keycaps: no hint row under it (popups opened from it keep theirs)
+  else if (s.openPath && s.hintAt !== null && s.hintCtx === ctxNow) {
     const st = fadeStep(Date.now() - s.hintAt, HINT_HOLD)
     hintK = st === null ? null : st / (GHOST_STEPS + 1)
   }
@@ -2136,8 +2991,11 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
       const [id, word] = Array.isArray(h) ? h : [h, undefined]
       if (id === "docMatch" && !query) continue
       if (id === "links" && s.source) continue // labels are Preview only
+      if (id === "edit" && s.openPath === STDIN) continue // nothing on disk to edit
+      if ((id === "summarize" || id === "zenGloss") && !s.ai) continue // AI is off until an `ai` block is configured
+      if (id === "explainChange" && (!s.ai || !d.cv || d.cv.state === "result")) continue // only while there are changes to explain
       const def = keyDef(id)
-      items.push({ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: id === "links" || id === "histBack" })
+      items.push({ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: id === "links" || id === "histBack" || id === "summarize" || id === "zenGloss" || id === "explainChange" || id === "edit" || id === "themeType" })
     }
     return fitHints(items, room).flatMap((h, i): Span[] => [
       ...(i ? [{ text: "   " }] : []),
@@ -2154,56 +3012,62 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   )
 
   const popupW = Math.min(70, W - 2)
-  const helpVis = HELP_VIS(W, H)
-  const mark = helpMark(W, H)
-  const helpTopC = Math.max(0, Math.min(s.helpTop, HELP_ROWS.length - helpVis))
-  const helpNote = HELP_ROWS.length > helpVis ? `j/k scroll ${helpTopC + helpVis}/${HELP_ROWS.length}` : undefined
+  const hl = helpLayout(HELP_GROUPS, W, H)
+  const helpTopC = Math.max(0, Math.min(s.helpTop, hl.rows - hl.vis))
+  const helpNote = hl.rows > hl.vis ? `j/k scroll ${helpTopC + hl.vis}/${hl.rows}` : undefined
   // title row: padding 4 each side, then the note and `esc`; the theme name goes first, then the title is cut
-  const titleRoom = popupW - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
+  const titleRoom = Math.min(hl.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
   const helpFull = `Keybindings · brothy v${VERSION} · ${t.name}`
   const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${VERSION}`, Math.max(1, titleRoom))
   const helpOverlay = help ? (
-    <Overlay
-      t={t}
-      W={W}
-      H={H}
-      width={70}
-      title={helpTitle}
-      note={helpNote}
-      onClose={() => set({ help: false })}
-      onScroll={(dir) => helpGo(helpTopC + dir * 3)}
-    >
-      <box key="help-body" style={{ flexDirection: "column", paddingLeft: 4, paddingRight: 4 }}>
-        {mark ? [...mark.map((l, i) => <Row key={"wm" + i} spans={[{ text: l, fg: t.primary }]} />), <Row key="wm-gap" spans={[]} />] : null}
-        {HELP_ROWS.slice(helpTopC, helpTopC + helpVis).map(([k, desc], i) => (
-          <Row
-            key={i}
-            spans={
-              desc === "" && k
-                ? [{ text: k, fg: t.text, attr: 1 }]
-                : [{ text: k.padEnd(16), fg: t.text }, { text: truncate(desc, popupW - 2 - 8 - 16), fg: t.textMuted }]
-            }
-          />
-        ))}
-      </box>
-    </Overlay>
+    <HelpSheet t={t} W={W} H={H} layout={hl} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * 3)} />
   ) : null
 
+  const notesLabel = s.indexing ? `indexing ${s.indexing[0]}/${s.indexing[1]}` : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")
+  // the peek pane (from PEEK_MIN_W): the highlighted row's note, its TL;DR only while fresh
+  const peekRow = s.switcher && W >= PEEK_MIN_W ? swRows[swHl] : undefined
+  const peekPath = peekRow && "path" in peekRow ? peekRow.path : null
+  const peekDoc = peekPath ? vault.current.ix.docs.get(peekPath) : undefined
+  const peekW = switchSplit(W).peekW
+  const peekNote = peekPath && peekDoc ? memo.peekFile(peekPath, peekDoc.mtime) : null
+  const peekWin = peekNote && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc!, peekRow) : null
+  const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree) : undefined
+  const peekSaved = peekPath ? s.summaries[peekPath] : undefined
+  const peek =
+    s.switcher && W >= PEEK_MIN_W
+      ? peekLines(
+          {
+            row: peekRow,
+            rel: peekPath ? relative(s.linkTree.path, peekPath) : "",
+            doc: peekDoc,
+            view: peekView,
+            base: peekWin?.base,
+            words: peekNote?.words,
+            minutes: peekNote?.minutes,
+            summary: peekSaved && peekNote && isFresh(peekSaved, peekNote.hash) ? { text: peekSaved.summary, model: shortModel(peekSaved.model) } : undefined,
+          },
+          t,
+          peekW,
+          L.PH,
+        )
+      : undefined
   const switchOverlay = s.switcher ? (
     <Switcher
       t={t}
       W={W}
       H={H}
+      title={question ? "Ask" : "Go to"}
       q={s.switcher.q}
       rows={swRows}
       hl={swHl}
       top={keepVisible(s.switcher.top, Math.max(0, swHl), L.PH, swRows.length)}
       height={L.PH}
-      note={s.indexing ? `indexing ${s.indexing[0]}/${s.indexing[1]}` : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")}
-      onClose={() => set({ switcher: null })}
+      note={question ? askTitleNote({ off: !s.ai, state: s.switcher.ask, indexing: s.indexing ? notesLabel : null, notes: notesLabel }) : notesLabel}
+      peek={peek}
+      onClose={closeSwitcher}
       onScroll={(dir) => swGo(stepRow(swRows, swHl, dir))}
       onHover={(i) => i !== swHl && ui.current.switcher && set({ switcher: { ...ui.current.switcher, hl: i } })}
-      onActivate={(i) => switchTo(swRows[i])}
+      onActivate={swActivate}
     />
   ) : null
 
@@ -2269,46 +3133,61 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     )
   }
 
-  // `t` picker: live preview while moving, Enter keeps, Esc reverts
-  // the picker window: 4 rows of overlay chrome plus a margin; scrolls to keep the highlight centred
-  const themeRows = Math.max(3, Math.min(themes.length, H - 6))
-  const themeTop = Math.max(0, Math.min(themes.length - themeRows, themeIdx - (themeRows >> 1)))
-  const themeOverlay =
-    themeOrig !== null ? (
-      <Overlay
-        t={t}
-        W={W}
-        H={H}
-        width={Math.min(48, W - 2)}
-        title="Themes"
-        onClose={revertTheme}
-        onScroll={(dir) => set({ themeIdx: (ui.current.themeIdx + dir + themes.length) % themes.length })}
-      >
-        <PickerList
-          t={t}
-          items={themes.map((th, i) => ({
-            spans: [
-              { text: th.name.padEnd(18), fg: t.text },
-              { text: "  ", bg: th.primary },
-              { text: " " },
-              { text: "  ", bg: th.secondary },
-              { text: " " },
-              { text: "  ", bg: th.accent },
-            ],
-            right: i === themeOrig ? "current" : th.mode,
-          }))}
-          hl={themeIdx}
-          top={themeTop}
-          height={themeRows}
-          innerW={Math.min(48, W - 2) - 2}
-          onHover={(i) => i !== themeIdx && set({ themeIdx: i })}
-          onActivate={(i) => {
-            set({ themeIdx: i })
-            applyTheme()
-          }}
-        />
-      </Overlay>
-    ) : null
+  // `t` picker: the chrome stays in `t`; from PEEK_MIN_W the pane draws the candidate's sample on its own background
+  const pick = s.themePick
+  const pickRows = pick ? memo.themeRows(pick.q) : []
+  const pickGeo = themeSplit(W, H, L.PH)
+  const pickHl = pick ? pickIndex(pick, pickRows) : -1
+  // the board's rows under the header; hover holds the window where it is, keys and the wheel centre it again
+  const pickTopShown = pick ? pickTop(pick, pickHl, Math.max(1, pickGeo.rows - 1), pickRows.length) : 0
+  const pickT = pick ? pickTheme(pick) : null
+  const pickView = pickT && pickGeo.split && pickHl >= 0 ? memo.themeSample(pickT, pickGeo.peekW, s.hl) : null
+  // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
+  useEffect(() => {
+    if (!pickView || pickView === hlSample.current) return
+    hlSample.current = pickView
+    const reqs = pendingHighlights(pickView)
+    if (reqs.length)
+      ensureHighlights(reqs).then((changed) => {
+        if (changed && alive.current) set({ hl: ui.current.hl + 1 })
+      })
+  })
+  /** row `i` becomes the highlight (hover, click); the list stays where it is under the pointer */
+  const pickAt = (i: number) => {
+    const p = ui.current.themePick
+    const r = pickRows[i]
+    if (p && r && r.family.name !== p.family) themeSet({ ...p, family: r.family.name, top: pickTopShown })
+  }
+  const themeOverlay = pick ? (
+    <ThemePicker
+      t={t}
+      W={W}
+      H={H}
+      q={pick.q}
+      rows={pickRows}
+      hl={pickHl}
+      top={pickTopShown}
+      mode={pick.mode}
+      shown={pickShown(pick)}
+      only={pickHl >= 0 ? onlyMode(pickRows[pickHl]!.family) : undefined}
+      orig={pick.orig}
+      geo={pickGeo}
+      pane={pickT && pickView ? { theme: pickT, lines: memo.themePane(pickT, pickView, pickGeo.peekW, pickGeo.rows) } : undefined}
+      onClose={closeTheme}
+      onScroll={(dir) => themeSet(pickMove(ui.current.themePick!, dir))}
+      onHover={pickAt}
+      onActivate={(i) => {
+        pickAt(i)
+        applyTheme()
+      }}
+      onPick={(i, m) => {
+        pickAt(i)
+        themeSet(pickMode(ui.current.themePick!, m))
+        applyTheme()
+      }}
+      onMode={(m) => themeSet(pickMode(ui.current.themePick!, m))}
+    />
+  ) : null
   const zenOverlay =
     s.zenOrig !== null ? (
       <ZenSettings
@@ -2342,7 +3221,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
     const step = s.zenCfg.ghost ? (s.ghostAt === null ? null : fadeStep(Date.now() - s.ghostAt)) : undefined
     const topK = step === undefined ? ZEN_DIM : step === null ? null : step / (GHOST_STEPS + 1)
     return (
-      <box key="zen" style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
+      <box key="zen" onMouse={pointer.note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
         {topRow(topK)}
         {gapRow()}
         <box style={{ flexDirection: "row", height: bodyH, paddingLeft: 1, paddingRight: 1 }}>{docEl}</box>
@@ -2359,12 +3238,13 @@ export function App({ root: startRoot, initialFile, themeName, transparent }: Ap
   }
 
   return (
-    <box key="main" style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
+    <box key="main" onMouse={pointer.note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
       {topRow(0)}
       {gapRow()}
-      <box style={{ flexDirection: "row", height: bodyH, paddingLeft: 1, paddingRight: 1, gap: 1 }}>
+      <box style={{ flexDirection: "row", height: bodyH, paddingLeft: 1, paddingRight: L.mini ? 0 : 1, gap: 1 }}>
         {L.inline ? panelBox : null}
         {docEl}
+        {miniEl}
       </box>
       {ghostLine}
       {progressLine}

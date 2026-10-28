@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseFrontMatter, parseProperties, render, renderSource, stats, stripCode, wrap, width } from "../src/markdown"
+import { parseFrontMatter, parseProperties, render, renderSource, stats, stripCode, wordStats, wrap, width } from "../src/markdown"
 import { rankNotes, scanTree, visibleRows, folderCounts } from "../src/files"
 import { contrast, themes } from "../src/theme"
 import { join } from "node:path"
@@ -138,4 +138,11 @@ describe("document text stays readable in every theme", () => {
           }
     })
   }
+})
+
+test("wordStats: the same words and minutes as stats, without lexing", () => {
+  const src = "# Title\n\nSome words here, don't count `code` twice.\n\n```js\nconst skipped = 1\n```\n\n- [x] done task\n\n%%hidden comment%%\n" + "more words ".repeat(300)
+  const st = stats(src)
+  expect(wordStats(src)).toEqual({ words: st.words, minutes: st.minutes })
+  expect(st.minutes).toBe(3)
 })

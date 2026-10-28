@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:tes
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
-import { configPath, loadConfig, saveConfig } from "../src/config"
+import { configPath, loadConfig, saveConfig, writeFileAtomic } from "../src/config"
 import { ZEN_DEFAULTS } from "../src/zen"
 
 const base = mkdtempSync(join(tmpdir(), "brothy-cfg-"))
@@ -228,5 +228,64 @@ describe("saveConfig file handling", () => {
       sidebar: { view: "info", hidden: true },
       zen: { wpm: 300, flow: "pages" },
     })
+  })
+})
+
+describe("ai", () => {
+  test("a valid ai block is kept", () => {
+    writeFileSync(file(), JSON.stringify({ ai: { provider: "ollama", model: "llama3.2", maxChars: 16000 } }))
+    expect(loadConfig().ai).toEqual({ provider: "ollama", model: "llama3.2", maxChars: 16000 })
+  })
+  test("missing model or custom without baseURL turns AI off", () => {
+    writeFileSync(file(), JSON.stringify({ ai: { provider: "openai" } }))
+    expect(loadConfig().ai).toBeUndefined()
+    writeFileSync(file(), JSON.stringify({ ai: { provider: "custom", model: "m" } }))
+    expect(loadConfig().ai).toBeUndefined()
+  })
+  test("a bad optional field drops only that field", () => {
+    writeFileSync(file(), JSON.stringify({ ai: { provider: "openai", model: "m", maxChars: 10 } }))
+    expect(loadConfig().ai).toEqual({ provider: "openai", model: "m" })
+  })
+  test("saveConfig never rewrites the ai block", () => {
+    const ai = { provider: "custom", model: "m", baseURL: "http://h/v1", headers: { "bad name": "kept as written" } }
+    writeFileSync(file(), JSON.stringify({ ai }))
+    expect(saveConfig({ theme: "dracula" })).toBe(true)
+    expect(JSON.parse(readFileSync(file(), "utf8")).ai).toEqual(ai)
+  })
+})
+
+describe("writeFileAtomic mode", () => {
+  test("a new file gets the mode", () => {
+    const f = join(xdg, "new.json")
+    writeFileAtomic(f, "{}", 0o600)
+    expect(statSync(f).mode & 0o777).toBe(0o600)
+  })
+  test("an existing file keeps its own mode", () => {
+    const f = join(xdg, "old.json")
+    writeFileSync(f, "{}")
+    chmodSync(f, 0o644)
+    writeFileAtomic(f, "{ }", 0o600)
+    expect(statSync(f).mode & 0o777).toBe(0o644)
+    expect(readFileSync(f, "utf8")).toBe("{ }")
+  })
+})
+
+describe("motion", () => {
+  test("reads a boolean motion, drops anything else", () => {
+    writeFileSync(file(), '{"motion":false}')
+    expect(loadConfig().motion).toBe(false)
+    writeFileSync(file(), '{"motion":"no"}')
+    expect(loadConfig().motion).toBeUndefined()
+  })
+})
+
+describe("minimap", () => {
+  test("reads a boolean minimap, drops anything else", () => {
+    writeFileSync(file(), '{"minimap":false}')
+    expect(loadConfig().minimap).toBe(false)
+    for (const bad of ['{"minimap":1}', '{"minimap":"off"}', '{"minimap":null}']) {
+      writeFileSync(file(), bad)
+      expect(loadConfig().minimap).toBeUndefined()
+    }
   })
 })

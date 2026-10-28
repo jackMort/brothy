@@ -1,6 +1,7 @@
 // Pure navigation helpers for App: search, scroll anchoring, sidebar cursor, key specs.
 import type { Span } from "./markdown"
 import type { Theme } from "./theme"
+import { superscript } from "./glyphs"
 
 // ------------------------------------------------------------- search
 
@@ -134,13 +135,13 @@ const STRIP = [
   ["outline", "Outline"],
   ["info", "Info"],
 ] as const
-/** Panels narrower than this get the compact strip: no digits, two-space gaps. */
+/** Panels narrower than this get the compact strip: two-space gaps instead of three. */
 export const STRIP_COMPACT_BELOW = 30
 
 export interface StripLabel {
   view: (typeof STRIP)[number][0]
   text: string
-  /** digit printed before the label ("" when compact) */
+  /** superscript key number printed against the label */
   digit: string
   /** clickable range `[x0, x1)` in panel columns (col 0 is padding); the label text starts at `lx` */
   x0: number
@@ -149,13 +150,13 @@ export interface StripLabel {
 }
 
 /** Tab-strip geometry for a panel `SW` columns wide, shared by the renderer and mouse hit-testing. */
-export function stripLayout(SW: number): { compact: boolean; labels: StripLabel[] } {
+export function stripLayout(SW: number, views: readonly StripLabel["view"][] = STRIP.map(([v]) => v)): { compact: boolean; labels: StripLabel[] } {
   const compact = SW < STRIP_COMPACT_BELOW
   const labels: StripLabel[] = []
   let x = 1
-  STRIP.forEach(([view, text], i) => {
-    const digit = compact ? "" : String(i + 1)
-    const lx = x + (digit ? digit.length + 1 : 0)
+  STRIP.filter(([v]) => views.includes(v)).forEach(([view, text], i) => {
+    const digit = superscript(i + 1)
+    const lx = x + digit.length
     labels.push({ view, text, digit, x0: x, lx, x1: lx + text.length })
     x = lx + text.length + (compact ? 2 : 3)
   })
@@ -284,4 +285,43 @@ export function cached<A extends unknown[], R>(fn: (...a: A) => R): (...a: A) =>
     }
     return val
   }
+}
+
+/** Copy-on-select text: rows are padded to their width, so trailing spaces and blank edge rows go. */
+export function selectedText(raw: string) {
+  const lines = raw.split("\n").map((l) => l.trimEnd())
+  while (lines.length && !lines[0]) lines.shift()
+  while (lines.length && !lines.at(-1)) lines.pop()
+  return lines.join("\n")
+}
+
+/** The copy toast's count: lines when there are several, else characters (code points). */
+export function copiedCount(text: string): [number, string] {
+  const n = text.split("\n").length
+  return n > 1 ? [n, "line"] : [[...text].length, "char"]
+}
+
+/**
+ * Row where `needle` starts within rows `from..to` of `plain` (lowercase rows), read as one
+ * space-joined text so a phrase may wrap; case-insensitive, whitespace runs count as one space.
+ */
+export function findQuote(plain: string[], from: number, to: number, needle: string): number | null {
+  const want = needle.toLowerCase().replace(/\s+/g, " ").trim()
+  if (!want) return null
+  const rows: number[] = []
+  const starts: number[] = []
+  let text = ""
+  for (let i = Math.max(0, from); i < Math.min(to, plain.length); i++) {
+    const row = plain[i]!.toLowerCase().replace(/\s+/g, " ").trim()
+    if (!row) continue
+    if (text) text += " "
+    rows.push(i)
+    starts.push(text.length)
+    text += row
+  }
+  const at = text.indexOf(want)
+  if (at < 0) return null
+  let k = 0
+  while (k + 1 < starts.length && starts[k + 1]! <= at) k++
+  return rows[k]!
 }

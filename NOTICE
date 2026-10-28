@@ -27,3 +27,29 @@ licensed under the MIT License:
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
+
+The ayu, nightfox, nightowl, iceberg, oxocarbon, cyberdream, melange,
+synthwave84 and vesper palettes (and their '-light' twins: dayfox for nightfox,
+Light Owl for nightowl) are adapted from the following projects, each licensed
+under the MIT License with the same permission notice as above:
+
+  ayu (https://github.com/ayu-theme/ayu-colors)
+    Copyright (c) Konstantin Pschera <me@kons.ch> (kons.ch)
+  vscode-ayu (https://github.com/ayu-theme/vscode-ayu)
+    Copyright (c) 2016 Ike Kurghinyan
+  nightfox.nvim (https://github.com/EdenEast/nightfox.nvim)
+    Copyright (c) 2021 James Simpson
+  Night Owl (https://github.com/sdras/night-owl-vscode-theme)
+    Copyright (c) 2018 Sarah Drasner
+  iceberg.vim (https://github.com/cocopon/iceberg.vim)
+    Copyright (c) 2014 cocopon <cocopon@me.com>
+  oxocarbon.nvim (https://github.com/nyoom-engineering/oxocarbon.nvim)
+    Copyright (c) 2022 Riccardo Mazzarini
+  cyberdream.nvim (https://github.com/scottmckendry/cyberdream.nvim)
+    Copyright (c) 2023 Scott McKendry
+  melange-nvim (https://github.com/savq/melange-nvim)
+    Copyright (c) 2021 Sergio Alejandro Vargas
+  SynthWave '84 (https://github.com/robb0wen/synthwave-vscode)
+    Copyright (c) 2019 Robb Owen
+  Vesper (https://github.com/raunofreiberg/vesper)
+    Copyright (c) 2023 Rauno Freiberg

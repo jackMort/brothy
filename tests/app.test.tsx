@@ -1,7 +1,7 @@
 import { afterAll, afterEach, expect, setSystemTime, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { testRender } from "@opentui/react/test-utils"
 import { quietAct } from "./quiet-act"
 
@@ -9,13 +9,20 @@ import { quietAct } from "./quiet-act"
 const prevXdg = process.env.XDG_CONFIG_HOME
 const cfgDir = mkdtempSync(join(tmpdir(), "brothy-cfg-"))
 process.env.XDG_CONFIG_HOME = cfgDir
+const prevCache = process.env.XDG_CACHE_HOME
+const cacheDir = mkdtempSync(join(tmpdir(), "brothy-cache-"))
+process.env.XDG_CACHE_HOME = cacheDir
 afterAll(async () => {
   await shutdownHighlighter() // the parser worker would otherwise keep the process alive
   if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME
   else process.env.XDG_CONFIG_HOME = prevXdg
   rmSync(cfgDir, { recursive: true, force: true })
+  if (prevCache === undefined) delete process.env.XDG_CACHE_HOME
+  else process.env.XDG_CACHE_HOME = prevCache
+  rmSync(cacheDir, { recursive: true, force: true })
 })
 const { App } = await import("../src/App")
+import type { EditResult } from "../src/editor"
 const { shutdownHighlighter } = await import("../src/highlight")
 import { mix, themeByName } from "../src/theme"
 import { GHOST_STEP, HINT_HOLD } from "../src/zen"
@@ -26,6 +33,7 @@ const dirs: string[] = []
 afterEach(() => {
   setup?.renderer.destroy()
   setup = undefined
+  rmSync(join(cacheDir, "brothy"), { recursive: true, force: true })
   rmSync(join(cfgDir, "brothy"), { recursive: true, force: true }) // folds and theme persist; keep tests independent
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
@@ -40,6 +48,19 @@ function tmp(files: Record<string, string>) {
   return d
 }
 
+const { noteText } = await import("../src/ai")
+const { textHash } = await import("../src/summaries")
+const { DELTA_PROMPT } = await import("../src/delta")
+function aiConfig(ai: object) {
+  mkdirSync(join(cfgDir, "brothy"), { recursive: true })
+  writeFileSync(join(cfgDir, "brothy", "config.json"), JSON.stringify({ ai }))
+}
+const OLLAMA = { provider: "ollama", model: "llama3.2" }
+function seedSummary(path: string, summary: string, hash = textHash(noteText(readFileSync(path, "utf8"))), model = "llama3.2") {
+  mkdirSync(join(cacheDir, "brothy"), { recursive: true })
+  writeFileSync(join(cacheDir, "brothy", "summaries.json"), JSON.stringify({ [path]: { hash, v: 1, summary, model, at: Date.now() } }))
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Render until `pred` holds. App timers (OPEN_DELAY, fades, the teleprompter) run late under load: wait, don't sleep. */
@@ -50,10 +71,11 @@ async function waitFor(s: Setup, pred: () => boolean, ms = 2000) {
   }
   throw new Error("never matched:\n" + s.captureCharFrame())
 }
-const waitFrame = (s: Setup, pred: (f: string) => boolean, ms = 2000) => waitFor(s, () => pred(s.captureCharFrame()), ms)
+/** Resolves with the frame that matched. */
+const waitFrame = (s: Setup, pred: (f: string) => boolean, ms = 2000) => waitFor(s, () => pred(s.captureCharFrame()), ms).then(() => s.captureCharFrame())
 
-async function mount(root: string, file?: string, size = { width: 100, height: 30 }) {
-  setup = quietAct(await testRender(<App root={root} initialFile={file ? join(root, file) : undefined} />, size))
+async function mount(root: string, file?: string, size = { width: 100, height: 30 }, fetch?: typeof globalThis.fetch) {
+  setup = quietAct(await testRender(<App root={root} initialFile={file ? join(root, file) : undefined} fetch={fetch} />, size))
   await setup.renderOnce()
   return setup
 }
@@ -112,8 +134,8 @@ async function openHelp(s: Setup) {
 }
 const PAST_HINTS = () => new Date(Date.now() + HINT_HOLD + 4 * GHOST_STEP + 10)
 
-/** The panel's tab strip is on screen (compact `Files  Outline` or full `Files   2 Outline`). */
-const panelShown = (f: string) => /Files\s+(?:2 )?Outline/.test(f)
+/** The panel's tab strip is on screen (compact `¹Files  ²Outline` or full `¹Files   ²Outline`). */
+const panelShown = (f: string) => /Files\s+²Outline/.test(f)
 
 /** A code block of numbered lines with `needle` on the given ones. */
 function numbered(n: number, needles: number[]) {
@@ -336,6 +358,18 @@ test("clicking the popup backdrop closes it", async () => {
   expect(await keys(s)).not.toContain("Keybindings")
 })
 
+test("a theme from config: a family name opens its dark theme; an unknown name says so once and falls back to brothy", async () => {
+  const d = tmp({ "a.md": "# a" })
+  setup = quietAct(await testRender(<App root={d} initialFile={join(d, "a.md")} themeName="one" />, W120))
+  await setup.renderOnce()
+  expect(await openHelp(setup)).toMatch(/brothy v\d+\.\d+\.\d+ · one-dark/)
+  setup.renderer.destroy()
+  setup = quietAct(await testRender(<App root={d} initialFile={join(d, "a.md")} themeName="nope" />, W120))
+  await setup.renderOnce()
+  expect(await keys(setup)).toContain(`unknown theme "nope" in config`)
+  expect(await openHelp(setup)).toMatch(/brothy v\d+\.\d+\.\d+ · brothy\b/)
+})
+
 test("clicking a theme row applies it; hover moves the highlight", async () => {
   const s = await mount(tmp({ "a.md": "# a" }), "a.md")
   const f = await keys(s, "t")
@@ -355,24 +389,253 @@ test("clicking a theme row applies it; hover moves the highlight", async () => {
   expect(await openHelp(s)).toMatch(/brothy v\d+\.\d+\.\d+ · gruvbox/)
 })
 
-test("theme picker lists dark themes then light ones, tagged, and scrolls inside a short terminal", async () => {
-  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 100, height: 24 })
+test("theme picker: hovering a row near the edge moves the highlight, not the list; a key centres it again", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 120, height: 24 })
+  await keys(s, "t")
+  const before = await keys(s, ...Array<string>(8).fill("down")) // the list has scrolled to centre the highlight
+  /** the family name on each screen row ("" off the board) */
+  const names = (f: string) => f.split("\n").map((l) => /([a-z][a-z0-9]*)\s+[▐▕]?\s*Aa ●●●/.exec(l)?.[1] ?? "")
+  const rows = before.split("\n")
+  const y = names(before).findLastIndex(Boolean) // the last family on screen
+  const name = names(before)[y]!
+  expect(names(before)).not.toContain("brothy")
+  await s.mockMouse.moveTo(rows[y]!.indexOf(name), y)
+  const after = await keys(s)
+  expect(names(after)).toEqual(names(before)) // nothing moved under the pointer
+  expect(after.split("\n")[y]).toContain("▐") // the hovered row has the cursor
+  expect(names(await keys(s, "down"))).not.toEqual(names(before)) // a key centres the highlight again
+})
+
+test("theme picker: keys move the highlight away from a pointer resting on the board", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 120, height: 30 })
+  const f = await keys(s, "t")
+  const names = (f: string) => f.split("\n").map((l) => /([a-z][a-z0-9]*)\s+[▐▕]?\s*Aa ●●●/.exec(l)?.[1] ?? "")
+  /** the family on the cursor's row */
+  const cursor = (f: string) => names(f)[f.split("\n").findIndex((l) => l.includes("▐"))]
+  const y = names(f).findIndex(Boolean) + 3
+  const at = (k: number) => names(f)[k]!
+  await s.mockMouse.moveTo(f.split("\n")[y]!.indexOf(at(y)), y)
+  expect(cursor(await keys(s))).toBe(at(y))
+  // the row under the pointer is redrawn when the highlight leaves it, but the pointer never moved
+  expect(cursor(await keys(s, "down"))).toBe(at(y + 1))
+  expect(cursor(await keys(s, "down", "down"))).toBe(at(y + 3))
+  expect(cursor(await keys(s, "up", "up", "up", "up"))).toBe(at(y - 1))
+  // moving the pointer still highlights the row it lands on
+  await s.mockMouse.moveTo(f.split("\n")[y + 2]!.indexOf(at(y + 2)), y + 2)
+  expect(cursor(await keys(s))).toBe(at(y + 2))
+})
+
+test("theme picker: keys and the wheel scroll the board under a resting pointer without the highlight snapping back", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 120, height: 24 })
+  const f = await keys(s, "t")
+  const names = (f: string) => f.split("\n").map((l) => /([a-z][a-z0-9]*)\s+[▐▕]?\s*Aa ●●●/.exec(l)?.[1] ?? "")
+  const cursor = (f: string) => names(f)[f.split("\n").findIndex((l) => l.includes("▐"))]!
+  const y = names(f).findLastIndex(Boolean) // the last family on screen: the board scrolls under it
+  const x = f.split("\n")[y]!.indexOf(names(f)[y]!)
+  await s.mockMouse.moveTo(x, y)
+  const seen = [cursor(await keys(s))]
+  for (let i = 0; i < 6; i++) seen.push(cursor(await keys(s, "down")))
+  for (let i = 0; i < 3; i++) {
+    await s.mockMouse.scroll(x, y, "down")
+    seen.push(cursor(await keys(s)))
+  }
+  expect(new Set(seen).size).toBe(seen.length) // every step went on to a new family
+})
+
+test("switcher: keys move the highlight away from a pointer resting on the list", async () => {
+  const s = await mount(tmp({ "alpha.md": "# a", "bravo.md": "# b", "charlie.md": "# c", "delta.md": "# d" }), "alpha.md")
+  const rows = (await keys(s, "C-p")).split("\n")
+  const y = rows.findIndex((r) => /\bcharlie\b/.test(r))
+  expect(y).toBeGreaterThan(0)
+  await s.mockMouse.moveTo(rows[y]!.indexOf("charlie"), y)
+  await keys(s)
+  const sel = () => onBg(s, PRIMARY).join("")
+  expect(sel()).toContain("charlie")
+  await keys(s, "down")
+  expect(sel()).toContain("delta")
+  await keys(s, "up", "up")
+  expect(sel()).toContain("bravo")
+})
+
+/** The background of the specimen the board's cursor frames (`▐ Aa ●●● ▌`): the candidate's. */
+const cursorBg = (s: Setup) => {
+  const row = s.captureSpans().lines.find((l) => l.spans.some((sp) => sp.text === "▐"))!.spans
+  return hex(row.slice(row.findIndex((sp) => sp.text === "▐")).find((sp) => sp.text === "Aa")!.bg)
+}
+
+test("theme picker: a header, one row per family with both specimens, typing filters (j k g G included), ← → tab S-tab move the cursor across", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 80, height: 24 })
   const f = await keys(s, "t")
   expect(f).toContain("Themes")
-  expect(f).toMatch(/brothy\s+.*\bcurrent\b/)
-  expect(f).toMatch(/catppuccin\s+.*\bdark\b/)
-  expect(f).not.toContain("flexoki-light")
-  const g = await keys(s, "G")
-  expect(g).toMatch(/flexoki-light\s+.*\blight\b/)
-  expect(g).not.toMatch(/\bcatppuccin\s/)
-  expect(g.trimEnd().split("\n")).toHaveLength(24)
-  await keys(s, "esc")
+  expect(f).toContain("22 families")
+  expect(f).toMatch(/▏Theme…\s+dark\s+light/)
+  expect(f).toMatch(/\n\s+dark {7}light\s*\n/) // the header, alone on its row
+  expect(f).toMatch(/brothy {7}▐ Aa ●●● ▌ {4}Aa ●●●/) // the cursor on brothy (dark), the theme in use (the cursor wins)
+  expect(f).toMatch(/\bone\b/)
+  expect(f).not.toMatch(/-light|one-dark/) // a family once, no mode suffix
+  expect(cursorBg(s)).toBe(themeByName("brothy").background)
+  const g = await keys(s, "tab")
+  expect(g).toMatch(/brothy {7}▕ Aa ●●● ▏ {2}▐ Aa ●●● ▌/) // the cursor on brothy-light; brothy, in use, keeps its bars
+  expect(cursorBg(s)).toBe(themeByName("brothy-light").background)
+  s.mockInput.pressTab({ shift: true }) // S-tab flips back
+  await keys(s)
+  expect(cursorBg(s)).toBe(themeByName("brothy").background)
+  await keys(s, "left") // ← is dark already
+  expect(cursorBg(s)).toBe(themeByName("brothy").background)
+  await keys(s, "right")
+  expect(cursorBg(s)).toBe(themeByName("brothy-light").background)
+  await keys(s, "down")
+  expect(cursorBg(s)).toBe(themeByName("catppuccin-light").background) // ↑↓ keep the column
+  const e = await keys(s, "type:gjk")
+  expect(e).toContain("gjk▏")
+  expect(e).toContain("0 of 22")
+  expect(e).toContain("No themes match")
+  expect(e).not.toMatch(/\n\s+dark {7}light\s*\n/) // no header without rows
+  expect(await keys(s, "enter")).toContain("Themes") // nothing to apply
+  const h = await keys(s, "backspace", "backspace", "backspace", "type:ka")
+  expect(h).toMatch(/\bkanagawa\b/)
+  expect(h).not.toMatch(/\bnord\b/)
+  expect(onBg(s, themeByName("brothy").backgroundElement).join("\n")).toContain("kanagawa") // the first row is the cursor row
+})
+
+test("theme picker: a click on a specimen applies that family in that mode and saves; on the name it applies the row as it is", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 80, height: 24 })
+  const rowOf = async (name: string) => {
+    const f = (await keys(s)).split("\n")
+    const y = f.findIndex((r) => new RegExp(`\\b${name}\\b`).test(r) && r.includes("Aa"))
+    return { y, r: f[y]! }
+  }
+  await keys(s, "t")
+  let { y, r } = await rowOf("nord")
+  await s.mockMouse.click(r.lastIndexOf("Aa"), y) // nord's light specimen
+  expect(await keys(s)).not.toContain("Themes")
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("nord-light")
+  await keys(s, "t", "type:drac") // the pointer still rests on a row, and hover picks it: filter first
+  ;({ y, r } = await rowOf("dracula"))
+  await s.mockMouse.click(r.indexOf("Aa"), y) // dracula's dark one
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("dracula")
+  // a dark-only family's struck light does nothing; its name applies the row
+  await keys(s, "t", "type:vesp")
+  ;({ y, r } = await rowOf("vesper"))
+  await s.mockMouse.click(r.indexOf("light"), y)
+  expect(await keys(s)).toContain("Themes")
+  await s.mockMouse.click(r.indexOf("vesper"), y)
+  expect(await keys(s)).not.toContain("Themes")
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("vesper")
+})
+
+test("theme picker: a click on the dark or light chip sets that mode, as ← → do; the picker stays open", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 80, height: 24 })
+  const swatch = () => cursorBg(s)
+  const chip = async (m: "dark" | "light") => {
+    const f = (await keys(s)).split("\n")
+    const y = f.findIndex((r) => r.includes("nord▏"))
+    await s.mockMouse.click(f[y]!.lastIndexOf(m), y)
+    return keys(s)
+  }
+  await keys(s, "t", "type:nord")
+  expect(swatch()).toBe(themeByName("nord").background)
+  expect(await chip("light")).toContain("Themes")
+  expect(swatch()).toBe(themeByName("nord-light").background)
+  await chip("light") // the active side stays
+  expect(swatch()).toBe(themeByName("nord-light").background)
+  await chip("dark")
+  expect(swatch()).toBe(themeByName("nord").background)
+  // the gap between the chips does nothing, and nothing is applied until ⏎
+  const f = (await keys(s)).split("\n")
+  const y = f.findIndex((r) => r.includes("nord▏"))
+  await s.mockMouse.click(f[y]!.lastIndexOf("light") - 2, y)
+  expect(await keys(s)).toContain("Themes")
+  expect(swatch()).toBe(themeByName("nord").background)
+  await chip("light")
+  await keys(s, "enter")
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("nord-light")
+})
+
+test("theme picker keeps the app's theme while you move; ⏎ applies and saves, esc changes nothing", async () => {
+  const b = themeByName("brothy")
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 80, height: 24 })
+  await keys(s, "t", "down", "down", "tab") // dracula-light
+  const hintRow = s.captureSpans().lines[22]!.spans
+  expect(hintRow.every((sp) => hex(sp.bg) === b.background)).toBe(true)
+  expect(spansOf(s).some((sp) => hex(sp.bg) === b.backgroundPanel && sp.text.includes("Themes"))).toBe(true)
+  expect(await keys(s)).not.toContain("Simmering notes") // no pane below 100 columns
+  const cells = spansOf(s).filter((sp) => hex(sp.bg) === themeByName("dracula-light").background)
+  expect(cells.length).toBeGreaterThan(0)
+  expect(cells.every((sp) => /^[ Aa●]+$/.test(sp.text))).toBe(true) // only the specimens paint the candidate
+  expect(await keys(s, "esc")).not.toContain("Themes")
   expect(await openHelp(s)).toMatch(/brothy v\d+\.\d+\.\d+ · brothy/)
+  expect(existsSync(configFile())).toBe(false)
+  await keys(s, "esc", "t", "down", "down", "tab")
+  expect((await keys(s, "enter")).split("\n")[22]).toContain("✓ theme · dracula-light")
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("dracula-light")
+  // reopened: on the applied family and mode; esc with a query closes at once
+  expect(await keys(s, "t")).toMatch(/dracula {8}Aa ●●● {4}▐ Aa ●●● ▌/)
+  expect(await keys(s, "down")).toMatch(/dracula {8}Aa ●●● {4}▕ Aa ●●● ▏/) // the theme in use keeps thin bars
+  expect(await keys(s, "type:no", "esc")).not.toContain("Themes")
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("dracula-light")
+})
+
+test("theme picker pane from 100 columns: the candidate's sample on its own background, the chrome in the app's theme", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 120, height: 34 })
+  const f = await keys(s, "t", "type:gruv", "tab")
+  const light = themeByName("gruvbox-light")
+  await waitFor(s, () => s.captureCharFrame().includes("let stock"))
+  const rows = s.captureCharFrame().split("\n")
+  expect(f).toContain("1 of 22")
+  expect(rows.some((r) => /dark\s+light\s+│\s+gruvbox-light\s+text \d+\.\d:1/.test(r))).toBe(true) // the header row
+  expect(rows.some((r) => /gruvbox\s+Aa ●●●\s+▐ Aa ●●● ▌\s+│/.test(r))).toBe(true)
+  expect(rows.some((r) => r.includes("text muted primary second accent error warn success info"))).toBe(true) // short labels at 58 columns
+  expect(rows.some((r) => r.includes("Stock wants patience"))).toBe(true) // the sample's text as written
+  expect(rows.some((r) => r.includes("│ low   │ reading    │ 8 min │"))).toBe(true) // the whole sample fits 24 rows
+  const paneRow = s.captureSpans().lines.find((l) => l.spans.some((sp) => sp.text.includes("Simmering notes")))!
+  expect(paneRow.spans.some((sp) => hex(sp.bg) === light.background)).toBe(true)
+  expect(hex(paneRow.spans.find((sp) => sp.text === "│")!.fg)).toBe(themeByName("brothy").border)
+  // nothing listed: an empty pane
+  const g = await keys(s, "type:zz")
+  expect(g).not.toContain("Simmering notes")
+  // 99 columns: no pane
+  const n = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 99, height: 34 })
+  expect(await keys(n, "t")).not.toContain("Simmering notes")
+})
+
+test("theme picker scrolls inside a short terminal, keeping the highlight in view; the hint row stays", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 60, height: 14 })
+  const f = await keys(s, "t")
+  expect(f).toMatch(/\bbrothy\b/)
+  expect(f).not.toMatch(/\bvesper\b/)
+  const g = await keys(s, "up") // wraps to the last family
+  expect(g).toMatch(/\bvesper\b/)
+  expect(g).not.toMatch(/\bbrothy\b/)
+  expect(g.trimEnd().split("\n")).toHaveLength(14)
+  expect(g.split("\n")[12]).toMatch(/esc close/)
+})
+
+test("theme picker on a dark-only family: in light mode the pane previews its dark theme, the switch shows dark, the mode keys do nothing", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 120, height: 34 })
+  const f = await keys(s, "t", "tab", "type:synth")
+  expect(f).toMatch(/dark\s+light\s+│\s+synthwave84\s+text \d+\.\d:1/)
+  expect(f).toMatch(/synthwave84 ▐ Aa ●●● ▌ {3}light {7}│/) // the cursor on its only theme, light struck through
+  const chip = () => s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text === "dark" || sp.text === "light")!
+  const t = themeByName("brothy")
+  expect(chip()).toMatchObject({ text: "dark" })
+  expect(hex(chip().fg)).toBe(t.primary) // dark is the active chip
+  const struck = s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes(" light "))!
+  expect(hex(struck.fg)).toBe(t.textMuted)
+  for (const k of ["tab", "left", "right"]) expect(await keys(s, k)).toMatch(/│\s+synthwave84\s+text/)
+  s.mockInput.pressTab({ shift: true })
+  expect(await keys(s)).toMatch(/│\s+synthwave84\s+text/)
+  // the light mode is still asked for: a pair shows its light theme again
+  const erase = Array(5).fill("backspace")
+  expect(await keys(s, ...erase, "type:nord")).toMatch(/│\s+nord-light\s+text/)
+  const g = await keys(s, ...erase.slice(1), "type:vesp", "enter")
+  expect(g).not.toContain("Themes")
+  expect(JSON.parse(readFileSync(configFile(), "utf8")).theme).toBe("vesper")
 })
 
 test("picking a light theme applies it", async () => {
   const s = await mount(tmp({ "a.md": "# a" }), "a.md")
-  const f = await keys(s, "t", "G", "enter")
+  const f = await keys(s, "t", "type:flex", "tab", "enter")
   expect(f).not.toContain("Themes")
   expect(f).toContain("flexoki-light")
 })
@@ -466,7 +729,7 @@ test("1 2 3 pick the panel view and focus it; tab swaps panel and document", asy
 test("clicking a strip label selects that view and focuses the panel", async () => {
   const s = await mount(tmp({ "a.md": sections(2) }), "a.md")
   const rows = (await keys(s)).split("\n")
-  const y = rows.findIndex((l) => /Files\s+Outline/.test(l))
+  const y = rows.findIndex((l) => /Files\s+²Outline/.test(l))
   await s.mockMouse.click(rows[y]!.indexOf("Outline") + 1, y)
   await keys(s)
   expect(onBg(s)[0]).toContain("Section 1")
@@ -490,7 +753,8 @@ test("below 100 columns the panel is a drawer: tab opens it focused, ⏎ on a no
 })
 test("the document wraps at an 80-column measure, centered", async () => {
   const s = await mount(tmp({ "a.md": "lorem ipsum dolor ".repeat(40) }), "a.md", { width: 200, height: 30 })
-  const rows = (await keys(s)).split("\n").filter((l) => l.includes("lorem"))
+  // the text alone: the minimap's 4 columns at the right edge cut off
+  const rows = (await keys(s)).split("\n").filter((l) => l.includes("lorem")).map((l) => [...l].slice(0, 196).join(""))
   expect(rows.length).toBeGreaterThan(3)
   const start = (r: string) => r.search(/lorem|ipsum|dolor/)
   for (const r of rows) expect(r.trimEnd().length - start(r)).toBeLessThanOrEqual(80)
@@ -503,7 +767,7 @@ test("the document wraps at an 80-column measure, centered", async () => {
 test("help popup lists the new bindings from the keymap", async () => {
   const s = await mount(tmp({ "a.md": "# a" }), "a.md", { width: 100, height: 50 })
   const f = await openHelp(s)
-  expect(f).toContain("show Files · Outline · Info")
+  expect(f).toContain("Files · Outline · Info")
   expect(f).toContain("toggle Source / Preview")
   expect(f).toContain("hide / show the panel")
 })
@@ -555,6 +819,19 @@ test("a complete scan shows no truncation note", async () => {
 
 /** Rows of the frame as colored spans, flattened. */
 const spansOf = (s: Setup) => s.captureSpans().lines.flatMap((l) => l.spans)
+
+test("panel tabs: superscript numbers in textMuted; the rule under the active tab is accent only while the panel has focus", async () => {
+  const t = themeByName("brothy")
+  const s = await mount(tmp({ "a.md": "# A\n" }), "a.md", { width: 120, height: 30 })
+  expect(await keys(s)).toContain("¹Files   ²Outline   ³Info")
+  for (const d of ["¹", "²", "³"]) expect(hex(spansOf(s).find((sp) => sp.text.includes(d))!.fg)).toBe(t.textMuted)
+  const rule = () => spansOf(s).find((sp) => /^━+$/.test(sp.text))!
+  expect(rule().text).toBe("━━━━━") // under Files only, not its digit
+  expect(hex(rule().fg)).toBe(t.textMuted)
+  await keys(s, "tab")
+  expect(hex(rule().fg)).toBe(t.accent)
+  expect(hex(spansOf(s).find((sp) => sp.text.endsWith("Files"))!.fg)).toBe(t.primary)
+})
 
 test("code blocks are highlighted once the parser answers, without moving the document", async () => {
   const s = await mount(tmp({ "a.md": "# T\n\n```ts\nconst a = 1 // note\n```\n\nafter\n" }), "a.md")
@@ -608,8 +885,8 @@ test("zen wraps at a 72-column measure, centered in the whole width", async () =
   const f = await keys(s, "z")
   expect(loremWidth(f)).toBeLessThanOrEqual(72)
   expect(loremWidth(f)).toBeGreaterThan(60)
-  const first = f.split("\n").find((l) => l.includes("lorem"))!
-  const left = first.search(/lorem/)
+  const below = f.split("\n").find((l) => l.includes("lorem"))!
+  const left = below.search(/[a-z]/)
   expect(Math.abs(left - (200 - left - 72))).toBeLessThanOrEqual(2)
 })
 
@@ -645,12 +922,13 @@ test("> past 100 reaches full measure in zen, < steps back; saved", async () => 
 test("w toggles full width in the normal view and persists it", async () => {
   const s = await mount(tmp({ "a.md": "lorem ipsum dolor ".repeat(80) }), "a.md", { width: 160, height: 30 })
   const f = await keys(s, "w")
-  const rows = f.split("\n").filter((l) => l.includes("lorem"))
+  const text = (fr: string) => fr.split("\n").filter((l) => l.includes("lorem")).map((l) => [...l].slice(0, 160 - 4).join("")) // without the minimap
+  const rows = text(f)
   expect(Math.max(...rows.map((r) => r.trimEnd().length - r.search(/lorem|ipsum|dolor/)))).toBeGreaterThan(100)
-  for (const r of rows) expect(r.trimEnd().length).toBeLessThanOrEqual(160 - 2)
+  for (const r of rows) expect(r.trimEnd().length).toBeLessThanOrEqual(160 - 4) // left of the minimap's gap column (a capped row fills the measure)
   expect(savedConfig().wide).toBe(true)
   const back = await keys(s, "w")
-  for (const r of back.split("\n").filter((l) => l.includes("lorem"))) expect(r.trimEnd().length - r.search(/lorem|ipsum|dolor/)).toBeLessThanOrEqual(80)
+  for (const r of text(back)) expect(r.trimEnd().length - r.search(/lorem|ipsum|dolor/)).toBeLessThanOrEqual(80)
   expect(savedConfig().wide).toBe(false)
 })
 
@@ -722,10 +1000,10 @@ test("esc in zen clears a find first, then leaves zen", async () => {
   expect(panelShown(await keys(s, "esc"))).toBe(true)
 })
 
-test("t in zen previews themes; esc reverts the theme and stays in zen", async () => {
+test("t in zen opens the theme picker; esc closes it and stays in zen", async () => {
   const s = await mount(tmp({ "a.md": sections(2) }), "a.md")
   expect(await keys(s, "z", "t")).toContain("Themes")
-  const f = await keys(s, "j", "esc")
+  const f = await keys(s, "down", "esc")
   expect(f).not.toContain("Themes")
   expect(panelShown(f)).toBe(false)
 })
@@ -1112,7 +1390,7 @@ test("the drawer is raised and has a ▏ edge; a click on the scrim closes it", 
 
 test("60×14 still opens the drawer with the compact strip", async () => {
   const s = await mount(tmp({ "a.md": "# alpha" }), "a.md", { width: 60, height: 14 })
-  expect(await keys(s, "tab")).toContain("Files  Outline  Info")
+  expect(await keys(s, "tab")).toContain("¹Files  ²Outline  ³Info")
 })
 
 test("crossing 100 columns: a focused panel becomes an open drawer and comes back inline, focused", async () => {
@@ -1206,10 +1484,11 @@ test("a non-Markdown file opened directly has no ● row; the Files cursor start
   expect(onBg(s)[0]).toMatch(/\bb\b/)
 })
 
-test("a folder without Markdown: Files says so and tab still focuses the panel", async () => {
+test("a folder without Markdown: the welcome page says so; the panel stays hidden and tab doesn't focus it", async () => {
   const f = await keys(await mount(tmp({ "x.txt": "" })), "tab")
-  expect(f).toContain("no Markdown files here")
-  expect(f).toContain("tab document")
+  expect(f).toContain("No Markdown files found")
+  expect(f).not.toContain("no Markdown files here")
+  expect(f).not.toContain("tab document")
 })
 
 test("the Outline marks the reading heading with ▸ and dims the headings above it", async () => {
@@ -1322,6 +1601,37 @@ test("hints appear after tab and are gone after HINT_HOLD and the fade", async (
   } finally {
     setSystemTime()
   }
+})
+
+test("? ? at 120 columns: five chip groups in two columns, Global and Panel left; j scrolls both", async () => {
+  const s = await mount(tmp({ "a.md": "# A\n" }), "a.md", { width: 120, height: 30 })
+  const f = await openHelp(s)
+  const rows = f.split("\n")
+  const chipRow = rows.find((r) => r.includes(" Global "))!
+  expect(chipRow).toContain(" Document ")
+  expect(chipRow.indexOf("Global")).toBeLessThan(chipRow.indexOf("Document"))
+  expect(f).toMatch(/j\/k scroll \d+\/\d+/)
+  const top = rows.findIndex((r) => r.includes("1 2 3"))
+  const after = (await keys(s, "j")).split("\n")
+  expect(after[top]).not.toContain("1 2 3")
+  expect(after[top - 1]).toContain("1 2 3")
+  expect(after.join("\n")).toContain("Keybindings")
+  expect(after.some((r) => /  AI  /.test(r))).toBe(true)
+  expect(after.join("\n")).toContain("ask: a ? query finds the section")
+  const end = (await keys(s, "G")).split("\n")
+  const panel = end.findIndex((r) => r.includes(" Panel "))
+  expect(panel).toBeGreaterThan(0)
+  expect(end[panel]!.indexOf("Panel")).toBe(chipRow.indexOf("Global")) // left column
+})
+
+test("? ? below 100 columns: one 70-column sheet with the five chips in order", async () => {
+  const s = await mount(tmp({ "a.md": "# A\n" }), "a.md", { width: 90, height: 120 })
+  const rows = (await openHelp(s)).split("\n")
+  const at = (g: string) => rows.findIndex((r) => r.trim() === g)
+  const order = ["Global", "Document", "Zen", "Panel", "AI"].map(at)
+  expect(order.every((y) => y > 0)).toBe(true)
+  expect([...order].sort((a, b) => a - b)).toEqual(order)
+  expect(rows[at("Global")]).not.toContain("Document")
 })
 
 test("? shows the hints first; a second ? opens the Keybindings popup", async () => {
@@ -1950,9 +2260,7 @@ test("popups leave the footer hint row and progress line visible", async () => {
 
 test("help title never wraps: the theme name goes first at 60x14", async () => {
   const s = await mount(tmp({ "a.md": "# Alpha\n" }), "a.md", { width: 60, height: 14 })
-  await keys(s, "t")
-  for (let i = 0; i < 40 && !(await keys(s, "down")).includes("catppuccin-light ")  ; i++);
-  await keys(s, "enter")
+  await keys(s, "t", "type:catp", "tab", "enter") // catppuccin-light, the longest name
   const f = await openHelp(s)
   const rows = f.split("\n")
   expect(rows.filter((r) => r.includes("Keybindings")).length).toBe(1)
@@ -2057,7 +2365,7 @@ test("leaving a project from zen records the Preview position, moved in zen or n
 test("a config.json that doesn't parse: saving toasts an error instead of claiming it", async () => {
   writeConfig("{ not json")
   const root = tmp({ "a.md": sections(2) })
-  for (const k of [["w"], ["T"], ["C-b"], ["2"], ["t", "j", "enter"], ["z", "<"], ["z", "+"], ["Z", "j", "space", "enter"]]) {
+  for (const k of [["w"], ["T"], ["C-b"], ["2"], ["t", "down", "enter"], ["z", "<"], ["z", "+"], ["Z", "j", "space", "enter"]]) {
     const s = await mount(root, "a.md")
     const f = await keys(s, ...k)
     expect(f.split("\n")[HINT_ROW], k.join(" ")).toContain("config.json not saved · it doesn't parse or can't be written")
@@ -2079,4 +2387,1902 @@ test("saving writes only the changed field: another instance's sidebar and zen s
   expect(Object.keys(savedConfig().zen).sort()).toEqual(["measure", "spotlight", "wpm"])
   expect(savedConfig().zen.wpm).toBe(300)
   expect(savedConfig().sidebar).toEqual({ view: "info", hidden: true })
+})
+
+test("dragging over the document copies the selection over OSC 52 and toasts", async () => {
+  const s = await mount(tmp({ "a.md": "# Title\n\nhello copy world\n" }), "a.md")
+  const copied: string[] = []
+  s.renderer.copyToClipboardOSC52 = (text: string) => (copied.push(text), true)
+  const rows = s.captureCharFrame().split("\n")
+  const y = rows.findIndex((r) => r.includes("hello copy world"))
+  const x = rows[y]!.indexOf("hello")
+  await s.mockMouse.drag(x, y, x + 10, y)
+  await waitFrame(s, (f) => f.includes("copied"))
+  expect(copied).toEqual(["hello copy"])
+})
+
+test("a without an ai block toasts AI off and opens Info", async () => {
+  const d = tmp({ "a.md": "# A\n\nText.\n" })
+  const s = await mount(d, "a.md", { width: 120, height: 30 })
+  const f = await keys(s, "a")
+  expect(f).toContain(`AI off · set "ai" in config.json`)
+  expect(f).toContain("words")
+  expect(f).not.toContain("TL;DR")
+})
+
+test("a on a note with only front matter and comments: nothing to summarize", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "---\ntitle: x\n---\n%%hidden%%\n" })
+  const s = await mount(d, "a.md", { width: 120, height: 30 })
+  expect(await keys(s, "a")).toContain("nothing to summarize")
+})
+
+test("Info shows a TL;DR block from the cache: none, fresh, outdated", async () => {
+  aiConfig({ provider: "openrouter", model: "anthropic/claude-haiku-5-5" })
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  let s = await mount(d, "a.md", { width: 120, height: 30 })
+  let f = await keys(s, "3")
+  expect(f).toContain("TL;DR")
+  expect(f).toContain("a to summarize")
+  s.renderer.destroy()
+
+  seedSummary(join(d, "a.md"), "About apples.", undefined, "anthropic/claude-haiku-5-5")
+  s = await mount(d, "a.md", { width: 120, height: 30 })
+  f = await keys(s, "3")
+  expect(f).toContain("TL;DR · claude-haiku-5-5")
+  expect(f).toContain("About apples.")
+  s.renderer.destroy()
+
+  seedSummary(join(d, "a.md"), "About apples.", "stale")
+  s = await mount(d, "a.md", { width: 120, height: 30 })
+  expect(await keys(s, "3")).toContain("TL;DR · outdated · a")
+})
+
+test("no TL;DR block when AI is off, even with a cached summary", async () => {
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  seedSummary(join(d, "a.md"), "About apples.")
+  const s = await mount(d, "a.md", { width: 120, height: 30 })
+  expect(await keys(s, "3")).not.toContain("TL;DR")
+})
+
+test("the a summarize footer hint shows only when an ai block is configured", async () => {
+  const d = tmp({ "a.md": "# A\n\nText.\n" })
+  let s = await mount(d, "a.md", { width: 140, height: 30 })
+  expect(await keys(s, "3")).not.toContain("summarize")
+  s.renderer.destroy()
+  aiConfig(OLLAMA)
+  s = await mount(d, "a.md", { width: 140, height: 30 })
+  expect(await keys(s, "3")).toContain("a summarize")
+})
+
+test("r re-reads the ai block: the a hint appears after adding and goes after removal", async () => {
+  const d = tmp({ "a.md": "# A\n\nText.\n" })
+  const s = await mount(d, "a.md", { width: 140, height: 30 })
+  expect(await keys(s, "3")).not.toContain("a summarize")
+  aiConfig(OLLAMA)
+  expect(await keys(s, "r")).toContain("a summarize")
+  writeFileSync(join(cfgDir, "brothy", "config.json"), "{}")
+  expect(await keys(s, "r")).not.toContain("a summarize")
+})
+
+test("a in zen without an ai block: AI off", async () => {
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  const s = await mount(d, "a.md", { width: 120, height: 30 })
+  expect(await keys(s, "z", "a")).toContain(`AI off · set "ai" in config.json`)
+})
+
+test("typing a into the Files filter filters, it doesn't summarize", async () => {
+  const d = tmp({ "a.md": "# A\n", "b.md": "# B\n" })
+  const s = await mount(d, "a.md", { width: 120, height: 30 })
+  const f = await keys(s, "1", "/", "type:a")
+  expect(f).not.toContain("AI off")
+})
+
+test("help lists a in the AI group, not under Global", async () => {
+  const d = tmp({ "a.md": "# A\n" })
+  const s = await mount(d, "a.md", { width: 120, height: 40 })
+  const lines = (await openHelp(s)).split("\n")
+  const at = lines.findIndex((l) => l.includes("summarize the note (Info tab)"))
+  const ai = lines.findIndex((l) => /  AI  /.test(l))
+  expect(ai).toBeGreaterThan(0)
+  expect(at).toBe(ai + 1)
+  expect(lines[at]!.slice(lines[ai]!.indexOf("AI"))).toStartWith("a ") // the key under the chip, whatever the left column holds
+})
+
+/** A fetch whose streams the test feeds: send(i, text), fail(i, message), end(i). */
+function aiStub() {
+  const streams: ReadableStreamDefaultController<Uint8Array>[] = []
+  const calls: { url: string; body: { messages: { content: string }[] }; signal?: AbortSignal | null }[] = []
+  const f = (async (url: string, init: RequestInit) => {
+    calls.push({ url: String(url), body: JSON.parse(String(init.body)), signal: init.signal })
+    const body = new ReadableStream<Uint8Array>({ start: (c) => void streams.push(c) })
+    return new Response(body, { headers: { "content-type": "text/event-stream" } })
+  }) as unknown as typeof fetch
+  const enc = new TextEncoder()
+  const data = (i: number, obj: unknown) => streams[i]!.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`))
+  return {
+    f,
+    calls,
+    send: (i: number, content: string) => data(i, { choices: [{ delta: { content } }] }),
+    fail: (i: number, message: string) => data(i, { error: { message } }),
+    end: (i: number) => {
+      streams[i]!.enqueue(enc.encode("data: [DONE]\n\n"))
+      streams[i]!.close()
+    },
+  }
+}
+const cacheFile = () => join(cacheDir, "brothy", "summaries.json")
+const cached = () => (existsSync(cacheFile()) ? (JSON.parse(readFileSync(cacheFile(), "utf8")) as Record<string, { summary: string }>) : {})
+/** Open a note through the Files filter; the first esc clears the query the last open left there. */
+const openNote = (s: Setup, name: string) => keys(s, "1", "/", "esc", "/", `type:${name}`, "enter")
+const W120 = { width: 120, height: 30 }
+
+test("a streams the summary into Info, then caches it; a second run shows it without a request", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "---\ntitle: A\n---\n# A\n\nSome text about apples.\n%%private%%\n" })
+  const ai = aiStub()
+  let s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(ai.calls[0]!.url).toBe("http://localhost:11434/v1/chat/completions")
+  expect(ai.calls[0]!.body.messages[1]!.content).toBe("# A\n\nSome text about apples.")
+  ai.send(0, "Apples are ")
+  await waitFrame(s, (f) => f.includes("TL;DR · summarizing…") && f.includes("Apples are"))
+  ai.send(0, "discussed.")
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("TL;DR · llama3.2") && f.includes("Apples are discussed."))
+  expect(Object.values(cached()).map((e) => e.summary)).toEqual(["Apples are discussed."])
+  s.renderer.destroy()
+
+  const again = aiStub()
+  s = await mount(d, "a.md", W120, again.f)
+  expect(await keys(s, "3")).toContain("Apples are discussed.")
+  expect(again.calls.length).toBe(0)
+})
+
+test("regenerating hides the old summary until the first new token", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  seedSummary(join(d, "a.md"), "Old summary.")
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  expect(await keys(s, "3")).toContain("Old summary.")
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  const f = await keys(s)
+  expect(f).toContain("TL;DR · summarizing…")
+  expect(f).not.toContain("Old summary.")
+  ai.send(0, "Fresh one.")
+  ai.end(0)
+  await waitFrame(s, (fr) => fr.includes("TL;DR · llama3.2") && fr.includes("Fresh one."))
+})
+
+test("editing the note marks its summary outdated", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  seedSummary(join(d, "a.md"), "About apples.")
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "3")).toContain("TL;DR · llama3.2")
+  writeFileSync(join(d, "a.md"), "# A\n\nPears now.\n")
+  await waitFrame(s, (f) => f.includes("TL;DR · outdated · a"), 4000)
+})
+
+test("a live reload mid-stream completes as outdated", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "About apples.")
+  writeFileSync(join(d, "a.md"), "# A\n\nPears now.\n")
+  await waitFrame(s, (f) => f.includes("Pears now."), 4000)
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("TL;DR · outdated · a") && f.includes("About apples."))
+})
+
+test("switching notes mid-stream caches the summary for the original note", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nApples.\n", "b.md": "# B\n\nBananas.\n" })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  await openNote(s, "b")
+  await waitFrame(s, (f) => f.includes("Bananas."))
+  ai.send(0, "About apples.")
+  ai.end(0)
+  await waitFor(s, () => Object.keys(cached()).some((p) => p.endsWith("a.md")))
+  expect(Object.keys(cached()).some((p) => p.endsWith("b.md"))).toBe(false)
+  await openNote(s, "a")
+  expect(await keys(s, "3")).toContain("About apples.")
+})
+
+test("a again mid-stream cancels: nothing cached, the previous summary shows again", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  seedSummary(join(d, "a.md"), "Old summary.", "stale")
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "New partial")
+  await waitFrame(s, (f) => f.includes("New partial"))
+  const f = await keys(s, "a")
+  expect(f).toContain("summary cancelled")
+  await waitFrame(s, (fr) => fr.includes("Old summary.") && !fr.includes("New partial"))
+  expect(Object.values(cached()).map((e) => e.summary)).toEqual(["Old summary."])
+})
+
+test("a 4th concurrent request is refused: AI busy", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nA.\n", "b.md": "# B\n\nB.\n", "c.md": "# C\n\nC.\n", "e.md": "# E\n\nE.\n" })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  for (const n of ["b", "c"]) {
+    await openNote(s, n)
+    await keys(s, "a")
+  }
+  await waitFor(s, () => ai.calls.length === 3)
+  await openNote(s, "e")
+  expect(await keys(s, "a")).toContain("AI busy · 3 requests running")
+  expect(ai.calls.length).toBe(3)
+})
+
+test("a failure for a note that isn't current names it", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "apples.md": "# A\n\nApples.\n", "b.md": "# B\n\nBananas.\n" })
+  const ai = aiStub()
+  const s = await mount(d, "apples.md", W120, ai.f)
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  await openNote(s, "b")
+  ai.fail(0, "model overloaded")
+  await waitFrame(s, (f) => f.includes("AI · apples: model overloaded"))
+  expect(cached()).toEqual({})
+})
+
+test("a preset without its key env var toasts which one to set", async () => {
+  aiConfig({ provider: "openrouter", model: "x/y" })
+  const prev = process.env.OPENROUTER_API_KEY
+  delete process.env.OPENROUTER_API_KEY
+  try {
+    const d = tmp({ "a.md": "# A\n\nApples.\n" })
+    const ai = aiStub()
+    const s = await mount(d, "a.md", W120, ai.f)
+    expect(await keys(s, "a")).toContain("AI: set OPENROUTER_API_KEY")
+    expect(ai.calls.length).toBe(0)
+  } finally {
+    if (prev !== undefined) process.env.OPENROUTER_API_KEY = prev
+  }
+})
+
+// ------------------------------------------------------------- ? in C-p: ask
+
+const { ASK_PROMPT, RERANK_PROMPT } = await import("../src/ask")
+/** Two notes; "Open a single file" sits below 40 filler paragraphs, so a jump there scrolls. */
+const askVault = () =>
+  tmp({
+    "README.md": "# README\n\n## Quick start\n\nbrothy path opens it.\n",
+    "getting-started.md": `# Getting started\n\nIntro.\n\n## Open a folder\n\nPass a folder path.\n\n${filler(40)}\n\n## Open a single file\n\nSee below.\n\nGive a single file path to brothy.\n`,
+  })
+const QUERIES = JSON.stringify({ queries: ["single file", "path", "cli"] })
+/** C-p, `?<question>`, ⏎; call `i` of the stub replies `reply`. Resolves with the frame once Answers show. */
+async function askIt(s: Setup, ai: ReturnType<typeof aiStub>, reply = QUERIES, i = 0, question = "how do I open one file") {
+  await keys(s, "C-p", `type:?${question}`)
+  await waitFrame(s, (f) => f.includes("⏎ ask"))
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === i + 1)
+  ai.send(i, reply)
+  ai.end(i)
+  return waitFrame(s, (f) => f.includes("Answers"))
+}
+
+test("? in C-p: the title is Ask, the row says what leaves and where; too short asks for more", async () => {
+  aiConfig(OLLAMA)
+  const s = await mount(askVault(), "README.md", W120)
+  let f = await keys(s, "C-p", "type:?ho")
+  expect(f).toContain("Ask")
+  expect(f).toContain("type a question")
+  f = await keys(s, "type:w")
+  expect(f).toContain("⏎ ask · only the question → localhost:11434")
+  expect(f).not.toContain("Go to")
+  await waitFrame(s, (fr) => fr.includes("2 notes")) // after the index build's "indexing n/m"
+})
+
+test("? never opens help while the switcher is open", async () => {
+  const s = await mount(askVault(), "README.md", W120)
+  const f = await keys(s, "C-p", "type:?")
+  expect(f).toContain("Ask")
+  expect(f).not.toContain("Global")
+})
+
+test("without an ai block the Ask row says AI off and ⏎ sends nothing", async () => {
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  let f = await keys(s, "C-p", "type:?how do I open one file")
+  expect(f).toContain(`AI off · set "ai" in config.json`)
+  f = await keys(s, "enter")
+  expect(f).toContain(`AI off · set "ai" in config.json`)
+  expect(ai.calls.length).toBe(0)
+})
+
+test("⏎ sends only the question; the answers are vault places with hits/all and the queries searched", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(await keys(s)).toContain("asking…")
+  const body = ai.calls[0]!.body
+  expect(body.messages.map((m) => m.content)).toEqual([ASK_PROMPT, "how do I open one file"])
+  expect(JSON.stringify(body)).not.toMatch(/brothy path|Give a single|README|getting-started/)
+  ai.send(0, QUERIES)
+  ai.end(0)
+  const f = await waitFrame(s, (fr) => fr.includes("Answers"))
+  // the list is narrower beside the peek pane: the note name keeps its quarter, cut with …
+  for (const x of ["llama3.2", "getting-sta… › Open a single file", "2/3", "README › Quick start", "1/3", "↻ rerank with excerpts", "searched: single file · path · cli"]) expect(f).toContain(x)
+  expect(existsSync(join(cacheDir, "brothy"))).toBe(false) // nothing on disk
+})
+
+test("editing the question aborts the request and goes back to idle; esc aborts too", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  const f = await keys(s, "backspace")
+  expect(ai.calls[0]!.signal!.aborted).toBe(true)
+  expect(f).toContain("⏎ ask")
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  expect(await keys(s, "esc")).not.toContain("Ask")
+  expect(ai.calls[1]!.signal!.aborted).toBe(true)
+})
+
+test("a failed ask toasts and shows ✗ … · ⏎ asks again; ⏎ asks again", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.fail(0, "boom")
+  await waitFrame(s, (f) => f.includes("✗ AI: boom · ⏎ asks again"))
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+})
+
+test("a reply without usable queries: AI: no usable answer", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "no json here")
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("AI: no usable answer"))
+})
+
+test("an ask while 3 other AI requests run: AI busy, on the toast and the ask row; nothing is sent", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nA.\n", "b.md": "# B\n\nB.\n", "c.md": "# C\n\nC.\n" })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  for (const n of ["b", "c"]) {
+    await openNote(s, n)
+    await keys(s, "a")
+  }
+  await waitFor(s, () => ai.calls.length === 3)
+  await keys(s, "C-p", "type:?how do I open one file")
+  await waitFrame(s, (f) => f.includes("⏎ ask"))
+  const f = await keys(s, "enter")
+  expect(f).toContain("AI busy · 3 requests running · ⏎ asks again")
+  await waitFrame(s, (fr) => fr.split("\n").filter((l) => l.includes("AI busy · 3 requests running")).length === 2) // toast + row
+  expect(ai.calls.length).toBe(3)
+})
+
+test("asking the same question again reuses its queries without a request", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await askIt(s, ai)
+  expect(await keys(s, "type:x", "backspace")).toContain("⏎ ask")
+  expect(await keys(s, "enter")).toContain("Answers")
+  expect(ai.calls.length).toBe(1)
+})
+
+test("excerpts are sent only from the rerank row; the model's order shows with its why, the rest under Other matches", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await askIt(s, ai)
+  expect(ai.calls.length).toBe(1)
+  await keys(s, "tab", "enter") // first answer → the rerank row
+  await waitFor(s, () => ai.calls.length === 2)
+  expect(await keys(s)).toContain("reranking…")
+  const [sys, user] = ai.calls[1]!.body.messages.map((m) => m.content)
+  expect(sys).toBe(RERANK_PROMPT)
+  expect(user).toStartWith("Question: how do I open one file\n\nc1 · getting-started › Getting started › Open a single file\nSee below. Give a single file path to brothy.")
+  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }, { id: "c7" }, { id: "c1", why: "dup" }] }))
+  ai.end(1)
+  const f = await waitFrame(s, (fr) => fr.includes("Other matches"))
+  expect(f).toContain("pass the file path")
+  expect(f).not.toContain("↻ rerank with excerpts")
+  expect(f).not.toContain("dup")
+})
+
+test("a rerank with no known id: AI: no usable ranking, the local order stays", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await askIt(s, ai)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  ai.send(1, JSON.stringify({ answers: [{ id: "c9" }] }))
+  ai.end(1)
+  const f = await waitFrame(s, (fr) => fr.includes("AI: no usable ranking"))
+  expect(f).toContain("↻ rerank with excerpts")
+  expect(f).not.toContain("Other matches")
+})
+
+test("a failed rerank toasts the error; the tier 0 answers stay", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await askIt(s, ai)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  ai.fail(1, "boom")
+  const f = await waitFrame(s, (fr) => fr.includes("AI: boom"))
+  expect(f).toContain("↻ rerank with excerpts")
+  expect(f).toContain("README › Quick start")
+  expect(f).not.toContain("asks again")
+})
+
+test("the same rerank again is served from memory", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await askIt(s, ai)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }] }))
+  ai.end(1)
+  await waitFrame(s, (fr) => fr.includes("Other matches"))
+  await keys(s, "type:x", "backspace", "enter") // the question again: queries from memory
+  await waitFrame(s, (fr) => fr.includes("↻ rerank with excerpts"))
+  const f = await keys(s, "tab", "enter")
+  expect(f).toContain("Other matches")
+  expect(ai.calls.length).toBe(2)
+})
+
+test("⏎ on an answer opens the note at the first line holding its best query, with the find highlight", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "README.md", W120, ai.f)
+  await askIt(s, ai)
+  const f = await keys(s, "enter") // getting-started › Open a single file (best query: "single file")
+  expect(f).not.toContain("Ask")
+  expect(f).toContain("Give a single file path to brothy.")
+  expect(f).toContain("/single file 2/2") // the heading is match 1
+})
+
+test("an answer whose best query is only in the heading opens at the heading, no find", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const s = await mount(askVault(), "getting-started.md", W120, ai.f)
+  await askIt(s, ai, JSON.stringify({ queries: ["quick start"] }))
+  const f = await keys(s, "enter")
+  expect(f).toContain("Quick start")
+  expect(f).toContain("brothy path opens it.")
+  expect(f).not.toContain("/quick start")
+})
+
+test("a heading renamed since indexing: the note opens where it was left and toasts heading gone", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const d = askVault()
+  const s = await mount(d, "README.md", W120, ai.f)
+  await askIt(s, ai)
+  writeFileSync(join(d, "getting-started.md"), readFileSync(join(d, "getting-started.md"), "utf8").replace("## Open a single file", "## Open one file"))
+  const f = await keys(s, "enter")
+  expect(f).toContain("heading gone")
+  expect(f).toContain("Getting started")
+  expect(f).not.toContain("/single file")
+})
+
+test("an answer whose note was deleted opens the read error, with no jump", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const d = askVault()
+  const s = await mount(d, "README.md", W120, ai.f)
+  await askIt(s, ai)
+  rmSync(join(d, "getting-started.md"))
+  const f = await keys(s, "enter")
+  expect(f).not.toContain("Ask")
+  expect(f).not.toContain("heading gone")
+  expect(f).not.toContain("/single file")
+})
+
+// ------------------------------------------------------------- e: edit
+
+/** Mount with the editor stubbed: returns the argv each `e` would have spawned; `result` is what the run reports. */
+async function mountEdit(root: string, file?: string, result?: EditResult) {
+  const spawned: string[][] = []
+  setup = quietAct(
+    await testRender(<App root={root} initialFile={file ? join(root, file) : undefined} edit={(argv) => (spawned.push(argv), result)} />, { width: 120, height: 40 }),
+  )
+  await setup.renderOnce()
+  return { s: setup, spawned }
+}
+
+test("e opens the note in $EDITOR at the top line of Source", async () => {
+  const prev = { v: process.env.VISUAL, e: process.env.EDITOR }
+  process.env.VISUAL = "ed-test"
+  try {
+    const d = tmp({ "a.md": "# A\n\nline\nline\n" })
+    const { s, spawned } = await mountEdit(d, "a.md")
+    await keys(s, "s", "e")
+    expect(spawned).toEqual([["ed-test", "+1", join(d, "a.md")]])
+  } finally {
+    if (prev.v === undefined) delete process.env.VISUAL
+    else process.env.VISUAL = prev.v
+  }
+})
+
+test("e in Preview lands on the heading at the top of the view", async () => {
+  const d = tmp({ "a.md": "intro\n\n# One\n\ntext\n\n## Two\n\n" + "para\n\n".repeat(60) })
+  const { s, spawned } = await mountEdit(d, "a.md")
+  await keys(s, "]", "]", "e") // scroll to the second heading
+  expect(spawned.length).toBe(1)
+  expect(spawned[0]![1]).toBe("+7")
+})
+
+test("e reloads the note afterwards and says so", async () => {
+  const d = tmp({ "a.md": "# A\n" })
+  const { s } = await mountEdit(d, "a.md")
+  expect(await keys(s, "e")).toContain("edited")
+})
+
+test("e says when the editor fails or exits with an error, and still reloads", async () => {
+  const d = tmp({ "a.md": "# A\n" })
+  const failed = await mountEdit(d, "a.md", { code: 1, signal: null })
+  const f = await keys(failed.s, "e")
+  expect(f).toContain("exited with 1")
+  expect(f).not.toContain("edited")
+  failed.s.renderer.destroy()
+  const none = await mountEdit(d, "a.md", { error: "no terminal for the editor" })
+  expect(await keys(none.s, "e")).toContain("no terminal for the editor")
+})
+
+test("e is listed in the help", async () => {
+  const d = tmp({ "a.md": "# A\n" })
+  const { s } = await mountEdit(d, "a.md")
+  expect(await keys(s, "?")).toContain("edit the note in $EDITOR")
+})
+
+test("e with no note open toasts", async () => {
+  const d = tmp({ "x.txt": "nothing" })
+  const { s, spawned } = await mountEdit(d)
+  expect(await keys(s, "e")).toContain("no note to edit")
+  expect(spawned).toEqual([])
+})
+
+// ------------------------------------------------------------- stdin document
+
+/** `scanDelay`: when the background link scan starts; far off by default so a test controls when the folder is read. */
+async function mountStdin(text: string, root: string, size = { width: 120, height: 30 }, scanDelay = 60_000) {
+  const spawned: string[][] = []
+  setup = quietAct(await testRender(<App root={root} stdin={text} linkScanDelay={scanDelay} edit={(argv) => void spawned.push(argv)} />, size))
+  await setup.renderOnce()
+  return { s: setup, spawned }
+}
+
+test("stdin: the piped text is the document, titled stdin", async () => {
+  const d = tmp({ "other.md": "# Other\n" })
+  const { s } = await mountStdin("# Piped\n\nhello from a pipe\n", d)
+  const f = s.captureCharFrame()
+  expect(f).toContain("hello from a pipe")
+  expect(f).toContain("stdin")
+})
+
+test("stdin: no Files tree, so the folder's notes are not listed", async () => {
+  const d = tmp({ "other.md": "# Other\n" })
+  const { s } = await mountStdin("# Piped\n", d)
+  expect(await keys(s, "1")).not.toContain("other")
+})
+
+test("stdin: e toasts instead of spawning an editor", async () => {
+  const d = tmp({})
+  const { s, spawned } = await mountStdin("# Piped\n", d)
+  expect(await keys(s, "e")).toContain("stdin · nothing to edit")
+  expect(spawned).toEqual([])
+})
+
+test("stdin: links resolve against the working folder's notes", async () => {
+  const d = tmp({ "other.md": "# Other\n\nbody of other\n" })
+  const { s } = await mountStdin("see [[other]]\n", d)
+  expect(s.captureCharFrame()).toContain("see")
+  await keys(s, "f", "a")
+  expect(s.captureCharFrame()).toContain("body of other")
+})
+
+// the folder is scanned on first link use, not at startup: a note created after mounting is found
+test("stdin: f follows a link to a note created after startup (scan is lazy)", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("see [[late]]\n", d)
+  writeFileSync(join(d, "late.md"), "# Late\n\nbody of late\n")
+  await keys(s, "f", "a")
+  expect(s.captureCharFrame()).toContain("body of late")
+})
+
+test("stdin: the folder is scanned in the background, so links light up without a key", async () => {
+  const d = tmp({ "late.md": "# Late\n" })
+  const linkFg = (s: Setup) => JSON.stringify(spansOf(s).find((sp) => sp.text.includes("late"))?.fg)
+  const idle = (await mountStdin("see [[late]]\n", d)).s
+  const before = linkFg(idle)
+  idle.renderer.destroy()
+  const { s } = await mountStdin("see [[late]]\n", d, undefined, 0)
+  await waitFor(s, () => linkFg(s) !== before)
+})
+
+test("stdin: using a link before the background scan runs scans once", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("see [[late]]\n", d)
+  writeFileSync(join(d, "late.md"), "# Late\n\nbody of late\n")
+  await keys(s, "f", "a")
+  expect(s.captureCharFrame()).toContain("body of late")
+  writeFileSync(join(d, "later.md"), "# Later\n")
+  await keys(s, "f") // already scanned: the new note is not picked up again
+  expect(await keys(s, "C-p", "type:later")).not.toContain("later.md")
+})
+
+test("stdin: C-p lists notes created after startup (scan is lazy)", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("# Piped\n", d)
+  writeFileSync(join(d, "late.md"), "# Late\n")
+  expect(await keys(s, "C-p", "type:lat")).toContain("late")
+})
+
+test("stdin: opening a link from Info scans on demand", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("see [[late]]\n", d)
+  writeFileSync(join(d, "late.md"), "# Late\n\nbody of late\n")
+  await keys(s, "2", "enter")
+  expect(s.captureCharFrame()).toContain("body of late")
+})
+
+test("stdin: nothing is recorded as a project", async () => {
+  const d = tmp({})
+  await mountStdin("# Piped\n", d)
+  expect(existsSync(join(cfgDir, "brothy", "projects.json"))).toBe(false)
+})
+
+test("stdin: a summarizes the piped text for this run without caching it", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({})
+  const ai = aiStub()
+  setup = quietAct(await testRender(<App root={d} stdin={"# Piped\n\nwords about pipes\n"} fetch={ai.f} />, W120))
+  await setup.renderOnce()
+  await keys(setup, "a")
+  expect(ai.calls.length).toBe(1)
+  expect(JSON.stringify(ai.calls[0]!.body)).toContain("words about pipes")
+  ai.send(0, "Pipes are discussed.")
+  ai.end(0)
+  await waitFrame(setup, (f) => f.includes("Pipes are discussed."))
+  expect(cached()).toEqual({})
+  expect(existsSync(cacheFile())).toBe(false)
+  expect(setup.captureCharFrame()).not.toContain("outdated")
+})
+
+test("stdin: the footer does not offer e", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("# Piped\n", d)
+  expect(s.captureCharFrame()).not.toContain("e edit")
+})
+
+test("stdin: the tab row is ¹Outline ²Info, with no Files", async () => {
+  const d = tmp({ "other.md": "# Other\n" })
+  const { s } = await mountStdin("# Piped\n\n## Sub\n", d)
+  const row = s.captureCharFrame().split("\n").find((l) => l.includes("Outline"))!
+  expect(row.slice(0, 31)).toBe("  ¹Outline   ²Info" + " ".repeat(13))
+  expect(row).not.toContain("Files")
+})
+
+test("stdin: 1 and 2 pick Outline and Info, 3 does nothing, / on Info filters the Outline", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("# Piped\n\n## Sub\n", d)
+  expect(await keys(s, "2")).toMatch(/Info[\s\S]*Words|Info/)
+  expect(await keys(s, "3")).not.toContain("no Markdown files")
+  expect(s.captureCharFrame().split("\n")[3]).toMatch(/^ ─{9,}━+/) // rule still under Info (second tab), Outline's is not
+  await keys(s, "/")
+  expect(s.captureCharFrame()).toContain("/ ")
+  expect(s.captureCharFrame()).not.toContain("no Markdown files")
+  await keys(s, "esc", "1")
+  expect(s.captureCharFrame()).toContain("Sub")
+})
+
+test("stdin: the help describes 1 2 for the piped document", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("# Piped\n", d, { width: 90, height: 40 }) // one column: the description is not cut
+  expect(await keys(s, "?")).toContain("piped: 1 2 only")
+})
+
+test("stdin: the view choice is not saved", async () => {
+  const d = tmp({})
+  const { s } = await mountStdin("# Piped\n", d)
+  await keys(s, "2")
+  expect(existsSync(join(cfgDir, "brothy", "config.json"))).toBe(false)
+})
+
+test("stdin: e on a followed note runs the editor as a piped session (keys from the terminal)", async () => {
+  const d = tmp({ "other.md": "# Other\n\nbody of other\n" })
+  const runs: [string, boolean][] = []
+  setup = quietAct(
+    await testRender(<App root={d} stdin={"see [[other]]\n"} linkScanDelay={60_000} edit={(argv, piped) => void runs.push([argv.at(-1)!, piped])} />, W120),
+  )
+  await setup.renderOnce()
+  await keys(setup, "f", "a")
+  expect(await keys(setup, "e")).toContain("edited")
+  expect(runs).toEqual([[join(d, "other.md"), true]])
+})
+
+test("stdin: H comes back to the piped document from a followed link", async () => {
+  const d = tmp({ "other.md": "# Other\n\nbody of other\n" })
+  const { s } = await mountStdin("see [[other]]\n\npiped body\n", d)
+  expect(await keys(s, "f", "a")).toContain("body of other")
+  const back = await keys(s, "H")
+  expect(back).toContain("piped body")
+  expect(back).not.toContain("is gone")
+})
+
+test("stdin: a followed note keeps the piped tabs, 1 is Outline and nothing is saved; H back draws", async () => {
+  const d = tmp({ "other.md": "# Other\n\nbody of other\n" })
+  const { s } = await mountStdin("see [[other]]\n\npiped body\n", d)
+  await keys(s, "f", "a")
+  const f = await keys(s, "1")
+  expect(f).toContain("¹Outline")
+  expect(f).not.toContain("Files")
+  expect(existsSync(join(cfgDir, "brothy", "config.json"))).toBe(false)
+  expect(await keys(s, "H")).toContain("piped body")
+})
+
+test("stdin: quitting on a followed note records no project", async () => {
+  const d = tmp({ "other.md": "# Other\n\nbody of other\n" })
+  const { s } = await mountStdin("see [[other]]\n", d)
+  await keys(s, "f", "a")
+  s.renderer.destroy() // the renderer's end records the workspace, as q does
+  expect(existsSync(join(cfgDir, "brothy", "projects.json"))).toBe(false)
+})
+
+const TWO = "# A\n\n## One\n\nfirst\n\n## Two\n\nsecond\n"
+const EDITED = "# A\n\n## One\n\nfirst, edited\n\n## Two\n\nsecond\n\n## Three\n\nthird\n"
+
+test("a live reload lists the changed sections in Info and counts them in the toast", async () => {
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", W120)
+  await keys(s, "3")
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("reloaded · 2 sections changed"), 4000)
+  const f = s.captureCharFrame()
+  expect(f).not.toContain("D explains") // no ai block
+  expect(f).toMatch(/Changed · since \d\d:\d\d/)
+  expect(f).toMatch(/~ One\s+\+1 −1/)
+  expect(f).toMatch(/\+ Three\s+\+3/)
+  expect(f).not.toMatch(/[~+] Two/)
+})
+
+test("with an ai block the reload toast names D", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", W120)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("reloaded · 2 sections changed · D explains"), 4000)
+})
+
+test("saves add up against the text the note was opened with", async () => {
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", W120)
+  writeFileSync(join(d, "a.md"), TWO.replace("first", "first!"))
+  await waitFrame(s, (f) => f.includes("reloaded · 1 section changed"), 4000)
+  writeFileSync(join(d, "a.md"), TWO.replace("first", "first!").replace("second", "second!"))
+  await waitFrame(s, (f) => f.includes("reloaded · 2 sections changed"), 4000)
+})
+
+test("a properties-only change and an unchanged save", async () => {
+  const d = tmp({ "a.md": "---\ntitle: x\n---\n" + TWO })
+  const s = await mount(d, "a.md", W120)
+  await keys(s, "3")
+  writeFileSync(join(d, "a.md"), "---\ntitle: y\n---\n" + TWO)
+  await waitFrame(s, (f) => f.includes("reloaded · properties changed"), 4000)
+  expect(s.captureCharFrame()).not.toContain("Changed")
+  writeFileSync(join(d, "a.md"), "---\ntitle: x\n---\n" + TWO + "\n\n")
+  await waitFrame(s, (f) => f.includes("reloaded from disk"), 4000)
+})
+
+test("switching notes drops the change list; coming back starts from the text on disk", async () => {
+  const d = tmp({ "a.md": TWO, "b.md": "# B\n" })
+  const s = await mount(d, "a.md", W120)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("2 sections changed"), 4000)
+  await openNote(s, "b")
+  expect(await keys(s, "3")).not.toContain("Changed")
+  await openNote(s, "a")
+  expect(await keys(s, "3")).not.toContain("Changed")
+})
+
+test("D streams an explanation of the changed hunks into Info; the baseline moves", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  const [system, user] = ai.calls[0]!.body.messages
+  expect(system!.content).toBe(DELTA_PROMPT)
+  expect(user!.content.startsWith("Note: a\n§1 edited · A › One\n@@\n")).toBe(true)
+  expect(user!.content).toContain("+ first, edited")
+  expect(user!.content).toContain("§2 added · A › Three")
+  expect(user!.content).not.toContain("second") // unchanged sections are never sent
+  expect(await keys(s)).toContain("Changed · explaining…")
+  ai.send(0, "Rewords the first part and adds a third.\n§1: first line reworded")
+  await waitFrame(s, (f) => f.includes("Rewords the first part"))
+  ai.send(0, ' | "first, edited"\n§2: new closing section\n')
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("Changed · llama3.2") && f.includes("first line reworded") && f.includes("new closing section"))
+  expect(await keys(s, "D")).toMatch(/no changes since \d\d:\d\d/)
+})
+
+test("D mid-stream cancels; the list goes back to idle", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  const f = await keys(s, "D")
+  expect(f).toContain("explanation cancelled")
+  expect(f).toMatch(/Changed · since \d\d:\d\d/)
+})
+
+test("a reload mid-stream leaves the newer changes listed after completion", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  writeFileSync(join(d, "a.md"), EDITED.replace("first, edited", "first, edited twice"))
+  await waitFrame(s, (f) => f.includes("first, edited twice"), 4000)
+  ai.send(0, "Old summary.\n§1: reworded")
+  ai.end(0)
+  await waitFrame(s, (f) => /Changed · since \d\d:\d\d/.test(f) && /~ One/.test(f))
+  const f = s.captureCharFrame()
+  expect(f).not.toContain("Old summary.")
+  expect(f).not.toMatch(/\+ Three/) // explained already: the baseline moved to the sent text
+})
+
+test("an explanation goes once a reload is too large to compare", async () => {
+  aiConfig(OLLAMA)
+  // five sections of 1000 lines: rewriting them all is over DIFF_BUDGET, editing one line is not
+  const big = (v: (k: number, i: number) => string) =>
+    Array.from({ length: 5 }, (_, k) => `## S${k}\n\n` + Array.from({ length: 1000 }, (_, i) => v(k, i)).join("\n") + "\n").join("\n")
+  const d = tmp({ "a.md": big((k, i) => `a${k}-${i}`) })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), big((k, i) => (k === 0 && i === 5 ? "edited" : `a${k}-${i}`)))
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "Rewords one line.\n§1: one line edited\n")
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("Changed · llama3.2") && f.includes("Rewords one line."))
+  writeFileSync(join(d, "a.md"), big((k, i) => `b${k}-${i}`))
+  await waitFrame(s, (f) => f.includes("reloaded · too large to compare"), 4000)
+  const f = await keys(s)
+  expect(f).not.toContain("Rewords one line.")
+  expect(f).not.toContain("Changed")
+})
+
+test("a failed request: one error toast, the list stays", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.fail(0, "boom")
+  await waitFrame(s, (f) => f.includes("AI: boom") && /Changed · since/.test(f))
+})
+
+test("a reply past MAX_DELTA keeps the summary and the finished section lines", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "Rewords the first part.\n§1: first line reworded\n")
+  await waitFrame(s, (f) => f.includes("first line reworded"))
+  ai.send(0, "§2: " + "very ".repeat(500))
+  await waitFrame(s, (f) => f.includes("Changed · llama3.2") && f.includes("Rewords the first part.") && f.includes("first line reworded"))
+  const f = s.captureCharFrame()
+  expect(f).not.toContain("too long")
+  expect(f).not.toContain("very very")
+})
+
+test("a reply with nothing usable: AI: no usable explanation", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "§9: no such section")
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("AI: no usable explanation"))
+})
+
+test("leaving the note mid-stream cancels and drops the list", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO, "b.md": "# B\n" })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  await openNote(s, "b")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+  await openNote(s, "a") // a fresh baseline from the text on disk: nothing listed
+  expect(await keys(s, "3")).not.toContain("Changed")
+  expect(await keys(s, "D")).toMatch(/no changes since/) // the cancelled job no longer counts or runs
+})
+
+test("D: AI off without an ai block; no changes without a reload", async () => {
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "D")).toContain(`AI off · set "ai" in config.json`)
+  aiConfig(OLLAMA)
+  expect(await keys(s, "D")).toMatch(/no changes since \d\d:\d\d/)
+})
+
+test("D in zen does nothing", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", W120)
+  const z = await keys(s, "z", "D")
+  expect(z).not.toContain("no changes since")
+  expect(z).not.toContain("AI off")
+})
+
+test("help lists D in the AI group; the Info footer shows D changes only with changes and AI", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", { width: 120, height: 40 })
+  const help = (await openHelp(s)).split("\n")
+  const at = help.findIndex((l) => l.includes("explain what changed on disk"))
+  const ai = help.findIndex((l) => /  AI  /.test(l))
+  expect(ai).toBeGreaterThan(help.findIndex((l) => l.includes("Document")))
+  expect(at).toBeGreaterThan(ai)
+  expect(help[at]!.indexOf("D ")).toBe(help[ai]!.indexOf("AI"))
+  await keys(s, "esc")
+  expect((await keys(s, "3")).split("\n")[38]).not.toContain("D changes")
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  setSystemTime(new Date(Date.now() + 10_000)) // past the toast, so the hints get the whole line
+  try {
+    expect((await keys(s, "tab", "3")).split("\n")[38]).toContain("D changes")
+  } finally {
+    setSystemTime()
+  }
+})
+
+const LONG = "# A\n\n## One\n\n" + Array.from({ length: 60 }, (_, i) => `row ${i}`).join("\n\n") + "\n\n## Two\n\nsecond\n\n## Three\n\nthird\n\n" +
+  Array.from({ length: 30 }, (_, i) => `tail ${i}`).join("\n\n") + "\n" // room below Three, so its heading can reach the top
+
+test("⏎ on a change row jumps to its heading; removed rows are skipped", async () => {
+  const d = tmp({ "a.md": LONG })
+  const s = await mount(d, "a.md", W120)
+  writeFileSync(join(d, "a.md"), LONG.replace("row 3\n", "row 3 edited\n").replace("## Two\n\nsecond\n\n", "").replace("third", "third!"))
+  await waitFrame(s, (f) => f.includes("3 sections changed"), 4000)
+  await keys(s, "3")
+  // rows: ~ One (stop), − Two (not a stop), ~ Three (stop): j goes from One straight to Three
+  const f = await keys(s, "j", "enter")
+  expect(bodyRows(f).split("\n")[0]).toContain("Three")
+})
+
+test("⏎ after D lands on the quoted line", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": LONG })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), LONG.replace("row 40\n", "row 40 changed now\n"))
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'One line changed.\n§1: row forty reworded | "row 40 changed now"\n')
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("row forty reworded"))
+  const f = await keys(s, "enter")
+  expect(bodyRows(f).split("\n").slice(0, 3).join("\n")).toContain("row 40 changed now")
+  // Source: the same row by its raw text
+  const src = await keys(s, "s", "3", "enter")
+  expect(bodyRows(src).split("\n").slice(0, 3).join("\n")).toContain("row 40 changed now")
+})
+
+test("jump finds the heading again when it moved", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": LONG })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), LONG.replace("third", "third!"))
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  // mid-request a new section lands above: Three's outline index shifts by one
+  writeFileSync(join(d, "a.md"), LONG.replace("## One", "## Zero\n\nz\n\n## One").replace("third", "third!"))
+  await waitFrame(s, (f) => f.includes("Zero"), 4000)
+  const f = await keys(s, "3", "enter") // loading rows: the sent list, one stop (Three)
+  expect(bodyRows(f).split("\n")[0]).toContain("Three")
+})
+
+test("D cancels a running explanation even after the ai block is gone", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  writeFileSync(join(cfgDir, "brothy", "config.json"), "{}")
+  const f = await keys(s, "D")
+  expect(f).toContain("explanation cancelled")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+})
+
+// ------------------------------------------------------------- zen gloss
+const { glossTarget, glossKey } = await import("../src/gloss")
+const said = (w: string, n = 25) => Array.from({ length: n }, (_, i) => `${w}${i}`).join(" ")
+/** Four sections, each with 25 words of its own. */
+const GLOSS_MD = ["Guide", "Apples", "Pears", "Plums"].map((h, i) => `${i ? "##" : "#"} ${h}\n\n${said(h.toLowerCase())}\n`).join("\n")
+const glossFile = () => join(cacheDir, "brothy", "glosses.json")
+const glossCache = () => (existsSync(glossFile()) ? (JSON.parse(readFileSync(glossFile(), "utf8")) as Record<string, { gloss: string }>) : {})
+/** Cache a gloss for section `index` of the note at `path`, fresh unless `hash` is given. */
+function seedGloss(path: string, index: number, gloss: string, hash?: string) {
+  const g = glossTarget(readFileSync(path, "utf8"), index, path, "a")!
+  const all = glossCache()
+  all[glossKey(g.id, "explain")] = { hash: hash ?? textHash(g.text), v: 1, gloss, model: "llama3.2", at: Date.now() } as never
+  mkdirSync(join(cacheDir, "brothy"), { recursive: true })
+  writeFileSync(glossFile(), JSON.stringify(all))
+}
+
+test("zen shows a fresh cached gloss for the reading section by itself, without a request", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  const f = await keys(s, "z")
+  expect(f).toContain("┈ gloss · Guide ┈")
+  expect(f).toContain("About the guide.")
+  expect(ai.calls.length).toBe(0)
+})
+
+test("a section never glossed shows nothing; leaving fades the sheet; coming back shows it again", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "z")).toContain("About the guide.")
+  await keys(s, "]")
+  await waitFrame(s, (f) => !f.includes("gloss ·"))
+  expect(s.captureCharFrame()).not.toContain("About the guide.")
+  expect(await keys(s, "[")).toContain("About the guide.")
+})
+
+test("an outdated gloss never shows by itself", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.", "stale")
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "z")).not.toContain("gloss ·")
+})
+
+test("editing the glossed section marks the sheet outdated; editing another section keeps it fresh", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const p = join(d, "a.md")
+  seedGloss(p, 0, "About the guide.")
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "z")).toContain("gloss · Guide ┈")
+  writeFileSync(p, GLOSS_MD.replace("pears3", "PEARS"))
+  let f = await keys(s, "r")
+  expect(f).toContain("gloss · Guide ┈")
+  expect(f).not.toContain("outdated")
+  writeFileSync(p, GLOSS_MD.replace("guide3", "GUIDE"))
+  f = await keys(s, "r")
+  expect(f).toContain("gloss · Guide · outdated · a")
+  expect(f).toContain("About the guide.")
+})
+
+test("no gloss sheet without an ai block, even with a cached gloss", async () => {
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "z")).not.toContain("gloss ·")
+})
+
+test("leaving zen hides the gloss; entering again shows it", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const s = await mount(d, "a.md", W120)
+  await keys(s, "z")
+  const f = await keys(s, "z")
+  expect(panelShown(f)).toBe(true)
+  expect(f).not.toContain("About the guide.")
+  expect(await keys(s, "z")).toContain("About the guide.")
+})
+
+test("a small terminal keeps the reading line clear of the sheet", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const s = await mount(d, "a.md", { width: 60, height: 14 })
+  const lines = (await keys(s, "z")).split("\n")
+  const mark = lines.findIndex((l) => l.includes("▸"))
+  const rule = lines.findIndex((l) => l.includes("gloss · Guide"))
+  expect(mark).toBeGreaterThan(-1)
+  expect(rule).toBeGreaterThan(mark)
+})
+
+test("a long gloss is cut to 3 rows ending in …", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, said("gloss", 60))
+  const lines = (await keys(await mount(d, "a.md", W120), "z")).split("\n")
+  const rule = lines.findIndex((l) => l.includes("gloss · Guide"))
+  expect(lines[rule + 3]!.trimEnd().endsWith("…")).toBe(true)
+})
+
+test("a in zen on a section with nothing in it: nothing to gloss here", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n" })
+  const s = await mount(d, "a.md", W120)
+  expect(await keys(s, "z", "a")).toContain("nothing to gloss here")
+})
+
+test("esc hides the gloss and stays in zen; a shows the cached gloss again without a request; esc esc leaves zen", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  expect(await keys(s, "z")).toContain("About the guide.")
+  let f = await keys(s, "esc")
+  expect(f).not.toContain("About the guide.")
+  expect(panelShown(f)).toBe(false)
+  expect(await keys(s, "a")).toContain("About the guide.")
+  expect(ai.calls.length).toBe(0)
+  await keys(s, "esc")
+  f = await keys(s, "esc")
+  expect(panelShown(f)).toBe(true)
+})
+
+test("an esc-hidden gloss stays hidden until the reading line leaves and comes back", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "About the guide.")
+  const s = await mount(d, "a.md", W120)
+  await keys(s, "z", "esc")
+  expect(await keys(s, "j")).not.toContain("About the guide.") // still in Guide
+  await keys(s, "]")
+  expect(await keys(s, "[")).toContain("About the guide.")
+})
+
+test("the a gloss hint shows in zen only with an ai block", async () => {
+  const d = tmp({ "a.md": GLOSS_MD })
+  let s = await mount(d, "a.md", { width: 140, height: 30 })
+  expect((await keys(s, "z")).split("\n")[HINT_ROW]).not.toContain("a gloss")
+  s.renderer.destroy()
+  aiConfig(OLLAMA)
+  s = await mount(d, "a.md", { width: 140, height: 30 })
+  const row = (await keys(s, "z")).split("\n")[HINT_ROW]!
+  expect(row).toContain("a gloss")
+  expect(row.indexOf("[ ] section")).toBeLessThan(row.indexOf("a gloss"))
+})
+
+test("help lists the gloss under Zen and esc hides it", async () => {
+  const d = tmp({ "a.md": "# A\n" })
+  const s = await mount(d, "a.md", { width: 90, height: 80 }) // one column: the two-column sheet cuts long descriptions
+  const lines = (await keys(s, "?")).split("\n")
+  const at = lines.findIndex((l) => l.includes("gloss: explain the section you're reading"))
+  const zen = lines.findIndex((l) => /\bZen\b/.test(l))
+  expect(zen).toBeGreaterThan(lines.findIndex((l) => l.includes("Document")))
+  expect(at).toBeGreaterThan(zen)
+  expect(lines.some((l) => l.includes("clear find · hide gloss · leave zen"))).toBe(true)
+})
+
+test("a outside zen is still the TL;DR", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  const f = await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(ai.calls[0]!.body.messages[0]!.content).not.toStartWith("Explain this section")
+  expect(f).toContain("summarizing")
+  expect(f).not.toContain("gloss")
+})
+
+test("a in zen streams a gloss for the reading section, caches it; a second run shows it without a request", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  let s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  const msgs = ai.calls[0]!.body.messages
+  expect(msgs[0]!.content).toStartWith("Explain this section of a note to its reader")
+  expect(msgs[1]!.content).toBe(`Note: a\nSection: Guide\n\n${said("guide")}`)
+  await waitFrame(s, (f) => f.includes("gloss · Guide · explaining…"))
+  ai.send(0, "The guide ")
+  await waitFrame(s, (f) => f.includes("The guide"))
+  ai.send(0, "introduces fruit.")
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("The guide introduces fruit.") && !f.includes("explaining…"))
+  expect(Object.values(glossCache()).map((e) => e.gloss)).toEqual(["The guide introduces fruit."])
+  s.renderer.destroy()
+
+  const ai2 = aiStub()
+  s = await mount(d, "a.md", W120, ai2.f)
+  expect(await keys(s, "z")).toContain("The guide introduces fruit.")
+  expect(ai2.calls.length).toBe(0)
+})
+
+test("a while the gloss streams cancels it: nothing cached, the sheet closes", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "Half")
+  const f = await keys(s, "a")
+  expect(f).toContain("gloss cancelled")
+  expect(f).not.toContain("gloss · Guide")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+  expect(glossCache()).toEqual({})
+})
+
+test("a on a gloss already on screen regenerates it", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "Old gloss.")
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  expect(await keys(s, "z")).toContain("Old gloss.")
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  await waitFrame(s, (f) => f.includes("gloss · Guide · explaining…"))
+})
+
+test("a on an outdated gloss sends a new request", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  seedGloss(join(d, "a.md"), 0, "Old gloss.", "stale")
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+})
+
+test("a 4th concurrent AI request is refused: AI busy · 3 requests running", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a", "]", "a", "]", "a", "]")
+  await waitFor(s, () => ai.calls.length === 3)
+  expect(await keys(s, "a")).toContain("AI busy · 3 requests running")
+  expect(ai.calls.length).toBe(3)
+})
+
+test("a failed gloss: error toast, the sheet closes, nothing cached", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.fail(0, "model overloaded")
+  await waitFrame(s, (f) => f.includes("AI: model overloaded") && !f.includes("gloss · Guide"))
+  expect(glossCache()).toEqual({})
+})
+
+test("a failure for a section the reading line left names its heading", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  await keys(s, "]")
+  ai.fail(0, "model overloaded")
+  await waitFrame(s, (f) => f.includes("AI · Guide: model overloaded"))
+})
+
+test("moving on mid-stream: the gloss is cached for its own section and shows on coming back", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  await keys(s, "]")
+  await waitFrame(s, (f) => !f.includes("gloss · Guide"))
+  ai.send(0, "About the guide.")
+  ai.end(0)
+  await waitFor(s, () => Object.keys(glossCache()).length === 1)
+  expect(s.captureCharFrame()).not.toContain("About the guide.") // Apples is under the reading line
+  expect(await keys(s, "[")).toContain("About the guide.")
+})
+
+test("a gloss's model error mentions the gloss, not a summary", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.end(0) // a stream with no text
+  await waitFrame(s, (f) => f.includes("AI: empty gloss"))
+})
+
+test("a gloss without the preset's key env var toasts which one to set", async () => {
+  aiConfig({ provider: "openrouter", model: "x/y" })
+  const prev = process.env.OPENROUTER_API_KEY
+  delete process.env.OPENROUTER_API_KEY
+  try {
+    const d = tmp({ "a.md": GLOSS_MD })
+    const ai = aiStub()
+    const s = await mount(d, "a.md", W120, ai.f)
+    expect(await keys(s, "z", "a")).toContain("AI: set OPENROUTER_API_KEY")
+    expect(ai.calls.length).toBe(0)
+  } finally {
+    if (prev !== undefined) process.env.OPENROUTER_API_KEY = prev
+  }
+})
+
+test("a piped document's gloss shows for the run but is not written to glosses.json", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({})
+  const ai = aiStub()
+  setup = quietAct(await testRender(<App root={d} stdin={GLOSS_MD} linkScanDelay={60_000} fetch={ai.f} />, W120))
+  const s = setup
+  await s.renderOnce()
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "Piped gloss.")
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("Piped gloss.") && !f.includes("explaining…"))
+  expect(existsSync(glossFile())).toBe(false)
+})
+
+test("a cancels a running gloss even after the ai block is gone", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": GLOSS_MD })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "z", "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  writeFileSync(join(cfgDir, "brothy", "config.json"), "{}")
+  const f = await keys(s, "a")
+  expect(f).toContain("gloss cancelled")
+  expect(f).not.toContain("AI off")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+})
+
+test("a cancels a running summary even after the ai block is gone", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nText to summarize.\n" })
+  const ai = aiStub()
+  const s = await mount(d, "a.md", W120, ai.f)
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  writeFileSync(join(cfgDir, "brothy", "config.json"), "{}")
+  const f = await keys(s, "a")
+  expect(f).toContain("summary cancelled")
+  expect(f).not.toContain("AI off")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+})
+
+test("a rerank is sent again after a candidate note's text changed", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const d = askVault()
+  const s = await mount(d, "README.md", W120, ai.f)
+  await askIt(s, ai)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }] }))
+  ai.end(1)
+  await waitFrame(s, (fr) => fr.includes("Other matches"))
+  await keys(s, "esc")
+  const file = join(d, "getting-started.md")
+  writeFileSync(file, readFileSync(file, "utf8").replace("Give a single file path to brothy.", "Give a single file path to brothy, or a folder, or stdin."))
+  utimesSync(file, new Date(Date.now() + 5000), new Date(Date.now() + 5000))
+  await keys(s, "C-p", "type:?how do I open one file")
+  await waitFrame(s, (fr) => fr.includes("⏎ ask"))
+  await keys(s, "enter") // the queries come from memory
+  await waitFrame(s, (fr) => fr.includes("↻ rerank with excerpts"))
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 3)
+  expect(ai.calls[2]!.body.messages[1]!.content).toContain("or a folder, or stdin")
+})
+
+const OPENING = "**brothy** is a terminal Markdown reader with a calm, panel-based interface. Browse a folder of notes on the left, read on the right, and never leave the terminal."
+const ZEN_BODY = "lorem ipsum dolor sit amet consectetur ".repeat(8)
+
+test("an opening paragraph reads as written, in Preview and in zen: no initial, no altered letters", async () => {
+  const s = await mount(tmp({ "a.md": `# A\n\n${OPENING}\n\n## Two\n\nSecond ${ZEN_BODY}\n` }), "a.md", { width: 100, height: 40 })
+  const f = await keys(s)
+  expect(f).toContain("brothy is a terminal Markdown reader")
+  expect(f).not.toMatch(/[ᴀ-ᴢʀʏ▘▝▀▖▌▞▛▗▚▐▜▄▙▟]/)
+  const z = await keys(s, "z")
+  expect(z).toContain("brothy is a terminal")
+  expect(z).toContain("Second lorem ipsum")
+})
+
+test("copy: the opening paragraph's first rows copy as they are drawn", async () => {
+  const s = await mount(tmp({ "a.md": `# A\n\n${OPENING}\n` }), "a.md")
+  const copied: string[] = []
+  s.renderer.copyToClipboardOSC52 = (text: string) => (copied.push(text), true)
+  const rows = s.captureCharFrame().split("\n")
+  const y = rows.findIndex((r) => r.includes("brothy is a"))
+  const x = rows[y]!.indexOf("brothy is a")
+  await s.mockMouse.drag(x, y, x + 6, y)
+  await waitFrame(s, (f) => f.includes("copied"))
+  expect(copied).toEqual(["brothy"])
+})
+
+// ------------------------------------------------------------- welcome
+
+function seedProjects(entries: { root: string; at: number; lastNote?: string }[]) {
+  mkdirSync(join(cfgDir, "brothy"), { recursive: true })
+  writeFileSync(join(cfgDir, "brothy", "projects.json"), JSON.stringify({ projects: entries.map((e) => ({ lastNote: null, top: 0, ...e })) }))
+}
+const WELCOME = { width: 120, height: 34 }
+const { MINI_W } = await import("../src/minimap")
+
+test("welcome: the wordmark over a bowl, today's message, keycaps, recent projects and the hint", async () => {
+  const t = themeByName("brothy")
+  const other = tmp({ "x.md": "# X\n" })
+  // three recents, as in v3's frame
+  seedProjects([{ root: other, at: Date.now() - 3600_000, lastNote: join(other, "x.md") }, { root: tmp({}), at: 2 }, { root: tmp({}), at: 1 }])
+  const empty = tmp({ "notes.txt": "" })
+  const s = await mount(empty, undefined, WELCOME)
+  const f = await keys(s)
+  const rows = f.split("\n")
+  expect(f).toContain("┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻")
+  expect(f).toContain("▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖")
+  expect(f).toContain(`No Markdown files found in ${empty}`)
+  expect(f).toContain(" o  open a project    t  theme    ?  keys    q  quit")
+  expect(f).toContain("⏎ open   o all projects or a path")
+  const head = rows.findIndex((r) => /Recent\s+3\b/.test(r))
+  expect(head).toBeGreaterThan(0)
+  expect(rows[head + 1]).toContain(basename(other))
+  expect(rows[head + 1]).toContain("x") // the last note, right-aligned
+  // v3's rows at 120×34: wordmark 4–6, rim 12, message 20, keycaps 22
+  expect(rows[4]).toContain("┏┓ ┳━┓")
+  expect(rows[12]).toContain("▗▄▄")
+  expect(rows[20]).toContain("No Markdown files")
+  expect(rows[22]).toContain("open a project")
+  const sp = spansOf(s)
+  const cap = sp.find((x) => x.text.includes(" o "))!
+  expect([hex(cap.fg), hex(cap.bg)]).toEqual([t.accent, t.backgroundElement])
+  expect(hex(sp.find((x) => x.text.includes("┏┓"))!.fg)).toBe(t.primary)
+  expect(hex(sp.find((x) => x.text.includes("▗"))!.fg)).toBe(t.text) // rim
+  expect(sp.some((x) => x.text.includes("▄") && hex(x.bg) === t.secondary)).toBe(true) // broth
+  expect(hex(sp.find((x) => x.text.includes("████"))!.fg)).toBe(t.primary) // body
+  expect(onBg(s, t.primary).join("")).toContain(basename(other)) // first row selected at rest
+})
+
+test("welcome: no recent projects leaves out the list, the hint stays", async () => {
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  const f = await keys(s)
+  expect(f).not.toContain("Recent")
+  expect(f).toContain("o all projects or a path")
+  expect(f).not.toContain("⏎ open")
+})
+
+test("welcome at 80×24: the small bowl, no chopsticks, v3's rows", async () => {
+  seedProjects([{ root: tmp({}), at: 3 }, { root: tmp({}), at: 2 }, { root: tmp({}), at: 1 }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, { width: 80, height: 24 })
+  const rows = (await keys(s)).split("\n")
+  expect(rows[2]).toContain("┏┓ ┳━┓")
+  expect(rows[7]).toContain("▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖")
+  expect(rows.join("\n")).not.toContain("▞")
+  expect(rows[12]).toContain("No Markdown files")
+  expect(rows[14]).toContain("open a project")
+})
+
+test("welcome: a click on a recent project opens it", async () => {
+  const other = tmp({ "x.md": "# Xylophone\n" })
+  seedProjects([{ root: other, at: Date.now() }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  const rows = (await keys(s)).split("\n")
+  const y = rows.findIndex((r) => r.includes(basename(other)) && !r.includes("No Markdown"))
+  await s.mockMouse.click(rows[y]!.indexOf(basename(other)), y)
+  expect(await waitFrame(s, (f) => f.includes("Xylophone"))).toContain("Xylophone")
+})
+
+test("welcome: ↑ ↓ move the selection and ⏎ opens it; pointing moves it too", async () => {
+  const a = tmp({ "a.md": "# Alpha note\n" })
+  const b = tmp({ "b.md": "# Bravo note\n" })
+  seedProjects([{ root: a, at: Date.now() }, { root: b, at: Date.now() - 1000 }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  await keys(s)
+  const sel = () => onBg(s, PRIMARY).join("")
+  expect(sel()).toContain(basename(a))
+  await keys(s, "down")
+  expect(sel()).toContain(basename(b))
+  await keys(s, "down") // stays on the last row
+  expect(sel()).toContain(basename(b))
+  await keys(s, "up")
+  expect(sel()).toContain(basename(a))
+  const rows = s.captureCharFrame().split("\n")
+  const y = rows.findIndex((r) => r.includes(basename(b)))
+  await s.mockMouse.moveTo(rows[y]!.indexOf(basename(b)), y)
+  await keys(s)
+  expect(sel()).toContain(basename(b))
+  await keys(s, "up") // the pointer still rests on b
+  expect(sel()).toContain(basename(a))
+  await keys(s, "down")
+  expect(sel()).toContain(basename(b))
+  expect(await keys(s, "enter")).toContain("Bravo note")
+})
+
+test("welcome: a missing project is listed muted; opening it drops it with a toast", async () => {
+  const gone = join(tmpdir(), "brothy-gone-" + Date.now())
+  seedProjects([{ root: gone, at: Date.now() }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  const f = await keys(s)
+  expect(f).toContain("missing")
+  const after = await keys(s, "enter")
+  expect(after).toContain("is gone")
+  expect(after).not.toContain("Recent")
+})
+
+test("welcome with motion: the wordmark and bowl ink in from border; the steam rises until a key stops it for good", async () => {
+  const t = themeByName("brothy")
+  const d = tmp({ "notes.txt": "" })
+  setup = quietAct(await testRender(<App root={d} motion />, WELCOME))
+  await setup.renderOnce()
+  const s = setup
+  const markFg = () => hex(spansOf(s).find((x) => x.text.includes("┏┓"))!.fg)
+  expect(markFg()).toBe(t.border)
+  const steam = () => s.captureCharFrame().split("\n").slice(7, 12).map((r) => r.replace(/▞/g, " ")).join("\n")
+  const first = steam()
+  await waitFor(s, () => markFg() === t.primary)
+  await waitFor(s, () => steam() !== first)
+  await keys(s, "x") // any key
+  const still = steam()
+  await sleep(400)
+  await s.renderOnce()
+  expect(steam()).toBe(still)
+  expect(markFg()).toBe(t.primary)
+})
+
+test("welcome without motion (tests): drawn still, inked, the same frame later", async () => {
+  const t = themeByName("brothy")
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  const a = await keys(s)
+  expect(hex(spansOf(s).find((x) => x.text.includes("┏┓"))!.fg)).toBe(t.primary)
+  expect(a).toMatch(/[⠁-⣿]/)
+  await sleep(350)
+  await s.renderOnce()
+  expect(s.captureCharFrame()).toBe(a)
+})
+
+test("welcome with motion: a resize stops the steam for good, and so does opening a note", async () => {
+  const other = tmp({ "x.md": "# Xylophone\n" })
+  seedProjects([{ root: other, at: Date.now() }])
+  setup = quietAct(await testRender(<App root={tmp({ "notes.txt": "" })} motion />, WELCOME))
+  await setup.renderOnce()
+  const s = setup
+  const steam = () => s.captureCharFrame().split("\n").filter((r) => /[⠁-⣿]/.test(r)).join("\n")
+  const first = steam()
+  await waitFor(s, () => steam() !== first)
+  s.resize(118, 34)
+  await sleep(30)
+  await s.renderOnce()
+  const still = steam()
+  await sleep(400)
+  await s.renderOnce()
+  expect(steam()).toBe(still)
+  await keys(s, "enter")
+  const opened = await waitFrame(s, (f) => f.includes("Xylophone"))
+  expect(opened.split("\n").map((r) => [...r].slice(0, 118 - MINI_W).join("")).join("\n")).not.toMatch(/[⠁-⣿]/) // the minimap keeps its braille
+})
+
+test("welcome keys act only on the rows on screen: none listed, ⏎ opens nothing; a short list stops at its last row", async () => {
+  const ps = Array.from({ length: 5 }, (_, i) => tmp({ "n.md": `# Project ${i}\n` }))
+  seedProjects(ps.map((root, i) => ({ root, at: 10 - i })))
+  const tiny = await mount(tmp({ "notes.txt": "" }), undefined, { width: 60, height: 16 })
+  expect(await keys(tiny)).not.toContain("Recent")
+  expect(await keys(tiny, "enter")).not.toContain("Project 0")
+  tiny.renderer.destroy()
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, { width: 100, height: 20 })
+  const f = await keys(s)
+  const shown = ps.filter((p) => f.includes(basename(p))).length
+  expect(shown).toBeGreaterThan(0)
+  expect(shown).toBeLessThan(5)
+  await keys(s, ...Array.from({ length: 6 }, () => "down"))
+  expect(onBg(s, PRIMARY).join("")).toContain(basename(ps[shown - 1]!))
+  await keys(s, "enter")
+  expect(await waitFrame(s, (x) => x.includes(`Project ${shown - 1}`))).toContain(`Project ${shown - 1}`)
+})
+
+test("welcome: coming back to the empty folder lists the project just left, with its last note", async () => {
+  const b = tmp({ "bee.md": "# Bee note\n" })
+  seedProjects([{ root: b, at: Date.now() }])
+  const a = tmp({ "notes.txt": "" })
+  const s = await mount(a, undefined, WELCOME)
+  expect(await keys(s)).not.toContain("bee")
+  await keys(s, "enter")
+  await waitFrame(s, (f) => f.includes("Bee note"))
+  await keys(s, "o", `type:${basename(a)}`, "enter")
+  const f = await waitFrame(s, (x) => x.includes("No Markdown files"))
+  const row = f.split("\n").find((r) => r.includes(basename(b)))!
+  expect(row).toContain("bee")
+})
+
+test("welcome with motion: a key in the middle of the ink-in shows the inked art at once", async () => {
+  const t = themeByName("brothy")
+  setup = quietAct(await testRender(<App root={tmp({ "notes.txt": "" })} motion />, WELCOME))
+  await setup.renderOnce()
+  const s = setup
+  await keys(s, "x")
+  expect(hex(spansOf(s).find((x) => x.text.includes("┏┓"))!.fg)).toBe(t.primary)
+})
+
+test("welcome at 60 columns: recent rows stay inside the measure and the hint lines up with them", async () => {
+  const p = tmp({ "x.md": "# X\n" })
+  seedProjects([{ root: p, at: Date.now() }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, { width: 60, height: 24 })
+  const rows = (await keys(s)).split("\n")
+  const head = rows.findIndex((r) => /Recent\s+1/.test(r))
+  const y = head + 1
+  expect(rows.find((r) => r.includes("⏎ open"))!.indexOf("⏎")).toBe(rows[head]!.indexOf("Recent"))
+  const fill = s.captureSpans().lines[y]!.spans.filter((sp) => hex(sp.bg) === PRIMARY).reduce((n, sp) => n + sp.text.length, 0)
+  expect(fill).toBeLessThanOrEqual(54) // the measure at 60 columns
+})
+
+for (const width of [80, 100, 120])
+  test(`welcome: the highlighted recent row is as wide as the centred block at ${width} columns`, async () => {
+    seedProjects([{ root: tmp({ "x.md": "# X\n" }), at: Date.now() }])
+    const s = await mount(tmp({ "notes.txt": "" }), undefined, { width, height: 34 })
+    const rows = (await keys(s)).split("\n")
+    const y = rows.findIndex((r) => /Recent\s+1/.test(r)) + 1
+    const cells = s.captureSpans().lines[y]!.spans.reduce<{ x: number; on: boolean }[]>((a, sp) => {
+      for (const _ of sp.text) a.push({ x: a.length, on: hex(sp.bg) === PRIMARY })
+      return a
+    }, [])
+    const on = cells.filter((c) => c.on).map((c) => c.x)
+    const [l, r] = [Math.min(...on), width - 1 - Math.max(...on)]
+    expect(on.length).toBeLessThanOrEqual(58)
+    expect(Math.abs(l - r)).toBeLessThanOrEqual(1)
+  })
+
+/** Left and right blank margins of the first row matching `re` (by code point). */
+function margins(row: string, W: number, re: RegExp) {
+  const cells = [...row]
+  const first = cells.findIndex((c) => re.test(c))
+  let last = cells.length - 1
+  while (last >= 0 && !re.test(cells[last]!)) last--
+  return [first, W - 1 - last]
+}
+
+test("welcome: full width and centred, no panel and no footer hints; a note brings the panel back, the saved sidebar untouched", async () => {
+  mkdirSync(join(cfgDir, "brothy"), { recursive: true })
+  writeFileSync(join(cfgDir, "brothy", "config.json"), JSON.stringify({ sidebar: { view: "outline", hidden: false } }))
+  const other = tmp({ "x.md": "# Xylophone\n" })
+  seedProjects([{ root: other, at: Date.now() }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  // the panel keys do nothing here: nothing to show, and nothing saved
+  const f = await keys(s, "C-b", "2", "tab")
+  const rows = f.split("\n")
+  expect(f).not.toMatch(/Files|Outline|Info/)
+  const [l, r] = margins(rows.find((x) => x.includes("▗▄"))!, WELCOME.width, /[▗▄▖]/)
+  expect(Math.abs(l - r)).toBeLessThanOrEqual(1)
+  const [rl, rr] = margins(rows[1]!, WELCOME.width, /─/) // the top-row rule spans the centred text column
+  expect(Math.abs(rl - rr)).toBeLessThanOrEqual(1)
+  expect(rows[WELCOME.height - 2]!.trim()).toBe("") // no footer hints
+  expect(f).not.toContain("j k scroll")
+  expect(f).toContain(" o  open a project")
+  expect(savedConfig().sidebar).toEqual({ view: "outline", hidden: false })
+  await keys(s, "enter")
+  const g = await waitFrame(s, (x) => x.includes("Xylophone"))
+  expect(g).toContain("²Outline")
+  expect(savedConfig().sidebar).toEqual({ view: "outline", hidden: false })
+})
+
+test("welcome: a, z, Z, s and w do nothing there (no zen, no hidden Source, no panel, nothing saved); the next note opens as usual", async () => {
+  const other = tmp({ "x.md": "# Xylophone\n\n## Part\n\nbody\n" })
+  seedProjects([{ root: other, at: Date.now() }])
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, WELCOME)
+  const before = s.captureCharFrame()
+  expect(await keys(s, "a", "z", "Z", "s", "w")).toBe(before)
+  expect(existsSync(join(cfgDir, "brothy", "config.json"))).toBe(false)
+  await keys(s, "enter")
+  const g = await waitFrame(s, (x) => x.includes("Xylophone"))
+  expect(g).not.toContain("# Xylophone") // Preview, not Source
+  expect(g).toContain("¹Files") // not zen
+})
+
+test("welcome at 80×24: no drawer and no scrim, the bowl centred across the screen", async () => {
+  const s = await mount(tmp({ "notes.txt": "" }), undefined, { width: 80, height: 24 })
+  const f = await keys(s, "1")
+  expect(f).not.toContain("▏")
+  expect(f).not.toMatch(/Files|Outline|Info/)
+  const [l, r] = margins(f.split("\n").find((x) => x.includes("▗▄"))!, 80, /[▗▄▖]/)
+  expect(Math.abs(l - r)).toBeLessThanOrEqual(1)
+})
+
+// ------------------------------------------------------------- minimap
+
+const BRAILLE = /[⠁-⣿]/
+/** the two braille cells at the right edge (the lane is the last column) */
+const miniCol = (f: string, W: number) => f.split("\n").map((r) => [...r].slice(W - 3, W - 1).join(""))
+const laneCol = (f: string, W: number) => f.split("\n").map((r) => [...r][W - 1] ?? "")
+const LONG_NOTE = "# Top\n\n" + Array.from({ length: 12 }, (_, i) => `## Part ${i}\n\n${"lorem ipsum dolor sit amet ".repeat(6)}\n`).join("\n")
+
+test("minimap: on at 120 columns, braille at the right edge, headings in primary, the text column unmoved", async () => {
+  const t = themeByName("brothy")
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 120, height: 34 })
+  const f = await keys(s)
+  expect(miniCol(f, 120).some((c) => BRAILLE.test(c))).toBe(true)
+  expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.primary)).toBe(true)
+  expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.textMuted && hex(sp.bg) === t.backgroundElement)).toBe(true)
+  expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.borderSubtle)).toBe(true)
+  const rule = f.split("\n")[1]! // the gap row's rule spans the text column: 80 wide from column 36, as without the minimap
+  expect((rule.match(/─/g) ?? []).length).toBe(80)
+  expect([...rule].indexOf("─")).toBe(36)
+  expect(laneCol(f, 120).some((c) => BRAILLE.test(c))).toBe(false) // no find, no lane
+})
+
+test("minimap: shown in Source too, where the line-number gutter draws no dots", async () => {
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 120, height: 34 })
+  expect(miniCol(await keys(s, "s"), 120).some((c) => BRAILLE.test(c))).toBe(true)
+  setup!.renderer.destroy()
+  setup = undefined
+  // text only at the far right of each line: the left cell stays empty
+  const s2 = await mount(tmp({ "b.md": Array.from({ length: 40 }, () => " ".repeat(70) + "x").join("\n") }), "b.md", { width: 120, height: 34 })
+  const f = await keys(s2, "s")
+  expect(f.split("\n").map((r) => [...r].slice(117, 119).join("")).some((c) => c[1] && BRAILLE.test(c[1]))).toBe(true)
+  expect(f.split("\n").some((r) => BRAILLE.test([...r][117] ?? ""))).toBe(false)
+})
+
+test("minimap: hidden below 110 columns and in zen", async () => {
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 109, height: 34 })
+  expect(miniCol(await keys(s), 109).some((c) => BRAILLE.test(c))).toBe(false)
+  s.resize(120, 34)
+  expect(miniCol(await keys(s), 120).some((c) => BRAILLE.test(c))).toBe(true)
+  expect(miniCol(await keys(s, "z"), 120).some((c) => BRAILLE.test(c))).toBe(false)
+})
+
+test("m hides the minimap, saves minimap:false, and a remount keeps it hidden", async () => {
+  const d = tmp({ "a.md": LONG_NOTE })
+  const s = await mount(d, "a.md", { width: 120, height: 34 })
+  const f = await keys(s, "m")
+  expect(f).toContain("minimap off")
+  expect(miniCol(f, 120).some((c) => BRAILLE.test(c))).toBe(false)
+  expect(JSON.parse(readFileSync(join(cfgDir, "brothy", "config.json"), "utf8")).minimap).toBe(false)
+  setup!.renderer.destroy()
+  setup = undefined
+  const s2 = await mount(d, "a.md", { width: 120, height: 34 })
+  expect(miniCol(await keys(s2), 120).some((c) => BRAILLE.test(c))).toBe(false)
+  expect(await keys(s2, "m")).toContain("minimap on")
+})
+
+test("m below 110 columns says the minimap needs 110 columns and leaves the setting alone", async () => {
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 100, height: 30 })
+  expect(await keys(s, "m")).toContain("minimap needs 110 columns")
+  s.resize(120, 34)
+  expect(miniCol(await keys(s), 120).some((c) => BRAILLE.test(c))).toBe(true)
+})
+
+test("minimap: during a find the lane marks the match lines in secondary", async () => {
+  const t = themeByName("brothy")
+  const s = await mount(tmp({ "a.md": LONG_NOTE + "\n\nneedle here\n" }), "a.md", { width: 120, height: 34 })
+  const f = await keys(s, "/", "type:needle", "enter")
+  expect(laneCol(f, 120).some((c) => BRAILLE.test(c))).toBe(true)
+  expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.secondary)).toBe(true)
+})
+
+test("minimap: a click scrolls to that part of the note", async () => {
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 120, height: 34 })
+  const before = await keys(s)
+  const rows = before.split("\n")
+  const last = rows.map((r, y) => (BRAILLE.test([...r].slice(117, 119).join("")) ? y : -1)).filter((y) => y >= 0).at(-1)!
+  await s.mockMouse.click(117, last)
+  const after = await keys(s)
+  expect(after).toContain("Part 11")
+  expect(after).not.toBe(before)
+})
+
+test("minimap: narrowing from 120 to 105 columns hides it and keeps the reading position", async () => {
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 120, height: 34 })
+  await keys(s, "]", "]", "]", "]", "]", "]")
+  expect(await keys(s)).toContain("Part 5")
+  s.resize(105, 34)
+  const f = await keys(s)
+  expect(miniCol(f, 105).some((c) => BRAILLE.test(c))).toBe(false)
+  expect(f).toContain("Part 5")
+})
+
+test("minimap with T: off-screen cells unpainted, the band keeps backgroundElement", async () => {
+  const t = themeByName("brothy")
+  const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { width: 120, height: 34 })
+  await keys(s, "T")
+  const mini = spansOf(s).filter((sp) => BRAILLE.test(sp.text))
+  expect(mini.some((sp) => hex(sp.bg) === t.backgroundElement)).toBe(true)
+  expect(mini.some((sp) => hex(sp.bg) === null)).toBe(true)
+})
+
+// ------------------------------------------------------------- C-p peek pane
+
+test("C-p at 120 columns peeks at the highlighted note, with its fresh TL;DR and no AI request", async () => {
+  const d = tmp({ "a.md": "# Alpha\n", "notes/beta.md": "# Beta notes\n\nPeek body line.\n\n## Part\n\nmore\n" })
+  aiConfig(OLLAMA)
+  seedSummary(join(d, "notes/beta.md"), "Beta is about peeking.")
+  let calls = 0
+  const s = await mount(d, "a.md", { width: 120, height: 34 }, (async () => (calls++, new Response(""))) as unknown as typeof fetch)
+  await keys(s, "C-p", "type:beta")
+  const f = await waitFrame(s, (x) => x.includes("Peek body line."))
+  expect(f).toContain("notes/beta.md")
+  expect(f).toContain("Beta notes")
+  expect(f).toContain("└ Part")
+  expect(f).toContain("TL;DR · llama3.2")
+  expect(f).toContain("Beta is about peeking.")
+  expect(f.split("\n").filter((r) => r.includes("│")).length).toBeGreaterThan(3)
+  expect(calls).toBe(0)
+})
+
+test("C-p peek: an outdated TL;DR is left out; a heading hit starts after its heading", async () => {
+  const d = tmp({ "a.md": "# Alpha\n", "beta.md": "# Beta\n\nIntro.\n\n## Gamma part\n\nUnder the heading.\n" })
+  seedSummary(join(d, "beta.md"), "Stale words.", "not-the-hash")
+  const s = await mount(d, "a.md", { width: 120, height: 34 })
+  await keys(s, "C-p", "type:gamma")
+  const f = await waitFrame(s, (x) => x.includes("Under the heading."))
+  expect(f).toContain("Under the heading.")
+  expect(f).not.toContain("Stale words.")
+  expect(f).not.toContain("TL;DR")
+  expect(f).not.toContain("Intro.")
+})
+
+test("C-p below 100 columns has no peek pane", async () => {
+  const d = tmp({ "a.md": "# Alpha\n", "beta.md": "# Beta\n\nPlain words here.\n" })
+  const s = await mount(d, "a.md", { width: 90, height: 30 })
+  const f = await keys(s, "C-p", "type:beta")
+  await sleep(100)
+  expect(await keys(s)).not.toContain("Plain words here.")
+  expect(f).toContain("Go to")
 })

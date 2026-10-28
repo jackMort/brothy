@@ -23,19 +23,19 @@ const SLOTS = [
   "background", "backgroundPanel", "backgroundElement", "border", "borderActive", "borderSubtle",
 ] as const
 
-test("themes: 13 families, each a dark theme plus a '-light' twin, darks listed first", () => {
-  expect(themes).toHaveLength(26)
+test("themes: 22 families: 20 a dark theme plus a '-light' twin, 2 dark-only, darks listed first", () => {
+  expect(themes).toHaveLength(42)
   const names = themes.map((t) => t.name)
-  expect(new Set(names).size).toBe(26)
+  expect(new Set(names).size).toBe(42)
   const dark = themes.filter((t) => t.mode === "dark")
   const light = themes.filter((t) => t.mode === "light")
-  expect(dark).toHaveLength(13)
-  expect(light).toHaveLength(13)
-  expect(themes.slice(0, 13)).toEqual(dark)
-  for (const d of dark) {
-    const twin = d.name === "one-dark" ? "one-light" : d.name + "-light"
-    expect(names).toContain(twin)
-  }
+  expect(dark).toHaveLength(22)
+  expect(light).toHaveLength(20)
+  expect(themes.slice(0, 22)).toEqual(dark)
+  const twin = (d: string) => (d === "one-dark" ? "one-light" : d + "-light")
+  // a light theme always has its dark twin; the darks without one are the single-mode families
+  for (const l of light) expect(dark.map((d) => twin(d.name))).toContain(l.name)
+  expect(dark.filter((d) => !names.includes(twin(d.name))).map((d) => d.name)).toEqual(["synthwave84", "vesper"])
   expect(names.slice(0, 5)).toEqual(["brothy", "catppuccin", "dracula", "tokyonight", "gruvbox"])
 })
 

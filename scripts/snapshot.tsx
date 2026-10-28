@@ -1,8 +1,8 @@
 // Render the app headlessly and print the frame. Usage:
-//   bun scripts/snapshot.tsx [path] [--size 120x36] [--keys "j j tab 3"] [--json out.json] [--theme name] [--transparent] [--config dir]
+//   bun scripts/snapshot.tsx [path] [--size 120x36] [--keys "j j tab 3"] [--json out.json] [--theme name] [--transparent] [--config dir] [--stdin file]
 // Config (theme, folds) lives in a throwaway temp dir unless --config <dir> points at a real XDG_CONFIG_HOME.
 import { resolve, dirname } from "node:path"
-import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { shutdownHighlighter } from "../src/highlight"
@@ -19,12 +19,13 @@ const json = opt("--json")
 const theme = opt("--theme")
 const transparent = args.includes("--transparent") ? (args.splice(args.indexOf("--transparent"), 1), true) : undefined
 const configDir = opt("--config")
+const stdinFile = opt("--stdin") // render that file as the piped document (root = the path argument)
 const tempConfig = configDir ? undefined : mkdtempSync(join(tmpdir(), "brothy-snap-"))
 process.env.XDG_CONFIG_HOME = configDir ? resolve(configDir) : tempConfig // read lazily by src/config.ts
 const abs = resolve(args[0] ?? "examples")
-const isFile = statSync(abs).isFile()
+const isFile = !stdinFile && statSync(abs).isFile()
 
-const setup = await mount({ root: isFile ? dirname(abs) : abs, initialFile: isFile ? abs : undefined, theme, transparent, width: w!, height: h! })
+const setup = await mount({ root: isFile ? dirname(abs) : abs, initialFile: isFile ? abs : undefined, theme, transparent, stdin: stdinFile ? readFileSync(stdinFile, "utf8") : undefined, width: w!, height: h! })
 for (const k of keys) {
   await press(setup, k)
   await sleep(30)

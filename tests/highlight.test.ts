@@ -126,6 +126,16 @@ describe("cache and rendering", () => {
 
     expect(await ensureHighlights(reqs)).toBe(false)
   })
+  test("a request the worker drops (shut down mid-parse, as renderer.destroy() does) is not cached; the next ensure parses", async () => {
+    clearHighlightCache()
+    const reqs = pendingHighlights(render(fenced("ts", "const dropped = 1 // the worker went away"), 60, t))
+    const asked = ensureHighlights(reqs) // in flight: shutdown destroys the client under it
+    await shutdownHighlighter()
+    expect(await asked).toBe(false)
+    expect(cachedHighlight(reqs[0]!.lang, reqs[0]!.code)).toBeUndefined() // not pinned to the fallback
+    expect(await ensureHighlights(reqs)).toBe(true) // a fresh worker
+    expect(cachedHighlight(reqs[0]!.lang, reqs[0]!.code)).toBeTruthy()
+  })
   test("duplicate requests share one parse", async () => {
     clearHighlightCache()
     const reqs = pendingHighlights(render(src + "\n\n" + src, 60, t))

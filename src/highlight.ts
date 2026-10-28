@@ -321,7 +321,13 @@ const inflight = new Map<string, Promise<boolean>>()
 async function load(req: HighlightRequest): Promise<boolean> {
   const key = keyOf(req.lang, req.code)
   const client = await getClient()
-  const res = client ? await withTimeout(client.highlightOnce(req.code, req.lang), TIMEOUT_MS) : null
+  let dropped = false
+  const ask = client?.highlightOnce(req.code, req.lang).catch(() => ((dropped = true), null))
+  const res = ask ? await withTimeout(ask, TIMEOUT_MS) : null
+  // a rejected request means the worker went away under it (shutdownHighlighter, or OpenTUI's
+  // renderer.destroy(), which destroys the shared client): that says nothing about the block, so
+  // it stays uncached and the next ensureHighlights asks again
+  if (dropped) return false
   if (!res?.highlights) {
     remember(key, null)
     return false

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { cached, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../src/nav"
+import { cached, copiedCount, findQuote, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../src/nav"
 import { themes } from "../src/theme"
 
 const t = themes[0]!
@@ -124,18 +124,20 @@ test("thumb is null when the rows fit, and spans the track from end to end", () 
   expect(thumb(0, 10, 1000)).toEqual({ start: 0, size: 1 })
 })
 
-test("stripLayout: digits and three-space gaps from 30 columns, compact below", () => {
+test("stripLayout: superscript digits against the labels, three-space gaps from 30 columns, two below", () => {
   const full = stripLayout(32)
   expect(full.compact).toBe(false)
-  expect(full.labels.map((l) => [l.view, l.digit, l.x0, l.lx, l.x1])).toEqual([
-    ["files", "1", 1, 3, 8],
-    ["outline", "2", 11, 13, 20],
-    ["info", "3", 23, 25, 29],
+  expect(full.labels.map((l) => [l.view, l.digit, l.text, l.x0, l.lx, l.x1])).toEqual([
+    ["files", "¹", "Files", 1, 2, 7],
+    ["outline", "²", "Outline", 10, 11, 18],
+    ["info", "³", "Info", 21, 22, 26],
   ])
   expect(stripLayout(30).compact).toBe(false)
   const c = stripLayout(29)
   expect(c.compact).toBe(true)
-  expect(c.labels.map((l) => [l.digit, l.x0, l.lx, l.x1])).toEqual([["", 1, 1, 6], ["", 8, 8, 15], ["", 17, 17, 21]])
+  expect(c.labels.map((l) => [l.digit, l.x0, l.lx, l.x1])).toEqual([["¹", 1, 2, 7], ["²", 9, 10, 17], ["³", 19, 20, 24]])
+  // the narrowest panel (24 columns) still fits the compact strip
+  expect(stripLayout(24).labels.at(-1)!.x1).toBeLessThanOrEqual(24)
 })
 
 test("matchIndex is 1-based and null when unset or stale", () => {
@@ -188,4 +190,42 @@ describe("link labels", () => {
     // a 2-key label over a 1-cell link spills onto the next cell
     expect(overlayAt([{ text: "b" }, { text: " and" }], 0, "as", st).map((s) => s.text).join("")).toBe("asand")
   })
+})
+
+test("selectedText drops row padding and blank edge rows, keeps indentation", () => {
+  expect(selectedText("\n   \n  code   \nmore  \n   ")).toBe("  code\nmore")
+  expect(selectedText("   \n ")).toBe("")
+})
+
+test("copiedCount counts lines, else code points", () => {
+  expect(copiedCount("a\nb\nc")).toEqual([3, "line"])
+  expect(copiedCount("zażółć")).toEqual([6, "char"])
+})
+
+test("stripLayout: a shorter view list renumbers from 1", () => {
+  const l = stripLayout(32, ["outline", "info"]).labels
+  expect(l.map((x) => [x.view, x.digit])).toEqual([["outline", "¹"], ["info", "²"]])
+})
+
+test("findQuote finds a phrase that wraps across rows", () => {
+  const plain = ["# why", "the quick brown", "fox jumps over", "", "the lazy dog"]
+  expect(findQuote(plain, 0, plain.length, "Brown  Fox")).toBe(1)
+  expect(findQuote(plain, 0, plain.length, "over the lazy")).toBe(2) // a blank row is skipped, not a break
+  expect(findQuote(plain, 0, plain.length, "lazy dog")).toBe(4)
+})
+
+test("findQuote searches the section's rows only", () => {
+  const plain = ["# a", "needle here", "# b", "needle here"]
+  expect(findQuote(plain, 2, 4, "needle here")).toBe(3)
+  expect(findQuote(plain, 2, 3, "needle here")).toBeNull()
+})
+
+test("findQuote: a miss or an empty needle is null", () => {
+  expect(findQuote(["abc"], 0, 1, "xyz")).toBeNull()
+  expect(findQuote(["abc"], 0, 1, "  ")).toBeNull()
+  expect(findQuote(["abc"], 0, 9, "abc")).toBe(0) // `to` past the end is clamped
+})
+
+test("findQuote ignores leading indentation of list rows", () => {
+  expect(findQuote(["  • find in the vault"], 0, 1, "• Find in the vault")).toBe(0)
 })

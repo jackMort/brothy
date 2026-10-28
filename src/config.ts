@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join } from "node:path"
+import { normalizeAI, type AIConfig } from "./ai"
 import { pickZen, type ZenConfig } from "./zen"
 
 /** Panel views, in tab-strip (and `1 2 3`) order. */
@@ -23,8 +24,14 @@ export interface Config {
   wide?: boolean
   /** Leave the main background unpainted so the terminal's shows through. */
   transparent?: boolean
+  /** Animations (the welcome ink-in and steam); default on. */
+  motion?: boolean
+  /** Braille minimap at the right edge (shown from 110 columns); default on. */
+  minimap?: boolean
   /** Zen mode settings (whether zen is on is never saved). */
   zen?: Partial<ZenConfig>
+  /** Opt-in AI summaries; never patched by brothy (keys come only from the environment). */
+  ai?: AIConfig
 }
 
 /** Resolved on every call so env changes apply; relative XDG paths are ignored per the spec. */
@@ -78,6 +85,8 @@ export function loadConfig(): Config {
   if (typeof raw.theme === "string") out.theme = raw.theme
   if (typeof raw.wide === "boolean") out.wide = raw.wide
   if (typeof raw.transparent === "boolean") out.transparent = raw.transparent
+  if (typeof raw.motion === "boolean") out.motion = raw.motion
+  if (typeof raw.minimap === "boolean") out.minimap = raw.minimap
   let folds: Partial<Record<View, boolean>> | undefined
   const f = raw.folds
   if (f && typeof f === "object" && !Array.isArray(f)) {
@@ -91,14 +100,17 @@ export function loadConfig(): Config {
   } else if (folds) out.sidebar = migrateFolds(folds)
   const zen = pickZen(raw.zen)
   if (Object.keys(zen).length) out.zen = zen
+  const ai = normalizeAI(raw.ai)
+  if (ai) out.ai = ai
   return out
 }
 
 /**
  * Write via a temp file in the target's own folder and rename over it. A symlinked file is
- * followed (the link survives, its target is replaced) and the old mode is kept. Throws on failure.
+ * followed (the link survives, its target is replaced) and the old mode is kept; `newMode`
+ * applies only when the file is new. Throws on failure.
  */
-export function writeFileAtomic(file: string, text: string) {
+export function writeFileAtomic(file: string, text: string, newMode?: number) {
   let target = file
   let mode: number | undefined
   try {
@@ -109,8 +121,9 @@ export function writeFileAtomic(file: string, text: string) {
   }
   mkdirSync(dirname(target), { recursive: true })
   const tmp = `${target}.${process.pid}.tmp`
-  writeFileSync(tmp, text)
-  if (mode !== undefined) chmodSync(tmp, mode)
+  const keep = mode ?? newMode
+  writeFileSync(tmp, text, keep === undefined ? undefined : { mode: keep })
+  if (keep !== undefined) chmodSync(tmp, keep)
   renameSync(tmp, target)
 }
 

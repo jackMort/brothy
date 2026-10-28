@@ -17,7 +17,7 @@ export interface NoteDoc {
   size: number
   aliases: string[]
   /** the Source outline: index i is `view.headings[i]` once the note is open (outline parity) */
-  headings: { text: string; line: number }[]
+  headings: { text: string; line: number; depth: number }[]
   /** searchable source lines (`sourceScan().text`, heading lines blank, `plainLine`) joined by "\n"; "" over BODY_LIMIT */
   text: string
   /** `text` case-folded with `foldSame`, so offsets carry over */
@@ -65,7 +65,7 @@ export function indexNote(src: string, mtime: number, size: number): NoteDoc {
   const sc = sourceScan(src, themes[0]!)
   const raw = parseProperties(src).find(([k]) => /^alias(es)?$/i.test(k))?.[1] ?? []
   const aliases = (Array.isArray(raw) ? raw : [raw]).map((a) => a.trim()).filter(Boolean)
-  const headings = sc.headings.map(({ text, line }) => ({ text, line }))
+  const headings = sc.headings.map(({ text, line, depth }) => ({ text, line, depth }))
   if (size > BODY_LIMIT) return { mtime, size, aliases, headings, text: "", lower: "", starts: [] }
   // Headings already answer in their own section, so their lines are not text
   const heads = new Set(sc.headings.flatMap((h) => Array.from({ length: h.end - h.line + 1 }, (_, k) => h.line + k)))
@@ -255,7 +255,7 @@ export function hitOrdinal(doc: NoteDoc, hit: TextHit, needle: string): number {
 }
 
 /** Index of the line holding offset `at` (binary search over line starts). */
-function lineOf(starts: number[], at: number): number {
+export function lineOf(starts: number[], at: number): number {
   let lo = 0
   let hi = starts.length - 1
   while (lo < hi) {
@@ -267,7 +267,7 @@ function lineOf(starts: number[], at: number): number {
 }
 
 /** Outline index of the last heading at or above `line`, else null. */
-function headingAt(hs: { line: number }[], line: number): number | null {
+export function headingAt(hs: { line: number }[], line: number): number | null {
   let i = -1
   hs.forEach((h, k) => {
     if (h.line <= line) i = k
@@ -312,17 +312,43 @@ export function remember(recent: readonly string[], path: string | null, max = 2
 
 // ------------------------------------------------------------- rows
 
-export type SwitchRow = { kind: "header"; title: string; count: string } | SwitchHit
+/** Ask mode (`ask.ts`): a section the local index found for the model's queries; `heading` -1 is the lead-in */
+export type AnswerRow = {
+  kind: "answer"
+  path: string
+  name: string
+  heading: number
+  /** heading text; "" for the lead-in */
+  text: string
+  /** the section's identity: `headingKey(text)` and its occurrence among equal keys */
+  key: string
+  ord: number
+  id: string
+  /** the best-scoring query: where `⏎` lands and what find highlights */
+  query: string
+  /** code points of `text` that match `query` */
+  hits: number[]
+  /** muted, right-aligned: `hits/all` queries, or the rerank's why */
+  right: string
+}
+/** Ask mode: `⏎` asks (again) or reranks; `error` leads with a ✗ */
+export type AskActionRow = { kind: "askAction"; act: "ask" | "rerank"; text: string; note: string; error?: boolean }
+/** Ask mode: a muted line that is never highlighted (states, `searched: …`) */
+export type AskNoteRow = { kind: "askNote"; text: string }
+export type SwitchRow = { kind: "header"; title: string; count: string } | SwitchHit | AnswerRow | AskActionRow | AskNoteRow
+
+/** Rows the highlight can rest on: not section titles, not ask notes. */
+export const isStop = (r: { kind: string }) => r.kind !== "header" && r.kind !== "askNote"
 
 export const switchRows = (sections: Section[]): SwitchRow[] =>
   sections.flatMap((s): SwitchRow[] => [{ kind: "header", title: s.title, count: s.count }, ...s.hits])
 
-/** First hit row at or after `from`; -1 when there is none. */
-export const firstHit = (rows: readonly { kind: string }[], from = 0): number => rows.findIndex((r, k) => k >= from && r.kind !== "header")
+/** First stop row at or after `from`; -1 when there is none. */
+export const firstHit = (rows: readonly { kind: string }[], from = 0): number => rows.findIndex((r, k) => k >= from && isStop(r))
 
-/** The next hit row from `cur` in `dir`, skipping headers; stays put at either end. */
+/** The next stop row from `cur` in `dir`, skipping headers and notes; stays put at either end. */
 export function stepRow(rows: readonly { kind: string }[], cur: number, dir: 1 | -1): number {
-  for (let k = cur + dir; k >= 0 && k < rows.length; k += dir) if (rows[k]!.kind !== "header") return k
+  for (let k = cur + dir; k >= 0 && k < rows.length; k += dir) if (isStop(rows[k]!)) return k
   return cur
 }
 

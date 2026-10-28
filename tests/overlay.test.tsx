@@ -1,10 +1,14 @@
 import { afterEach, expect, test } from "bun:test"
 import { testRender } from "@opentui/react/test-utils"
 import { quietAct } from "./quiet-act"
-import { OpenPicker, Overlay, PickerInput, Switcher, ZenSettings, fitHits, scrim } from "../src/overlay"
+import { HelpSheet, OpenPicker, Overlay, PickerInput, Switcher, ThemeBoard, ThemePicker, ZenSettings, fitHits, modeSwitch, scrim } from "../src/overlay"
+import { helpLayout } from "../src/help"
+import { WORDMARK } from "../src/status"
 import type { OpenRow } from "../src/projects"
-import { switchRows } from "../src/vault"
-import { contrast, themes } from "../src/theme"
+import { switchRows, type SwitchRow } from "../src/vault"
+import { contrast, themeByName, themes } from "../src/theme"
+import { A } from "../src/spans"
+import { filterFamilies, paneLines, sampleView, themeSplit } from "../src/themepick"
 import { ZEN_DEFAULTS, zenRows } from "../src/zen"
 
 type Setup = Awaited<ReturnType<typeof testRender>>
@@ -178,4 +182,188 @@ test("PickerInput shows the tail of a long query with the cursor", async () => {
   expect(f).toContain("END▏")
   expect(f).toContain("…")
   expect(f).toContain("3 matches")
+})
+
+test("Switcher in Ask mode: title, answers with hits on the right, action rows, muted notes never filled", async () => {
+  const t = themes[0]!
+  const rows: SwitchRow[] = [
+    { kind: "header", title: "Answers", count: "2" },
+    { kind: "answer", path: "/v/g.md", name: "getting-started", heading: 2, text: "Open a single file", key: "open a single file", ord: 0, id: "/v/g.md#open a single file#0", query: "single file", hits: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], right: "3/5" },
+    { kind: "answer", path: "/v/r.md", name: "README", heading: -1, text: "", key: "", ord: 0, id: "/v/r.md##0", query: "path", hits: [], right: "1/5" },
+    { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: " · ~1.3k tokens" },
+    { kind: "askNote", text: "searched: open file · path" },
+  ]
+  setup = quietAct(await testRender(<Switcher t={t} W={80} H={24} title="Ask" q="?how" rows={rows} hl={3} top={0} height={8} note="claude-haiku-5-5" />, { width: 80, height: 24 }))
+  await setup.renderOnce()
+  const f = setup.captureCharFrame()
+  for (const s of ["Ask", "claude-haiku-5-5", "Answers", "getting-started › Open a single file", "3/5", "README", "1/5", "↻ rerank with excerpts · ~1.3k tokens", "searched: open file · path"]) expect(f).toContain(s)
+  expect(f).not.toContain("Go to")
+  expect(rowText(setup, "rerank with excerpts").spans.some((sp) => hex(sp.bg) === t.primary)).toBe(true)
+  expect(rowText(setup, "searched:").spans.some((sp) => hex(sp.bg) === t.primary)).toBe(false)
+  expect(rowText(setup, "Open a single file").spans.some((sp) => sp.text.includes("single") && hex(sp.fg) === t.primary)).toBe(true)
+})
+
+test("Switcher in Ask mode: an error row leads with ✗ in the error color", async () => {
+  const t = themes[0]!
+  const rows: SwitchRow[] = [{ kind: "askAction", act: "ask", text: "AI: rate limited · ⏎ asks again", note: "", error: true }]
+  setup = quietAct(await testRender(<Switcher t={t} W={80} H={24} title="Ask" q="?how" rows={rows} hl={0} top={0} height={8} note="6 notes" />, { width: 80, height: 24 }))
+  await setup.renderOnce()
+  expect(setup.captureCharFrame()).toContain("✗ AI: rate limited · ⏎ asks again")
+  setup.renderer.destroy()
+  setup = quietAct(await testRender(<Switcher t={t} W={80} H={24} title="Ask" q="?how" rows={rows} hl={-1} top={0} height={8} />, { width: 80, height: 24 }))
+  await setup.renderOnce()
+  expect(hex(rowText(setup, "rate limited").spans.find((sp) => sp.text.startsWith("✗"))!.fg)).toBe(t.error)
+})
+
+test("HelpSheet: primary wordmark, role chips on backgroundElement and today's key rows, two columns side by side at 120", async () => {
+  const t = themes[0]!
+  const groups = [
+    { title: "Global", entries: [{ keys: "q", desc: "quit" }, { keys: "t", desc: "pick theme" }] },
+    { title: "Document", entries: [{ keys: "j k ↑ ↓", desc: "scroll a line" }] },
+    { title: "AI", entries: [{ keys: "a", desc: "summarize the note (Info tab) and a description far too long to fit its column" }] },
+  ]
+  const layout = helpLayout(groups, 120, 34)
+  setup = quietAct(await testRender(<HelpSheet t={t} W={120} H={34} layout={layout} top={0} title="Keybindings" />, { width: 120, height: 34 }))
+  await setup.renderOnce()
+  const f = setup.captureCharFrame()
+  const lines = setup.captureSpans().lines
+  const rowOf = (s: string) => lines.find((l) => l.spans.map((sp) => sp.text).join("").includes(s))!
+  const wm = rowOf(WORDMARK[0]!.trim().slice(0, 4))
+  expect(wm.spans.filter((sp) => sp.text.trim()).map((sp) => hex(sp.fg))).toEqual([t.primary])
+  const chipRow = rowOf("Global")
+  expect(chipRow.spans.map((sp) => sp.text).join("")).toContain("Document") // side by side
+  for (const [title, role] of [["Global", t.primary], ["Document", t.secondary]] as const) {
+    const sp = chipRow.spans.find((x) => x.text.includes(title))!
+    expect(hex(sp.fg)).toBe(role)
+    expect(hex(sp.bg)).toBe(t.backgroundElement)
+  }
+  const ai = rowOf(" AI ").spans.find((x) => x.text.includes("AI"))!
+  expect(hex(ai.fg)).toBe(t.accent)
+  const text = f.split("\n")
+  const q = text.find((r) => r.includes("quit"))!
+  expect(q).toMatch(/ q {15}quit/)
+  expect(hex(rowOf("quit").spans.find((x) => x.text.includes("quit"))!.fg)).toBe(t.textMuted)
+  expect(text.find((r) => r.includes("summarize"))).toContain("…")
+  // keys and chips share a column edge; the chip's padding cell sits left of it
+  expect(q.indexOf("q")).toBe(text.find((r) => r.includes("Global"))!.indexOf("Global"))
+})
+
+test("Switcher with a peek at 120 columns: list, │ divider and pane side by side; no pane below 100", async () => {
+  const t = themes[0]!
+  const rows = switchRows([{ title: "Notes", count: "1", hits: [{ kind: "note", path: "/v/s.md", name: "Streams", folder: "dev", hits: [] }] }])
+  const peek = [
+    [{ text: "dev/s.md", fg: t.textMuted }, { text: " ".repeat(41 - 8 - 5) }, { text: "2 min", fg: t.textMuted }],
+    [],
+    [{ text: "Kafka in five minutes.", fg: t.text }],
+  ]
+  setup = quietAct(await testRender(<Switcher t={t} W={120} H={34} q="str" rows={rows} hl={1} top={0} height={16} peek={peek} />, { width: 120, height: 34 }))
+  await setup.renderOnce()
+  const f = setup.captureCharFrame().split("\n")
+  const row = f.find((r) => r.includes("Streams"))!
+  expect([...row].indexOf("S")).toBe(11) // list text where v3 has it: popup at 6, padding 5
+  expect([...row][65]).toBe("│")
+  const head = f.find((r) => r.includes("dev/s.md"))!
+  expect([...head].indexOf("d", 66)).toBe(68)
+  expect([...head].slice(104, 109).join("")).toBe("2 min")
+  expect(f.filter((r) => [...r][65] === "│")).toHaveLength(16)
+  const div = setup.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes("│"))!
+  expect(hex(div.fg)).toBe(t.border)
+  setup.renderer.destroy()
+  setup = quietAct(await testRender(<Switcher t={t} W={90} H={30} q="str" rows={rows} hl={1} top={0} height={10} peek={peek} />, { width: 90, height: 30 }))
+  await setup.renderOnce()
+  const g = setup.captureCharFrame()
+  expect(g).not.toContain("Kafka in five minutes.")
+  expect(g).not.toContain("│")
+})
+
+test("ThemeBoard: a header, then the name and a specimen per mode; the cursor row tinted, its cell framed in primary, the theme in use in muted bars", async () => {
+  const t = themes[0]!
+  const rows = filterFamilies("")
+  const nord = rows.findIndex((r) => r.family.name === "nord")
+  const pick = { i: -1, m: "" }
+  const rowClicks: number[] = []
+  setup = quietAct(
+    await testRender(
+      <ThemeBoard t={t} rows={rows} hl={nord} top={0} height={22} innerW={41} mode="light" shown="light" orig="brothy" onPick={(i, m) => Object.assign(pick, { i, m })} onActivate={(i) => rowClicks.push(i)} />,
+      { width: 41, height: 23 },
+    ),
+  )
+  await setup.renderOnce()
+  const f = setup.captureCharFrame().split("\n")
+  expect(f[0]).toBe(" ".repeat(4 + 12) + "   dark   " + " " + "  light   " + "    ")
+  expect(f[1]).toBe("    brothy      ▕ Aa ●●● ▏   Aa ●●●      ") // the theme in use: thin bars
+  expect(f[1 + nord]).toBe("    nord          Aa ●●●   ▐ Aa ●●● ▌    ") // the cursor on nord-light
+  expect(f[21]).toBe("    synthwave84   Aa ●●●     light       ")
+  const lines = setup.captureSpans().lines
+  const sel = lines[1 + nord]!.spans
+  expect(sel.find((sp) => sp.text.includes("nord"))!.attributes & A.BOLD).toBe(A.BOLD)
+  expect(hex(sel.find((sp) => sp.text.includes("nord"))!.bg)).toBe(t.backgroundElement) // chrome: the app's theme
+  const light = themeByName("nord-light")
+  expect(hex(sel.find((sp) => sp.text === "Aa" && hex(sp.bg) === light.background)!.fg)).toBe(light.text) // cells: the candidate's roles
+  expect(hex(sel.find((sp) => sp.text === "▐")!.fg)).toBe(t.primary)
+  expect(hex(lines[1]!.spans.find((sp) => sp.text === "▕")!.fg)).toBe(t.textMuted)
+  expect(lines[2]!.spans.every((sp) => hex(sp.bg) !== t.backgroundElement)).toBe(true) // other rows untinted
+  const struck = lines[21]!.spans.find((sp) => sp.text === "light")!
+  expect(hex(struck.fg)).toBe(t.textMuted)
+  expect(struck.attributes & A.STRIKE).toBe(A.STRIKE)
+  expect(hex(lines[0]!.spans.find((sp) => sp.text.includes("light"))!.fg)).toBe(t.primary) // the shown mode
+  // a click on a specimen picks that row and mode; a missing mode does nothing
+  await setup.mockMouse.click(f[3]!.indexOf("Aa"), 3)
+  expect(pick).toEqual({ i: 2, m: "dark" })
+  await setup.mockMouse.click(f[21]!.indexOf("light"), 21) // synthwave84's struck light: nothing at all
+  expect(pick).toEqual({ i: 2, m: "dark" })
+  expect(rowClicks).toEqual([])
+  await setup.mockMouse.click(f[21]!.indexOf("synthwave84"), 21) // the name applies the row
+  expect(rowClicks).toEqual([20])
+  setup.renderer.destroy()
+  setup = quietAct(await testRender(<ThemeBoard t={t} rows={[]} hl={-1} top={0} height={5} innerW={41} mode="dark" shown="dark" orig="brothy" />, { width: 41, height: 3 }))
+  await setup.renderOnce()
+  const g = setup.captureCharFrame()
+  expect(g).toContain("No themes match")
+  expect(g).not.toContain("dark") // no header without rows
+})
+
+test("modeSwitch: the active side is a primary chip on backgroundElement, the other muted", () => {
+  const t = themes[0]!
+  const segs = modeSwitch(t, "light")
+  expect(segs.map((seg) => seg.map((s) => s.text).join(""))).toEqual([" dark ", " light "]) // SWITCH_MODES order, one per chip
+  expect(segs[1]!.find((s) => s.text === "light")).toMatchObject({ fg: t.primary, bg: t.backgroundElement, attr: 1 })
+  expect(segs[0]!.map((s) => s.fg)).toEqual([t.textMuted])
+  expect(segs[0]![0]!.attr).toBeUndefined()
+  // a dark-only family: dark is the chip, light muted and struck through
+  const only = modeSwitch(t, "dark", "dark")
+  expect(only[0]!.find((s) => s.text === "dark")).toMatchObject({ fg: t.primary })
+  expect(only[1]).toEqual([{ text: " light ", fg: t.textMuted, attr: A.STRIKE }])
+})
+
+test("ThemePicker at 120 columns: query with the mode switch, 41-wide board, │, the pane on the candidate's background; no pane below 100", async () => {
+  const t = themes[0]!
+  const x = themeByName("rosepine-light")
+  const geo = themeSplit(120, 34, 16)
+  const rows = filterFamilies("")
+  const pane = { theme: x, lines: paneLines(x, sampleView(x, geo.peekW), geo.peekW, geo.rows) }
+  setup = quietAct(await testRender(<ThemePicker t={t} W={120} H={34} q="" rows={rows} hl={6} top={0} mode="light" orig="brothy" geo={geo} pane={pane} />, { width: 120, height: 34 }))
+  await setup.renderOnce()
+  const f = setup.captureCharFrame().split("\n")
+  expect(f[2]).toMatch(/Themes\s+22 families  esc/)
+  expect(f[4]).toMatch(/▏Theme…\s+dark   light/)
+  const row = f.find((r) => /^\s+rosepine\s/.test(r))!
+  expect([...row].indexOf("r")).toBe(11) // popup at 6, padding 5, as in the switcher
+  expect([...row][48]).toBe("│") // 6 + 1 + 41
+  expect(f.filter((r) => [...r][48] === "│")).toHaveLength(24)
+  expect(f[6]).toMatch(/^\s+dark\s+light\s+│/) // the header row
+  expect(f.find((r) => r.includes("rosepine-light"))!.indexOf("rosepine-light")).toBe(51)
+  expect(f.some((r) => r.includes("brothy"))).toBe(true)
+  const lines = setup.captureSpans().lines
+  const sel = lines.find((l) => l.spans.some((sp) => sp.text.includes("rosepine") && !sp.text.includes("-")))!
+  expect(sel.spans.some((sp) => hex(sp.bg) === t.backgroundElement)).toBe(true) // the chrome is the app's theme
+  expect(sel.spans.some((sp) => sp.text === "▐" && hex(sp.fg) === t.primary)).toBe(true)
+  const head = lines.find((l) => l.spans.some((sp) => sp.text.includes("Simmering notes")))!
+  expect(head.spans.some((sp) => hex(sp.bg) === x.background)).toBe(true)
+  setup.renderer.destroy()
+  setup = quietAct(await testRender(<ThemePicker t={t} W={80} H={24} q="" rows={rows} hl={6} top={0} mode="light" orig="brothy" geo={themeSplit(80, 24, 16)} />, { width: 80, height: 24 }))
+  await setup.renderOnce()
+  const g = setup.captureCharFrame()
+  expect(g).not.toContain("│")
+  expect(g).toContain("flexoki")
 })

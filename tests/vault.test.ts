@@ -7,8 +7,11 @@ import {
   emptyIndex,
   firstHit,
   foldSame,
+  headingAt,
   hitOrdinal,
   indexNote,
+  isStop,
+  lineOf,
   nextSection,
   notesOf,
   recentSection,
@@ -19,6 +22,7 @@ import {
   switchRows,
   type IndexIO,
   type SwitchHit,
+  type SwitchRow,
   type VaultIndex,
 } from "../src/vault"
 
@@ -61,7 +65,7 @@ describe("indexNote", () => {
     const src = "---\naliases: [Kafka, Streams]\n---\n# Top\nbody line\n```\nsecret code\n```\n## Sub\n%% hidden %%\nend\n"
     const d = indexNote(src, 5, src.length)
     expect(d.aliases).toEqual(["Kafka", "Streams"])
-    expect(d.headings).toEqual([{ text: "Top", line: 3 }, { text: "Sub", line: 8 }])
+    expect(d.headings).toEqual([{ text: "Top", line: 3, depth: 1 }, { text: "Sub", line: 8, depth: 2 }])
     expect(d.text).not.toContain("secret")
     expect(d.text).not.toContain("hidden")
     expect(d.text).not.toContain("aliases")
@@ -69,9 +73,17 @@ describe("indexNote", () => {
     expect(d.starts[4]).toBe(d.text.indexOf("body line"))
     expect(indexNote("---\nalias: Solo\n---\n", 1, 1).aliases).toEqual(["Solo"])
   })
+  test("headingAt / lineOf: the section of a source line and the line of a text offset", () => {
+    const d = indexNote("lead\n# A\nx\n## B\ny\n", 1, 1)
+    expect(d.headings.map((h) => h.depth)).toEqual([1, 2])
+    expect(headingAt(d.headings, 0)).toBeNull()
+    expect(headingAt(d.headings, 2)).toBe(0)
+    expect(headingAt(d.headings, 4)).toBe(1)
+    expect(lineOf(d.starts, d.text.indexOf("y"))).toBe(4)
+  })
   test("over BODY_LIMIT: name and headings only", () => {
     const d = indexNote("# Big\nneedle\n", 1, BODY_LIMIT + 1)
-    expect(d.headings).toEqual([{ text: "Big", line: 0 }])
+    expect(d.headings).toEqual([{ text: "Big", line: 0, depth: 1 }])
     expect(d.text).toBe("")
   })
   test("foldSame keeps the length, so offsets carry over", () => {
@@ -187,6 +199,22 @@ describe("searchVault", () => {
 })
 
 describe("recents and rows", () => {
+  test("ask rows: askNote is never a stop (like a header); answers and actions are", () => {
+    const rows: SwitchRow[] = [
+      { kind: "askNote", text: "asking…" },
+      { kind: "header", title: "Answers", count: "1" },
+      { kind: "answer", path: "/v/a.md", name: "a", heading: 0, text: "A", key: "a", ord: 0, id: "/v/a.md#a#0", query: "a", hits: [0], right: "1/1" },
+      { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: " · ~1k tokens" },
+      { kind: "askNote", text: "searched: a" },
+    ]
+    expect(rows.map(isStop)).toEqual([false, false, true, true, false])
+    expect(firstHit(rows)).toBe(2)
+    expect(stepRow(rows, 2, 1)).toBe(3)
+    expect(stepRow(rows, 3, 1)).toBe(3)
+    expect(stepRow(rows, 2, -1)).toBe(2)
+    const note: SwitchRow[] = [{ kind: "askNote", text: "type a question" }]
+    expect(firstHit(note)).toBe(-1)
+  })
   test("recentSection: newest first, then the open note's folder-mates; the open note and vanished paths left out", () => {
     const tree = treeOf(["d/a.md", "d/b.md", "d/c.md", "e/x.md"])
     const sec = recentSection(tree, ["/v/e/x.md", "/v/d/a.md", "/v/gone.md"], "/v/d/a.md")
@@ -207,7 +235,7 @@ describe("recents and rows", () => {
       { title: "Notes", count: "2", hits: [hit("a"), hit("b")] },
       { title: "Text", count: "1", hits: [hit("c")] },
     ])
-    expect(rows.map((r) => (r.kind === "header" ? "#" + r.title : r.path))).toEqual(["#Notes", "a", "b", "#Text", "c"])
+    expect(rows.map((r) => (r.kind === "header" ? "#" + r.title : "path" in r ? r.path : ""))).toEqual(["#Notes", "a", "b", "#Text", "c"])
     expect(firstHit(rows)).toBe(1)
     expect(stepRow(rows, 2, 1)).toBe(4)
     expect(stepRow(rows, 4, 1)).toBe(4)

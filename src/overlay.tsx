@@ -1,14 +1,20 @@
 import { MouseButton, RGBA, type MouseEvent } from "@opentui/core"
+import { useRenderer } from "@opentui/react"
 import { basename, dirname } from "node:path"
 import type { ReactNode } from "react"
 import { contrastOn, type Theme } from "./theme"
 import { A, width as sw, type Span } from "./markdown"
 import { safe, safeLine } from "./spans"
-import { truncate, truncateLeft } from "./status"
+import { WORDMARK, truncate, truncateLeft } from "./status"
+import { chip, groupColor, inkAt, keycaps, steamColors } from "./chrome"
+import { BIG, welcomeArt, welcomeFit, type ArtCell } from "./welcome"
+import type { HelpLayout, HelpLine } from "./help"
 import { stem } from "./files"
 import { tildify, type OpenRow } from "./projects"
 import type { SwitchRow } from "./vault"
 import type { ZenRow } from "./zen"
+import { switchSplit } from "./peek"
+import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "./themepick"
 
 function Line({ spans }: { spans: Span[] }) {
   return (
@@ -20,6 +26,32 @@ function Line({ spans }: { spans: Span[] }) {
       ))}
     </text>
   )
+}
+
+/**
+ * The pointer's cell as of the last mouse event a `note` box saw, per renderer. After a render
+ * OpenTUI hit-tests the resting pointer again and sends `over` to whatever is under it now — a row
+ * redrawn as the highlight leaves it, or one scrolled under it — so an `over` at that same cell is
+ * no movement and must not take the highlight back from the keys.
+ */
+const pointers = new WeakMap<object, { x: number; y: number }>()
+
+export function usePointer() {
+  const r = useRenderer()
+  return {
+    /**
+     * Catch-all `onMouse` above the rows (App's roots, the popup): the pointer's own events set its
+     * cell. Not `over`/`out`: a real move sends them first, already at the new cell.
+     */
+    note: (e: MouseEvent) => {
+      if (e.type !== "over" && e.type !== "out") pointers.set(r, { x: e.x, y: e.y })
+    },
+    /** `over` event `e` came from the pointer moving onto the row */
+    moved: (e: MouseEvent) => {
+      const p = pointers.get(r)
+      return !p || p.x !== e.x || p.y !== e.y
+    },
+  }
 }
 
 /** Wash drawn over the page behind a popup: black over dark themes, white over light ones. */
@@ -55,6 +87,7 @@ export function Overlay({
   children: ReactNode
 }) {
   const wash = scrim(t)
+  const pointer = usePointer()
   return (
     <box
       key="overlay"
@@ -76,6 +109,7 @@ export function Overlay({
       }}
     >
       <box
+        onMouse={pointer.note} // down and the wheel stop here, short of App's root
         onMouseDown={(e: MouseEvent) => e.stopPropagation()}
         onMouseScroll={(e: MouseEvent) => {
           if (e.scroll?.direction === "up" || e.scroll?.direction === "down") onScroll?.(e.scroll.direction === "up" ? -1 : 1)
@@ -136,6 +170,7 @@ export function PickerList({
   onActivate?: (i: number) => void
 }) {
   const fgOn = contrastOn(t.primary)
+  const pointer = usePointer()
   const rows = items.slice(top, top + height)
   const textW = innerW - 8
   return (
@@ -157,7 +192,7 @@ export function PickerList({
         return (
           <box
             key={sel ? "sel" + j : "row" + j}
-            onMouseOver={() => !it.header && onHover?.(top + j)}
+            onMouseOver={(e: MouseEvent) => !it.header && pointer.moved(e) && onHover?.(top + j)}
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT && !it.header) onActivate?.(top + j)
             }}
@@ -176,10 +211,30 @@ export function PickerList({
   )
 }
 
-/** Search-input row with a muted placeholder and a primary cursor. */
-export function PickerInput({ t, value, placeholder, note, width }: { t: Theme; value: string; placeholder: string; note?: string; width?: number }) {
+/**
+ * Search-input row with a muted placeholder and a primary cursor; on the right a muted `note` or
+ * `right` segments, one cell apart. A left click on segment `i` calls `onRight(i)`.
+ */
+export function PickerInput({
+  t,
+  value,
+  placeholder,
+  note,
+  right,
+  onRight,
+  width,
+}: {
+  t: Theme
+  value: string
+  placeholder: string
+  note?: string
+  right?: Span[][]
+  onRight?: (i: number) => void
+  width?: number
+}) {
   // a long query shows its end, where the typing is; `width` is the popup's column count
-  const room = width === undefined ? Infinity : width - 2 - 8 - 1 - (note ? sw(note) + 1 : 0)
+  const side = note ? sw(note) : right?.length ? right.reduce((n, seg) => n + seg.reduce((m, s) => m + sw(s.text), 0), right.length - 1) : 0
+  const room = width === undefined ? Infinity : width - 2 - 8 - 1 - (side ? side + 1 : 0)
   const shown = safeLine(value)
   return (
     <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 4, paddingRight: 4, height: 1 }}>
@@ -188,7 +243,23 @@ export function PickerInput({ t, value, placeholder, note, width }: { t: Theme; 
         <span fg={t.primary}>▏</span>
         {value ? null : <span fg={t.textMuted}>{placeholder}</span>}
       </text>
-      {note ? <text fg={t.textMuted}>{note}</text> : null}
+      {note ? (
+        <text fg={t.textMuted}>{note}</text>
+      ) : right?.length ? (
+        <box style={{ flexDirection: "row", gap: 1, height: 1 }}>
+          {right.map((seg, i) => (
+            <box
+              key={i}
+              style={{ height: 1, flexShrink: 0 }}
+              onMouseDown={(e: MouseEvent) => {
+                if (e.button === MouseButton.LEFT) onRight?.(i)
+              }}
+            >
+              <Line spans={seg} />
+            </box>
+          ))}
+        </box>
+      ) : null}
     </box>
   )
 }
@@ -249,6 +320,19 @@ export function fitHits(text: string, hits: readonly number[], room: number): { 
  */
 export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
   if (r.kind === "header") return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
+  if (r.kind === "askNote") return { header: true, spans: [{ text: safeLine(r.text), fg: t.textMuted }] }
+  if (r.kind === "askAction")
+    return { spans: [...(r.error ? [{ text: "✗ ", fg: t.error }] : []), { text: safeLine(r.text), fg: t.text }, { text: safeLine(r.note), fg: t.textMuted }] }
+  if (r.kind === "answer") {
+    const room = w - (r.right ? sw(r.right) + 1 : 0)
+    if (r.heading < 0) {
+      const f = fitHits(r.name, [], room)
+      return { spans: hitSpans(f.text, f.hits, t.text, t.primary), right: r.right }
+    }
+    const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
+    const f = fitHits(r.text, r.hits, room - sw(name) - 3)
+    return { spans: [{ text: name + " › ", fg: t.textMuted }, ...hitSpans(f.text, f.hits, t.text, t.primary)], right: r.right }
+  }
   const folder = r.kind === "text" ? "" : truncateLeft(r.folder, Math.floor(w / 3))
   const room = w - (folder ? sw(folder) + 1 : 0)
   const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
@@ -277,12 +361,14 @@ export function Switcher({
   t,
   W,
   H,
+  title = "Go to",
   q,
   rows,
   hl,
   top,
   height,
   note,
+  peek,
   onClose,
   onScroll,
   onHover,
@@ -291,6 +377,8 @@ export function Switcher({
   t: Theme
   W: number
   H: number
+  /** "Go to", or "Ask" for a `?` question */
+  title?: string
   q: string
   rows: SwitchRow[]
   hl: number
@@ -298,26 +386,50 @@ export function Switcher({
   height: number
   /** right of the title: indexing progress or the note count */
   note?: string
+  /** peek pane rows for the highlighted row (`peekLines`); shown from PEEK_MIN_W columns */
+  peek?: Span[][]
   onClose?: () => void
   onScroll?: (dir: 1 | -1) => void
   onHover?: (i: number) => void
   onActivate?: (i: number) => void
 }) {
-  const width = Math.min(70, W - 2)
+  const g = switchSplit(W)
+  const split = g.split && peek !== undefined
+  const width = split ? g.width : Math.min(70, W - 2)
+  const listW = split ? g.listW : width - 2
+  const list = (
+    <PickerList
+      t={t}
+      items={rows.map((r) => switchItem(r, t, listW - 8))}
+      hl={hl}
+      top={top}
+      height={height}
+      innerW={listW}
+      empty={q.trim() ? "No results found" : "Type a note, heading or text"}
+      onHover={onHover}
+      onActivate={onActivate}
+    />
+  )
   return (
-    <Overlay t={t} W={W} H={H} width={width} title="Go to" note={note} onClose={onClose} onScroll={onScroll}>
+    <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
-      <PickerList
-        t={t}
-        items={rows.map((r) => switchItem(r, t, width - 10))}
-        hl={hl}
-        top={top}
-        height={height}
-        innerW={width - 2}
-        empty={q.trim() ? "No results found" : "Type a note, heading or text"}
-        onHover={onHover}
-        onActivate={onActivate}
-      />
+      {split ? (
+        <box key="split" style={{ flexDirection: "row", height }}>
+          <box style={{ width: listW, flexShrink: 0 }}>{list}</box>
+          <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
+            {Array.from({ length: height }, (_, i) => (
+              <Line key={i} spans={[{ text: "│", fg: t.border }]} />
+            ))}
+          </box>
+          <box style={{ width: g.peekW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0 }}>
+            {peek!.slice(0, height).map((spans, i) => (
+              <Line key={i} spans={spans} />
+            ))}
+          </box>
+        </box>
+      ) : (
+        list
+      )}
     </Overlay>
   )
 }
@@ -396,6 +508,208 @@ export function OpenPicker({
   )
 }
 
+/**
+ * The `t` picker's list as a board: a header (`dark` / `light` over their slots), then one row per family,
+ * its name with the hits and a slot per mode (`boardSlot`: a specimen in that theme's own roles, or the
+ * missing mode struck through). The highlighted row is tinted backgroundElement with its name bold, and
+ * its shown theme framed in primary; the theme in use keeps a thin muted frame. Rows are PickerList's
+ * (padding 1, then 3); hovering a row picks it, a click on a slot picks that theme (`onPick`; a missing
+ * mode's slot does nothing), elsewhere on the row applies the row as it is (`onActivate`).
+ */
+export function ThemeBoard({
+  t,
+  rows,
+  hl,
+  top,
+  height,
+  innerW,
+  mode,
+  shown,
+  orig,
+  onHover,
+  onActivate,
+  onPick,
+}: {
+  t: Theme
+  rows: FamilyHit[]
+  hl: number
+  top: number
+  /** family rows below the header */
+  height: number
+  innerW: number
+  /** the mode asked for */
+  mode: ThemeMode
+  /** the candidate's mode: the header's primary word */
+  shown: ThemeMode
+  /** the theme in use */
+  orig: string
+  onHover?: (i: number) => void
+  onActivate?: (i: number) => void
+  onPick?: (i: number, mode: ThemeMode) => void
+}) {
+  const L = boardLayout(innerW - 8)
+  const pointer = usePointer()
+  return (
+    <box key="theme-board" style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1 }}>
+      {rows.length ? (
+        <box key="head" style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3 }}>
+          <Line spans={boardHeader(t, shown, L)} />
+        </box>
+      ) : (
+        <box key="none" style={{ height: 1, paddingLeft: 3 }}>
+          <text fg={t.textMuted}>No themes match</text>
+        </box>
+      )}
+      {rows.slice(top, top + height).map((h, j) => {
+        const i = top + j
+        const sel = i === hl
+        const frames = boardFrames(h.family, mode, orig, sel)
+        return (
+          <box
+            key={sel ? "sel" + j : "row" + j}
+            onMouseOver={(e: MouseEvent) => pointer.moved(e) && onHover?.(i)}
+            onMouseDown={(e: MouseEvent) => {
+              if (e.button === MouseButton.LEFT) onActivate?.(i)
+            }}
+            style={{ height: 1, flexShrink: 0, flexDirection: "row", paddingLeft: 3, paddingRight: 3, backgroundColor: sel ? t.backgroundElement : undefined }}
+          >
+            <box style={{ width: L.nameW, height: 1, flexShrink: 0 }}>
+              <Line spans={hitSpans(h.family.name, h.hits, t.text, t.primary, sel)} />
+            </box>
+            {BOARD_MODES.map((m, k) => (
+              <box
+                key={m}
+                style={{ width: SLOT_W, height: 1, flexShrink: 0, marginLeft: k ? L.gap : 0 }}
+                onMouseDown={(e: MouseEvent) => {
+                  if (e.button !== MouseButton.LEFT) return
+                  pointer.note(e)
+                  e.stopPropagation() // a missing mode is not a theme: its struck word does nothing
+                  if (h.family[m]) onPick?.(i, m)
+                }}
+              >
+                <Line spans={boardSlot(t, h.family[m], m, frames[m])} />
+              </box>
+            ))}
+          </box>
+        )
+      })}
+    </box>
+  )
+}
+
+/** The modes in the switch's order: the board's (`BOARD_MODES`). */
+export const SWITCH_MODES = BOARD_MODES
+
+/**
+ * The mode switch in the input row, one segment per SWITCH_MODES entry: the active side as a primary
+ * chip, the other muted; with `only` (a single-mode family) the missing side is also struck through.
+ */
+export const modeSwitch = (t: Theme, mode: ThemeMode, only?: ThemeMode): Span[][] =>
+  SWITCH_MODES.map((m) =>
+    m === mode ? chip(t, m, t.primary) : [{ text: ` ${m} `, fg: t.textMuted, ...(only && m !== only ? { attr: A.STRIKE } : {}) }],
+  )
+
+/**
+ * `t` popup: the query with the dark/light switch, the board (`ThemeBoard`: a dark and a light specimen
+ * per family) and with `geo.split` a pane that draws the candidate's sample on its own background. The
+ * chrome stays in `t`, the app's theme: only the specimens and the pane paint candidates' roles. A click
+ * on a chip sets that mode (`onMode`), on a specimen applies that theme (`onPick`). Controlled by App.
+ */
+export function ThemePicker({
+  t,
+  W,
+  H,
+  q,
+  rows,
+  hl,
+  top,
+  mode,
+  shown = mode,
+  only,
+  orig,
+  geo,
+  pane,
+  onClose,
+  onScroll,
+  onHover,
+  onActivate,
+  onPick,
+  onMode,
+}: {
+  t: Theme
+  W: number
+  H: number
+  q: string
+  rows: FamilyHit[]
+  /** the highlighted row, -1 for none */
+  hl: number
+  /** the board's first row on screen (`pickTop`) */
+  top: number
+  /** the mode asked for: where each row's cursor would sit (`boardFrames`) */
+  mode: ThemeMode
+  /** the candidate's mode, active on the switch (`pickShown`) */
+  shown?: ThemeMode
+  /** the highlighted family's only mode: the switch does nothing */
+  only?: ThemeMode
+  /** the theme in use (its thin frame) */
+  orig: string
+  geo: ReturnType<typeof themeSplit>
+  /** the candidate and its rows (`paneLines`); drawn only with `geo.split` */
+  pane?: { theme: Theme; lines: Span[][] }
+  onClose?: () => void
+  onScroll?: (dir: 1 | -1) => void
+  onHover?: (i: number) => void
+  onActivate?: (i: number) => void
+  /** a click on row `i`'s slot for `mode`: that theme, applied */
+  onPick?: (i: number, mode: ThemeMode) => void
+  onMode?: (mode: ThemeMode) => void
+}) {
+  const note = q.trim() ? `${rows.length} of ${FAMILIES.length}` : `${FAMILIES.length} families`
+  // the header takes a row; below PEEK_MIN_W the popup shrinks to the rows there are
+  const height = Math.max(1, geo.rows - 1)
+  const list = (
+    <ThemeBoard
+      t={t}
+      rows={rows}
+      hl={hl}
+      top={top}
+      height={height}
+      innerW={geo.listW}
+      mode={mode}
+      shown={shown}
+      orig={orig}
+      onHover={onHover}
+      onActivate={onActivate}
+      onPick={onPick}
+    />
+  )
+  return (
+    <Overlay t={t} W={W} H={H} width={geo.width} title="Themes" note={note} onClose={onClose} onScroll={onScroll}>
+      <PickerInput t={t} value={q} placeholder="Theme…" right={modeSwitch(t, shown, only)} onRight={(i) => !only && onMode?.(SWITCH_MODES[i]!)} width={geo.width} />
+      {geo.split ? (
+        <box key="split" style={{ flexDirection: "row", height: geo.rows }}>
+          <box style={{ width: geo.listW, flexShrink: 0 }}>{list}</box>
+          <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
+            {Array.from({ length: geo.rows }, (_, i) => (
+              <Line key={i} spans={[{ text: "│", fg: t.border }]} />
+            ))}
+          </box>
+          <box
+            key={pane ? "pane" : "pane-none"}
+            style={{ width: geo.peekW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(pane ? { backgroundColor: pane.theme.background } : {}) }}
+          >
+            {(pane?.lines ?? []).slice(0, geo.rows).map((spans, i) => (
+              <Line key={i} spans={spans} />
+            ))}
+          </box>
+        </box>
+      ) : (
+        list
+      )}
+    </Overlay>
+  )
+}
+
 /** `Z` popup: one row per zen setting, label left and value right of it; controlled by App. */
 export function ZenSettings({
   t,
@@ -437,5 +751,120 @@ export function ZenSettings({
         onActivate={onActivate}
       />
     </Overlay>
+  )
+}
+
+/** `spans` padded with spaces to `w` cells. */
+const padTo = (spans: Span[], w: number): Span[] => [...spans, { text: " ".repeat(Math.max(0, w - spans.reduce((n, s) => n + sw(s.text), 0))) }]
+
+/** One column cell, 1 + `colW` wide: the lead cell holds a chip's left padding, so chips and keys share an edge. */
+function helpCell(t: Theme, l: HelpLine | undefined, { colW, keyW }: HelpLayout): Span[] {
+  if (!l) return padTo([], 1 + colW)
+  if (l.kind === "chip") return padTo(chip(t, l.title, groupColor(t, l.title)), 1 + colW)
+  const keys = truncate(l.keys, keyW - 1)
+  return padTo([{ text: " " + keys + " ".repeat(keyW - sw(keys)), fg: t.text }, { text: truncate(l.desc, colW - keyW), fg: t.textMuted }], 1 + colW)
+}
+
+/** `? ?`: the keys sheet, today's popup with role chips per group and, from 100 columns, two columns; App owns `top`. */
+export function HelpSheet({ t, W, H, layout, top, title, note, onClose, onScroll }: {
+  t: Theme
+  W: number
+  H: number
+  layout: HelpLayout
+  top: number
+  title: string
+  note?: string
+  onClose?: () => void
+  onScroll?: (dir: 1 | -1) => void
+}) {
+  return (
+    <Overlay t={t} W={W} H={H} width={layout.width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
+      <box key="help-body" style={{ flexDirection: "column", paddingLeft: 3, paddingRight: 4 }}>
+        {layout.mark
+          ? [...WORDMARK.map((l, i) => <Line key={"wm" + i} spans={[{ text: " " + l, fg: t.primary }]} />), <Line key="wm-gap" spans={[]} />]
+          : null}
+        {Array.from({ length: layout.vis }, (_, i) => (
+          <Line key={i} spans={layout.cols.flatMap((c, k) => [...(k ? [{ text: "   " }] : []), ...helpCell(t, c[top + i], layout)])} />
+        ))}
+      </box>
+    </Overlay>
+  )
+}
+
+/** Spans of one art row, `cells` coloured by role; neighbours with the same look share a span. */
+function artSpans(t: Theme, cells: ArtCell[], ink: number): Span[] {
+  const steam = steamColors(t)
+  const out: Span[] = []
+  for (const c of cells) {
+    const fg =
+      c.role === "mark" || c.role === "body" ? inkAt(t, ink, t.primary) : c.role === "edge" ? inkAt(t, ink, t.text) : c.role === "steam" ? steam[c.row ?? 4] : undefined
+    const bg = c.broth ? inkAt(t, ink, t.secondary) : undefined
+    const last = out.at(-1)
+    if (last && last.fg === fg && last.bg === bg) last.text += c.ch
+    else out.push({ text: c.ch, fg, bg })
+  }
+  return out
+}
+
+/**
+ * The empty state (no Markdown files): the wordmark over a bowl with steam rising off the broth, today's message,
+ * keycap actions, recent projects as `o` picker rows (pointing selects, a click opens) and the hint row.
+ * Blocks drop as the area shrinks (`welcomeFit`); App owns the selection, the steam tick and the ink step.
+ */
+export function Welcome({ t, CW, CH, root, recents, hl, tick, ink, keys, home, onHover, onActivate }: {
+  t: Theme
+  CW: number
+  CH: number
+  root: string
+  /** the `o` picker's rows for the recent projects, header first */
+  recents: OpenRow[]
+  /** highlighted row of `recents` */
+  hl: number
+  tick: number
+  /** ink-in step, 0–3 (3: inked) */
+  ink: number
+  /** [key, word] actions */
+  keys: [string, string][]
+  home?: string
+  onHover?: (i: number) => void
+  onActivate?: (i: number) => void
+}) {
+  const fit = welcomeFit(CW, CH, recents.filter((r) => r.kind === "recent").length)
+  const width = (spans: Span[]) => spans.reduce((n, s) => n + sw(s.text), 0)
+  const centre = (spans: Span[]): Span[] => [{ text: " ".repeat(Math.max(0, Math.floor((CW - width(spans)) / 2))) }, ...spans]
+  const rows: ReactNode[] = []
+  const line = (spans: Span[]) => rows.push(<Line key={rows.length} spans={spans} />)
+  for (let i = 0; i < fit.top; i++) line([])
+  if (fit.mark) {
+    const art = welcomeArt(fit.size, tick, { steam: fit.steam, bowl: fit.bowl })
+    const x = Math.max(0, (CW >> 1) - ((fit.size.bowlW + 2) >> 1))
+    for (const r of art) line([{ text: " ".repeat(x) }, ...artSpans(t, r, ink)])
+    line([])
+  }
+  line(centre([{ text: truncate(`No Markdown files found in ${safeLine(root)}`, CW), fg: t.textMuted }]))
+  line([])
+  line(centre(keycaps(t, keys)))
+  // PickerList pads one cell each side of the rows
+  const FW = Math.min(58, CW - 2)
+  const fx = Math.max(0, Math.floor((CW - FW) / 2))
+  const list = fit.recents ? recents.slice(0, 1 + fit.recents) : []
+  if (list.length) {
+    line([])
+    rows.push(
+      <box key="recent" style={{ flexDirection: "column", alignItems: "flex-start", flexShrink: 0, paddingLeft: Math.max(0, fx - 1) }}>
+        <PickerList t={t} items={list.map((r) => openItem(r, t, FW - 6, home))} hl={hl} top={0} height={list.length} innerW={FW + 2} onHover={onHover} onActivate={onActivate} />
+      </box>,
+    )
+  }
+  if (fit.hint) {
+    if ((fit.size === BIG && fit.bowl) || !list.length) line([])
+    const hint: [string, string][] = [...(list.length ? [["⏎", "open"] as [string, string]] : []), ["o", "all projects or a path"]]
+    const spans = hint.flatMap(([k, w], i): Span[] => [...(i ? [{ text: "   " }] : []), { text: k, fg: t.text }, { text: " " + w, fg: t.textMuted }])
+    line(list.length ? [{ text: " ".repeat(fx + 3) }, ...spans] : centre(spans))
+  }
+  return (
+    <box key="empty" style={{ flexDirection: "column" }}>
+      {rows}
+    </box>
   )
 }

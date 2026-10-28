@@ -20,7 +20,7 @@ import {
   FLAT, INTRO_FROM, OUTRO_TO, camTrack, capsOf, clamp01, frameRect, homeCam, inCubic, inOutCubic, layersAt, lerp, lerpPose,
   mixHex, onScreen, outBack, outCubic, outQuart, pressDepth, span, tilt, transform,
 } from "./cinema"
-import { BAR, CH, CW, DOCS, PAD, ROOT, mix, pngCommands, sandbox, svgDoc, window } from "./pipeline"
+import { BAR, CH, CW, DOCS, PAD, ROOT, mix, pngCommand, sandbox, svgDoc, window } from "./pipeline"
 import type { Frame } from "./session"
 
 const COLS = 110, ROWS = 26
@@ -53,8 +53,9 @@ interface Step {
 
 const cap = (keys: string | string[], text: string): Cap => ({ keys: Array.isArray(keys) ? keys : [keys], text })
 
+// a success callout: its ✓ is in JetBrains Mono (the note callout's ✎ is in no font the PNGs are drawn with)
 const RELOAD: Step = {
-  write: ["examples/README.md", (s) => s.replace("# Welcome to brothy\n", "# Welcome to brothy\n\n> [!note] Just saved in another window\n> brothy reloads the note the moment it changes on disk.\n")],
+  write: ["examples/README.md", (s) => s.replace("# Welcome to brothy\n", "# Welcome to brothy\n\n> [!success] Just saved in another window\n> brothy reloads the note the moment it changes on disk.\n")],
   cap: { keys: [], text: "saved in your editor: live reload" },
   cam: [32, 3, 77, 4],
   hold: 2300,
@@ -80,17 +81,19 @@ const FULL: Step[] = [
   { keys: "2", cap: cap("2", "outline"), hold: 800 },
   { keys: "j j j j", gap: 260, cap: cap(["j", "k"], "move"), hold: 300 },
   { keys: "enter", cap: cap("⏎", "jump to the heading"), hold: 1300 },
-  // switcher
-  { keys: "C-p", cap: cap(["ctrl", "p"], "go to a note, heading or text"), cam: [24, 8, 62, 9], hold: 800 },
+  // switcher: with its peek pane the popup is as wide as the theme picker, so both get the same frame
+  { keys: "C-p", cap: cap(["ctrl", "p"], "go to a note, heading or text"), cam: [6, 1, 98, 21], hold: 800 },
   { keys: "type:heat", hold: 900 },
   { keys: "enter", cap: cap("⏎", "open the heading"), cam: "full", hold: 1300 },
   // themes
-  { keys: "t", cap: cap("t", "pick a theme"), cam: [33, 0, 44, 10], zoom: 1.6, hold: 800 },
-  { keys: "j j j", gap: 650, cap: cap(["j", "k"], "live preview"), cam: "full", hold: 600 },
-  { keys: "j j j j j j j j j j", gap: 130, hold: 900 },
+  { keys: "t", cap: cap("t", "pick a theme"), cam: [6, 1, 98, 22], hold: 800 },
+  { keys: "down down down", gap: 650, cap: cap(["↑", "↓"], "family, shown in the pane"), hold: 600 },
+  { keys: "right", cap: cap(["←", "→"], "dark / light"), hold: 1100 },
   { keys: "enter", cap: cap("⏎", "apply"), cam: "full", hold: 1300 },
-  { keys: "t g", gap: 500, cap: cap(["t", "g"], "back to brothy"), hold: 500 },
-  { keys: "enter", cap: cap("⏎", "apply"), hold: 1000 },
+  // the picker opens on the theme in use (tokyonight-light), so typing a name keeps its light side: ← takes the dark
+  { keys: "t type:brothy", gap: 120, cap: cap("t", "type to filter"), cam: [6, 1, 98, 22], hold: 500 },
+  { keys: "left", cap: cap("←", "dark"), hold: 600 },
+  { keys: "enter", cap: cap("⏎", "back to brothy"), cam: "full", hold: 1000 },
   // transparent
   { keys: "T", cap: cap("T", "transparent background"), hold: 1500 },
   { keys: "T", cap: cap("T", "opaque again"), hold: 900 },
@@ -114,13 +117,15 @@ const SHORT: Step[] = [
   { cap: null, hold: 400 },
   { keys: "f", cap: cap("f", "label the links"), cam: [33, 2, 77, 5], hold: 1000 },
   { keys: "a", cap: cap("a", "follow"), hold: 900 },
-  { keys: "C-p", cap: cap(["ctrl", "p"], "go to anything"), cam: [24, 8, 62, 9], hold: 450 },
+  { keys: "C-p", cap: cap(["ctrl", "p"], "go to anything"), cam: [6, 1, 98, 21], hold: 450 },
   { keys: "type:heat", hold: 600 },
   { keys: "enter", cap: cap("⏎", "open"), cam: "full", hold: 800 },
-  { keys: "t", cap: cap("t", "pick a theme"), cam: [33, 0, 44, 10], zoom: 1.6, hold: 600 },
-  { keys: "j j j j", gap: 520, cap: cap(["j", "k"], "live preview"), cam: "full", hold: 450 },
-  { keys: "enter", cap: cap("⏎", "apply"), hold: 650 },
-  { keys: "z", cap: cap("z", "zen mode"), cam: [19, 4, 70, 14], hold: 800 },
+  { keys: "t", cap: cap("t", "pick a theme · ←→ dark / light"), cam: [6, 1, 98, 22], hold: 600 },
+  // the pane shows the family; esc keeps brothy: applying (the full cut does) sweeps the window twice and the GIF
+  // outgrows GIF_MAX
+  { keys: "down down down", gap: 450, cap: cap(["↑", "↓"], "family, shown in the pane"), hold: 700 },
+  { keys: "esc", cap: cap("esc", "keep yours"), cam: "full", hold: 450 },
+  { keys: "z", cap: cap("z", "zen mode"), cam: [19, 3, 70, 14], hold: 700 }, // from row 3 the zen heading row stays in the frame
   { keys: "j j j j", gap: 260, cap: cap(["j", "k"], "read"), hold: 500 },
   { keys: "z", cap: null, cam: "full", hold: 700 },
 ]
@@ -237,10 +242,9 @@ async function stills(rec: Recording, dir: string): Promise<{ stills: Still[]; w
     return st
   })
   await pool(jobs, cpus().length, async ({ svg, png }) => {
-    const [cmd] = pngCommands(svg, png, ZOOM)
-    if (!cmd) throw new Error("no SVG→PNG converter (resvg, rsvg-convert, magick)")
+    const cmd = pngCommand(svg, png, ZOOM)
     const p = Bun.spawn(cmd, { stdout: "ignore", stderr: "pipe" })
-    if ((await p.exited) !== 0) throw new Error(`${cmd[0]} failed on ${svg}:\n${await new Response(p.stderr).text()}`)
+    if ((await p.exited) !== 0) throw new Error(`resvg failed on ${svg}:\n${await new Response(p.stderr).text()}`)
   })
   return { stills: out, ww, wh }
 }

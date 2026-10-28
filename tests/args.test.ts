@@ -15,7 +15,7 @@ const err = (argv: string[]) => {
 const theme = themes[1]!.name
 
 describe("parseArgs", () => {
-  test("defaults", () => expect(ok([])).toEqual({ path: ".", theme: undefined, transparent: false, help: false, version: false }))
+  test("defaults", () => expect(ok([])).toEqual({ path: ".", stdin: false, given: false, theme: undefined, transparent: false, help: false, version: false }))
   test("path", () => expect(ok(["docs"]).path).toBe("docs"))
   test("-t / --theme / --theme=", () => {
     expect(ok(["-t", theme]).theme).toBe(theme)
@@ -40,6 +40,17 @@ describe("parseArgs", () => {
     expect(err(["--theme="])).toMatch(/requires a value/)
     expect(err(["-t", "--help-ish"])).toMatch(/requires a value/)
   })
+  test("a family name is accepted as given (App resolves it)", () => {
+    expect(ok(["-t", "one"]).theme).toBe("one")
+    expect(ok(["--theme=ayu"]).theme).toBe("ayu")
+    expect(ok(["-t", "vesper"]).theme).toBe("vesper")
+  })
+  test("unknown theme lists the families", () => {
+    const e = err(["-t", "nope"])
+    expect(e).toContain("nope")
+    expect(e).toContain("oxocarbon")
+    expect(err(["-t", "one-"])).toContain("one-")
+  })
   test("unknown theme lists the valid ones", () => {
     const e = err(["-t", "nope"])
     expect(e).toContain("nope")
@@ -52,4 +63,20 @@ test("--transparent", () => {
   expect(ok(["--transparent"]).transparent).toBe(true)
   expect(ok(["docs", "--transparent", "-t", theme])).toMatchObject({ path: "docs", transparent: true, theme })
   expect(ok(["docs"]).transparent).toBe(false)
+})
+
+describe("stdin", () => {
+  test("- reads the document from stdin", () => {
+    expect(ok(["-"]).stdin).toBe(true)
+    expect(ok(["-"]).path).toBe(".")
+  })
+  test("a path or no path is not stdin (cli decides on a pipe)", () => {
+    expect(ok([]).stdin).toBe(false)
+    expect(ok(["notes"]).stdin).toBe(false)
+  })
+  test("- takes options like any path and conflicts with another path", () => {
+    expect(ok(["-", "-t", "brothy"]).stdin).toBe(true)
+    expect(ok(["--", "-"]).stdin).toBe(true)
+    expect(err(["-", "notes"])).toContain("at most one path")
+  })
 })

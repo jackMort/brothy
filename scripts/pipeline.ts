@@ -141,16 +141,15 @@ export function sandbox() {
 // ---------- svg → png ----------
 const FONT_FILES = ["Regular", "Bold", "Italic", "BoldItalic"].map((v) => `/usr/share/fonts/TTF/JetBrainsMonoNerdFontMono-${v}.ttf`)
 
-/** The converter commands to try, in order (resvg gets the font files directly). */
-export function pngCommands(svg: string, png: string, zoom: number): string[][] {
-  return [
-    ["resvg", "--zoom", String(zoom), ...FONT_FILES.flatMap((f) => ["--use-font-file", f]), "--font-family", FAMILY, svg, png],
-    ["rsvg-convert", "-z", String(zoom), "-o", png, svg],
-    ["magick", "-density", String(96 * zoom), "-background", "none", svg, png],
-  ].filter((t) => Bun.which(t[0]!))
+export const NO_RESVG = "resvg not found: install it (official release: https://github.com/linebender/resvg/releases, or your package manager: `pacman -S resvg`, `brew install resvg`, `cargo install resvg`). rsvg-convert and ImageMagick render the cell grid wrong (merged words, ligatures), so they are not used."
+
+/** The converter command (resvg gets the font files directly); throws `NO_RESVG` when it is not installed. */
+export function pngCommand(svg: string, png: string, zoom: number): string[] {
+  if (!Bun.which("resvg")) throw new Error(NO_RESVG)
+  return ["resvg", "--zoom", String(zoom), ...FONT_FILES.flatMap((f) => ["--use-font-file", f]), "--font-family", FAMILY, svg, png]
 }
 
 export function toPng(svg: string, png: string, zoom = 2) {
-  for (const t of pngCommands(svg, png, zoom)) if (Bun.spawnSync(t, { stdout: "ignore", stderr: "pipe" }).exitCode === 0) return t[0]!
-  throw new Error(`no SVG→PNG converter worked (tried resvg, rsvg-convert, magick) for ${svg}`)
+  const p = Bun.spawnSync(pngCommand(svg, png, zoom), { stdout: "ignore", stderr: "pipe" })
+  if (p.exitCode !== 0) throw new Error(`resvg failed on ${svg}:\n${p.stderr}`)
 }

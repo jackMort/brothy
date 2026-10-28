@@ -2,7 +2,7 @@
   "name": "brothy",
   "version": "0.1.1",
   "private": true,
-  "description": "A calm terminal Markdown reader: folder tree, outline, live reload, 26 themes",
+  "description": "A calm terminal Markdown reader: folder tree, outline, live reload, 42 themes",
   "keywords": ["markdown", "terminal", "tui", "reader", "viewer", "cli", "bun", "opentui", "notes"],
   "type": "module",
   "license": "Apache-2.0",
@@ -22,6 +22,8 @@
   "files": [
     "src",
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE",
     "NOTICE"
   ],
