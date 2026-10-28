@@ -3882,7 +3882,8 @@ test("welcome: the wordmark over a bowl, today's message, keycaps, recent projec
   const rows = f.split("\n")
   expect(f).toContain("┏┓ ┳━┓┏━┓╺┳╸╻ ╻╻ ╻")
   expect(f).toContain("▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖")
-  expect(f).toContain(`No Markdown files found in ${empty}`)
+  // the root as the app resolved it: macOS's /var/folders temp dir reads as /private/var/…
+  expect(f).toMatch(new RegExp(`No Markdown files found in \\S*/${basename(empty)}`))
   expect(f).toContain(" o  open a project    t  theme    ?  keys    q  quit")
   expect(f).toContain("⏎ open   o all projects or a path")
   const head = rows.findIndex((r) => /Recent\s+3\b/.test(r))
