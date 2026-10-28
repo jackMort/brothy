@@ -63,7 +63,7 @@ function social(hero: Win): string {
   const W = 1280, H = 640
   const sc = 0.62
   const wx = W - hero.w * sc - 40, wy = 96
-  const wm = WORDMARK.map((l, i) => `<text x="64" y="${150 + i * 50}" font-size="${40}" fill="${hero.accent}">${esc(l)}</text>`).join("")
+  const wm = WORDMARK.map((l, i) => `<text x="64" y="${190 + i * 25}" font-size="19" fill="${themes[0]!.primary}">${esc(l)}</text>`).join("")
   const dark = luma(hero.bg) < 128
   const base = dark ? mix(hero.bg, "#000000", 0.55) : mix(hero.bg, "#000000", 0.08)
   const sub = mix(hero.fg, base, 0.15)
