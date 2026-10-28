@@ -1,7 +1,22 @@
 import { defineConfig } from "astro/config"
 import starlight from "@astrojs/starlight"
 import { ExpressiveCodeTheme } from "@astrojs/starlight/expressive-code"
-import { codeTheme } from "./src/code-theme.mjs"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { codeTheme, followPalette } from "./src/code-theme.mjs"
+import { pickerData, siteThemesCss } from "./src/themes"
+
+// Every palette on the site comes from ../src/theme.ts: this writes one block of `--b-*` tokens per theme (and the picker's
+// families) before Starlight reads its customCss (src/generated is not committed; see src/themes.ts).
+const brothyThemes = () => ({
+  name: "brothy-themes",
+  hooks: {
+    "astro:config:setup": () => {
+      mkdirSync("./src/generated", { recursive: true })
+      writeFileSync("./src/generated/themes.css", siteThemesCss())
+      writeFileSync("./src/generated/families.json", JSON.stringify(pickerData))
+    },
+  },
+})
 
 export default defineConfig({
   site: "https://jackmort.github.io",
@@ -9,6 +24,7 @@ export default defineConfig({
   // docs/ screenshots are read from the repo root (src/assets/docs is a symlink to it)
   vite: { server: { fs: { allow: [".."] } } },
   integrations: [
+    brothyThemes(),
     starlight({
       title: "brothy",
       description: "A calm terminal Markdown reader: browse a folder of notes, jump anywhere with ctrl+p, read in zen. Obsidian-flavored, live reload, 42 themes.",
@@ -16,7 +32,7 @@ export default defineConfig({
       favicon: "/favicon.svg",
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/jackMort/brothy" }],
       editLink: { baseUrl: "https://github.com/jackMort/brothy/edit/main/site/" },
-      customCss: ["./src/styles/brothy.css"],
+      customCss: ["./src/generated/themes.css", "./src/styles/brothy.css"],
       // brothy's screen as the frame: see each component's header comment
       components: {
         Header: "./src/components/Header.astro",
@@ -25,11 +41,15 @@ export default defineConfig({
         TwoColumnContent: "./src/components/TwoColumnContent.astro",
         Hero: "./src/components/Hero.astro",
         PageTitle: "./src/components/PageTitle.astro",
+        ThemeProvider: "./src/components/ThemeProvider.astro",
         ThemeSelect: "./src/components/ThemeSelect.astro",
         Footer: "./src/components/Footer.astro",
       },
       expressiveCode: {
         themes: [ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("dark"))), ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("light")))],
+        plugins: [followPalette],
+        // the stand-in colors are not contrast-checked against the stand-in background: the palettes are (tests/theme.test.ts)
+        minSyntaxHighlightingColorContrast: 0,
         useStarlightUiThemeColors: true,
         // code blocks as brothy draws them: a flat fill, no frame, the language at the top right (brothy.css)
         defaultProps: { frame: "none" },

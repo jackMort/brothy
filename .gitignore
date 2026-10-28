@@ -13,3 +13,4 @@ dist/
 .superpowers/
 .claude/
 site/.astro/
+site/src/generated/
