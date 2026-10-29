@@ -11,6 +11,7 @@ import { quoteNeedle } from "../delta"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "../editor"
 import { ancestorsOf, folderCounts, scanTree } from "../files"
 import { helpLayout } from "../help"
+import { MEASURE } from "../layout"
 import { HEADING_STYLES, parseFrontMatter, sourceScan } from "../markdown"
 import { MINI_MIN_W } from "../minimap"
 import { findQuote, matchKey, stepMatch } from "../nav"
@@ -157,7 +158,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (derive().L.zen) return // zen has its own measure (< >); full width is not shown there
       const wide = !ui.current.wide
       set({ wide })
-      if (persist({ wide })) flash(wide ? "full width" : "measure 80")
+      if (persist({ wide })) flash(wide ? "full width" : `measure ${MEASURE}`)
     },
     minimap: () => {
       if (dims.current.W < MINI_MIN_W) return flash(`minimap needs ${MINI_MIN_W} columns`)

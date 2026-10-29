@@ -17,6 +17,7 @@ import { zenRows } from "../zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { HELP_GROUPS } from "./keymap"
+import { WHEEL_ROWS } from "./store"
 import type { Popups } from "./popups"
 import type { SwitcherControl } from "./switcher"
 import type { WorkspaceControl } from "./workspace"
@@ -34,7 +35,7 @@ export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { versio
   const helpFull = `Keybindings · brothy v${version} · ${t.name}`
   const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`, Math.max(1, titleRoom))
   return s.help ? (
-    <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * 3)} />
+    <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * WHEEL_ROWS)} />
   ) : null
 }
 

@@ -18,7 +18,7 @@ import { panelBox } from "./app/Panel"
 import { docBox, miniBox } from "./app/Document"
 import { gapRow, ghostLine, progressLine, topRow } from "./app/Chrome"
 import { findOverlay, helpOverlay, openOverlay, switchOverlay, themeOverlay, themePickView, zenOverlay } from "./app/Overlays"
-import { ZEN_DIM, initUI, type FileRow, type Spot, type UI } from "./app/store"
+import { MIN_H, MIN_W, ZEN_DIM, initUI, type FileRow, type Spot, type UI } from "./app/store"
 import { PINNED, footerHints, type Ctx, type FooterState } from "./app/keymap"
 import { STDIN } from "./workspace"
 import { DRAWER_BELOW } from "./layout"
@@ -181,10 +181,10 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const themeEl = themeOverlay(ctx, d, pickView, popups)
   const zenEl = zenOverlay(ctx, d, zen)
 
-  if (W < 60 || H < 14)
+  if (W < MIN_W || H < MIN_H)
     return (
       <box style={{ width: W, height: H, backgroundColor: paint.main, alignItems: "center", justifyContent: "center" }}>
-        {tooSmall(W, H).map((l, i) => (
+        {tooSmall(W, H, `${MIN_W}×${MIN_H}`).map((l, i) => (
           <text key={i} wrapMode="none" fg={t.textMuted}>
             {l}
           </text>

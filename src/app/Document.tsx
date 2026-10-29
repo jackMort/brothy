@@ -19,7 +19,7 @@ import type { Derived } from "./derive"
 import { WELCOME_KEYS, keyDef } from "./keymap"
 import { labelGeo } from "./links"
 import { Row } from "./Row"
-import { SCRIM_DIM } from "./store"
+import { SCRIM_DIM, WHEEL_ROWS } from "./store"
 import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
@@ -114,7 +114,7 @@ export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScr
       key="doc"
       style={{ flexDirection: "column", flexGrow: 1, height: bodyH, paddingLeft: L.zen ? padL - 2 : padL }}
       onMouseDown={() => focusDoc()}
-      onMouseScroll={(e: MouseEvent) => (L.zen ? zenScroll : scrollBy)(e.scroll?.direction === "up" ? -3 : 3)}
+      onMouseScroll={(e: MouseEvent) => (L.zen ? zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)}
     >
       {content}
     </box>

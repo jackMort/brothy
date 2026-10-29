@@ -27,6 +27,11 @@ export const ZEN_DIM = 0.5
 export const SCRIM_DIM = 0.62
 /** Tree indent stops growing here; deeper rows keep this indent and cut the name. */
 export const MAX_DEPTH = 6
+/** Rows one wheel notch scrolls: the document, the panel lists and the help sheet. */
+export const WHEEL_ROWS = 3
+/** The smallest terminal drawn; below it a `tooSmall` notice. */
+export const MIN_W = 60
+export const MIN_H = 14
 
 /** Where keys go: the panel (when shown) or the document. */
 export type Focus = "doc" | "panel"

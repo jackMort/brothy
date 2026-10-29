@@ -16,7 +16,7 @@ import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
 import { Row } from "./Row"
-import { MAX_DEPTH } from "./store"
+import { MAX_DEPTH, WHEEL_ROWS } from "./store"
 
 /** What the panel's clicks do beyond the context: jump to a heading or a change, follow a link. */
 export interface PanelActions extends Pick<Links, "openLink"> {
@@ -177,7 +177,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
 
   const scrollList = (e: MouseEvent) => {
     const n = s.view === "files" ? rows.length : s.view === "outline" ? d.oRows.length : infoRows.length
-    const dlt = e.scroll?.direction === "up" ? -3 : 3
+    const dlt = e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS
     set({ listTop: { ...s.listTop, [s.view]: Math.max(0, Math.min(n - LH, topOf(s.view, n) + dlt)) } })
   }
   const cur = rows[cursor]
