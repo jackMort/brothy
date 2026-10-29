@@ -37,3 +37,6 @@ export const safe = (s: string) => s.replace(UNSAFE, "�")
 
 /** `safe` for one-row text (names, titles, toasts): tab and newline become spaces. */
 export const safeLine = (s: string) => safe(s).replace(/[\t\n]/g, " ")
+
+/** The text of a rendered line (its spans joined); "" for a missing one. */
+export const lineText = (l: { spans: Span[] } | undefined) => (l?.spans ?? []).map((s) => s.text).join("")

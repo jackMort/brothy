@@ -1,6 +1,6 @@
 // The app's store: the one mutable UI object every handler reads at call time, its parts and the app's tunables.
 // No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
-import type { AIConfig } from "../ai"
+import type { AIConfig } from "../ai-config"
 import type { AskState, Candidate } from "../ask"
 import { loadConfig, type View } from "../config"
 import type { Change, DeltaNote } from "../delta"
