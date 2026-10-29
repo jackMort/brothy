@@ -1,9 +1,9 @@
 // Note statistics for Info and the Ctrl-P peek: words, reading time, headings, links, code blocks, tables and
 // tasks. Pure; `stats` lexes through the shared marked instance, `wordStats` does not lex.
 
-import type { Token, Tokens } from "marked"
+import type { Token } from "marked"
 
-import { lexBlocks, normalize, stripComments } from "./lexer"
+import { lexBlocks, normalize, stripComments, tokenOf } from "./lexer"
 
 export interface Stats {
   words: number
@@ -36,18 +36,17 @@ export function stats(src: string): Stats {
       if (tok.type === "code") s.codeBlocks++
       if (tok.type === "table") {
         s.tables++
-        const tb = tok as Tokens.Table
+        const tb = tokenOf(tok, "table")
         for (const cell of [...tb.header, ...tb.rows.flat()]) walk(cell.tokens)
       }
       if (tok.type === "list")
-        for (const it of (tok as Tokens.List).items)
+        for (const it of tokenOf(tok, "list").items)
           if (it.task || /^\[[ xX]\]$/.test(it.text.trim())) {
             s.tasks[1]++
             if (it.task ? it.checked : !/^\[ \]$/.test(it.text.trim())) s.tasks[0]++
           }
-      const anyTok = tok as unknown as { tokens?: Token[]; items?: Token[] }
-      if (anyTok.tokens) walk(anyTok.tokens)
-      if (anyTok.items) walk(anyTok.items)
+      if ("tokens" in tok && tok.tokens) walk(tok.tokens)
+      if ("items" in tok && tok.items) walk(tok.items)
     }
   }
   walk(tokens)

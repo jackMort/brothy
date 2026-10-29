@@ -4,7 +4,7 @@ import type { Theme } from "./theme"
 import { isMarkdown } from "./files"
 import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
-import { lexBlocks, lexInline, normalize, stripComments, wikiLabel, type Wikilink } from "./lexer"
+import { isWikilink, lexBlocks, lexInline, normalize, stripComments, tokenOf, wikiLabel } from "./lexer"
 import { A, safe, type Span } from "./spans"
 import { graphemes, pushSpan, spanWidth, width } from "./text"
 
@@ -166,20 +166,20 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
     switch (tok.type) {
       case "text":
       case "escape": {
-        const tt = tok as Tokens.Text
+        const tt = tokenOf(tok, "text") // an escape is a text token without `tokens`
         if (tt.tokens && tt.tokens.length) out.push(...inline(tt.tokens, t, cur, sink))
         else out.push({ ...cur, text: decode(tt.text) })
         break
       }
       case "strong":
-        out.push(...inline((tok as Tokens.Strong).tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.BOLD }, sink))
+        out.push(...inline(tokenOf(tok, "strong").tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.BOLD }, sink))
         break
       case "em":
-        out.push(...inline((tok as Tokens.Em).tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.ITALIC }, sink))
+        out.push(...inline(tokenOf(tok, "em").tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.ITALIC }, sink))
         break
       case "del":
         out.push(
-          ...inline((tok as Tokens.Del).tokens, t, {
+          ...inline(tokenOf(tok, "del").tokens, t, {
             ...cur,
             fg: t.textMuted,
             attr: (cur.attr ?? 0) | A.STRIKE,
@@ -191,20 +191,21 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
         break
       case "codespan":
         out.push({
-          text: safe((tok as Tokens.Codespan).text).replace(/ /g, "\u00a0"),
+          text: safe(tokenOf(tok, "codespan").text).replace(/ /g, "\u00a0"),
           fg: t.accent,
           bg: t.backgroundElement,
         })
         break
       case "link": {
-        const l = tok as Tokens.Link
+        const l = tokenOf(tok, "link")
         const style: Omit<Span, "text"> = { ...cur, fg: t.info, attr: (cur.attr ?? 0) | A.UNDERLINE }
         if (sink) style.link = sink.links.push(/^[a-z][\w+.-]*:/i.test(l.href) ? { kind: "url", href: l.href } : { kind: "md", href: l.href }) - 1
         out.push(...inline(l.tokens, t, style, sink))
         break
       }
       case "wikilink": {
-        const w = tok as unknown as Wikilink & { embed: boolean }
+        if (!isWikilink(tok)) break
+        const w = tok
         if (w.embed && /\.[^/.]+$/.test(w.target) && !isMarkdown(w.target)) {
           out.push({ text: `▣ ${safe(w.target.split("/").at(-1)!)}`, fg: t.textMuted, attr: A.ITALIC })
           break
@@ -221,7 +222,7 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
         break
       }
       case "image": {
-        const im = tok as Tokens.Image
+        const im = tokenOf(tok, "image")
         out.push({ text: `▣\u00a0${safe(im.text) || "image"}`, fg: t.textMuted, attr: A.ITALIC })
         break
       }
@@ -229,7 +230,7 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
         out.push({ ...cur, text: "\n" })
         break
       case "html": {
-        const raw = (tok as Tokens.HTML).text
+        const raw = tokenOf(tok, "html").text
         if (/^\s*<!--/.test(raw)) break
         const m = /^\s*<(\/?)([a-zA-Z][\w-]*)\b[^>]*>\s*$/.exec(raw)
         const name = m?.[2]!.toLowerCase()
@@ -401,7 +402,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
       case "space":
         break
       case "heading": {
-        const h = tok as Tokens.Heading
+        const h = tokenOf(tok, "heading")
         const text = inline(h.tokens, t, undefined, ctx.sink)
         const colors = [t.primary, t.secondary, t.accent, t.text, t.text, t.textMuted]
         const fg = colors[h.depth - 1] ?? t.text
@@ -449,13 +450,13 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
       }
       case "paragraph":
       case "text": {
-        const p = tok as Tokens.Paragraph
+        const p = tokenOf(tok, "paragraph", "text")
         emitRows(ctx, wrap(inline(p.tokens, t, undefined, ctx.sink), max, pre(), rest))
         if (tok.type === "paragraph") ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
         break
       }
       case "blockquote": {
-        const q = tok as Tokens.Blockquote
+        const q = tokenOf(tok, "blockquote")
         const c = calloutOf(q)
         if (c) {
           callout(ctx, c, max, pre(), rest, depth)
@@ -470,7 +471,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         break
       }
       case "list": {
-        const l = tok as Tokens.List
+        const l = tokenOf(tok, "list")
         const start = typeof l.start === "number" ? l.start : 1
         const numW = l.ordered ? String(start + l.items.length - 1).length + 1 : 1
         l.items.forEach((item, i) => {
@@ -508,7 +509,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         break
       }
       case "code": {
-        const c = tok as Tokens.Code
+        const c = tokenOf(tok, "code")
         const lang = (c.lang ?? "").split(/\s/)[0] ?? ""
         if (DATAVIEW_LANGS.has(lang.toLowerCase())) {
           const fill = t.backgroundElement
@@ -563,10 +564,10 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         break
       }
       case "table":
-        table(ctx, tok as Tokens.Table, max, pre(), rest)
+        table(ctx, tokenOf(tok, "table"), max, pre(), rest)
         break
       case "html": {
-        const txt = stripTags((tok as Tokens.HTML).text)
+        const txt = stripTags(tokenOf(tok, "html").text)
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean)

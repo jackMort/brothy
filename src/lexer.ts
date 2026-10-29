@@ -2,7 +2,7 @@
 // `[[wikilinks]]`), the capped lexers and `%%comments%%`. Pure. Every lex in brothy goes through here, so Preview,
 // the Source outline and stats see the same tokens; never lex with `new Lexer` or `Lexer.lexInline`.
 
-import { Marked, type Token, type Tokens, type TokenizerExtension } from "marked"
+import { Marked, type MarkedToken, type Token, type Tokens, type TokenizerExtension } from "marked"
 
 import { safe } from "./spans"
 
@@ -19,7 +19,8 @@ const highlightExt: TokenizerExtension = {
   },
   tokenizer(src) {
     const m = /^==(?=[^\s=])([^\n]*?[^\s=])==(?!=)/.exec(src)
-    if (m) return { type: "highlight", raw: m[0], text: m[1]!, tokens: this.lexer.inlineTokens(m[1]!) }
+    if (!m) return undefined
+    return { type: "highlight", raw: m[0], text: m[1]!, tokens: this.lexer.inlineTokens(m[1]!) }
   },
 }
 
@@ -53,6 +54,16 @@ export function wikiLabel(w: Wikilink): string {
   return name || (w.block ? `^${w.block}` : "")
 }
 
+/** The token `wikilinkExt` makes: the parsed link, and whether it was an `![[embed]]`. */
+export interface WikilinkToken extends Wikilink {
+  type: "wikilink"
+  raw: string
+  embed: boolean
+}
+
+/** Is `tok` a `[[wikilink]]`? Marked types extension tokens as `Tokens.Generic`, so this narrows to ours. */
+export const isWikilink = (tok: Token): tok is Tokens.Generic & WikilinkToken => tok.type === "wikilink"
+
 /** Obsidian `[[target#heading|alias]]` and `![[embed]]`. */
 const wikilinkExt: TokenizerExtension = {
   name: "wikilink",
@@ -63,9 +74,19 @@ const wikilinkExt: TokenizerExtension = {
   },
   tokenizer(src) {
     const m = /^(!?)\[\[([^\[\]\n]+)\]\]/.exec(src)
-    if (m) return { type: "wikilink", raw: m[0], embed: m[1] === "!", ...parseWikilink(m[2]!) }
+    if (!m) return undefined
+    return { type: "wikilink", raw: m[0], embed: m[1] === "!", ...parseWikilink(m[2]!) } satisfies WikilinkToken
   },
 }
+
+/** Marked's own token for a `type`: `TokenOf<"heading">` is `Tokens.Heading`. */
+export type TokenOf<K extends MarkedToken["type"]> = Extract<MarkedToken, { type: K }>
+
+/**
+ * `tok` as the marked token its `type` names, for a caller that has checked `type` (each `case` of a switch on it).
+ * `Token` includes `Tokens.Generic`, whose `type` is any string, so checking `type` alone never narrows it.
+ */
+export const tokenOf = <K extends MarkedToken["type"]>(tok: Token, ..._types: K[]): TokenOf<K> => tok as TokenOf<K>
 
 /** The one marked instance: every lex goes through it so Preview, Source outline and stats see the same tokens. */
 const md = new Marked({ gfm: true, extensions: [highlightExt, wikilinkExt] })
@@ -100,9 +121,9 @@ export function lexOutline(src: string): Token[] {
   const wanted = new Set<Token[]>()
   const find = (toks: Token[]) => {
     for (const tok of toks) {
-      if (tok.type === "heading") wanted.add((tok as Tokens.Heading).tokens)
-      else if (tok.type === "blockquote") find((tok as Tokens.Blockquote).tokens)
-      else if (tok.type === "list") for (const item of (tok as Tokens.List).items) find(item.tokens)
+      if (tok.type === "heading") wanted.add(tokenOf(tok, "heading").tokens)
+      else if (tok.type === "blockquote") find(tokenOf(tok, "blockquote").tokens)
+      else if (tok.type === "list") for (const item of tokenOf(tok, "list").items) find(item.tokens)
     }
   }
   find(tokens)

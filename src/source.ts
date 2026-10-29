@@ -2,11 +2,11 @@
 // reader for simple notes, the shared lexer for the rest), the switcher's `sourceScan`, and `renderSource`. Pure.
 // Outline parity: these headings are Preview's, in the same order, so anything Preview hides is skipped here too.
 
-import type { Token, Tokens } from "marked"
+import type { Token } from "marked"
 import { themes, type Theme } from "./theme"
 
 import { parseFrontMatter } from "./frontmatter"
-import { lexInline, lexOutline, normalize, parseWikilink, scanComments } from "./lexer"
+import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf } from "./lexer"
 import { CALLOUT_KINDS, calloutKind, calloutOf, inline, pad, plainOf, wrap, type Heading, type Line, type RenderOpts, type Rendered } from "./markdown"
 import { A, type Span } from "./spans"
 
@@ -185,13 +185,13 @@ export function sourceStructureLexed(lines: string[], from: number, t: Theme, hi
       const rowsOf = () => tok.raw.replace(/\n+$/, "").split("\n").length
       switch (tok.type) {
         case "heading": {
-          const h = tok as Tokens.Heading
+          const h = tokenOf(tok, "heading")
           const title = titleOf(h.tokens, t)
           headings.set(at[line]!, { depth: h.depth, text: title, end: at[line + rowsOf() - 1] ?? at[line]!, setext: !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(tok.raw) })
           break
         }
         case "code": {
-          if ((tok as Tokens.Code).codeBlockStyle === "indented") break
+          if (tokenOf(tok, "code").codeBlockStyle === "indented") break
           const rows = rowsOf()
           const last = tok.raw.replace(/\n+$/, "").split("\n")
           const open = /^ {0,3}(`{3,}|~{3,})/.exec(last[0]!)
@@ -202,14 +202,14 @@ export function sourceStructureLexed(lines: string[], from: number, t: Theme, hi
           break
         }
         case "blockquote": {
-          const q = tok as Tokens.Blockquote
+          const q = tokenOf(tok, "blockquote")
           const c = calloutOf(q)
           if (c) walk(lexOutline(c.body), c.body, line + 1)
           else walk(q.tokens, q.text, line)
           break
         }
         case "list": {
-          const l = tok as Tokens.List
+          const l = tokenOf(tok, "list")
           let at0 = 0
           let seen = 0
           let from = 0
