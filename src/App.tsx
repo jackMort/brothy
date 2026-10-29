@@ -10,13 +10,14 @@ import { A, lineText, type Span } from "./spans"
 import { clamp, fmtNum, plural, spanWidth, truncate, truncateLeft, width } from "./text"
 import { headingKey } from "./sections"
 import { Row } from "./app/Row"
-import { jobKey, makeAIJobs, type Job } from "./app/ai-jobs"
+import { makeAIJobs, type Job } from "./app/ai-jobs"
 import { makeDerive, makeMemo } from "./app/derive"
 import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
 import { labelGeo, makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
+import { useAppEffects } from "./app/effects"
 import { MAX_DEPTH, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { STDIN } from "./workspace"
@@ -29,16 +30,15 @@ import { STILL_TICK } from "./welcome"
 import { INK_STEPS } from "./chrome"
 import { emptyIndex, nextSection, stepRow, type VaultIndex } from "./vault"
 import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniJump } from "./minimap"
-import { filterFamilies, onlyMode, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, themeSplit, type ThemePick } from "./themepick"
+import { filterFamilies, onlyMode, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, themeSplit, type ThemePick } from "./themepick"
 import { loadConfig, type View } from "./config"
-import { copiedCount, findQuote, keepVisible, markMatches, matchRanges, matchKey, overlayAt, selectedText, stepMatch, stripLayout, thumb, type Geometry } from "./nav"
-import { watchPath } from "./watch"
+import { findQuote, keepVisible, markMatches, matchRanges, matchKey, overlayAt, stepMatch, stripLayout, thumb, type Geometry } from "./nav"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
 import { askSection, askTitleNote } from "./ask"
 import { GLOSS_ROWS, glossRows, glossRule } from "./gloss"
-import { GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
+import { GHOST_STEPS, HINT_HOLD, LOGO, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
 import { findHeading, type InfoItem } from "./panel"
-import { quoteNeedle, reloadToast } from "./delta"
+import { quoteNeedle } from "./delta"
 import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, stepMeasure, zenRows } from "./zen"
 
 export const VERSION = "0.2.0"
@@ -277,91 +277,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     set({ helpTop: Math.max(0, Math.min(l.rows - l.vis, n)) })
   }
 
-  // ---------------------------------------------------- live reload
-  const { openPath, watchGen } = ui.current
-  useEffect(() => {
-    if (!openPath || openPath === STDIN) return
-    return watchPath(openPath, {
-      change: () => {
-        set({ reload: ui.current.reload + 1, reloadedAt: Date.now() })
-        clearTimeout(timers.current.logo)
-        timers.current.logo = setTimeout(() => bump((x) => x + 1), LOGO_HOLD + 20)
-        const d = derive()
-        // a shown explanation goes once the list moves on, or once it can't be compared
-        const dl = d.s.delta
-        if (dl?.result && (d.changes === null || d.changes.length) && !jobs.current.has(jobKey("delta", dl.path))) set({ delta: null })
-        flash(reloadToast(d.changes, d.propsChanged, !!d.s.ai))
-      },
-      error: (msg) => flash(msg, "error"),
-    })
-  }, [openPath, watchGen])
-  // a failed read is a toast too (the document shows the message as well); the change list
-  // compares against the text the note had when it opened: leaving it or a failed read drops it
-  const { reload } = ui.current
-  useEffect(() => {
-    const f = derive().file
-    if (f?.error && openPath) flash(`cannot open “${basename(openPath)}”: ${f.error}`, "error")
-    if (!openPath || !f || f.error) return dropDelta()
-    if (ui.current.baseline?.path === openPath) return
-    dropDelta()
-    set({ baseline: { path: openPath, text: memo.note(f.src), props: memo.propsKey(memo.fm(f.src)), at: Date.now() } })
-  }, [openPath, reload])
-  // the start is a project opened too
-  useEffect(recordProject, [])
-  // `--theme` is checked by the CLI, so a name nothing resolves came from config.json (brothy stands in)
-  useEffect(() => {
-    if (themeName !== undefined && !resolveTheme(themeName)) flash(`unknown theme "${themeName}" in config`, "error")
-  }, [])
-  // a piped document's links resolve once the cwd scan has run: start it after the first frame, unless a link got there first
-  useEffect(() => {
-    if (!ui.current.linkLazy) return
-    const id = setTimeout(ensureLinks, linkScanDelay)
-    return () => clearTimeout(id)
-  }, [])
-  // SIGTERM / SIGHUP (the terminal closing) end the renderer without `quit`
-  useEffect(() => {
-    renderer.on("destroy", leave)
-    return () => void renderer.off("destroy", leave)
-  }, [])
-  // copy on select: a finished mouse drag goes to the clipboard over OSC 52
-  useEffect(() => {
-    const copy = (sel: { getSelectedText(): string }) => {
-      const text = selectedText(sel.getSelectedText())
-      if (!text) return
-      if (renderer.copyToClipboardOSC52(text)) flash(`copied ${plural(...copiedCount(text))}`, "ok")
-      else flash("copy: the terminal has no clipboard (OSC 52)", "error")
-    }
-    renderer.on("selection", copy)
-    return () => void renderer.off("selection", copy)
-  }, [])
-  // a build still running after unmount must not touch the store
-  useEffect(() => () => void (vault.current = { ...vault.current }), [])
-  useEffect(() => () => {
-    clearTimeout(timers.current.toast)
-    clearTimeout(timers.current.hints)
-    clearTimeout(timers.current.open)
-    clearTimeout(timers.current.roll)
-    clearTimeout(timers.current.ghost)
-    clearTimeout(timers.current.logo)
-    clearTimeout(timers.current.ai)
-    clearTimeout(timers.current.gloss)
-    clearTimeout(timers.current.steam)
-    for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
-  }, [])
-  useEffect(() => () => void (alive.current = false), [])
-
-  useEffect(animateWelcome)
-  // code blocks render plain first; once their parser results land, re-render the document
-  useEffect(() => {
-    const doc = derive().doc
-    if (doc === hlSeen.current) return
-    hlSeen.current = doc
-    const reqs = pendingHighlights(doc)
-    if (!reqs.length) return
-    ensureHighlights(reqs).then((changed) => {
-      if (changed && alive.current) set({ hl: ui.current.hl + 1 })
-    })
-  })
+  // ---------------------------------------------------- effects
+  const { openPath } = ui.current
+  useAppEffects(ctx, { dropDelta, ensureLinks, recordProject, leave, animateWelcome })
 
   // ---------------------------------------------------- keys
   const actions: Record<KeyId, (k: KeyEvent) => void> = {
