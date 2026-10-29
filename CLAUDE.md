@@ -13,6 +13,7 @@ bun test tests/markdown/markdown-fixes.test.ts -t "tables"   # single file / tes
 bun run typecheck                 # bunx tsc --noEmit (covers src, scripts, tests)
 bun run lint                      # biome check . (format + recommended lint rules; biome.jsonc says why each deviation is off); `bun run format` rewrites
 bun run knip                      # unused files, exports and dependencies (knip.jsonc; tests and scripts count as entries)
+bun run fallow                    # fallow 3.37.0: dead code, clones, complexity (.fallowrc.jsonc says why each ignore is there); CI gates a PR with `fallow audit --base origin/<base>`, new findings only
 bun run build                     # compile single binary ./brothy (tree-sitter parsers are embedded); delete it after checking
 bun run snapshot examples --size 100x30 --keys "tab j s"   # headless frame dump
 # media tooling (docs screenshots, site casts, demo videos) lives in the private brothy-studio repo: it imports `scripts/session.tsx` (keep its exports: `mount`, `press`, `frame`, `frameKey`, `settle`, `sleep`, `Frame`) and `src/*` from a checkout of this repo and writes docs/*.{svg,png,mp4,gif} and site/public/casts/*.cast into it; they are committed here by hand, with the brothy commit they were rendered from in the message
