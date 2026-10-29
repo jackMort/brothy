@@ -11,13 +11,8 @@ import { safeLine } from "./spans"
 import { truncate } from "./status"
 
 /** The `ai` block's types, presets and validation live in ai-config.ts; re-exported for importers. */
-export { PRESETS, normalizeAI, parseGlossStyle, resolveAI } from "./ai-config"
+export { PRESETS, PROMPTS, PROMPT_V, normalizeAI, parseGlossStyle, resolveAI } from "./ai-config"
 export type { AIConfig, AITarget, GlossStyle, Preset, Provider } from "./ai-config"
-
-/** Prompt versions per feature: bump one whenever its prompt changes, and its cached results show as outdated. */
-export const PROMPTS = { tldr: 1, gloss: 1, delta: 2, ask: 1, rerank: 1 } as const
-/** The TL;DR's version (`SYSTEM_PROMPT`); what `summaries.json` entries carry as `v`. */
-export const PROMPT_V = PROMPTS.tldr
 
 /** What is summarized and hashed: the body without front matter and `%%comments%%`. */
 export function noteText(src: string): string {

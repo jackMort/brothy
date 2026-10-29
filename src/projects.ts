@@ -6,7 +6,7 @@ import { readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path"
 import { configPath } from "./config"
-import { fuzzyHits, isMarkdown, scoreName } from "./files"
+import { SCORE_PATH, fuzzyHits, isMarkdown, scoreName } from "./files"
 import { isRecord, readJSON, writeFileAtomic } from "./json"
 import type { Geometry } from "./nav"
 
@@ -117,7 +117,7 @@ export function rankProjects(list: readonly ProjectEntry[], q: string, home = ho
     }
     const m = scoreName(name, needle)
     if (m) out.push({ entry, name, ...m })
-    else if (fuzzyHits(tildify(entry.root, home), needle)) out.push({ entry, name, hits: [], score: 1e6 })
+    else if (fuzzyHits(tildify(entry.root, home), needle)) out.push({ entry, name, hits: [], score: SCORE_PATH })
   }
   return out.sort((a, b) => b.score - a.score) // stable: equal scores stay newest first
 }

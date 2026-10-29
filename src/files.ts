@@ -243,6 +243,13 @@ function indexOfSeq(h: string[], n: string[]): number {
   return -1
 }
 
+/** Score tiers of `scoreName`: a substring always beats a subsequence, which beats a match only in the path or an alias. */
+export const SCORE_SUBSTRING = 3e6
+export const SCORE_SUBSEQUENCE = 2e6
+export const SCORE_PATH = 1e6
+/** a subsequence loses this much per code point of span */
+const SPAN_PENALTY = 1e3
+
 /**
  * How well `needle` matches `name`, or null: a substring (earlier is better) beats a
  * subsequence (tighter span, then earlier start). Hits are code-point indexes into `name`.
@@ -252,9 +259,9 @@ export function scoreName(name: string, needle: string): { hits: number[]; score
   const nq = fold(q)
   if (!nq.length) return null
   const at = indexOfSeq(fold(name), nq)
-  if (at >= 0) return { hits: nq.map((_, j) => at + j), score: 3e6 - at }
+  if (at >= 0) return { hits: nq.map((_, j) => at + j), score: SCORE_SUBSTRING - at }
   const hits = fuzzyHits(name, q)
-  return hits ? { hits, score: 2e6 - (hits[hits.length - 1]! - hits[0]!) * 1e3 - hits[0]! } : null
+  return hits ? { hits, score: SCORE_SUBSEQUENCE - (hits[hits.length - 1]! - hits[0]!) * SPAN_PENALTY - hits[0]! } : null
 }
 
 export interface RankedNote {
@@ -296,8 +303,8 @@ export function rankNotes(
         const a = scoreName(text, needle)
         if (a && (!best || a.score > best.score)) best = { text, ...a }
       }
-      if (best) out.push({ node: c, hits: [], score: 1e6 + (best.score - 1e6) / 10, alias: { text: best.text, hits: best.hits } })
-      else if (fuzzyHits(stem(c.rel), needle)) out.push({ node: c, hits: [], score: 1e6 })
+      if (best) out.push({ node: c, hits: [], score: SCORE_PATH + (best.score - SCORE_PATH) / 10, alias: { text: best.text, hits: best.hits } })
+      else if (fuzzyHits(stem(c.rel), needle)) out.push({ node: c, hits: [], score: SCORE_PATH })
     }
   }
   walk(root)

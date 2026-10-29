@@ -4,8 +4,8 @@
 // sample note rendered in the candidate theme on its own background. App holds the state and
 // applies the theme; nothing here saves config or re-themes the app.
 import { fuzzyHits } from "./files"
+import { PEEK_MIN_W, SPLIT_ROWS_MARGIN, innerWidth, paneWidth, popupWidth, splitWidth } from "./geometry"
 import { render, type HeadingStyle, type Rendered } from "./markdown"
-import { PEEK_MIN_W } from "./peek"
 import { A, type Span } from "./spans"
 import { clamp, spanWidth, width } from "./text"
 import { contrast, themes, type Theme } from "./theme"
@@ -130,11 +130,11 @@ export const THEME_NARROW_W = 48
  */
 export function themeSplit(W: number, H: number, ph: number): { split: boolean; width: number; listW: number; peekW: number; rows: number } {
   if (W < PEEK_MIN_W) {
-    const popupW = Math.min(THEME_NARROW_W, W - 2)
-    return { split: false, width: popupW, listW: popupW - 2, peekW: 0, rows: ph }
+    const popupW = popupWidth(W, THEME_NARROW_W)
+    return { split: false, width: popupW, listW: innerWidth(popupW), peekW: 0, rows: ph }
   }
-  const popupW = Math.min(W - 12, 116)
-  return { split: true, width: popupW, listW: THEME_LIST_W, peekW: popupW - 2 - THEME_LIST_W - 1 - 6, rows: Math.max(ph, H - 10) }
+  const popupW = splitWidth(W)
+  return { split: true, width: popupW, listW: THEME_LIST_W, peekW: paneWidth(innerWidth(popupW), THEME_LIST_W), rows: Math.max(ph, H - SPLIT_ROWS_MARGIN) }
 }
 
 /** The board's modes, left to right (the switch's order too). */
@@ -159,7 +159,7 @@ export interface BoardLayout {
  */
 export function boardLayout(textW: number): BoardLayout {
   const gap = textW >= NAME_W + 2 * SLOT_W + 2 ? 2 : 1
-  const nameW = Math.max(1, Math.min(NAME_W, textW - 2 * SLOT_W - gap))
+  const nameW = clamp(textW - 2 * SLOT_W - gap, 1, NAME_W)
   return { nameW, gap, x: [nameW, nameW + SLOT_W + gap] }
 }
 

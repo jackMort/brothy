@@ -2,13 +2,15 @@
 // outline as a tree (from the vault index), a fresh cached TL;DR, then its first rendered lines
 // from where the row points. App renders the `peekWindow` of the note; nothing here reads a file or calls AI.
 import { wrap, type Rendered } from "./markdown"
+import { LIST_MAX_W, PEEK_MIN_W, innerWidth, paneWidth, popupWidth, splitWidth } from "./geometry"
 import { findQuote } from "./nav"
 import { A, type Span } from "./spans"
 import { clamp, plural, truncate, truncateLeft, width } from "./text"
 import type { Theme } from "./theme"
 import type { NoteDoc, SwitchRow } from "./vault"
 
-export const PEEK_MIN_W = 100
+/** from this many columns the switcher splits (geometry.ts); re-exported for importers */
+export { PEEK_MIN_W }
 /** outline rows shown around the hit's heading */
 export const PEEK_OUTLINE = 5
 /** TL;DR rows, the last cut with `…` */
@@ -25,13 +27,13 @@ const PEEK_AFTER = 64
  */
 export function switchSplit(W: number): { split: boolean; width: number; listW: number; peekW: number } {
   if (W < PEEK_MIN_W) {
-    const popupW = Math.min(70, W - 2)
-    return { split: false, width: popupW, listW: popupW - 2, peekW: 0 }
+    const popupW = popupWidth(W)
+    return { split: false, width: popupW, listW: innerWidth(popupW), peekW: 0 }
   }
-  const popupW = Math.min(W - 12, 116)
-  const inner = popupW - 2
-  const listW = Math.min(70, Math.round(inner * 0.55))
-  return { split: true, width: popupW, listW, peekW: inner - listW - 1 - 6 }
+  const popupW = splitWidth(W)
+  const inner = innerWidth(popupW)
+  const listW = Math.min(LIST_MAX_W, Math.round(inner * 0.55))
+  return { split: true, width: popupW, listW, peekW: paneWidth(inner, listW) }
 }
 
 export interface PeekInput {

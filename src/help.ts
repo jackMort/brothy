@@ -1,6 +1,8 @@
 // The `? ?` keys sheet's layout: KEYMAP groups as a chip row and key rows, one column below 100 columns,
 // two from there (whole groups, Global and Panel left, the rest right), scrolled together by rows.
+import { BODY_PAD, innerWidth, popupWidth } from "./geometry"
 import { WORDMARK, fitWordmark } from "./status"
+import { clamp } from "./text"
 
 export interface HelpGroup {
   title: string
@@ -25,6 +27,9 @@ export interface HelpLayout {
 }
 
 export const HELP_TWO_COLS = 100
+/** the two-column sheet's widest popup, and the columns it keeps free of the screen */
+const HELP_WIDE_W = 112
+const HELP_WIDE_MARGIN = 8
 /** keys are padded to this many cells, as the popup has always done; a narrow column gives up to 7 of them */
 export const HELP_KEY_W = 16
 /** description cells a column keeps before its key padding shrinks */
@@ -38,11 +43,11 @@ const join = (gs: HelpGroup[]): HelpLine[] => gs.flatMap((g, i) => (i ? [null, .
 
 export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, columns = HELP_COLUMNS): HelpLayout {
   const two = W >= HELP_TWO_COLS
-  const width = two ? Math.min(112, W - 8) : Math.min(70, W - 2)
+  const width = two ? Math.min(HELP_WIDE_W, W - HELP_WIDE_MARGIN) : popupWidth(W)
   // Overlay padding 1 and the body's 4 each side
-  const inner = width - 2 - 8
+  const inner = innerWidth(width) - BODY_PAD
   const colW = two ? Math.floor((inner - COL_GAP) / 2) : inner
-  const keyW = Math.max(HELP_KEY_W - 7, Math.min(HELP_KEY_W, colW - DESC_MIN))
+  const keyW = clamp(colW - DESC_MIN, HELP_KEY_W - 7, HELP_KEY_W)
   const shown = groups.filter((g) => g.entries.length)
   let cols: HelpLine[][]
   if (!two) cols = [join(shown)]
@@ -58,6 +63,6 @@ export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, c
   // popup chrome: footer 2, padding 2, title row and its gap 2; the wordmark leaves 3 list rows
   const mark = !!fitWordmark(inner, H - 2 - 4 - 3 - 1)
   const rows = Math.max(0, ...cols.map((c) => c.length))
-  const vis = Math.max(3, Math.min(rows, H - 2 - 4 - (mark ? WORDMARK.length + 1 : 0)))
+  const vis = clamp(rows, 3, H - 2 - 4 - (mark ? WORDMARK.length + 1 : 0))
   return { width, cols, colW, keyW, mark, rows, vis }
 }

@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
-import { PROMPT_V } from "./ai"
+import { PROMPT_V } from "./ai-config"
 import { cacheHome, isRecord, readJSON, writeFileAtomic } from "./json"
 
 /** Every cache entry carries its time (epoch ms): the newest wins on merge, the oldest goes on prune. */
