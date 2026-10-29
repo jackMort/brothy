@@ -28,7 +28,7 @@ const SGR_FLAGS: Record<number, number> = { 1: 1, 3: 2, 4: 4, 9: 8 }
 /** The escape sequences in `d` the screen model does not handle (each as written). */
 export function unsupported(d: string): string[] {
   const out: string[] = []
-  for (let m; (m = CSI.exec(d)); ) {
+  for (let m: RegExpExecArray | null; (m = CSI.exec(d)); ) {
     if (m[4]) {
       out.push(d.slice(m.index, m.index + 2))
       continue
@@ -87,7 +87,7 @@ export class Screen {
     this.at.fill(0)
   }
   write(d: string) {
-    for (let m; (m = CSI.exec(d)); ) {
+    for (let m: RegExpExecArray | null; (m = CSI.exec(d)); ) {
       const c = m[3]
       if (m[4]) continue
       if (c !== undefined) {

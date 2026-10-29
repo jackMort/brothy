@@ -119,7 +119,7 @@ test("matchKey distinguishes shift and ctrl variants", () => {
 
 test("cached recomputes only when an argument changes", () => {
   let calls = 0
-  const f = cached((a: number, b: object) => (calls++, a))
+  const f = cached((a: number, _b: object) => (calls++, a))
   const o = {}
   f(1, o)
   f(1, o)
