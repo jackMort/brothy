@@ -78,8 +78,14 @@ function readEntries(dir: string): Dirent[] | null {
   }
   entries = decodable(dir, entries)
   // real directories before symlinks, so an alias never claims a subtree first
-  entries.sort((a, b) => +a.isSymbolicLink() - +b.isSymbolicLink() || +(a.name > b.name) - +(a.name < b.name))
+  entries.sort((a, b) => +a.isSymbolicLink() - +b.isSymbolicLink() || byCodeUnit(a.name, b.name))
   return entries
+}
+
+/** Plain code-unit order (not locale order), so the walk is the same on every machine. */
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1
+  return a > b ? 1 : 0
 }
 
 /** Whether an entry is a directory or a file, a symlink by its target; null for a link that cannot be followed. */
