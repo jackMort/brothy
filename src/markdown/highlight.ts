@@ -159,13 +159,13 @@ export function groupKind(group: string): Kind | undefined {
 type Range = [number, number, string, unknown?]
 
 /**
- * Turn tree-sitter ranges into per-line tokens. Overlaps resolve by
+ * The kind of every character of `code`. Overlaps resolve by
  * specificity (more dotted segments wins), then by later position in the
  * query, as OpenTUI itself does. The shipped queries' `#match?` predicates
  * are not applied by the worker, so every identifier arrives as variable +
  * type + constant; those two are re-checked against the text here.
  */
-export function tokenize(code: string, ranges: Range[]): Tok[][] {
+function paintKinds(code: string, ranges: Range[]): (Kind | undefined)[] {
   const kinds: (Kind | undefined)[] = new Array(code.length)
   const spec: number[] = new Array(code.length).fill(0)
   for (const [start, end, group] of ranges) {
@@ -181,6 +181,12 @@ export function tokenize(code: string, ranges: Range[]): Tok[][] {
       }
     }
   }
+  return kinds
+}
+
+/** Turn tree-sitter ranges into per-line tokens (`paintKinds`, then runs of one kind per line). */
+export function tokenize(code: string, ranges: Range[]): Tok[][] {
+  const kinds = paintKinds(code, ranges)
   const lines: Tok[][] = [[]]
   let line = lines[0]!
   for (let i = 0; i < code.length; i++) {
