@@ -1,7 +1,7 @@
 // Note statistics for Info and the Ctrl-P peek: words, reading time, headings, links, code blocks, tables and
 // tasks. Pure; `stats` lexes through the shared marked instance, `wordStats` does not lex.
 
-import type { Token } from "marked"
+import type { Token, Tokens } from "marked"
 
 import { lexBlocks, normalize, stripComments, tokenOf } from "./lexer"
 
@@ -34,6 +34,23 @@ function countWords(src: string): { words: number; minutes: number } {
 /** The same `words` and `minutes` as `stats(src)`. */
 export const wordStats = (src: string) => countWords(stripComments(normalize(src)))
 
+/** Token types that are one count each (a table also has its cells walked). */
+const COUNTED = new Map<string, "headings" | "links" | "codeBlocks" | "tables">([
+  ["heading", "headings"],
+  ["link", "links"],
+  ["code", "codeBlocks"],
+  ["table", "tables"],
+])
+
+/** Adds a list's tasks to `tasks` ([done, all]): marked's own, and a bare `[ ]`/`[x]` item it did not take for one. */
+function countTasks(items: Tokens.ListItem[], tasks: [number, number]) {
+  for (const it of items)
+    if (it.task || /^\[[ xX]\]$/.test(it.text.trim())) {
+      tasks[1]++
+      if (it.task ? it.checked : !/^\[ \]$/.test(it.text.trim())) tasks[0]++
+    }
+}
+
 /** Counts over the note as Preview lexes it (comments cut, though `lines` counts theirs); wikilinks count as links. */
 export function stats(src: string): Stats {
   const lines = normalize(src).split("\n").length
@@ -42,20 +59,13 @@ export function stats(src: string): Stats {
   const s: Stats = { words: 0, lines, headings: 0, links: 0, codeBlocks: 0, tables: 0, tasks: [0, 0], minutes: 0 }
   const walk = (toks: Token[]) => {
     for (const tok of toks) {
-      if (tok.type === "heading") s.headings++
-      if (tok.type === "link") s.links++
-      if (tok.type === "code") s.codeBlocks++
+      const counted = COUNTED.get(tok.type)
+      if (counted) s[counted]++
       if (tok.type === "table") {
-        s.tables++
         const tb = tokenOf(tok, "table")
         for (const cell of [...tb.header, ...tb.rows.flat()]) walk(cell.tokens)
       }
-      if (tok.type === "list")
-        for (const it of tokenOf(tok, "list").items)
-          if (it.task || /^\[[ xX]\]$/.test(it.text.trim())) {
-            s.tasks[1]++
-            if (it.task ? it.checked : !/^\[ \]$/.test(it.text.trim())) s.tasks[0]++
-          }
+      if (tok.type === "list") countTasks(tokenOf(tok, "list").items, s.tasks)
       if ("tokens" in tok && tok.tokens) walk(tok.tokens)
       if ("items" in tok && tok.items) walk(tok.items)
     }

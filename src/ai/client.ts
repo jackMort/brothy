@@ -202,19 +202,28 @@ export interface ErrCtx {
 }
 const MSG_W = 80
 
+/** A server's own words for the toast: control characters out, the key redacted, one line. */
+function serverText(m: string, ctx: ErrCtx): string {
+  return truncate(safeLine(ctx.key ? m.replaceAll(ctx.key, "…") : m).trim(), MSG_W)
+}
+
+/** The toast text for an HTTP status failure: the well-known codes by name, else the server's message, else the bare status. */
+function statusError(f: Extract<Failure, { kind: "status" }>, ctx: ErrCtx): string {
+  if (f.status === 401 || f.status === 403) return ctx.key ? `key rejected (${ctx.keyEnv})` : "unauthorized · set keyEnv"
+  if (f.status === 404) return "model or endpoint not found"
+  if (f.status === 429) return "rate limited"
+  return f.message?.trim() ? serverText(f.message, ctx) : `${f.status} from ${ctx.host}`
+}
+
 /** The error toast for a failure (spec: Errors table). */
 export function aiError(f: Failure, ctx: ErrCtx): string {
-  const tell = (m: string) => truncate(safeLine(ctx.key ? m.replaceAll(ctx.key, "…") : m).trim(), MSG_W)
   const noun = ctx.noun ?? "summary"
   const what = (): string => {
     switch (f.kind) {
       case "status":
-        if (f.status === 401 || f.status === 403) return ctx.key ? `key rejected (${ctx.keyEnv})` : "unauthorized · set keyEnv"
-        if (f.status === 404) return "model or endpoint not found"
-        if (f.status === 429) return "rate limited"
-        return f.message?.trim() ? tell(f.message) : `${f.status} from ${ctx.host}`
+        return statusError(f, ctx)
       case "message":
-        return tell(f.message)
+        return serverText(f.message, ctx)
       case "length":
         return `${noun} cut short`
       case "tooLong":

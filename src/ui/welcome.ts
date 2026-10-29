@@ -38,10 +38,8 @@ const QUAD = [" ", "▘", "▝", "▀", "▖", "▌", "▞", "▛", "▗", "▚"
 /** Particles in the steam. */
 const STEAM_PARTICLES = 26
 
-/** Steam at `tick`: STEAM_PARTICLES particles on a `w`×`h` braille field, born on the bottom row (the broth), drifting up and out. */
-export function steamRows(tick: number, w: number, h: number): string[] {
-  const W = w * 2
-  const H = h * 4
+/** The steam particles at `tick` as dots on a `W`×`H` field: born on the bottom row (the broth), drifting up and out. */
+function steamDots(tick: number, W: number, H: number): Uint8Array {
   const dots = new Uint8Array(W * H)
   const per = H + 8
   for (let i = 0; i < STEAM_PARTICLES; i++) {
@@ -52,6 +50,13 @@ export function steamRows(tick: number, w: number, h: number): string[] {
     if (px >= 0 && px < W) dots[py * W + px] = 1
     if (life < H * 0.5 && px + 1 >= 0 && px + 1 < W) dots[py * W + px + 1] = 1
   }
+  return dots
+}
+
+/** Steam at `tick`: STEAM_PARTICLES particles on a `w`×`h` braille field. */
+export function steamRows(tick: number, w: number, h: number): string[] {
+  const W = w * 2
+  const dots = steamDots(tick, W, h * 4)
   const rows: string[] = []
   for (let cy = 0; cy < h; cy++) {
     let s = ""
@@ -77,28 +82,11 @@ export interface ArtCell {
   broth?: boolean
 }
 
-/** The art, `artWidth` cells wide: the wordmark, then (with `bowl`) the steam field over the bowl. */
-export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean; bowl?: boolean } = {}): ArtCell[][] {
-  const { steam = true, bowl = true } = o
+type Put = (x: number, y: number, c: ArtCell) => void
+
+/** The bowl under the rim row `rim`: the rim, the body, the foot and the chopsticks. `ox` is the rim's left cell, `cx` the art's middle. */
+function drawBowl(put: Put, size: WelcomeSize, rim: number, ox: number, cx: number) {
   const w = size.bowlW
-  const AW = artWidth(size)
-  const ox = (AW - (w + 2)) >> 1 // the bowl centred under a wider wordmark
-  const cx = AW >> 1
-  // the big bowl keeps its steam rows (the chopsticks stand in them); the small one gives them up
-  const steamH = steam || size.sticks ? size.steamH : 0
-  const gap = size.sticks ? 1 : 0
-  const rim = WORDMARK.length + gap + steamH
-  const height = bowl ? rim + 1 + size.bowlH + (size.foot ? 1 : 0) : WORDMARK.length
-  const g: ArtCell[][] = Array.from({ length: height }, () => Array.from({ length: AW }, () => ({ ch: " ", role: "none" as const })))
-  const put = (x: number, y: number, c: ArtCell) => {
-    if (y >= 0 && y < height && x >= 0 && x < AW) g[y]![x] = c
-  }
-  WORDMARK.forEach((l, y) => [...l].forEach((ch, i) => ch !== " " && put(cx - (WORDMARK_W >> 1) + i, y, { ch, role: "mark" })))
-  if (!bowl) return g
-  if (steam)
-    steamRows(tick, size.steamW, size.steamH).forEach((r, cy) =>
-      [...r].forEach((ch, i) => ch !== " " && put(cx - (size.steamW >> 1) + i, rim - size.steamH + cy, { ch, role: "steam", row: cy + 5 - size.steamH })),
-    )
   // rim: one cell wider than the body each side, rounded at the ends; the broth fills the top half of its inner cells
   for (let i = 0; i < w + 2; i++) put(ox + i, rim, { ch: i === 0 ? "▗" : i === w + 1 ? "▖" : "▄", role: "edge", broth: i >= 2 && i < w })
   // body: a quarter ellipse at 2×2 pixels per cell, so the last row is still about half the rim
@@ -120,6 +108,30 @@ export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean
     for (let j = 0; j < 5; j++) put(sx + j, rim - 1 - j, { ch: "▞", role: "edge" })
     for (let j = 0; j < 4; j++) put(sx + 2 + j, rim - 1 - j, { ch: "▞", role: "edge" })
   }
+}
+
+/** The art, `artWidth` cells wide: the wordmark, then (with `bowl`) the steam field over the bowl. */
+export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean; bowl?: boolean } = {}): ArtCell[][] {
+  const { steam = true, bowl = true } = o
+  const AW = artWidth(size)
+  const ox = (AW - (size.bowlW + 2)) >> 1 // the bowl centred under a wider wordmark
+  const cx = AW >> 1
+  // the big bowl keeps its steam rows (the chopsticks stand in them); the small one gives them up
+  const steamH = steam || size.sticks ? size.steamH : 0
+  const gap = size.sticks ? 1 : 0
+  const rim = WORDMARK.length + gap + steamH
+  const height = bowl ? rim + 1 + size.bowlH + (size.foot ? 1 : 0) : WORDMARK.length
+  const g: ArtCell[][] = Array.from({ length: height }, () => Array.from({ length: AW }, () => ({ ch: " ", role: "none" as const })))
+  const put: Put = (x, y, c) => {
+    if (y >= 0 && y < height && x >= 0 && x < AW) g[y]![x] = c
+  }
+  WORDMARK.forEach((l, y) => [...l].forEach((ch, i) => ch !== " " && put(cx - (WORDMARK_W >> 1) + i, y, { ch, role: "mark" })))
+  if (!bowl) return g
+  if (steam)
+    steamRows(tick, size.steamW, size.steamH).forEach((r, cy) =>
+      [...r].forEach((ch, i) => ch !== " " && put(cx - (size.steamW >> 1) + i, rim - size.steamH + cy, { ch, role: "steam", row: cy + 5 - size.steamH })),
+    )
+  drawBowl(put, size, rim, ox, cx)
   return g
 }
 

@@ -108,14 +108,8 @@ export function truncateLeft(s: string, max: number): string {
 
 // ------------------------------------------------------------- wrapping
 
-/**
- * Word-wrap styled spans to `max` columns. `first`/`rest` are prefixes drawn
- * on the first and following rows (indentation, bullets, quote bars).
- * A "\n" inside a span forces a hard break. With `preserve`, whitespace is
- * kept verbatim and rows break only at "\n" or by hard-chopping (code).
- * Text is cut on grapheme boundaries and measured per grapheme.
- */
-export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[] = first, preserve = false): Span[][] {
+/** The rows being filled: each starts with its prefix (`first`, then `rest`) and holds at most `max` columns. */
+function rowWriter(max: number, first: Span[], rest: Span[]) {
   const rows: Span[][] = []
   let row: Span[] = first.map((s) => ({ ...s }))
   let w = spanWidth(first)
@@ -137,45 +131,71 @@ export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[
       w += gw
     }
   }
-  if (preserve) {
-    for (const s of spans) {
-      s.text.split("\n").forEach((seg, i) => {
-        if (i > 0) newRow()
-        place(s, seg)
-      })
-    }
-    rows.push(row)
-    return rows
-  }
-  for (const s of spans) {
-    const parts = s.text.split(/(\n|[ \t]+)/)
-    for (const part of parts) {
-      if (!part) continue
-      if (part === "\n") {
-        newRow()
-        continue
-      }
-      if (/^[ \t]+$/.test(part)) {
-        if (w > base) pendingSpace = { ...s, text: " " }
-        continue
-      }
-      const pw = width(part)
-      const sp = pendingSpace ? 1 : 0
-      if (w > base && w + sp + pw > max) newRow()
+  return {
+    newRow,
+    place,
+    /** a run of blanks in `s`: one space, drawn only if a word follows on the same row and not at the row's start */
+    gap(s: Span) {
+      if (w > base) pendingSpace = { ...s, text: " " }
+    },
+    /** a word in `s`: after its pending space, on a new row if it does not fit, chopped if it is wider than any row */
+    word(s: Span, text: string) {
+      const pw = width(text)
+      if (w > base && w + (pendingSpace ? 1 : 0) + pw > max) newRow()
       else if (pendingSpace) {
         pushSpan(row, pendingSpace)
         w += 1
       }
       pendingSpace = null
-      if (pw > max - base) place(s, part)
+      if (pw > max - base) place(s, text)
       else {
-        pushSpan(row, { ...s, text: part })
+        pushSpan(row, { ...s, text })
         w += pw
       }
+    },
+    done() {
+      rows.push(row)
+      return rows
+    },
+  }
+}
+
+type RowWriter = ReturnType<typeof rowWriter>
+
+/** `wrap`'s `preserve` mode: whitespace verbatim, rows break only at "\n" or by hard-chopping. */
+function wrapVerbatim(spans: Span[], out: RowWriter) {
+  for (const s of spans) {
+    s.text.split("\n").forEach((seg, i) => {
+      if (i > 0) out.newRow()
+      out.place(s, seg)
+    })
+  }
+}
+
+/** `wrap`'s word mode: the text cut into words, blank runs and "\n". */
+function wrapWords(spans: Span[], out: RowWriter) {
+  for (const s of spans) {
+    for (const part of s.text.split(/(\n|[ \t]+)/)) {
+      if (!part) continue
+      if (part === "\n") out.newRow()
+      else if (/^[ \t]+$/.test(part)) out.gap(s)
+      else out.word(s, part)
     }
   }
-  rows.push(row)
-  return rows
+}
+
+/**
+ * Word-wrap styled spans to `max` columns. `first`/`rest` are prefixes drawn
+ * on the first and following rows (indentation, bullets, quote bars).
+ * A "\n" inside a span forces a hard break. With `preserve`, whitespace is
+ * kept verbatim and rows break only at "\n" or by hard-chopping (code).
+ * Text is cut on grapheme boundaries and measured per grapheme.
+ */
+export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[] = first, preserve = false): Span[][] {
+  const out = rowWriter(max, first, rest)
+  if (preserve) wrapVerbatim(spans, out)
+  else wrapWords(spans, out)
+  return out.done()
 }
 
 // ------------------------------------------------------------- numbers
