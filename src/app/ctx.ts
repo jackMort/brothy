@@ -148,8 +148,8 @@ function makeScroll(base: Base) {
   return { setTop, scrollBy, stopRolling, showMatch }
 }
 
-/** Opening a note (history, the folders above it) and the Files cursor. */
-function makeOpening(base: Base) {
+/** Opening a note: history and the folders above it. */
+function makeNoteOpening(base: Base) {
   const { ui, set, derive, timers, sidebarSeen } = base
   /** The open note's scroll entry, as history keeps it. */
   const currentSpot = (): Spot | null => {
@@ -188,6 +188,13 @@ function makeOpening(base: Base) {
     }
   }
 
+  return { currentSpot, openFile }
+}
+
+/** The Files cursor: moving it previews notes, folders open and close. */
+function makeFilesCursor(base: Base, openFile: (path: string, how?: "open" | "peek" | "history") => void) {
+  const { ui, set, derive, timers, sidebarSeen } = base
+
   /** Move the Files cursor; notes open once the cursor rests (`now` opens at once). */
   const selectRow = (i: number, open: "later" | "now" | "no" = "later") => {
     const { rows, LH } = derive()
@@ -209,12 +216,18 @@ function makeOpening(base: Base) {
     set({ expanded: next })
   }
 
-  return { currentSpot, openFile, selectRow, toggleDir }
+  return { selectRow, toggleDir }
 }
 
-/** The panel: its saved layout, the shown view, focus on the panel or the document. */
-function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof makeOpening>) {
-  const { ui, set, derive, timers, persist, selectRow } = c
+/** Opening a note and the Files cursor. */
+function makeOpening(base: Base) {
+  const opening = makeNoteOpening(base)
+  return { ...opening, ...makeFilesCursor(base, opening.openFile) }
+}
+
+/** The panel's saved layout and the shown view. */
+function makePanelViews(c: Base & ReturnType<typeof makeFeedback>) {
+  const { ui, set, derive, persist } = c
   /** Save the panel layout field that changed (`view` on change, `hidden` only by ^b inline); saveConfig merges it per field. */
   const saveSidebar = (patch: Partial<SidebarConfig>) => persist({ sidebar: patch, folds: undefined })
 
@@ -240,6 +253,15 @@ function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof
 
   /** The tabs, in `1 2 3` order: a piped session has no Files, also on a note followed from it. */
   const panelViews = (): readonly View[] => (ui.current.piped ? VIEWS.filter((v) => v !== "files") : VIEWS)
+
+  return { saveSidebar, selectView, panelViews }
+}
+
+/** The panel: its views, focus on the panel or the document. */
+function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof makeOpening>) {
+  const { ui, set, derive, timers, selectRow } = c
+  const views = makePanelViews(c)
+  const { selectView } = views
 
   /** Show the panel (unhide it inline, open the drawer) and focus it; Files lands on the open note. */
   const focusPanel = (v?: View) => {
@@ -277,7 +299,7 @@ function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof
     })
   }
 
-  return { saveSidebar, selectView, panelViews, focusPanel, focusDoc }
+  return { ...views, focusPanel, focusDoc }
 }
 
 /** The app context: `base` plus fades, toasts and config saves, then scrolling, opening a note, the Files cursor and focus. */

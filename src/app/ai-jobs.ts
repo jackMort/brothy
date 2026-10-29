@@ -282,16 +282,9 @@ function makeSummary(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJo
   return { summarizeNote }
 }
 
-/** `D`: the reload-explain request for the open note's changes. */
-function makeReloadExplain(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJob }: Jobs) {
-  const { ui, set, bump, derive, flash, focusPanel } = c
-
-  /** Forget the open note's baseline and explanation; a `D` still running for it is cancelled. */
-  const dropDelta = () => {
-    const s = ui.current
-    if (s.delta) cancelJob(jobKey("delta", s.delta.path))
-    if (s.baseline || s.delta) set({ baseline: null, delta: null })
-  }
+/** `D`: send the changed hunks of a note and keep the reply. */
+function makeDeltaStart(c: AppCtx, { failText, startJob }: Jobs) {
+  const { ui, set, bump, derive, flash } = c
 
   /** Send the changed hunks of `path`; on success the baseline moves to the sent text, so later edits list anew. */
   const startDelta = (
@@ -325,6 +318,22 @@ function makeReloadExplain(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, s
         })
       },
     })
+  }
+
+  return { startDelta }
+}
+
+/** `D`: the reload-explain request for the open note's changes. */
+function makeReloadExplain(c: AppCtx, jobs: Jobs) {
+  const { reloadAI, cancelJob, aiGate } = jobs
+  const { ui, set, derive, flash, focusPanel } = c
+  const { startDelta } = makeDeltaStart(c, jobs)
+
+  /** Forget the open note's baseline and explanation; a `D` still running for it is cancelled. */
+  const dropDelta = () => {
+    const s = ui.current
+    if (s.delta) cancelJob(jobKey("delta", s.delta.path))
+    if (s.baseline || s.delta) set({ baseline: null, delta: null })
   }
 
   /** `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. */
