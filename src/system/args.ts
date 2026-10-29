@@ -14,41 +14,62 @@ export interface Args {
   version: boolean
 }
 
-/** Pure CLI argument parser: returns the parsed options or `{ error }`. */
-export function parseArgs(argv: string[]): Args | { error: string } {
-  const out: Args = { path: ".", stdin: false, given: false, theme: undefined, transparent: false, help: false, version: false }
-  const paths: string[] = []
-  const names = `a family (${FAMILIES.map((f) => f.name).join(", ")}) or one of its themes (<family>-light, one-dark)`
-  let theme: string | undefined
-  let transparent = false
+/** Early exits: these flags win over every other argument, even a bad one. */
+const EARLY = new Map<string, "help" | "version">([
+  ["-h", "help"],
+  ["--help", "help"],
+  ["-v", "version"],
+  ["--version", "version"],
+])
+
+interface Scan {
+  paths: string[]
+  theme?: string
+  transparent: boolean
+  early?: "help" | "version"
+  error?: string
+}
+
+/** `-t`/`--theme`/`--theme=` at `argv[i]`: its value and the index to resume from (an option-looking next argument is left for the loop). Not a theme flag: null. */
+function themeOption(argv: string[], i: number, names: string): { value: string; next: number } | { error: string; next: number } | null {
+  const a = argv[i]!
+  const eq = a.startsWith("--theme=")
+  if (!eq && a !== "-t" && a !== "--theme") return null
+  const value = eq ? a.slice(8) : argv[i + 1]
+  if (value && (eq || !value.startsWith("-"))) return { value, next: eq ? i : i + 1 }
+  return { error: `option ${eq ? "--theme" : a} requires a value: ${names}`, next: eq || value?.startsWith("-") ? i : i + 1 }
+}
+
+/** One pass over argv: the paths, the theme and `--transparent`, the first error, or an early exit. */
+function scanArgs(argv: string[], names: string): Scan {
+  const scan: Scan = { paths: [], transparent: false }
   let optionsDone = false
-  let error: string | undefined
-  const fail = (msg: string) => {
-    error ??= msg
-  }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!
     if (optionsDone || !a.startsWith("-") || a === "-") {
-      paths.push(a)
-    } else if (a === "--") {
-      optionsDone = true
-    } else if (a === "-h" || a === "--help") {
-      return { ...out, help: true }
-    } else if (a === "-v" || a === "--version") {
-      return { ...out, version: true }
-    } else if (a === "--transparent") {
-      transparent = true
-    } else if (a === "-t" || a === "--theme" || a.startsWith("--theme=")) {
-      const eq = a.startsWith("--theme=")
-      const value = eq ? a.slice(8) : argv[++i]
-      if (!value || (!eq && value.startsWith("-"))) {
-        fail(`option ${eq ? "--theme" : a} requires a value: ${names}`)
-        if (!eq && value?.startsWith("-")) i--
-      } else theme = value
-    } else {
-      fail(`unknown option: ${a}`)
+      scan.paths.push(a)
+      continue
     }
+    const early = EARLY.get(a)
+    if (early) return { ...scan, early }
+    const theme = themeOption(argv, i, names)
+    if (theme) {
+      if ("error" in theme) scan.error ??= theme.error
+      else scan.theme = theme.value
+      i = theme.next
+    } else if (a === "--") optionsDone = true
+    else if (a === "--transparent") scan.transparent = true
+    else scan.error ??= `unknown option: ${a}`
   }
+  return scan
+}
+
+/** Pure CLI argument parser: returns the parsed options or `{ error }`. */
+export function parseArgs(argv: string[]): Args | { error: string } {
+  const out: Args = { path: ".", stdin: false, given: false, theme: undefined, transparent: false, help: false, version: false }
+  const names = `a family (${FAMILIES.map((f) => f.name).join(", ")}) or one of its themes (<family>-light, one-dark)`
+  const { paths, theme, transparent, early, error } = scanArgs(argv, names)
+  if (early) return { ...out, [early]: true }
   if (error) return { error }
   if (theme !== undefined && !resolveTheme(theme)) return { error: `unknown theme "${theme}": ${names}` }
   if (paths.length > 1) return { error: "expected at most one path" }
