@@ -40,7 +40,7 @@ function pickGeometry(raw: unknown): Geometry | undefined {
 }
 
 /** The valid entries of a raw `projects` value: bad ones dropped, bad fields defaulted, deduped, capped. */
-export function pickProjects(raw: unknown): ProjectEntry[] {
+function pickProjects(raw: unknown): ProjectEntry[] {
   if (!Array.isArray(raw)) return []
   const out: ProjectEntry[] = []
   for (const r of raw) {
@@ -68,12 +68,9 @@ export function loadProjects(): ProjectEntry[] {
 
 /** Best effort: a broken file is replaced (it holds no settings), a write error is ignored. */
 export function saveProjects(list: readonly ProjectEntry[]) {
-  const file = projectsPath()
   try {
-    writeFileAtomic(file, JSON.stringify({ projects: list }, null, 2) + "\n")
-  } catch {
-    // read-only home: recents just won't persist
-  }
+    writeFileAtomic(projectsPath(), JSON.stringify({ projects: list }, null, 2) + "\n")
+  } catch {}
 }
 
 /** `e` first, any older entry for its root dropped, at most `cap` kept. */

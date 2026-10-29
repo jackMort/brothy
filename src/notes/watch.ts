@@ -51,7 +51,7 @@ export function watchPath(
     polling = true
     on.error(`live reload: ${(e as Error)?.message ?? e} · polling instead`)
     pollTimer = setInterval(report, poll)
-    pollTimer.unref?.()
+    pollTimer.unref()
   }
 
   const name = basename(path)
@@ -87,7 +87,7 @@ export function watchPath(
       arm()
       fire() // the file went away or is a different one now
     }, check)
-    guard.unref?.()
+    guard.unref()
   }
 
   return () => {
