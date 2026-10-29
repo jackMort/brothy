@@ -52,7 +52,7 @@ function readRaw(): Raw | null {
 }
 
 /** The valid fields of a raw `sidebar` value. */
-export function pickSidebar(raw: unknown): Partial<SidebarConfig> {
+function pickSidebar(raw: unknown): Partial<SidebarConfig> {
   if (!isRecord(raw)) return {}
   const out: Partial<SidebarConfig> = {}
   if (VIEWS.includes(raw.view as View)) out.view = raw.view as View
@@ -95,7 +95,6 @@ export function loadConfig(): Config {
   return out
 }
 
-
 /**
  * Merge `patch` into the file: top-level keys replace, except object-valued ones (`sidebar`,
  * `zen`) merge one level, so a patch of one field leaves what another instance saved. Returns
@@ -104,7 +103,7 @@ export function loadConfig(): Config {
  */
 export function saveConfig(patch: Config): boolean {
   const current = readRaw()
-  if (!current) return false // exists but invalid: leave the user's file alone
+  if (!current) return false
   const next: Raw = { ...current }
   for (const [k, v] of Object.entries(patch)) next[k] = isRecord(v) && isRecord(current[k]) ? { ...current[k], ...v } : v
   try {
