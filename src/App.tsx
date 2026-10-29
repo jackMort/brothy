@@ -1,11 +1,11 @@
 // The app's root: the store and refs, the context and feature factories rebuilt every render, the effects that need
 // this render's values, and the screen (zen or main) laid out from the parts in src/app/. Not pure.
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ensureHighlights } from "./markdown/highlight"
 import { pendingHighlights, type Geometry, type Rendered } from "./markdown/render"
 import { makeAIJobs } from "./app/ai-jobs"
-import { makeDerive, makeMemo } from "./app/derive"
+import { makeDerive, makeMemo, type Derived } from "./app/derive"
 import { makeCtx, type Timers, type WelcomeState } from "./app/ctx"
 import { makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
@@ -78,20 +78,8 @@ export function App({
   }
 
   // crossing DRAWER_BELOW: a focused panel becomes an open drawer; widening shows it inline again
-  const modeSeen = useRef<"inline" | "drawer" | null>(null)
-  const modeNow = W < DRAWER_BELOW ? "drawer" : "inline"
-  if (modeSeen.current !== modeNow) {
-    const s0 = ui.current
-    if (modeSeen.current === "inline") s0.drawerOpen = s0.focus === "panel" && !s0.hidden && !s0.zen
-    if (modeSeen.current === "drawer") {
-      s0.drawerOpen = false
-      if (s0.hidden && s0.focus === "panel") {
-        s0.focus = "doc"
-        s0.filterTyping = false
-      }
-    }
-    modeSeen.current = modeNow
-  }
+  const modeSeen = useRef<PanelMode | null>(null)
+  crossDrawer(modeSeen, ui.current, W)
 
   // the refs the context carries are documented on `Base` and `DeriveRefs`
   const vault = useRef<{ ix: VaultIndex; running: boolean }>({ ix: emptyIndex(), running: false })
@@ -162,8 +150,7 @@ export function App({
 
   // ---------------------------------------------------- render
   const d = derive()
-  const { s, L, t } = d
-  const paint = surface(t, s.transparent)
+  const { L } = d
 
   // the panel and the document write the list tops and the welcome row back to the store as they draw: always built,
   // even when zen or a too-small terminal leaves them off screen
@@ -189,13 +176,7 @@ export function App({
   })
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
-  const footer: FooterState = {
-    query: !!s.query,
-    preview: !s.source,
-    disk: s.openPath !== STDIN,
-    ai: !!s.ai,
-    changes: !!s.ai && !!d.cv && d.cv.state !== "result",
-  }
+  const footer = footerState(d)
   const ghostEl = ghostLine(ctx, d, { ctx: ctxNow, pinned: PINNED.includes(ctxNow), hints: (c) => footerHints(c, footer) })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo: popups.helpGo })
@@ -217,56 +198,122 @@ export function App({
   const themeEl = themeOverlay(ctx, d, pickView, popups)
   const zenEl = zenOverlay(ctx, d, zen)
 
-  if (W < MIN_W || H < MIN_H)
-    return (
-      <box style={{ width: W, height: H, backgroundColor: paint.main, alignItems: "center", justifyContent: "center" }}>
-        {tooSmall(W, H, `${MIN_W}×${MIN_H}`).map((l, i) => (
-          <text key={i} wrapMode="none" fg={t.textMuted}>
-            {l}
-          </text>
-        ))}
-      </box>
-    )
+  if (W < MIN_W || H < MIN_H) return tooSmallScreen(d, W, H)
+  const parts: ScreenParts = { panelEl, docEl, miniEl, ghostEl, progressEl, helpEl, findEl, switchEl, openEl, themeEl, zenEl }
+  return L.zen ? zenScreen(d, W, H, pointer.note, parts) : mainScreen(d, W, H, pointer.note, parts)
+}
 
-  if (L.zen) {
-    // Ghost on: the top line is full after a key, then fades; Ghost off: dimmed. Hints and toasts have their own lifetimes.
-    const step = s.zenCfg.ghost ? (s.ghostAt === null ? null : fadeStep(Date.now() - s.ghostAt)) : undefined
-    const topK = step === undefined ? ZEN_DIM : step === null ? null : step / (GHOST_STEPS + 1)
-    return (
-      <box key="zen" onMouse={pointer.note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
-        {topRow(d, topK)}
-        {gapRow(d)}
-        <box style={{ flexDirection: "row", height: L.bodyH, paddingLeft: 1, paddingRight: 1 }}>{docEl}</box>
-        {ghostEl}
-        {progressEl}
-        {helpEl}
-        {findEl}
-        {switchEl}
-        {openEl}
-        {themeEl}
-        {zenEl}
-      </box>
-    )
+// ------------------------------------------------------------- screen
+
+type PanelMode = "inline" | "drawer"
+type Pointer = ReturnType<typeof usePointer>
+
+/** Apply a DRAWER_BELOW crossing to the store before this render draws; `seen` is the panel mode last drawn. */
+function crossDrawer(seen: { current: PanelMode | null }, s: UI, W: number) {
+  const modeNow = W < DRAWER_BELOW ? "drawer" : "inline"
+  if (seen.current === modeNow) return
+  if (seen.current === "inline") s.drawerOpen = s.focus === "panel" && !s.hidden && !s.zen
+  if (seen.current === "drawer") {
+    s.drawerOpen = false
+    if (s.hidden && s.focus === "panel") {
+      s.focus = "doc"
+      s.filterTyping = false
+    }
   }
+  seen.current = modeNow
+}
 
+/** What the footer hints wait for. */
+function footerState({ s, cv }: Derived): FooterState {
+  return {
+    query: !!s.query,
+    preview: !s.source,
+    disk: s.openPath !== STDIN,
+    ai: !!s.ai,
+    changes: !!s.ai && !!cv && cv.state !== "result",
+  }
+}
+
+/** The parts both screens draw, built every render. */
+interface ScreenParts {
+  panelEl: ReactNode
+  docEl: ReactNode
+  miniEl: ReactNode
+  ghostEl: ReactNode
+  progressEl: ReactNode
+  helpEl: ReactNode
+  findEl: ReactNode
+  switchEl: ReactNode
+  openEl: ReactNode
+  themeEl: ReactNode
+  zenEl: ReactNode
+}
+
+/** Below MIN_W × MIN_H: only the size it needs. */
+function tooSmallScreen({ s, t }: Derived, W: number, H: number) {
+  const paint = surface(t, s.transparent)
   return (
-    <box key="main" onMouse={pointer.note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
+    <box style={{ width: W, height: H, backgroundColor: paint.main, alignItems: "center", justifyContent: "center" }}>
+      {tooSmall(W, H, `${MIN_W}×${MIN_H}`).map((l, i) => (
+        <text key={i} wrapMode="none" fg={t.textMuted}>
+          {l}
+        </text>
+      ))}
+    </box>
+  )
+}
+
+/** How far zen's top line has faded, for `topRow` (null: hidden). */
+function zenTopFade(s: UI) {
+  const step = s.zenCfg.ghost ? (s.ghostAt === null ? null : fadeStep(Date.now() - s.ghostAt)) : undefined
+  return step === undefined ? ZEN_DIM : step === null ? null : step / (GHOST_STEPS + 1)
+}
+
+/** The zen screen: the document alone between the top line and the footer rows. */
+function zenScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: ScreenParts) {
+  const { s, L, t } = d
+  const paint = surface(t, s.transparent)
+  // Ghost on: the top line is full after a key, then fades; Ghost off: dimmed. Hints and toasts have their own lifetimes.
+  const topK = zenTopFade(s)
+  return (
+    <box key="zen" onMouse={note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
+      {topRow(d, topK)}
+      {gapRow(d)}
+      <box style={{ flexDirection: "row", height: L.bodyH, paddingLeft: 1, paddingRight: 1 }}>{p.docEl}</box>
+      {p.ghostEl}
+      {p.progressEl}
+      {p.helpEl}
+      {p.findEl}
+      {p.switchEl}
+      {p.openEl}
+      {p.themeEl}
+      {p.zenEl}
+    </box>
+  )
+}
+
+/** The main screen: the panel inline (or as a drawer over the rest), the document and the minimap. */
+function mainScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: ScreenParts) {
+  const { s, L, t } = d
+  const paint = surface(t, s.transparent)
+  return (
+    <box key="main" onMouse={note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
       {topRow(d, 0)}
       {gapRow(d)}
       <box style={{ flexDirection: "row", height: L.bodyH, paddingLeft: 1, paddingRight: L.mini ? 0 : 1, gap: 1 }}>
-        {L.inline ? panelEl : null}
-        {docEl}
-        {miniEl}
+        {L.inline ? p.panelEl : null}
+        {p.docEl}
+        {p.miniEl}
       </box>
-      {ghostEl}
-      {progressEl}
-      {L.shown && !L.inline ? panelEl : null}
-      {helpEl}
-      {findEl}
-      {switchEl}
-      {openEl}
-      {themeEl}
-      {zenEl}
+      {p.ghostEl}
+      {p.progressEl}
+      {L.shown && !L.inline ? p.panelEl : null}
+      {p.helpEl}
+      {p.findEl}
+      {p.switchEl}
+      {p.openEl}
+      {p.themeEl}
+      {p.zenEl}
     </box>
   )
 }
