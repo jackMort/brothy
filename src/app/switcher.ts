@@ -21,7 +21,7 @@ import { keepHitVisible } from "../ui/nav"
 import { peekLines, peekWindow, switchSplit } from "../notes/peek"
 import { PEEK_MIN_W } from "../ui/geometry"
 import { errText } from "../ui/status"
-import { isFresh, textHash } from "../ai/cache"
+import { isFresh, textHash, type Summary } from "../ai/cache"
 import {
   emptyIndex,
   firstHit,
@@ -260,27 +260,32 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     if (!ui.current.switcher?.ask) askStart() // AI off or no key: re-read the config and say why
   }
 
+  /** The highlighted row's note as the peek reads it: its index entry, the note (read once per mtime), its window rendered at `w`. */
+  const peekNote = (row: SwitchRow | undefined, { s, t }: Pick<Derived, "s" | "t">, w: number) => {
+    const path = row && "path" in row ? row.path : null
+    const doc = path ? vault.current.ix.docs.get(path) : undefined
+    const note = path && doc ? memo.peekFile(path, doc.mtime) : null
+    const win = note && doc && row ? peekWindow(note.lines, note.fm, doc, row) : null
+    const view = note && win ? memo.peek(note.lines, win.from, win.to, w, t, s.linkTree, s.headingStyle) : undefined
+    return { path, doc, note, base: win?.base, view }
+  }
+
   /** The peek pane (from PEEK_MIN_W): the highlighted row's note, its TL;DR only while fresh; undefined without one. */
   const peekPane = ({ s, swRows, swHl, t, L }: Derived) => {
     if (!s.switcher || W < PEEK_MIN_W) return undefined
     const peekRow = swRows[swHl]
-    const peekPath = peekRow && "path" in peekRow ? peekRow.path : null
-    const peekDoc = peekPath ? vault.current.ix.docs.get(peekPath) : undefined
     const peekW = switchSplit(W).peekW
-    const peekNote = peekPath && peekDoc ? memo.peekFile(peekPath, peekDoc.mtime) : null
-    const peekWin = peekNote && peekDoc && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc, peekRow) : null
-    const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headingStyle) : undefined
-    const peekSaved = peekPath ? s.summaries[peekPath] : undefined
+    const { path, doc, note, base, view } = peekNote(peekRow, { s, t }, peekW)
     return peekLines(
       {
         row: peekRow,
-        rel: peekPath ? relative(s.linkTree.path, peekPath) : "",
-        doc: peekDoc,
-        view: peekView,
-        base: peekWin?.base,
-        words: peekNote?.words,
-        minutes: peekNote?.minutes,
-        summary: peekSaved && peekNote && isFresh(peekSaved, peekNote.hash) ? { text: peekSaved.summary, model: shortModel(peekSaved.model) } : undefined,
+        rel: path ? relative(s.linkTree.path, path) : "",
+        doc,
+        view,
+        base,
+        words: note?.words,
+        minutes: note?.minutes,
+        summary: freshTldr(path ? s.summaries[path] : undefined, note),
       },
       t,
       peekW,
@@ -290,5 +295,11 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
 
   return { dropAsk, closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane }
 }
+
+/** A cached TL;DR for the peek, only while fresh for the note as read. */
+function freshTldr(saved: Summary | undefined, note: { hash: string } | null) {
+  return saved && note && isFresh(saved, note.hash) ? { text: saved.summary, model: shortModel(saved.model) } : undefined
+}
+
 /** What `makeSwitcher` gives App and the other factories. */
 export type SwitcherControl = ReturnType<typeof makeSwitcher>
