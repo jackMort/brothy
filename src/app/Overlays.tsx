@@ -17,29 +17,38 @@ import { zenRows } from "../zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { HELP_GROUPS } from "./keymap"
+import type { Popups } from "./popups"
 import type { SwitcherControl } from "./switcher"
 import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
 /** The `? ?` sheet, scrolled to `helpTop`; its title names the version and, while it fits, the theme. */
-export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { version: string; helpGo: (n: number) => void }): ReactNode {
+export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { version: string } & Pick<Popups, "helpGo">): ReactNode {
   const { set, W, H } = c
   const { s, t } = d
-  const hl = helpLayout(HELP_GROUPS, W, H)
-  const helpTopC = Math.max(0, Math.min(s.helpTop, hl.rows - hl.vis))
-  const helpNote = hl.rows > hl.vis ? `j/k scroll ${helpTopC + hl.vis}/${hl.rows}` : undefined
+  const layout = helpLayout(HELP_GROUPS, W, H)
+  const helpTopC = Math.max(0, Math.min(s.helpTop, layout.rows - layout.vis))
+  const helpNote = layout.rows > layout.vis ? `j/k scroll ${helpTopC + layout.vis}/${layout.rows}` : undefined
   // title row: padding 4 each side, then the note and `esc`; the theme name goes first, then the title is cut
-  const titleRoom = Math.min(hl.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
+  const titleRoom = Math.min(layout.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
   const helpFull = `Keybindings · brothy v${version} · ${t.name}`
   const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`, Math.max(1, titleRoom))
   return s.help ? (
-    <HelpSheet t={t} W={W} H={H} layout={hl} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * 3)} />
+    <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * 3)} />
   ) : null
+}
+
+/** Hover: row `i` becomes popup `key`'s highlight (with `top`, for Find), unless it already is or the popup has closed. */
+function hoverRow({ ui, set }: AppCtx, key: "switcher" | "opener" | "prompt", hl: number, top?: number) {
+  return (i: number) => {
+    const p = ui.current[key]
+    if (i !== hl && p) set({ [key]: { ...p, hl: i, ...(top === undefined ? {} : { top }) } })
+  }
 }
 
 /** The `C-p` switcher (Go to, or Ask for a `?` query), with the peek pane where it fits. */
 export function switchOverlay(c: AppCtx, d: Derived, { closeSwitcher, swGo, swActivate, peekPane }: Pick<SwitcherControl, "closeSwitcher" | "swGo" | "swActivate" | "peekPane">): ReactNode {
-  const { ui, set, W, H } = c
+  const { W, H } = c
   const { s, L, t, swRows, swHl, question } = d
   const notesLabel = s.indexing ? `indexing ${s.indexing[0]}/${s.indexing[1]}` : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")
   const peek = peekPane(d)
@@ -58,7 +67,7 @@ export function switchOverlay(c: AppCtx, d: Derived, { closeSwitcher, swGo, swAc
       peek={peek}
       onClose={closeSwitcher}
       onScroll={(dir) => swGo(stepRow(swRows, swHl, dir))}
-      onHover={(i) => i !== swHl && ui.current.switcher && set({ switcher: { ...ui.current.switcher, hl: i } })}
+      onHover={hoverRow(c, "switcher", swHl)}
       onActivate={swActivate}
     />
   ) : null
@@ -66,7 +75,7 @@ export function switchOverlay(c: AppCtx, d: Derived, { closeSwitcher, swGo, swAc
 
 /** The `o` Open picker: recent projects and path completions. */
 export function openOverlay(c: AppCtx, d: Derived, { opGo, opOpen }: Pick<WorkspaceControl, "opGo" | "opOpen">): ReactNode {
-  const { ui, set, W, H } = c
+  const { set, W, H } = c
   const { s, L, t } = d
   return s.opener ? (
     <OpenPicker
@@ -80,23 +89,15 @@ export function openOverlay(c: AppCtx, d: Derived, { opGo, opOpen }: Pick<Worksp
       height={L.PH}
       onClose={() => set({ opener: null })}
       onScroll={(dir) => opGo(stepRow(d.opRows, d.opHl, dir))}
-      onHover={(i) => i !== d.opHl && ui.current.opener && set({ opener: { ...ui.current.opener, hl: i } })}
+      onHover={hoverRow(c, "opener", d.opHl)}
       onActivate={(i) => opOpen(d.opRows[i])}
     />
   ) : null
 }
 
-/** What the Find picker does: the row Enter takes unmoved, move the highlight, submit a row, close. */
-export interface FindActions {
-  promptDefault: () => number
-  promptHighlight: (hl: number) => void
-  promptSubmit: (hl?: number) => void
-  promptClose: () => void
-}
-
 /** The `/` picker: find in the document, one row per matching line. */
-export function findOverlay(c: AppCtx, d: Derived, { promptDefault, promptHighlight, promptSubmit, promptClose }: FindActions): ReactNode {
-  const { ui, set, W, H } = c
+export function findOverlay(c: AppCtx, d: Derived, { promptDefault, promptHighlight, promptSubmit, promptClose }: Pick<Popups, "promptDefault" | "promptHighlight" | "promptSubmit" | "promptClose">): ReactNode {
+  const { W, H } = c
   const { s, L, t, view, matches } = d
   const { prompt } = s
   if (!prompt) return null
@@ -125,7 +126,7 @@ export function findOverlay(c: AppCtx, d: Derived, { promptDefault, promptHighli
         height={height}
         innerW={popupW - 2}
         empty={!prompt.value ? "Type to search" : "No results found"}
-        onHover={(i) => i !== hl && ui.current.prompt && set({ prompt: { ...ui.current.prompt, hl: i, top: ptop } })}
+        onHover={hoverRow(c, "prompt", hl, ptop)}
         onActivate={(i) => promptSubmit(i)}
       />
     </Overlay>
@@ -163,15 +164,8 @@ export function themePickView(c: AppCtx, d: Derived): ThemePickView | null {
   return { pick, rows, geo, hl, top, cand, sample }
 }
 
-/** What the theme picker does: close it, replace its state, apply the candidate. */
-export interface ThemeActions {
-  closeTheme: () => void
-  themeSet: (p: ThemePick) => void
-  applyTheme: () => void
-}
-
 /** The `t` picker drawn from `view` (null: closed). */
-export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, { closeTheme, themeSet, applyTheme }: ThemeActions): ReactNode {
+export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, { closeTheme, themeSet, applyTheme }: Pick<Popups, "closeTheme" | "themeSet" | "applyTheme">): ReactNode {
   const { ui, memo, W, H } = c
   if (!view) return null
   const { pick, rows, geo, hl, top, cand, sample } = view
