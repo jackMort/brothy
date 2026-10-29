@@ -2,7 +2,8 @@
 import { expect, test } from "bun:test"
 import { existsSync, readFileSync } from "node:fs"
 import { themeByName } from "../src/theme"
-import { type Setup, hex, keys, onBg, openHelp, spansOf, W120, waitFor, useAppHarness } from "./helpers/app"
+import { type Setup, keys, onBg, openHelp, spansOf, W120, waitFor, useAppHarness } from "./helpers/app"
+import { hex } from "./helpers/theme"
 
 const { tmp, mount, configFile } = useAppHarness()
 

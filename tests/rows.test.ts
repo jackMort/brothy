@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test"
 import { A } from "../src/spans"
 import { artSpans, fitHits, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem } from "../src/rows"
-import { themeByName, themes } from "../src/theme"
+import { themes } from "../src/theme"
 import { BIG, welcomeArt } from "../src/welcome"
+import { brothy } from "./helpers/theme"
+
+const t = brothy
 
 test("scrim is a dark wash over dark themes and a light wash over light themes", () => {
   for (const t of themes) {
@@ -29,7 +32,6 @@ test("fitHits: the end is cut first; a late match gets a window; wide characters
 
 
 test("modeSwitch: the active side is a primary chip on backgroundElement, the other muted", () => {
-  const t = themes[0]!
   const segs = modeSwitch(t, "light")
   expect(segs.map((seg) => seg.map((s) => s.text).join(""))).toEqual([" dark ", " light "]) // SWITCH_MODES order, one per chip
   expect(segs[1]!.find((s) => s.text === "light")).toMatchObject({ fg: t.primary, bg: t.backgroundElement, attr: 1 })
@@ -59,7 +61,6 @@ test("padTo fills to the width by display width and never cuts", () => {
 })
 
 test("switchItem: a header is a muted bold title with its count, a note row puts the folder on the right", () => {
-  const t = themeByName("brothy")
   expect(switchItem({ kind: "header", title: "Notes", count: "2" }, t)).toEqual({ header: true, spans: [{ text: "Notes", fg: t.textMuted, attr: A.BOLD }], right: "2" })
   const note = switchItem({ kind: "note", path: "/v/a/b.md", name: "b", folder: "a", hits: [0] }, t, 40)
   expect(note.right).toBe("a")
@@ -69,7 +70,6 @@ test("switchItem: a header is a muted bold title with its count, a note row puts
 })
 
 test("switchItem: heading and text rows lead with the note name, an alias shows after ←, ask notes are never stops", () => {
-  const t = themeByName("brothy")
   const heading = switchItem({ kind: "heading", path: "/v/b.md", name: "b", folder: "", heading: 1, text: "Install", hits: [0, 1] }, t, 40)
   expect(heading.spans.map((s) => s.text).join("")).toBe("b › Install")
   const text = switchItem({ kind: "text", path: "/v/b.md", name: "b", folder: "x", heading: null, line: 3, context: "some words", hits: [5] }, t, 40)
@@ -81,7 +81,6 @@ test("switchItem: heading and text rows lead with the note name, an alias shows 
 })
 
 test("switchItem: a narrow row keeps the match in view and the note name within a quarter", () => {
-  const t = themeByName("brothy")
   const w = 30
   const it = switchItem({ kind: "heading", path: "/v/n.md", name: "a-very-long-note-name-indeed", folder: "", heading: 0, text: "x".repeat(50) + "MATCH", hits: [50, 51, 52, 53, 54] }, t, w)
   const line = it.spans.map((s) => s.text).join("")
@@ -91,7 +90,6 @@ test("switchItem: a narrow row keeps the match in view and the note name within 
 })
 
 test("openItem: recent rows show the name, the ~ path and the last note; missing folders are muted", () => {
-  const t = themeByName("brothy")
   const entry = { root: "/home/me/notes", lastNote: "/home/me/notes/todo.md", top: 0, at: 1 }
   const ok = openItem({ kind: "recent", missing: false, entry, name: "notes", hits: [0], score: 1 }, t, 60, "/home/me")
   expect(ok.spans.map((s) => s.text).join("")).toBe("notes  ~/notes")
@@ -102,7 +100,6 @@ test("openItem: recent rows show the name, the ~ path and the last note; missing
 })
 
 test("openItem: path rows mark folders with / and the typed folder as this folder", () => {
-  const t = themeByName("brothy")
   const dir = openItem({ kind: "path", path: "/p/a", name: "a", dir: true, hits: [0], completion: "/p/a/" }, t)
   expect(dir.spans.map((s) => s.text).join("")).toBe("a/")
   expect(dir.right).toBeUndefined()
@@ -112,7 +109,6 @@ test("openItem: path rows mark folders with / and the typed folder as this folde
 })
 
 test("artSpans: neighbouring cells with the same look share a span; ink 0 and 3 differ only in colour", () => {
-  const t = themeByName("brothy")
   const row = welcomeArt(BIG, 0)[0]!
   for (const ink of [0, 3]) {
     const spans = artSpans(t, row, ink)

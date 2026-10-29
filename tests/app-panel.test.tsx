@@ -3,7 +3,8 @@ import { expect, test } from "bun:test"
 import { symlinkSync } from "node:fs"
 import { join } from "node:path"
 import { mix } from "../src/theme"
-import { B, hex, keys, onBg, sections, spansOf, useAppHarness } from "./helpers/app"
+import { B, keys, onBg, sections, spansOf, useAppHarness } from "./helpers/app"
+import { hex } from "./helpers/theme"
 
 const { tmp, mount, unmount, vault } = useAppHarness()
 

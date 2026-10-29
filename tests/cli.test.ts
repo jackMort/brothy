@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { execFileSync } from "node:child_process"
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { chmodSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
+import { useTmp } from "./helpers/tmp"
 
 const cli = join(import.meta.dir, "../src/cli.tsx")
 const root = join(import.meta.dir, "..")
@@ -13,6 +13,7 @@ async function run(...args: string[]) {
 }
 
 describe("cli", () => {
+  const tmp = useTmp("brothy-cli-")
   test("--version prints and exits 0", async () => {
     const r = await run("--version")
     expect(r.code).toBe(0)
@@ -69,18 +70,14 @@ describe("cli", () => {
     expect(r.err).not.toMatch(/terminal/)
   })
   test("a FIFO exits 1", async () => {
-    const d = mkdtempSync(join(tmpdir(), "brothy-cli-"))
-    try {
-      execFileSync("mkfifo", [join(d, "p")])
-      const r = await run(join(d, "p"))
-      expect(r.code).toBe(1)
-      expect(r.err).toContain("not a file or folder")
-    } finally {
-      rmSync(d, { recursive: true, force: true })
-    }
+    const d = tmp()
+    execFileSync("mkfifo", [join(d, "p")])
+    const r = await run(join(d, "p"))
+    expect(r.code).toBe(1)
+    expect(r.err).toContain("not a file or folder")
   })
   test("an unreadable folder exits 1 with the reason", async () => {
-    const d = mkdtempSync(join(tmpdir(), "brothy-cli-"))
+    const d = tmp()
     const dir = join(d, "locked")
     mkdirSync(dir)
     chmodSync(dir, 0o000)
@@ -91,7 +88,6 @@ describe("cli", () => {
       expect(r.err).toMatch(/cannot read .*EACCES|permission denied/i)
     } finally {
       chmodSync(dir, 0o700)
-      rmSync(d, { recursive: true, force: true })
     }
   })
   // util-linux setsid detaches /dev/tty; macOS has no setsid

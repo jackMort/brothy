@@ -15,8 +15,9 @@ import {
 } from "../src/highlight"
 import { A, pendingHighlights, render, width } from "../src/markdown"
 import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 afterAll(() => shutdownHighlighter())
 
 const fenced = (lang: string, code: string) => "```" + lang + "\n" + code + "\n```"

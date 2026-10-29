@@ -2,10 +2,10 @@ import { expect, test } from "bun:test"
 import { normalize, parseFrontMatter, render } from "../src/markdown"
 import { PEEK_BYTES, PEEK_TLDR, peekLines, peekWindow, switchSplit, type PeekInput } from "../src/peek"
 import type { Span } from "../src/spans"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 import { indexNote, type SwitchRow } from "../src/vault"
 
-const t = themes[0]!
+const t = brothy
 const W = 40
 const SRC = "---\ntitle: x\n---\n# Simmering notes\n\nA ==slow read== beats a fast scroll.\n\n\n\nSecond line.\n\n## A tiny stock\n\nStock body.\n\n## Heat levels\n\nHeat body.\n\n## Later\n\nLater body.\n"
 const doc = indexNote(SRC, 2000, SRC.length)

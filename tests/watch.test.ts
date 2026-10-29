@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { watchPath } from "../src/watch"
+import { useTmp } from "./helpers/tmp"
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const cleanup: (() => void)[] = []
@@ -10,11 +10,7 @@ afterEach(() => {
   for (const f of cleanup.splice(0)) f()
 })
 
-function dir() {
-  const d = mkdtempSync(join(tmpdir(), "brothy-watch-"))
-  cleanup.push(() => rmSync(d, { recursive: true, force: true }))
-  return d
-}
+const dir = useTmp("brothy-watch-")
 
 async function until(pred: () => boolean, ms = 2000) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(10)) if (pred()) return

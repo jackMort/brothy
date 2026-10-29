@@ -5,6 +5,7 @@ import { PEEK_MIN_W } from "../src/peek"
 import { A, type Span } from "../src/spans"
 import { width as sw } from "../src/text"
 import { contrast, themeByName, themes, type Theme } from "../src/theme"
+import { brothy } from "./helpers/theme"
 import {
   BOARD_MODES,
   CELL_W,
@@ -246,7 +247,7 @@ test("paneLines: name and text contrast, the role words, then the sample as writ
     expect(new Set(code.map((s) => s.fg)).size).toBeGreaterThan(2)
     expect(rs.some((r) => text(r).includes("│ low   │ reading"))).toBe(true)
   }
-  expect(paneLines(themes[0]!, sampleView(themes[0]!, 63), 63, 5)).toHaveLength(5)
+  expect(paneLines(brothy, sampleView(brothy, 63), 63, 5)).toHaveLength(5)
   expect(SAMPLE).toContain("==the lid on==")
 })
 

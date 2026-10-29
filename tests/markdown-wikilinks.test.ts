@@ -4,9 +4,9 @@ import { render } from "../src/markdown"
 import { renderSource } from "../src/source"
 import { A } from "../src/spans"
 import { width } from "../src/text"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
 const linkSpans = (r: ReturnType<typeof render>) => r.lines.flatMap((l) => l.spans.filter((s) => s.link !== undefined))
 

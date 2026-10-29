@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { mix, themes } from "../src/theme"
+import { mix } from "../src/theme"
+import { brothy } from "./helpers/theme"
 import { GHOST_HOLD, HINT_HOLD, fadeStep } from "../src/status"
 import { ZEN_DEFAULTS, ZEN_ROWS, dimSpans, headingPath, minutesLeft, normalizeZen, pageSlice, pickZen, prompterRate, sectionAt, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows } from "../src/zen"
 
@@ -150,7 +151,7 @@ describe("headingPath", () => {
 })
 
 describe("dimSpans", () => {
-  const t = themes[0]!
+  const t = brothy
   test("mixes fg (and bg) toward the background, keeping text and attributes", () => {
     const out = dimSpans(
       [{ text: "a", fg: "#ffffff", attr: 1 }, { text: "b" }, { text: "c", fg: "#000000", bg: "#ffffff" }],
