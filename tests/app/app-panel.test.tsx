@@ -157,6 +157,18 @@ test("Info with links: j/k at the first and last link scroll the rest of the lis
   expect(top).toContain("prop0") // the properties above the first link
 })
 
+test("Info without links: j/k scroll the list, G and g go to its bottom and top", async () => {
+  const noLinks = "---\n" + Array.from({ length: 8 }, (_, i) => `prop${i}: value${i}`).join("\n") + "\n---\n# H\n\nword\n"
+  const s = await mount(tmp({ "a.md": noLinks, "b.md": "# bee" }), "a.md", { size: { width: 80, height: 16 } })
+  expect(await keys(s, "3")).toContain("prop0")
+  const bottom = await keys(s, "G")
+  expect(bottom).not.toContain("prop0")
+  expect(bottom).toContain("edited") // the last stat line
+  expect(await keys(s, "g")).toContain("prop0")
+  expect(await keys(s, "j")).not.toContain("prop0")
+  expect(await keys(s, "k")).toContain("prop0")
+})
+
 test("Info: wheel scrolling sticks until the cursor moves", async () => {
   const s = await mount(tmp(tallFiles), "a.md", { size: { width: 80, height: 16 } })
   await keys(s, "3")
