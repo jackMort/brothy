@@ -88,46 +88,50 @@ export class Screen {
   }
   write(d: string) {
     for (let m: RegExpExecArray | null; (m = CSI.exec(d)); ) {
-      const c = m[3]
       if (m[4]) continue
-      if (c !== undefined) {
-        if (c === "\n") {
-          this.y++
-          continue
-        }
-        if (c === "\r") {
-          this.x = 0
-          continue
-        }
-        if (this.x < this.cols && this.y < this.rows) {
-          const i = this.y * this.cols + this.x
-          this.ch[i] = c
-          this.fg[i] = this.cur.fg
-          this.bg[i] = this.cur.bg
-          this.at[i] = this.cur.at
-        }
-        this.x++
-        continue
-      }
-      const p = m[1]!.split(";").map(Number),
-        f = m[2]
-      if (f === "H") {
-        this.y = (p[0] || 1) - 1
-        this.x = (p[1] || 1) - 1
-      } else if (f === "J" && p[0] === 2) this.clear()
-      else if (f === "m")
-        for (let k = 0; k < p.length; k++) {
-          const v = p[k] || 0
-          if (v === 0) this.cur = { fg: null, bg: null, at: 0 }
-          else if (SGR_FLAGS[v]) this.cur.at |= SGR_FLAGS[v]!
-          else if ((v === 38 || v === 48) && p[k + 1] === 2) {
-            const rgb = `${p[k + 2]},${p[k + 3]},${p[k + 4]}`
-            if (v === 38) this.cur.fg = rgb
-            else this.cur.bg = rgb
-            k += 4
-          }
-        }
+      if (m[3] !== undefined) this.put(m[3])
+      else this.csi(m[2]!, m[1]!.split(";").map(Number))
     }
     CSI.lastIndex = 0
+  }
+  /** a printable character (or a newline / carriage return) at the cursor */
+  private put(c: string) {
+    if (c === "\n") this.y++
+    else if (c === "\r") this.x = 0
+    else {
+      if (this.x < this.cols && this.y < this.rows) {
+        const i = this.y * this.cols + this.x
+        this.ch[i] = c
+        this.fg[i] = this.cur.fg
+        this.bg[i] = this.cur.bg
+        this.at[i] = this.cur.at
+      }
+      this.x++
+    }
+  }
+  /** one CSI sequence: cursor position, erase display or SGR; anything else is ignored */
+  private csi(f: string, p: number[]) {
+    if (f === "H") this.moveTo(p)
+    else if (f === "J" && p[0] === 2) this.clear()
+    else if (f === "m") this.sgr(p)
+  }
+  /** CUP: 1-based row;col, a missing or zero parameter meaning 1 */
+  private moveTo(p: number[]) {
+    this.y = (p[0] || 1) - 1
+    this.x = (p[1] || 1) - 1
+  }
+  /** SGR: reset, the attribute flags and truecolor 38;2 / 48;2 */
+  private sgr(p: number[]) {
+    for (let k = 0; k < p.length; k++) {
+      const v = p[k] || 0
+      if (v === 0) this.cur = { fg: null, bg: null, at: 0 }
+      else if (SGR_FLAGS[v]) this.cur.at |= SGR_FLAGS[v]!
+      else if ((v === 38 || v === 48) && p[k + 1] === 2) {
+        const rgb = `${p[k + 2]},${p[k + 3]},${p[k + 4]}`
+        if (v === 38) this.cur.fg = rgb
+        else this.cur.bg = rgb
+        k += 4
+      }
+    }
   }
 }
