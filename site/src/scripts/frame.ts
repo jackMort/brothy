@@ -39,18 +39,30 @@ const read = $("[data-read]"),
   prog = $(".prog i"),
   minutes = Number($(".foot")?.dataset.minutes ?? 0)
 
-function onScroll() {
-  const cur = readingAt()
+/** the running head: the reading heading's label, and its separator */
+function setRunningHead(cur: HTMLElement | null) {
   const label = cur ? (cur.dataset.head ?? cur.textContent?.trim() ?? "") : ""
   if (section) section.textContent = label
   sep?.toggleAttribute("hidden", !label)
+}
+/** the reading marker in Outline: the reading heading's link, else the first */
+function markOutline(cur: HTMLElement | null) {
   const id = cur?.id
   outline.forEach((a) => a.classList.toggle("on", !!id && a.hash === `#${id}`))
   if (!cur) outline[0]?.classList.add("on")
+}
+/** the progress line and the footer's "% · n min left" */
+function setProgress() {
   const max = root.scrollHeight - innerHeight
   const p = max > 0 ? Math.min(100, Math.round((scrollY / max) * 100)) : 100
   prog?.style.setProperty("--read", `${p}%`)
   if (read) read.textContent = minutes ? `${p}% · ${Math.max(0, Math.ceil(minutes * (1 - p / 100)))} min left` : `${p}%`
+}
+function onScroll() {
+  const cur = readingAt()
+  setRunningHead(cur)
+  markOutline(cur)
+  setProgress()
 }
 addEventListener("scroll", onScroll, { passive: true })
 addEventListener("resize", onScroll)
@@ -136,55 +148,72 @@ const tourVisible = () => {
   return !!r && r.top < innerHeight * 0.75 && r.bottom > innerHeight * 0.25
 }
 
-addEventListener("keydown", (e) => {
-  if (e.defaultPrevented || e.altKey || e.metaKey || typing(e.target)) return
-  if (document.querySelector("dialog[open]:not(.sheet)")) return // the search dialog owns the keys
-  if (sheet?.open) {
-    if (!e.ctrlKey && e.key !== "Tab") {
-      e.preventDefault()
-      sheet.close()
-    }
-    return
-  } // any key closes, as in brothy
-  if ((e.target as HTMLElement).closest?.("[data-cast]") && [" ", "Enter", "ArrowLeft", "ArrowRight"].includes(e.key)) return
-  const k = e.ctrlKey ? `C-${e.key.toLowerCase()}` : e.key
-  const onLink = (e.target as HTMLElement).closest?.("a, button")
-  const act: Record<string, () => void> = {
-    j: () => scrollBy({ top: 64 }),
-    k: () => scrollBy({ top: -64 }),
-    g: () => scrollTo({ top: 0 }),
-    G: () => scrollTo({ top: root.scrollHeight }),
-    "]": () => jump(1),
-    "[": () => jump(-1),
-    "1": () => {
-      view("files")
-      if (narrow.matches) drawer(true)
-    },
-    "2": () => {
-      view("outline")
-      if (narrow.matches) drawer(true)
-    },
-    "3": () => {
-      view("info")
-      if (narrow.matches) drawer(true)
-    },
-    t: () => $("[data-theme-open]")?.click(),
-    "C-b": panelToggle,
-    "/": () => $("site-search button[data-open-modal]")?.click(),
-    "?": () => sheet?.showModal(),
-    Escape: () => drawer(false),
-  }
-  if (rows.length && startVisible() && !onLink) {
-    act.ArrowDown = () => pick(sel + 1)
-    act.ArrowUp = () => pick(sel - 1)
-    act.Enter = () => rows[sel]!.click()
-  }
-  if (tour() && tourVisible() && !onLink) act[" "] = () => tour()!.toggle?.()
+/** opens a panel tab, and the drawer when the panel is one */
+const showTab = (name: string) => () => {
+  view(name)
+  if (narrow.matches) drawer(true)
+}
+/** key → action for the keys that always work (`C-` for ctrl) */
+const KEYS: Record<string, () => void> = {
+  j: () => scrollBy({ top: 64 }),
+  k: () => scrollBy({ top: -64 }),
+  g: () => scrollTo({ top: 0 }),
+  G: () => scrollTo({ top: root.scrollHeight }),
+  "]": () => jump(1),
+  "[": () => jump(-1),
+  "1": showTab("files"),
+  "2": showTab("outline"),
+  "3": showTab("info"),
+  t: () => $("[data-theme-open]")?.click(),
+  "C-b": panelToggle,
+  "/": () => $("site-search button[data-open-modal]")?.click(),
+  "?": () => sheet?.showModal(),
+  Escape: () => drawer(false),
+}
+/** the Start here rows: arrows move, enter opens */
+function startKeys(onLink: boolean): Record<string, () => void> {
+  if (!rows.length || !startVisible() || onLink) return {}
+  return { ArrowDown: () => pick(sel + 1), ArrowUp: () => pick(sel - 1), Enter: () => rows[sel]!.click() }
+}
+/** the tour in view: space plays and pauses it */
+function tourKeys(onLink: boolean): Record<string, () => void> {
+  if (!tour() || !tourVisible() || onLink) return {}
+  return { " ": () => tour()!.toggle?.() }
+}
+/** the front page: `i` jumps to the install block */
+function installKeys(): Record<string, () => void> {
   const install = $("#install")
-  if (rows.length && install) act.i = () => install.scrollIntoView()
-  const f = act[k]
-  if (f && (k.startsWith("C-") ? k === "C-b" : !e.ctrlKey)) {
+  return rows.length && install ? { i: () => install.scrollIntoView() } : {}
+}
+/** the keys that depend on the page */
+const pageKeys = (onLink: boolean) => ({ ...startKeys(onLink), ...tourKeys(onLink), ...installKeys() })
+/** the keys sheet is open: any key closes it, as in brothy */
+function sheetKey(e: KeyboardEvent) {
+  if (!e.ctrlKey && e.key !== "Tab") {
     e.preventDefault()
-    f()
+    sheet!.close()
   }
+}
+/** the cast player owns space, enter and the arrows while it has focus */
+const playerKey = (e: KeyboardEvent) => !!(e.target as HTMLElement).closest?.("[data-cast]") && [" ", "Enter", "ArrowLeft", "ArrowRight"].includes(e.key)
+
+/** the action for this key press: `C-b` is the only ctrl binding, and ctrl turns the plain keys off */
+function actionFor(e: KeyboardEvent) {
+  const k = e.ctrlKey ? `C-${e.key.toLowerCase()}` : e.key
+  const onLink = !!(e.target as HTMLElement).closest?.("a, button")
+  const f = { ...KEYS, ...pageKeys(onLink) }[k]
+  return f && (k.startsWith("C-") ? k === "C-b" : !e.ctrlKey) ? f : undefined
+}
+
+/** the page leaves this key press alone: modified, handled, typed into a field, or the search dialog's */
+const notOurs = (e: KeyboardEvent) => e.defaultPrevented || e.altKey || e.metaKey || typing(e.target) || !!document.querySelector("dialog[open]:not(.sheet)")
+
+addEventListener("keydown", (e) => {
+  if (notOurs(e)) return
+  if (sheet?.open) return sheetKey(e)
+  if (playerKey(e)) return
+  const f = actionFor(e)
+  if (!f) return
+  e.preventDefault()
+  f()
 })
