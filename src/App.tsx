@@ -76,58 +76,14 @@ export function App({
     bump((x) => x + 1)
   }
 
-  // crossing DRAWER_BELOW: a focused panel becomes an open drawer; widening shows it inline again
-  const modeSeen = useRef<PanelMode | null>(null)
-  crossDrawer(modeSeen, ui.current, W)
+  useDrawerCrossing(ui.current, W)
 
-  // the refs the context carries are documented on `Base` and `DeriveRefs`
-  const vault = useRef<{ ix: VaultIndex; running: boolean }>({ ix: emptyIndex(), running: false })
-  // derived data, memoized so handlers and render can both pull it on demand
-  const memo = useRef(makeMemo(stdin)).current
-  const matchSeen = useRef<{ matches: number[]; query: string }>({ matches: [], query: "" })
-  const scrolls = useRef(new Map<string, { top: number; geo: Geometry }>())
-  const zenBack = useRef<Spot | null>(null)
-  const sidebarSeen = useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null })
-  const timers = useRef<Timers>({})
-  const jobs = useRef(new Map<string, Job>())
-  const askMemo = useRef(new Map<string, { queries: string[]; model: string }>())
-  const rerankMemo = useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>())
-  const alive = useRef(true)
-  const hlSeen = useRef<Rendered | null>(null)
-  const left = useRef(false)
-  const welcome = useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H })
-
-  const derive = makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen })
+  const refs = useAppRefs(stdin, W, H)
+  const derive = makeDerive({ ui, dims, ...refs })
 
   // the app context and the feature factories over it, rebuilt every render: handlers close over this render's size and
   // props, and read the store at call time
-  const ctx = makeCtx({
-    ui,
-    set,
-    bump,
-    derive,
-    dims,
-    memo,
-    vault,
-    jobs,
-    sidebarSeen,
-    scrolls,
-    matchSeen,
-    W,
-    H,
-    renderer,
-    fetchImpl,
-    themeName,
-    linkScanDelay,
-    zenBack,
-    timers,
-    askMemo,
-    rerankMemo,
-    alive,
-    hlSeen,
-    left,
-    welcome,
-  })
+  const ctx = makeCtx({ ui, set, bump, derive, dims, ...refs, W, H, renderer, fetchImpl, themeName, linkScanDelay })
   const aiJobs = makeAIJobs(ctx)
   const links = makeLinks(ctx)
   const zen = makeZen(ctx, aiJobs)
@@ -179,8 +135,33 @@ export function App({
 type PanelMode = "inline" | "drawer"
 type Pointer = ReturnType<typeof usePointer>
 
-/** Apply a DRAWER_BELOW crossing to the store before this render draws; `seen` is the panel mode last drawn. */
-function crossDrawer(seen: { current: PanelMode | null }, s: UI, W: number) {
+/** The refs the context carries (documented on `Base` and `DeriveRefs`), made in this order on every render. A hook. */
+function useAppRefs(stdin: string | undefined, W: number, H: number) {
+  return {
+    vault: useRef<{ ix: VaultIndex; running: boolean }>({ ix: emptyIndex(), running: false }),
+    // derived data, memoized so handlers and render can both pull it on demand
+    memo: useRef(makeMemo(stdin)).current,
+    matchSeen: useRef<{ matches: number[]; query: string }>({ matches: [], query: "" }),
+    scrolls: useRef(new Map<string, { top: number; geo: Geometry }>()),
+    zenBack: useRef<Spot | null>(null),
+    sidebarSeen: useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null }),
+    timers: useRef<Timers>({}),
+    jobs: useRef(new Map<string, Job>()),
+    askMemo: useRef(new Map<string, { queries: string[]; model: string }>()),
+    rerankMemo: useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>()),
+    alive: useRef(true),
+    hlSeen: useRef<Rendered | null>(null),
+    left: useRef(false),
+    welcome: useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H }),
+  }
+}
+
+/**
+ * Crossing DRAWER_BELOW: a focused panel becomes an open drawer; widening shows it inline again. Applied to the store
+ * before this render draws. A hook: it remembers the panel mode last drawn.
+ */
+function useDrawerCrossing(s: UI, W: number) {
+  const seen = useRef<PanelMode | null>(null)
   const modeNow = W < DRAWER_BELOW ? "drawer" : "inline"
   if (seen.current === modeNow) return
   if (seen.current === "inline") s.drawerOpen = s.focus === "panel" && !s.hidden && !s.zen
