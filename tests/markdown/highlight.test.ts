@@ -122,6 +122,7 @@ describe("theme colors", () => {
 })
 
 describe("cache and rendering", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: the fixture is TypeScript source with a template literal
   const src = fenced("ts", "const a = 1 // hi\nfunction f(n: number) {\n  return `x${n}`\n}")
 
   test("miss -> pending request -> hit, and a hit is not re-parsed", async () => {

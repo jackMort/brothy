@@ -57,6 +57,8 @@
       "suspicious": {
         // terminal rows and cells are positional and have no identity beyond their index
         "noArrayIndexKey": "off",
+        // `EditResult | void` types the `edit` stub, which may return nothing (tests and the real editor runner differ)
+        "noConfusingVoidType": "off",
         // the text sanitisers match control characters on purpose
         "noControlCharactersInRegex": "off",
         // `while ((m = re.exec(s)))`, `x ??= ...` caches and `(budget -= n) < 0` are compact idioms used in hot paths and tests

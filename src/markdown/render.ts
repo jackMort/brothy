@@ -63,6 +63,7 @@ export interface RenderOpts {
   exists?: (target: string) => boolean
 }
 
+// biome-ignore lint/complexity/useMathMinMax: a NaN width must leave the running maximum alone, which Math.max would not
 const maxOf = (xs: number[], init = 0) => xs.reduce((m, x) => (x > m ? x : m), init)
 
 // ---------------------------------------------------------------- inline
@@ -122,7 +123,7 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
       case "text":
       case "escape": {
         const tt = tokenOf(tok, "text") // an escape is a text token without `tokens`
-        if (tt.tokens && tt.tokens.length) out.push(...inline(tt.tokens, t, cur, sink))
+        if (tt.tokens?.length) out.push(...inline(tt.tokens, t, cur, sink))
         else out.push({ ...cur, text: decode(tt.text) })
         break
       }
@@ -182,8 +183,8 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
         const raw = tokenOf(tok, "html").text
         if (/^\s*<!--/.test(raw)) break
         const m = /^\s*<(\/?)([a-zA-Z][\w-]*)\b[^>]*>\s*$/.exec(raw)
-        const name = m?.[2]!.toLowerCase()
-        if (!m || !HTML_TAGS.has(name!)) {
+        const name = m?.[2]?.toLowerCase()
+        if (!m || !name || !HTML_TAGS.has(name)) {
           out.push({ text: safe(raw), fg: t.textMuted })
           break
         }
