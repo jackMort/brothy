@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { MAX_SUMMARY, PRESETS, PROMPTS, PROMPT_V, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, normalizeAI, parseGlossStyle, resolveAI, shortModel, sseParser, stripThink, summarize, tokens, type AIEvent, type AITarget } from "../src/ai"
+import * as aiConfig from "../src/ai-config"
 
 const ok = (r: ReturnType<typeof resolveAI>) => {
   if ("error" in r) throw new Error(r.error)
@@ -480,5 +481,22 @@ describe("chat", () => {
   })
   test("summarize keeps its result shape: no raw", async () => {
     expect(await summarize(T, "n", { fetch: reply(stream([delta("TL;DR: Ok."), "data: [DONE]\n\n"])) })).toEqual({ ok: true, text: "Ok." })
+  })
+})
+
+describe("ai-config", () => {
+  test("ai.ts re-exports what moved to ai-config.ts", () => {
+    expect(PRESETS).toBe(aiConfig.PRESETS)
+    expect(normalizeAI).toBe(aiConfig.normalizeAI)
+    expect(resolveAI).toBe(aiConfig.resolveAI)
+    expect(parseGlossStyle).toBe(aiConfig.parseGlossStyle)
+  })
+  test("parseGlossStyle with a fallback: a valid style wins, anything else is the fallback", () => {
+    expect(aiConfig.parseGlossStyle("simplify", "explain")).toBe("simplify")
+    expect(aiConfig.parseGlossStyle("translate:pl", "explain")).toBe("translate:pl")
+    for (const bad of [undefined, null, 3, "Explain", "translate:", "translate:polish"]) {
+      expect(aiConfig.parseGlossStyle(bad, "explain")).toBe("explain")
+      expect(aiConfig.parseGlossStyle(bad, "simplify")).toBe("simplify")
+    }
   })
 })

@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { normalizeAI, type AIConfig } from "./ai"
+import { normalizeAI, type AIConfig } from "./ai-config"
 import { configHome, isRecord, readJSON, writeFileAtomic } from "./json"
 import { HEADING_STYLES, type HeadingStyle } from "./markdown"
 import { pickZen, type ZenConfig } from "./zen"
