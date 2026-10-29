@@ -4119,7 +4119,7 @@ for (const width of [80, 100, 120])
   })
 
 /** Left and right blank margins of the first row matching `re` (by code point). */
-function margins(row: string, W: number, re: RegExp) {
+function margins(row: string, W: number, re: RegExp): [number, number] {
   const cells = [...row]
   const first = cells.findIndex((c) => re.test(c))
   let last = cells.length - 1
