@@ -104,7 +104,10 @@ test("below 100 columns the panel is a drawer: tab opens it focused, ⏎ on a no
 test("the document wraps at an 80-column measure, centered", async () => {
   const s = await mount(tmp({ "a.md": "lorem ipsum dolor ".repeat(40) }), "a.md", { size: { width: 200, height: 30 } })
   // the text alone: the minimap's 4 columns at the right edge cut off
-  const rows = (await keys(s)).split("\n").filter((l) => l.includes("lorem")).map((l) => [...l].slice(0, 196).join(""))
+  const rows = (await keys(s))
+    .split("\n")
+    .filter((l) => l.includes("lorem"))
+    .map((l) => [...l].slice(0, 196).join(""))
   expect(rows.length).toBeGreaterThan(3)
   const start = (r: string) => r.search(/lorem|ipsum|dolor/)
   for (const r of rows) expect(r.trimEnd().length - start(r)).toBeLessThanOrEqual(80)

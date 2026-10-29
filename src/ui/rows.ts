@@ -105,7 +105,11 @@ export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
       if (!r.alias) return { spans: fit(r.name, r.hits, 0, t.text), right: folder }
       const short = truncate(r.name, Math.max(8, Math.floor(room / 3)))
       return {
-        spans: [...hitSpans(short, [], t.text, t.primary), { text: "  ← ", fg: t.textMuted }, ...fit(r.alias.text, r.alias.hits, width(short) + 4, t.textMuted)],
+        spans: [
+          ...hitSpans(short, [], t.text, t.primary),
+          { text: "  ← ", fg: t.textMuted },
+          ...fit(r.alias.text, r.alias.hits, width(short) + 4, t.textMuted),
+        ],
         right: folder,
       }
     }
@@ -147,9 +151,7 @@ export const SWITCH_MODES = BOARD_MODES
  * chip, the other muted; with `only` (a single-mode family) the missing side is also struck through.
  */
 export const modeSwitch = (t: Theme, mode: ThemeMode, only?: ThemeMode): Span[][] =>
-  SWITCH_MODES.map((m) =>
-    m === mode ? chip(t, m, t.primary) : [{ text: ` ${m} `, fg: t.textMuted, ...(only && m !== only ? { attr: A.STRIKE } : {}) }],
-  )
+  SWITCH_MODES.map((m) => (m === mode ? chip(t, m, t.primary) : [{ text: ` ${m} `, fg: t.textMuted, ...(only && m !== only ? { attr: A.STRIKE } : {}) }]))
 
 /** `spans` padded with spaces to `w` cells. */
 export const padTo = (spans: Span[], w: number): Span[] => [...spans, { text: " ".repeat(Math.max(0, w - spanWidth(spans))) }]
@@ -160,7 +162,13 @@ export function artSpans(t: Theme, cells: ArtCell[], ink: number): Span[] {
   const out: Span[] = []
   for (const c of cells) {
     const fg =
-      c.role === "mark" || c.role === "body" ? inkAt(t, ink, t.primary) : c.role === "edge" ? inkAt(t, ink, t.text) : c.role === "steam" ? steam[c.row ?? 4] : undefined
+      c.role === "mark" || c.role === "body"
+        ? inkAt(t, ink, t.primary)
+        : c.role === "edge"
+          ? inkAt(t, ink, t.text)
+          : c.role === "steam"
+            ? steam[c.row ?? 4]
+            : undefined
     const bg = c.broth ? inkAt(t, ink, t.secondary) : undefined
     const last = out.at(-1)
     if (last && last.fg === fg && last.bg === bg) last.text += c.ch

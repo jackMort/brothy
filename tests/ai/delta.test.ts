@@ -1,6 +1,23 @@
 import { describe, expect, test } from "bun:test"
 import { cleanReply, noteText } from "../../src/ai/client"
-import { DELTA_MAX, DELTA_PROMPT, DIFF_BUDGET, DIFF_CELLS, DIFF_LIMIT, MAX_DELTA, deltaMessage, deltaRequest, diffSections, hhmm, hunks, lineDiff, parseDelta, quoteNeedle, reloadToast, type Op } from "../../src/ai/delta"
+import {
+  DELTA_MAX,
+  DELTA_PROMPT,
+  DIFF_BUDGET,
+  DIFF_CELLS,
+  DIFF_LIMIT,
+  MAX_DELTA,
+  deltaMessage,
+  deltaRequest,
+  diffSections,
+  hhmm,
+  hunks,
+  lineDiff,
+  parseDelta,
+  quoteNeedle,
+  reloadToast,
+  type Op,
+} from "../../src/ai/delta"
 import { expectLinear, manyHeadings, SCALE } from "../helpers/perf"
 
 const show = (ops: Op[]) => ops.map((o) => o.op + o.text)
@@ -196,17 +213,29 @@ describe("deltaMessage", () => {
     const many = (v: string) => Array.from({ length: 500 }, (_, i) => `## Section number ${i} with a longish heading\n\nline ${v} of ${i}\n`).join("\n")
     const big = deltaMessage("T", diffSections(many("a"), many("b"))!, 8000)
     expect([...big].length).toBeLessThanOrEqual(8000)
-    const ids = big.split("\n").flatMap((l) => /^§(\d+) /.exec(l)?.[1] ?? []).map(Number)
+    const ids = big
+      .split("\n")
+      .flatMap((l) => /^§(\d+) /.exec(l)?.[1] ?? [])
+      .map(Number)
     expect(ids).toEqual(ids.map((_, i) => i + 1))
     expect(big.split("\n").at(-1)).toBe(`… and ${500 - ids.length} more sections`)
-    expect(deltaMessage("T", diffSections(many("a"), many("b"))!.slice(0, ids.length + 1), 8000).split("\n").at(-1)).toBe("… and 1 more section")
+    expect(
+      deltaMessage("T", diffSections(many("a"), many("b"))!.slice(0, ids.length + 1), 8000)
+        .split("\n")
+        .at(-1),
+    ).toBe("… and 1 more section")
   })
 })
 
 describe("deltaRequest", () => {
   test("DELTA_PROMPT and deltaMessage within min(maxChars, DELTA_MAX); cleanReply, at most MAX_DELTA", () => {
     const cs = diffSections(BEFORE, AFTER)!
-    expect(deltaRequest("Readme", cs, 48_000)).toEqual({ system: DELTA_PROMPT, user: deltaMessage("Readme", cs, DELTA_MAX), maxOut: MAX_DELTA, clean: cleanReply })
+    expect(deltaRequest("Readme", cs, 48_000)).toEqual({
+      system: DELTA_PROMPT,
+      user: deltaMessage("Readme", cs, DELTA_MAX),
+      maxOut: MAX_DELTA,
+      clean: cleanReply,
+    })
     expect(deltaRequest("Readme", cs, 120).user).toBe(deltaMessage("Readme", cs, 120))
   })
 })
@@ -237,7 +266,7 @@ describe("parseDelta", () => {
     expect(p.notes[0]).toEqual({ what: "x" })
   })
   test("decorated § lines and a think block parse", () => {
-    const raw = '<think>hmm</think>\nOverall.\n**§1:** vault search | “Find in the vault”\n- §4 — brew steps'
+    const raw = "<think>hmm</think>\nOverall.\n**§1:** vault search | “Find in the vault”\n- §4 — brew steps"
     const p = parseDelta(raw, cs())!
     expect(p.summary).toBe("Overall.")
     expect(p.notes[0]).toEqual({ what: "vault search", quote: "Find in the vault" })

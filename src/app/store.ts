@@ -46,7 +46,13 @@ export type Spot = { key: string; top: number; geo: Geometry }
 /** The open note's body (`noteText`) and properties when it was opened or last explained; memory only. */
 type Baseline = { path: string; text: string; props: string; at: number }
 /** `D` for `path`: the changes sent, the text and properties they lead to, and the reply once it is in. */
-type DeltaState = { path: string; changes: Change[]; text: string; props: string; result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null }
+type DeltaState = {
+  path: string
+  changes: Change[]
+  text: string
+  props: string
+  result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null
+}
 /** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
 export type JobKind = "tldr" | "gloss" | "delta" | "ask"
 /** The `jobs` key of a job: `<kind>:<id>`, or the bare kind without an id. */
@@ -175,7 +181,14 @@ export interface UI {
 }
 
 /** The store at mount: the workspace from the CLI's root and note (or the piped document), the saved config, the summary cache. */
-export function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined): UI {
+export function initUI(
+  root: string,
+  initialFile: string | undefined,
+  themeName: string | undefined,
+  transparent: boolean | undefined,
+  piped: boolean,
+  motion: boolean | undefined,
+): UI {
   const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
   const openPath = w.openPath
   const cfg = loadConfig()

@@ -82,10 +82,13 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
   }, [])
   // a build still running after unmount must not touch the store
   useEffect(() => () => void (vault.current = { ...vault.current }), [])
-  useEffect(() => () => {
-    for (const id of Object.values(timers.current)) clearTimeout(id)
-    for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
-  }, [])
+  useEffect(
+    () => () => {
+      for (const id of Object.values(timers.current)) clearTimeout(id)
+      for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
+    },
+    [],
+  )
   useEffect(() => () => void (alive.current = false), [])
   // the welcome page's ink-in and steam
   useEffect(animateWelcome)

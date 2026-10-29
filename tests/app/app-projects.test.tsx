@@ -129,7 +129,10 @@ test("a recent project reopens at its section after a width change (w)", async (
 
 test("leaving a project from zen records the Preview position, moved in zen or not", async () => {
   writeConfig({ zen: { measure: "full", typewriter: false } })
-  for (const moves of [["]", "]", "]", "]", "]", "z"], ["z", "]", "]", "]", "]", "]"]]) {
+  for (const moves of [
+    ["]", "]", "]", "]", "]", "z"],
+    ["z", "]", "]", "]", "]", "]"],
+  ]) {
     const a = tmp({ "a.md": wrapped() })
     const b = tmp({ "b.md": "# Bee\n" })
     writeProjects([{ root: b, lastNote: null, at: 1 }])

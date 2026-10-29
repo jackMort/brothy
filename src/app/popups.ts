@@ -29,7 +29,10 @@ export function makePopups(c: AppCtx) {
   /** The popup row Enter acts on when the highlight hasn't been moved. */
   const promptDefault = () => {
     const { matches, top } = derive()
-    return Math.max(0, matches.findIndex((m) => m >= top))
+    return Math.max(
+      0,
+      matches.findIndex((m) => m >= top),
+    )
   }
   const promptCount = () => derive().matches.length
   const promptHighlight = (hl: number) => {
@@ -81,9 +84,20 @@ export function makePopups(c: AppCtx) {
   }
 
   return {
-    filterText, filterType, filterStop,
-    promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose,
-    openTheme, closeTheme, themeSet, applyTheme, helpGo,
+    filterText,
+    filterType,
+    filterStop,
+    promptDefault,
+    promptCount,
+    promptHighlight,
+    promptType,
+    promptSubmit,
+    promptClose,
+    openTheme,
+    closeTheme,
+    themeSet,
+    applyTheme,
+    helpGo,
   }
 }
 /** What `makePopups` gives App and the actions. */

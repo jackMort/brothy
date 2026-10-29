@@ -52,10 +52,7 @@ test("without typewriter zen scrolls from the top and has no marker", async () =
 })
 
 test("spotlight dims every section but the current one", async () => {
-  const s = await mount(
-    tmp({ "a.md": "## One\n\nalpha\n\n## Two\n\nbravo\n\n```\nsnippet\n```\n\n## Three\n\ncharlie\n" }),
-    "a.md",
-  )
+  const s = await mount(tmp({ "a.md": "## One\n\nalpha\n\n## Two\n\nbravo\n\n```\nsnippet\n```\n\n## Three\n\ncharlie\n" }), "a.md")
   await keys(s, "z")
   const bright = docFg(s, "alpha")
   expect(docFg(s, "bravo")).toBe(mix(bright!, B.background, 0.6)) // brothy background

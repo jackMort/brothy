@@ -176,7 +176,10 @@ test("stdin: the footer does not offer e", async () => {
 test("stdin: the tab row is ¹Outline ²Info, with no Files", async () => {
   const d = tmp({ "other.md": "# Other\n" })
   const { s } = await mountStdin("# Piped\n\n## Sub\n", d)
-  const row = s.captureCharFrame().split("\n").find((l) => l.includes("Outline"))!
+  const row = s
+    .captureCharFrame()
+    .split("\n")
+    .find((l) => l.includes("Outline"))!
   expect(row.slice(0, 31)).toBe("  ¹Outline   ²Info" + " ".repeat(13))
   expect(row).not.toContain("Files")
 })
@@ -210,7 +213,12 @@ test("stdin: the view choice is not saved", async () => {
 test("stdin: e on a followed note runs the editor as a piped session (keys from the terminal)", async () => {
   const d = tmp({ "other.md": "# Other\n\nbody of other\n" })
   const runs: [string, boolean][] = []
-  const s = await mount(d, undefined, { size: W120, stdin: "see [[other]]\n", linkScanDelay: 60_000, edit: (argv, piped) => void runs.push([argv.at(-1)!, piped]) })
+  const s = await mount(d, undefined, {
+    size: W120,
+    stdin: "see [[other]]\n",
+    linkScanDelay: 60_000,
+    edit: (argv, piped) => void runs.push([argv.at(-1)!, piped]),
+  })
   await keys(s, "f", "a")
   expect(await keys(s, "e")).toContain("edited")
   expect(runs).toEqual([[join(d, "other.md"), true]])

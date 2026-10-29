@@ -15,7 +15,8 @@ for (const f of casts)
     const [head, ...lines] = readFileSync(join(DIR, f), "utf8").trim().split("\n")
     const h = JSON.parse(head!) as { version: number; width: number; height: number }
     expect(h.version).toBe(2)
-    const bad = new Set<string>(), glyphs = new Set<string>()
+    const bad = new Set<string>(),
+      glyphs = new Set<string>()
     let last = 0
     for (const l of lines) {
       const [t, kind, d] = JSON.parse(l) as [number, string, string]

@@ -873,5 +873,14 @@ export function contrastOn(bg: string): string {
 /** `a` blended `k` of the way towards `b` (both `#rrggbb`). */
 export function mix(a: string, b: string, k: number): string {
   const ch = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16)
-  return "#" + [1, 3, 5].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * k).toString(16).padStart(2, "0")).join("")
+  return (
+    "#" +
+    [1, 3, 5]
+      .map((i) =>
+        Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * k)
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")
+  )
 }

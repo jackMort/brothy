@@ -25,7 +25,15 @@ process.env.XDG_CONFIG_HOME = configDir ? resolve(configDir) : tempConfig // rea
 const abs = resolve(args[0] ?? "examples")
 const isFile = !stdinFile && statSync(abs).isFile()
 
-const setup = await mount({ root: isFile ? dirname(abs) : abs, initialFile: isFile ? abs : undefined, theme, transparent, stdin: stdinFile ? readFileSync(stdinFile, "utf8") : undefined, width: w!, height: h! })
+const setup = await mount({
+  root: isFile ? dirname(abs) : abs,
+  initialFile: isFile ? abs : undefined,
+  theme,
+  transparent,
+  stdin: stdinFile ? readFileSync(stdinFile, "utf8") : undefined,
+  width: w!,
+  height: h!,
+})
 for (const k of keys) {
   await press(setup, k)
   await sleep(30)

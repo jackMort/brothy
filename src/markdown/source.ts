@@ -79,7 +79,10 @@ export function sourceStructureLines(lines: string[], from: number, t: Theme, hi
     // one `-` is enough: an empty list item can't interrupt a paragraph, so `Para\n-` is a setext h2
     const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(body)
     if (underline && para.length && depth === paraDepth) {
-      const text = para.map((k) => bodies[k]!.trimStart()).join("\n").trimEnd()
+      const text = para
+        .map((k) => bodies[k]!.trimStart())
+        .join("\n")
+        .trimEnd()
       headings.set(para[0]!, { depth: underline[1]![0] === "=" ? 1 : 2, text: title(text), end: i, setext: true })
       para = []
       continue
@@ -323,10 +326,14 @@ export function renderSource(src: string, max: number, t: Theme, opts: RenderOpt
             { text: m[4]!, fg: t.textMuted, attr: A.ITALIC },
           ]
         : [{ text, fg: t.textMuted, attr: A.ITALIC }]
-    }
-    else if (/^\s*([-*+]|\d+\.)\s/.test(text)) {
+    } else if (/^\s*([-*+]|\d+\.)\s/.test(text)) {
       const m = /^(\s*(?:[-*+]|\d+\.))(.*)$/.exec(text)
-      spans = m ? [{ text: m[1]!, fg: t.primary }, { text: m[2]!, fg: t.text }] : [{ text, fg: t.text }]
+      spans = m
+        ? [
+            { text: m[1]!, fg: t.primary },
+            { text: m[2]!, fg: t.text },
+          ]
+        : [{ text, fg: t.text }]
     } else if (/^\s*\|/.test(text)) spans = [{ text, fg: t.info }]
     else spans = [{ text, fg: t.text }]
     if (i >= fmLines && !hidden[i] && !fenceLines.has(i) && !codeLines.has(i) && !h && !setext) spans = tintWikilinks(spans, t, opts.exists)
@@ -335,5 +342,14 @@ export function renderSource(src: string, max: number, t: Theme, opts: RenderOpt
     const rows = wrap(spans, max, [gutter], [{ text: pad(gw + 2) }])
     rows.forEach((r, k) => lines.push(k === 0 && idx >= 0 ? { spans: r, heading: idx } : { spans: r }))
   })
-  return { lines, headings, plain: lines.map((l) => plainOf(l.spans).replace(/\u00a0/g, " ").toLowerCase()), srcRow }
+  return {
+    lines,
+    headings,
+    plain: lines.map((l) =>
+      plainOf(l.spans)
+        .replace(/\u00a0/g, " ")
+        .toLowerCase(),
+    ),
+    srcRow,
+  }
 }

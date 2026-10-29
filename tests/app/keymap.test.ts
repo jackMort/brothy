@@ -23,7 +23,10 @@ test("AI hints show only with an `ai` block; D also needs changes to explain", (
 })
 
 test("spare hints are the optional ones", () => {
-  const spare = (c: Parameters<typeof footerHints>[0]) => footerHints(c, ALL).filter((h) => h.spare).map((h) => h.key)
+  const spare = (c: Parameters<typeof footerHints>[0]) =>
+    footerHints(c, ALL)
+      .filter((h) => h.spare)
+      .map((h) => h.key)
   expect(spare("doc")).toEqual(["f", "H L", "e"])
   expect(spare("panel:info")).toEqual(["a", "D"])
   expect(spare("theme")).toEqual(["type"])

@@ -248,11 +248,18 @@ test("theme picker on a dark-only family: in light mode the pane previews its da
   const f = await keys(s, "t", "tab", "type:synth")
   expect(f).toMatch(/dark\s+light\s+│\s+synthwave84\s+text \d+\.\d:1/)
   expect(f).toMatch(/synthwave84 ▐ Aa ●●● ▌ {3}light {7}│/) // the cursor on its only theme, light struck through
-  const chip = () => s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text === "dark" || sp.text === "light")!
+  const chip = () =>
+    s
+      .captureSpans()
+      .lines.flatMap((l) => l.spans)
+      .find((sp) => sp.text === "dark" || sp.text === "light")!
   const t = themeByName("brothy")
   expect(chip()).toMatchObject({ text: "dark" })
   expect(hex(chip().fg)).toBe(t.primary) // dark is the active chip
-  const struck = s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes(" light "))!
+  const struck = s
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .find((sp) => sp.text.includes(" light "))!
   expect(hex(struck.fg)).toBe(t.textMuted)
   for (const k of ["tab", "left", "right"]) expect(await keys(s, k)).toMatch(/│\s+synthwave84\s+text/)
   s.mockInput.pressTab({ shift: true })
@@ -274,11 +281,17 @@ test("picking a light theme applies it", async () => {
 
 test("borderSubtle is only used for decorative glyphs, never for readable text", async () => {
   const sub = themeByName("brothy").borderSubtle
-  const drawn = (s: Setup) => spansOf(s).filter((sp) => hex(sp.fg) === sub && sp.text.trim()).map((sp) => sp.text.trim())
+  const drawn = (s: Setup) =>
+    spansOf(s)
+      .filter((sp) => hex(sp.fg) === sub && sp.text.trim())
+      .map((sp) => sp.text.trim())
   const decorative = /^[›\/▸▾─━│]+$/
-  const s = await mount(tmp({ "a.md": "---\ntitle: A\ntags: [x, y]\nauthor: me\n---\n# a\n\n[b](dir/b.md) [gone](missing.md)\n", "dir/b.md": "# b", "dir/c.md": "# c" }), "a.md")
+  const s = await mount(
+    tmp({ "a.md": "---\ntitle: A\ntags: [x, y]\nauthor: me\n---\n# a\n\n[b](dir/b.md) [gone](missing.md)\n", "dir/b.md": "# b", "dir/c.md": "# c" }),
+    "a.md",
+  )
   const seen = [...drawn(s)]
-  for (const k of ["2", "3", "1"]) seen.push(...drawn(await (keys(s, k).then(() => s))))
+  for (const k of ["2", "3", "1"]) seen.push(...drawn(await keys(s, k).then(() => s)))
   await keys(s, "/")
   seen.push(...drawn(s))
   await keys(s, "esc")

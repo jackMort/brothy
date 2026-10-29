@@ -12,7 +12,6 @@ import { A, safeLine, type Span } from "../lib/spans"
 import { plural, spanWidth, truncate, truncateLeft, width, wrap } from "../lib/text"
 import { mix, type Theme } from "../theme/theme"
 
-
 // ------------------------------------------------------------- formatting
 
 /** `812 B`, `1.5 KB`, `2.0 MB`. */
@@ -161,7 +160,9 @@ export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
       : sv.state === "fresh"
         ? truncate(" · " + sv.model, cols - width(label))
         : sv.state === "outdated"
-          ? width(label + OUTDATED) <= cols ? OUTDATED : " · outdated · a"
+          ? width(label + OUTDATED) <= cols
+            ? OUTDATED
+            : " · outdated · a"
           : ""
   const out: InfoItem[] = [{ kind: "tldr", status }]
   if (sv.state === "none") return [...out, { kind: "summary", text: "a to summarize", muted: true }]
@@ -209,7 +210,16 @@ export function changeItems(cv: ChangeView, title: string, cols: number): InfoIt
 }
 
 /** The Info view, top to bottom: the TL;DR block (AI on), the Changed block (after a reload), properties, links, then three stat lines. */
-export function infoItems(props: Property[], st: Stats, links: LinkRef[], cols: number, file: FileMeta | null, now = Date.now(), summary?: SummaryView, changes?: { view: ChangeView; title: string }): InfoItem[] {
+export function infoItems(
+  props: Property[],
+  st: Stats,
+  links: LinkRef[],
+  cols: number,
+  file: FileMeta | null,
+  now = Date.now(),
+  summary?: SummaryView,
+  changes?: { view: ChangeView; title: string },
+): InfoItem[] {
   const out: InfoItem[] = summary ? [...tldrItems(summary, cols), { kind: "blank" }] : []
   if (changes) out.push(...changeItems(changes.view, changes.title, cols), { kind: "blank" })
   const rank = (k: string) => {
@@ -266,8 +276,7 @@ export function fileRowSpans(
     const count = open ? "" : String(o.counts.get(n.path) ?? 0)
     const name = truncate(n.name, room)
     spans.push({ text: name, fg: t.textMuted }, ...mark)
-    if (count && width(n.name) + 1 + width(count) <= room)
-      spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
+    if (count && width(n.name) + 1 + width(count) <= room) spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
     return spans
   }
   if (r.hits) {
@@ -296,7 +305,11 @@ export function outlineRowSpans(r: OutlineRow, t: Theme, cols: number): Span[] {
   const base = r.current ? t.primary : r.level === 2 ? t.textMuted : t.text
   const fg = r.read ? mix(base, t.background, READ_FADE) : base
   const text = truncate(r.text, cols - 2 - r.indent)
-  return [{ text: r.current ? "▸ " : "  ", fg: t.primary }, { text: " ".repeat(r.indent) }, ...hitSpans(text, r.hits, fg, t.primary, r.current || r.level === 0)]
+  return [
+    { text: r.current ? "▸ " : "  ", fg: t.primary },
+    { text: " ".repeat(r.indent) },
+    ...hitSpans(text, r.hits, fg, t.primary, r.current || r.level === 0),
+  ]
 }
 
 /** Info row `it` in `t`, `cols` text columns wide: tags and link targets are cut to fit. */
@@ -304,7 +317,10 @@ export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
   const pad = (k: string, w: number) => k + " ".repeat(Math.max(0, w - width(k)))
   switch (it.kind) {
     case "prop":
-      return [{ text: pad(it.key, it.keyW), fg: t.textMuted }, { text: it.text, fg: t.text }]
+      return [
+        { text: pad(it.key, it.keyW), fg: t.textMuted },
+        { text: it.text, fg: t.text },
+      ]
     case "chips":
       return [
         { text: pad(it.key, it.keyW), fg: t.textMuted },
@@ -314,11 +330,17 @@ export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
     case "label":
       return [{ text: it.text, fg: t.textMuted, attr: A.BOLD }]
     case "tldr":
-      return [{ text: "TL;DR", fg: t.textMuted, attr: A.BOLD }, { text: it.status, fg: t.textMuted }]
+      return [
+        { text: "TL;DR", fg: t.textMuted, attr: A.BOLD },
+        { text: it.status, fg: t.textMuted },
+      ]
     case "summary":
       return [{ text: it.text, fg: it.muted ? t.textMuted : t.text }]
     case "changes":
-      return [{ text: "Changed", fg: t.textMuted, attr: A.BOLD }, { text: it.status, fg: t.textMuted }]
+      return [
+        { text: "Changed", fg: t.textMuted, attr: A.BOLD },
+        { text: it.status, fg: t.textMuted },
+      ]
     case "change":
       return [
         { text: it.mark + " ", fg: it.mark === "~" ? t.warning : it.mark === "+" ? t.success : t.textMuted },

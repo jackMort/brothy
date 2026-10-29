@@ -274,12 +274,7 @@ export interface RankedNote {
  * then earlier start), then an alias from `aliases`, then a match only in the folder path.
  * Ties go to the shorter name, then alphabetical. At most `limit` rows; `total` counts every match.
  */
-export function rankNotes(
-  root: FileNode,
-  q: string,
-  limit = 500,
-  aliases?: (node: FileNode) => readonly string[],
-): { rows: RankedNote[]; total: number } {
+export function rankNotes(root: FileNode, q: string, limit = 500, aliases?: (node: FileNode) => readonly string[]): { rows: RankedNote[]; total: number } {
   const needle = q.trim()
   if (!needle) return { rows: [], total: 0 }
   const out: RankedNote[] = []

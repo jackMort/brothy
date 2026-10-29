@@ -19,14 +19,7 @@
   "engines": {
     "bun": ">=1.4"
   },
-  "files": [
-    "src",
-    "README.md",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "LICENSE",
-    "NOTICE"
-  ],
+  "files": ["src", "README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE", "NOTICE"],
   "bin": {
     "brothy": "src/cli.tsx"
   },

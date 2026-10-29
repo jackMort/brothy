@@ -31,7 +31,16 @@ export function workspace(root: string, note?: string | null, single = false): W
     const top = tree.children.filter((c) => !c.dir)
     openPath = (top.find((c) => /^readme\./i.test(c.name)) ?? top[0] ?? firstFile(tree))?.path ?? null
   }
-  return { root, tree, linkTree: linkRoot ? scanTree(linkRoot) : tree, linkLazy: false, piped: false, linkRoot, openPath, expanded: new Set(openPath ? ancestorsOf(tree, openPath) : []) }
+  return {
+    root,
+    tree,
+    linkTree: linkRoot ? scanTree(linkRoot) : tree,
+    linkLazy: false,
+    piped: false,
+    linkRoot,
+    openPath,
+    expanded: new Set(openPath ? ancestorsOf(tree, openPath) : []),
+  }
 }
 
 /** The piped document: an empty Files tree; links resolve against the notes under `root`, scanned on first use (`ensureLinks`). */

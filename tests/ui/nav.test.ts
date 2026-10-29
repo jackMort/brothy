@@ -1,5 +1,28 @@
 import { describe, expect, test } from "bun:test"
-import { cached, copiedCount, findItems, findQuote, matchHits, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepHitVisible, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../../src/ui/nav"
+import {
+  cached,
+  copiedCount,
+  findItems,
+  findQuote,
+  matchHits,
+  selectedText,
+  linkLabels,
+  narrowLabels,
+  overlayAt,
+  visibleLinks,
+  findLines,
+  keepHitVisible,
+  keepVisible,
+  markMatches,
+  matchIndex,
+  matchKey,
+  matchRanges,
+  relocate,
+  remapTop,
+  stepMatch,
+  stripLayout,
+  thumb,
+} from "../../src/ui/nav"
 import { brothy } from "../helpers/theme"
 
 const t = brothy
@@ -144,7 +167,11 @@ test("stripLayout: superscript digits against the labels, three-space gaps from 
   expect(stripLayout(30).compact).toBe(false)
   const c = stripLayout(29)
   expect(c.compact).toBe(true)
-  expect(c.labels.map((l) => [l.digit, l.x0, l.lx, l.x1])).toEqual([["¹", 1, 2, 7], ["²", 9, 10, 17], ["³", 19, 20, 24]])
+  expect(c.labels.map((l) => [l.digit, l.x0, l.lx, l.x1])).toEqual([
+    ["¹", 1, 2, 7],
+    ["²", 9, 10, 17],
+    ["³", 19, 20, 24],
+  ])
   // the narrowest panel (24 columns) still fits the compact strip
   expect(stripLayout(24).labels.at(-1)!.x1).toBeLessThanOrEqual(24)
 })
@@ -180,8 +207,7 @@ describe("link labels", () => {
     expect(many[0]).toBe("aa")
     expect(new Set(linkLabels(144)).size).toBe(144)
     expect(linkLabels(200)).toHaveLength(144) // more links than labels: the rest go unlabelled
-    for (const set of [linkLabels(12), linkLabels(40)])
-      for (const a of set) for (const b of set) if (a !== b) expect(b.startsWith(a)).toBe(false)
+    for (const set of [linkLabels(12), linkLabels(40)]) for (const a of set) for (const b of set) if (a !== b) expect(b.startsWith(a)).toBe(false)
   })
   test("narrowLabels keeps labels starting with what was typed", () => {
     const ls = ["aa", "as", "sa"]
@@ -195,9 +221,17 @@ describe("link labels", () => {
     expect(out.map((s) => s.text).join("")).toBe("see sea")
     expect(out.find((s) => s.bg === "#ff0")!.text).toBe("s")
     // a wide grapheme cut by the label becomes a space
-    expect(overlayAt([{ text: "a漢b" }], 2, "x", st).map((s) => s.text).join("")).toBe("a xb")
+    expect(
+      overlayAt([{ text: "a漢b" }], 2, "x", st)
+        .map((s) => s.text)
+        .join(""),
+    ).toBe("a xb")
     // a 2-key label over a 1-cell link spills onto the next cell
-    expect(overlayAt([{ text: "b" }, { text: " and" }], 0, "as", st).map((s) => s.text).join("")).toBe("asand")
+    expect(
+      overlayAt([{ text: "b" }, { text: " and" }], 0, "as", st)
+        .map((s) => s.text)
+        .join(""),
+    ).toBe("asand")
   })
 })
 
@@ -213,7 +247,10 @@ test("copiedCount counts lines, else code points", () => {
 
 test("stripLayout: a shorter view list renumbers from 1", () => {
   const l = stripLayout(32, ["outline", "info"]).labels
-  expect(l.map((x) => [x.view, x.digit])).toEqual([["outline", "¹"], ["info", "²"]])
+  expect(l.map((x) => [x.view, x.digit])).toEqual([
+    ["outline", "¹"],
+    ["info", "²"],
+  ])
 })
 
 test("findQuote finds a phrase that wraps across rows", () => {

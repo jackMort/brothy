@@ -182,10 +182,7 @@ export function pathCompletions(query: string, io: DirIO, o: { cwd: string; home
   return prefix ? rows : [{ path: dir, name: head, dir: true, hits: [], completion: head, self: true }, ...rows]
 }
 
-export type OpenRow =
-  | { kind: "header"; title: string; count: string }
-  | ({ kind: "recent"; missing: boolean } & RankedProject)
-  | ({ kind: "path" } & PathHit)
+export type OpenRow = { kind: "header"; title: string; count: string } | ({ kind: "recent"; missing: boolean } & RankedProject) | ({ kind: "path" } & PathHit)
 
 /**
  * The picker's rows: Recent (all but `current`) matching `q` fuzzily. A path-looking `q` lists the
@@ -218,7 +215,13 @@ export function openRows(
   const dirs = all.filter((p) => p.dir && !p.self).map((p) => p.path)
   const bases = dirs.includes(typed) ? [typed] : [typed, ...dirs]
   const under = (root: string) => bases.some((b) => root === b || root.startsWith(b.endsWith(sep) ? b : b + sep))
-  const recent = isPath ? rankProjects(others.filter((e) => under(e.root)), "", o.home) : rankProjects(others, query, o.home)
+  const recent = isPath
+    ? rankProjects(
+        others.filter((e) => under(e.root)),
+        "",
+        o.home,
+      )
+    : rankProjects(others, query, o.home)
   if (recent.length) {
     rows.push({ kind: "header", title: "Recent", count: String(recent.length) })
     for (const r of recent) rows.push({ kind: "recent", missing: !o.exists(r.entry.root), ...r })

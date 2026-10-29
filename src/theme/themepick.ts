@@ -204,9 +204,17 @@ const struckWord = (word: string, w: number, fg: string): Span[] => {
 export function boardSlot(t: Theme, x: Theme | undefined, mode: ThemeMode, frame: SlotFrame): Span[] {
   if (!x) return [{ text: " " }, ...struckWord(mode, CELL_W, t.textMuted), { text: " " }]
   const [l, r]: [Span, Span] =
-    frame === "cursor" ? [{ text: "▐", fg: t.primary }, { text: "▌", fg: t.primary }]
-    : frame === "current" ? [{ text: "▕", fg: t.textMuted }, { text: "▏", fg: t.textMuted }]
-    : [{ text: " " }, { text: " " }]
+    frame === "cursor"
+      ? [
+          { text: "▐", fg: t.primary },
+          { text: "▌", fg: t.primary },
+        ]
+      : frame === "current"
+        ? [
+            { text: "▕", fg: t.textMuted },
+            { text: "▏", fg: t.textMuted },
+          ]
+        : [{ text: " " }, { text: " " }]
   return [l, ...specimen(x), r]
 }
 
@@ -225,8 +233,7 @@ export function boardHeader(t: Theme, shown: ThemeMode, L: BoardLayout): Span[] 
 export const listTop = (hl: number, rows: number, n: number) => clamp(hl - (rows >> 1), 0, n - rows)
 
 /** The board's first row on screen: the held `top` (clamped), else centred on the highlight `hl`. */
-export const pickTop = (p: ThemePick, hl: number, rows: number, n: number) =>
-  p.top === null ? listTop(Math.max(0, hl), rows, n) : clamp(p.top, 0, n - rows)
+export const pickTop = (p: ThemePick, hl: number, rows: number, n: number) => (p.top === null ? listTop(Math.max(0, hl), rows, n) : clamp(p.top, 0, n - rows))
 
 /** The pane's note: one of each thing a theme colours (marks, links, code, callout, tasks, table). */
 export const SAMPLE = [
@@ -260,7 +267,11 @@ const SHORT: Partial<Record<(typeof ROLES)[number], string>> = { textMuted: "mut
 export function roleWords(t: Theme, w: number): Span[] {
   const line = (roles: readonly (typeof ROLES)[number][], labels: typeof LABEL, gap: string): Span[] =>
     roles.flatMap((r, i) => [...(i ? [{ text: gap }] : []), { text: labels[r] ?? r, fg: t[r] }])
-  for (const [labels, gap] of [[LABEL, "  "], [LABEL, " "], [SHORT, " "]] as const) {
+  for (const [labels, gap] of [
+    [LABEL, "  "],
+    [LABEL, " "],
+    [SHORT, " "],
+  ] as const) {
     const sp = line(ROLES, labels, gap)
     if (spanWidth(sp) <= w) return sp
   }
@@ -274,9 +285,10 @@ export function roleWords(t: Theme, w: number): Span[] {
  */
 export function paneLines(t: Theme, view: Rendered, w: number, h: number): Span[][] {
   const right = `text ${contrast(t.text, t.background).toFixed(1)}:1`
-  const head: Span[] = width(t.name) + 1 + width(right) <= w
-    ? [{ text: t.name, fg: t.textMuted }, { text: " ".repeat(w - width(t.name) - width(right)) }, { text: right, fg: t.textMuted }]
-    : [{ text: t.name, fg: t.textMuted }]
+  const head: Span[] =
+    width(t.name) + 1 + width(right) <= w
+      ? [{ text: t.name, fg: t.textMuted }, { text: " ".repeat(w - width(t.name) - width(right)) }, { text: right, fg: t.textMuted }]
+      : [{ text: t.name, fg: t.textMuted }]
   const out: Span[][] = [head, roleWords(t, w), []]
   for (const l of view.lines) {
     if (!l.fill) {

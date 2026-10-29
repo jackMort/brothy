@@ -96,7 +96,12 @@ export function makeCtx(base: Base) {
     const next = nextToast(ui.current.toast, { msg: safeLine(msg), kind, at: now }, now)
     if (next === ui.current.toast) return
     set({ toast: next })
-    runFade("toast", () => ui.current.toast?.at ?? null, TOAST_HOLD[kind], () => set({ toast: null }))
+    runFade(
+      "toast",
+      () => ui.current.toast?.at ?? null,
+      TOAST_HOLD[kind],
+      () => set({ toast: null }),
+    )
   }
 
   /** `saveConfig`, or an error toast when it refuses (a file that doesn't parse, a failed write). */
@@ -176,7 +181,19 @@ export function makeCtx(base: Base) {
   const selectView = (v: View) => {
     if (v === ui.current.view) return
     if (v === "files" && ui.current.piped) v = "outline" // a piped session has no Files tab
-    set({ view: v, filterTyping: false, outlineFilter: "", ...(v === "outline" ? { outlineCur: Math.max(0, derive().oRows.findIndex((r) => r.current)) } : {}) })
+    set({
+      view: v,
+      filterTyping: false,
+      outlineFilter: "",
+      ...(v === "outline"
+        ? {
+            outlineCur: Math.max(
+              0,
+              derive().oRows.findIndex((r) => r.current),
+            ),
+          }
+        : {}),
+    })
     if (!ui.current.piped) saveSidebar({ view: v })
   }
 
@@ -191,7 +208,14 @@ export function makeCtx(base: Base) {
     set({
       focus: "panel",
       ...(L.mode === "drawer" ? { drawerOpen: true } : { hidden: false }),
-      ...(!was && s.view === "outline" ? { outlineCur: Math.max(0, oRows.findIndex((r) => r.current)) } : {}),
+      ...(!was && s.view === "outline"
+        ? {
+            outlineCur: Math.max(
+              0,
+              oRows.findIndex((r) => r.current),
+            ),
+          }
+        : {}),
     })
     if (!was && s.view === "files") {
       const i = rows.findIndex((r) => r.node.path === s.openPath)
@@ -214,7 +238,25 @@ export function makeCtx(base: Base) {
     setTop(d.tw || d.pg ? m : m - Math.floor(d.L.CH / 3))
   }
 
-  return { ...base, runFade, flash, persist, setTop, scrollBy, stopRolling, currentSpot, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch }
+  return {
+    ...base,
+    runFade,
+    flash,
+    persist,
+    setTop,
+    scrollBy,
+    stopRolling,
+    currentSpot,
+    openFile,
+    selectRow,
+    toggleDir,
+    saveSidebar,
+    selectView,
+    panelViews,
+    focusPanel,
+    focusDoc,
+    showMatch,
+  }
 }
 /** What every `src/app/*` factory takes. */
 export type AppCtx = ReturnType<typeof makeCtx>

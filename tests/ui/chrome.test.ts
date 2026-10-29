@@ -3,7 +3,6 @@ import { HELP_GROUP_TITLES, INK_STEPS, STEAM_FLOOR, chip, fade, fadeSpans, group
 import { contrast, themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
 
-
 test("groupColor: Global primary, Document secondary, Zen info, Panel success, AI accent", () => {
   expect(HELP_GROUP_TITLES).toEqual(["Global", "Document", "Zen", "Panel", "AI"])
   expect(HELP_GROUP_TITLES.map((g) => groupColor(brothy, g))).toEqual([brothy.primary, brothy.secondary, brothy.info, brothy.success, brothy.accent])
@@ -15,13 +14,19 @@ test("chip: the group's role in bold on backgroundElement, one cell of padding, 
   expect(c.map((s) => s.text).join("")).toBe(" Global ")
   for (const s of c) expect(s.bg).toBe(brothy.backgroundElement)
   expect(c[1]).toMatchObject({ fg: brothy.primary, attr: 1 })
-  for (const t of themes)
-    for (const g of HELP_GROUP_TITLES) expect(contrast(groupColor(t, g), t.backgroundElement), `${t.name} ${g}`).toBeGreaterThanOrEqual(3)
+  for (const t of themes) for (const g of HELP_GROUP_TITLES) expect(contrast(groupColor(t, g), t.backgroundElement), `${t.name} ${g}`).toBeGreaterThanOrEqual(3)
 })
 
 test("keycap: markdown's <kbd> style (accent on backgroundElement), padded by one cell", () => {
   expect(keycap(brothy, "o")).toEqual([{ text: " o ", fg: brothy.accent, bg: brothy.backgroundElement }])
-  expect(keycaps(brothy, [["o", "open"], ["q", "quit"]]).map((s) => s.text).join("")).toBe(" o  open    q  quit")
+  expect(
+    keycaps(brothy, [
+      ["o", "open"],
+      ["q", "quit"],
+    ])
+      .map((s) => s.text)
+      .join(""),
+  ).toBe(" o  open    q  quit")
   for (const t of themes) expect(contrast(t.accent, t.backgroundElement), t.name).toBeGreaterThanOrEqual(3)
 })
 

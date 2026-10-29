@@ -31,7 +31,12 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
   /** Ghost chrome: show the zen top line now; it holds, fades in steps, then hides. */
   const pokeGhost = () => {
     set({ ghostAt: Date.now() })
-    runFade("ghost", () => ui.current.ghostAt, GHOST_HOLD, () => set({ ghostAt: null }))
+    runFade(
+      "ghost",
+      () => ui.current.ghostAt,
+      GHOST_HOLD,
+      () => set({ ghostAt: null }),
+    )
   }
 
   /** Zen on / off. Entering shows the Preview; only the settings persist, never the mode. */

@@ -28,20 +28,35 @@ test("miniInk: columns go by display width, so wide characters ink as far as the
 })
 
 test("miniInk: a note longer than 4 rows per cell scales so the whole note fits", () => {
-  const ink = miniInk(Array.from({ length: 100 }, () => "text"), Array(100).fill(false), 80, 10)
+  const ink = miniInk(
+    Array.from({ length: 100 }, () => "text"),
+    Array(100).fill(false),
+    80,
+    10,
+  )
   expect(ink.scale).toBe(3)
   expect(ink.rows).toBeLessThanOrEqual(10)
 })
 
 test("miniInk: 20 000 lines still fit in the rows given", () => {
   const n = 20_000
-  const ink = miniInk(Array.from({ length: n }, (_, i) => (i % 7 ? "some words here" : "")), Array(n).fill(false), 80, 30)
+  const ink = miniInk(
+    Array.from({ length: n }, (_, i) => (i % 7 ? "some words here" : "")),
+    Array(n).fill(false),
+    80,
+    30,
+  )
   expect(ink.rows).toBeLessThanOrEqual(30)
   expect(ink.scale).toBe(Math.ceil(n / 120))
 })
 
 test("miniCells: headings beat the viewport band; the band marks the rows on screen; empty cells are spaces", () => {
-  const ink = miniInk(Array.from({ length: 16 }, () => "word"), Array(16).fill(false), 8, 10)
+  const ink = miniInk(
+    Array.from({ length: 16 }, () => "word"),
+    Array(16).fill(false),
+    8,
+    10,
+  )
   const cells = miniCells(ink, { top: 4, h: 8, heads: [0, 8], hits: [], total: 16, lane: false })
   expect(cells.map((r) => r[0]!.kind)).toEqual(["head", "view", "head", "rest"])
   expect(cells.map((r) => r[0]!.band)).toEqual([false, true, true, false])
@@ -50,7 +65,12 @@ test("miniCells: headings beat the viewport band; the band marks the rows on scr
 })
 
 test("miniCells: during a find the lane puts one dot per match line at its row", () => {
-  const ink = miniInk(Array.from({ length: 16 }, () => "word"), Array(16).fill(false), 8, 10)
+  const ink = miniInk(
+    Array.from({ length: 16 }, () => "word"),
+    Array(16).fill(false),
+    8,
+    10,
+  )
   const cells = miniCells(ink, { top: 0, h: 4, heads: [], hits: [1, 3, 9], total: 16, lane: true })
   const lane = cells.map((r) => r[MINI_COLS]!)
   expect(lane.map((c) => c.kind)).toEqual(["lane", "lane", "lane", "lane"])
@@ -59,7 +79,12 @@ test("miniCells: during a find the lane puts one dot per match line at its row",
 })
 
 test("miniJump centres the clicked cell's first line, clamped", () => {
-  const ink = miniInk(Array.from({ length: 400 }, () => "x"), Array(400).fill(false), 8, 20) // scale 5 → 20 lines per row
+  const ink = miniInk(
+    Array.from({ length: 400 }, () => "x"),
+    Array(400).fill(false),
+    8,
+    20,
+  ) // scale 5 → 20 lines per row
   expect(miniJump(10, ink, 30, 370)).toBe(200 - 15)
   expect(miniJump(0, ink, 30, 370)).toBe(0)
   expect(miniJump(99, ink, 30, 370)).toBe(370)

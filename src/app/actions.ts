@@ -48,13 +48,50 @@ export interface Features {
 
 /** The actions over the app context; App registers `onKey` and draws with the rest. */
 export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace, popups, edit: editImpl }: Features) {
-  const { ui, set, derive, dims, memo, renderer, runFade, flash, persist, setTop, scrollBy, stopRolling, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch } = c
+  const {
+    ui,
+    set,
+    derive,
+    dims,
+    memo,
+    renderer,
+    runFade,
+    flash,
+    persist,
+    setTop,
+    scrollBy,
+    stopRolling,
+    openFile,
+    selectRow,
+    toggleDir,
+    saveSidebar,
+    selectView,
+    panelViews,
+    focusPanel,
+    focusDoc,
+    showMatch,
+  } = c
   const { ensureGlosses, summarizeNote, explainChange, zenGloss } = aiJobs
   const { openLink, liveLabels, startLabels, histMove, labelType } = links
   const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = zen
   const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate } = switcher
   const { leave, opType, opGo, openOpener, opComplete, opOpen, welcomeKey, stopWelcome } = workspace
-  const { filterText, filterType, filterStop, promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose, openTheme, closeTheme, themeSet, applyTheme, helpGo } = popups
+  const {
+    filterText,
+    filterType,
+    filterStop,
+    promptDefault,
+    promptCount,
+    promptHighlight,
+    promptType,
+    promptSubmit,
+    promptClose,
+    openTheme,
+    closeTheme,
+    themeSet,
+    applyTheme,
+    helpGo,
+  } = popups
 
   /** Context id outside popups and zen: the focused panel view, else the document. */
   const docMode = (): Ctx => {
@@ -66,9 +103,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
   const jumpMatch = (dir: 1 | -1) => {
     const { matches, win, L, s, pg } = derive()
     // pages: only the current page's own lines count as on screen (not the blank pad above it)
-    const m = pg
-      ? stepMatch(matches, s.matchLine, pg.top, Math.min(L.CH, pg.end - pg.top), dir)
-      : stepMatch(matches, s.matchLine, win.first, L.CH, dir)
+    const m = pg ? stepMatch(matches, s.matchLine, pg.top, Math.min(L.CH, pg.end - pg.top), dir) : stepMatch(matches, s.matchLine, win.first, L.CH, dir)
     if (m === undefined) return s.query ? flash(`no match for “${s.query}”`, "error") : flash("nothing to find · / to search", "error")
     showMatch(m)
   }
@@ -111,7 +146,12 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
   /** Show the key hints for context `c` now; they hold HINT_HOLD, then fade. */
   const pokeHints = (c: Ctx) => {
     set({ hintAt: Date.now(), hintCtx: c })
-    runFade("hints", () => ui.current.hintAt, HINT_HOLD, () => set({ hintAt: null }))
+    runFade(
+      "hints",
+      () => ui.current.hintAt,
+      HINT_HOLD,
+      () => set({ hintAt: null }),
+    )
   }
 
   /** Context id now: an open popup, else zen, else the panel view or the document. */
@@ -226,7 +266,14 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (s.openPath === STDIN) return flash("stdin · nothing to edit")
       const d = derive()
       const src = memo.read(s.openPath, s.reload)?.src ?? ""
-      const line = sourceLineAt({ source: s.source, top: d.top, srcRow: d.view.srcRow, headings: d.view.headings, scan: sourceScan(src).headings, offset: parseFrontMatter(src).offset })
+      const line = sourceLineAt({
+        source: s.source,
+        top: d.top,
+        srcRow: d.view.srcRow,
+        headings: d.view.headings,
+        scan: sourceScan(src).headings,
+        offset: parseFrontMatter(src).offset,
+      })
       const argv = editorCommand(process.env, s.openPath, line)
       const run =
         editImpl ??

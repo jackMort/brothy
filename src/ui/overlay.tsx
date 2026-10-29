@@ -15,7 +15,18 @@ import type { SwitchRow } from "../notes/vault"
 import type { ZenRow } from "./zen"
 import { BODY_PAD, PANE_PAD, POPUP_INSET, ROW_PAD, ZEN_POPUP_W, innerWidth, popupWidth } from "./geometry"
 import { switchSplit } from "../notes/peek"
-import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "../theme/themepick"
+import {
+  BOARD_MODES,
+  FAMILIES,
+  SLOT_W,
+  boardFrames,
+  boardHeader,
+  boardLayout,
+  boardSlot,
+  type FamilyHit,
+  type ThemeMode,
+  type themeSplit,
+} from "../theme/themepick"
 import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
 
 function Line({ spans }: { spans: Span[] }) {
@@ -288,7 +299,16 @@ interface PopupListProps {
  * List │ pane: `list` in a `listW` column, a `│` divider, then `lines` (cut to `rows`) in a `paneW` column. A
  * `paneBg` paints the pane on a candidate's background; `paneKey` keeps boxes that differ in style apart.
  */
-function SplitPane({ t, rows, listW, paneW, list, lines, paneKey, paneBg }: {
+function SplitPane({
+  t,
+  rows,
+  listW,
+  paneW,
+  list,
+  lines,
+  paneKey,
+  paneBg,
+}: {
   t: Theme
   rows: number
   listW: number
@@ -308,7 +328,14 @@ function SplitPane({ t, rows, listW, paneW, list, lines, paneKey, paneBg }: {
       </box>
       <box
         key={paneKey}
-        style={{ width: paneW + PANE_PAD, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(paneBg ? { backgroundColor: paneBg } : {}) }}
+        style={{
+          width: paneW + PANE_PAD,
+          flexDirection: "column",
+          paddingLeft: 2,
+          paddingRight: 4,
+          flexShrink: 0,
+          ...(paneBg ? { backgroundColor: paneBg } : {}),
+        }}
       >
         {lines.slice(0, rows).map((spans, i) => (
           <Line key={i} spans={spans} />
@@ -568,7 +595,14 @@ export function ThemePicker({
   )
   return (
     <Overlay t={t} W={W} H={H} width={geo.width} title="Themes" note={note} onClose={onClose} onScroll={onScroll}>
-      <PickerInput t={t} value={q} placeholder="Theme…" right={modeSwitch(t, shown, only)} onRight={(i) => !only && onMode?.(SWITCH_MODES[i]!)} width={geo.width} />
+      <PickerInput
+        t={t}
+        value={q}
+        placeholder="Theme…"
+        right={modeSwitch(t, shown, only)}
+        onRight={(i) => !only && onMode?.(SWITCH_MODES[i]!)}
+        width={geo.width}
+      />
       {geo.split ? (
         <SplitPane
           key="split"
@@ -639,11 +673,27 @@ function helpCell(t: Theme, l: HelpLine | undefined, { colW, keyW }: HelpLayout)
   if (!l) return padTo([], 1 + colW)
   if (l.kind === "chip") return padTo(chip(t, l.title, groupColor(t, l.title)), 1 + colW)
   const keys = truncate(l.keys, keyW - 1)
-  return padTo([{ text: " " + keys + " ".repeat(keyW - sw(keys)), fg: t.text }, { text: truncate(l.desc, colW - keyW), fg: t.textMuted }], 1 + colW)
+  return padTo(
+    [
+      { text: " " + keys + " ".repeat(keyW - sw(keys)), fg: t.text },
+      { text: truncate(l.desc, colW - keyW), fg: t.textMuted },
+    ],
+    1 + colW,
+  )
 }
 
 /** `? ?`: the keys sheet with role chips per group and, from 100 columns, two columns; App owns `top`. */
-export function HelpSheet({ t, W, H, layout, top, title, note, onClose, onScroll }: {
+export function HelpSheet({
+  t,
+  W,
+  H,
+  layout,
+  top,
+  title,
+  note,
+  onClose,
+  onScroll,
+}: {
   t: Theme
   W: number
   H: number
@@ -657,9 +707,7 @@ export function HelpSheet({ t, W, H, layout, top, title, note, onClose, onScroll
   return (
     <Overlay t={t} W={W} H={H} width={layout.width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <box key="help-body" style={{ flexDirection: "column", paddingLeft: 3, paddingRight: 4 }}>
-        {layout.mark
-          ? [...WORDMARK.map((l, i) => <Line key={"wm" + i} spans={[{ text: " " + l, fg: t.primary }]} />), <Line key="wm-gap" spans={[]} />]
-          : null}
+        {layout.mark ? [...WORDMARK.map((l, i) => <Line key={"wm" + i} spans={[{ text: " " + l, fg: t.primary }]} />), <Line key="wm-gap" spans={[]} />] : null}
         {Array.from({ length: layout.vis }, (_, i) => (
           <Line key={i} spans={layout.cols.flatMap((c, k) => [...(k ? [{ text: "   " }] : []), ...helpCell(t, c[top + i], layout)])} />
         ))}
@@ -676,7 +724,20 @@ const RECENT_W = 58
  * keycap actions, recent projects as `o` picker rows (pointing selects, a click opens) and the hint row.
  * Blocks drop as the area shrinks (`welcomeFit`); App owns the selection, the steam tick and the ink step.
  */
-export function Welcome({ t, CW, CH, root, recents, hl, tick, ink, keys, home, onHover, onActivate }: {
+export function Welcome({
+  t,
+  CW,
+  CH,
+  root,
+  recents,
+  hl,
+  tick,
+  ink,
+  keys,
+  home,
+  onHover,
+  onActivate,
+}: {
   t: Theme
   CW: number
   CH: number
@@ -716,7 +777,16 @@ export function Welcome({ t, CW, CH, root, recents, hl, tick, ink, keys, home, o
     line([])
     rows.push(
       <box key="recent" style={{ flexDirection: "column", alignItems: "flex-start", flexShrink: 0, paddingLeft: Math.max(0, fx - 1) }}>
-        <PickerList t={t} items={list.map((r) => openItem(r, t, innerW - ROW_PAD, home))} hl={hl} top={0} height={list.length} innerW={innerW} onHover={onHover} onActivate={onActivate} />
+        <PickerList
+          t={t}
+          items={list.map((r) => openItem(r, t, innerW - ROW_PAD, home))}
+          hl={hl}
+          top={0}
+          height={list.length}
+          innerW={innerW}
+          onHover={onHover}
+          onActivate={onActivate}
+        />
       </box>,
     )
   }

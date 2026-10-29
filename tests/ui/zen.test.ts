@@ -2,7 +2,23 @@ import { describe, expect, test } from "bun:test"
 import { mix } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
 import { GHOST_HOLD, HINT_HOLD, fadeStep } from "../../src/ui/status"
-import { ZEN_DEFAULTS, ZEN_ROWS, dimSpans, headingPath, minutesLeft, normalizeZen, pageSlice, pickZen, prompterRate, sectionAt, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows } from "../../src/ui/zen"
+import {
+  ZEN_DEFAULTS,
+  ZEN_ROWS,
+  dimSpans,
+  headingPath,
+  minutesLeft,
+  normalizeZen,
+  pageSlice,
+  pickZen,
+  prompterRate,
+  sectionAt,
+  sectionRanges,
+  typewriterTop,
+  wordSuffix,
+  zenAdjust,
+  zenRows,
+} from "../../src/ui/zen"
 
 describe("normalizeZen", () => {
   test("no config gives the defaults", () => {
@@ -87,13 +103,24 @@ describe("settings rows", () => {
 
 describe("sectionRanges", () => {
   test("each heading starts a section; the preamble is its own", () => {
-    expect(sectionRanges([3, 10], 15)).toEqual([[0, 3], [3, 10], [10, 15]])
+    expect(sectionRanges([3, 10], 15)).toEqual([
+      [0, 3],
+      [3, 10],
+      [10, 15],
+    ])
   })
-  test("a heading on line 0 means no preamble", () => expect(sectionRanges([0, 5], 8)).toEqual([[0, 5], [5, 8]]))
+  test("a heading on line 0 means no preamble", () =>
+    expect(sectionRanges([0, 5], 8)).toEqual([
+      [0, 5],
+      [5, 8],
+    ]))
   test("no headings: one section", () => expect(sectionRanges([], 7)).toEqual([[0, 7]]))
   test("empty document: one empty section", () => expect(sectionRanges([], 0)).toEqual([[0, 0]]))
   test("ignores duplicate headings and ones past the end", () => {
-    expect(sectionRanges([2, 2, 9], 5)).toEqual([[0, 2], [2, 5]])
+    expect(sectionRanges([2, 2, 9], 5)).toEqual([
+      [0, 2],
+      [2, 5],
+    ])
   })
 })
 
@@ -146,18 +173,22 @@ describe("headingPath", () => {
   test("before the first heading there is no path", () => expect(headingPath(hs, -1)).toEqual([]))
   test("an index past the end uses the last heading", () => expect(headingPath(hs, 99)).toEqual(["A", "D"]))
   test("works without a level-1 heading", () => {
-    expect(headingPath([{ depth: 2, text: "X" }, { depth: 3, text: "Y" }], 1)).toEqual(["X", "Y"])
+    expect(
+      headingPath(
+        [
+          { depth: 2, text: "X" },
+          { depth: 3, text: "Y" },
+        ],
+        1,
+      ),
+    ).toEqual(["X", "Y"])
   })
 })
 
 describe("dimSpans", () => {
   const t = brothy
   test("mixes fg (and bg) toward the background, keeping text and attributes", () => {
-    const out = dimSpans(
-      [{ text: "a", fg: "#ffffff", attr: 1 }, { text: "b" }, { text: "c", fg: "#000000", bg: "#ffffff" }],
-      t,
-      0.6,
-    )
+    const out = dimSpans([{ text: "a", fg: "#ffffff", attr: 1 }, { text: "b" }, { text: "c", fg: "#000000", bg: "#ffffff" }], t, 0.6)
     expect(out).toEqual([
       { text: "a", fg: mix("#ffffff", t.background, 0.6), attr: 1 },
       { text: "b", fg: mix(t.text, t.background, 0.6) },

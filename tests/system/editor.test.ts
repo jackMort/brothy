@@ -37,7 +37,9 @@ describe("sourceLineAt", () => {
     const sr = render(short, 80, t)
     const ss = sourceScan(short, t)
     // a wrapped paragraph can't push the line into the next heading
-    expect(sourceLineAt({ source: false, top: sr.headings[1]!.line - 1 + 40, headings: sr.headings.slice(0, 1), scan: ss.headings.slice(0, 1), offset: 0 })).toBeGreaterThan(0)
+    expect(
+      sourceLineAt({ source: false, top: sr.headings[1]!.line - 1 + 40, headings: sr.headings.slice(0, 1), scan: ss.headings.slice(0, 1), offset: 0 }),
+    ).toBeGreaterThan(0)
     expect(sourceLineAt({ source: false, top: 2, headings: sr.headings, scan: ss.headings, offset: 0 })).toBeLessThanOrEqual(4)
   })
 

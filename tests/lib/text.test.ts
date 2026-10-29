@@ -1,19 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Span } from "../../src/lib/spans"
-import {
-  clamp,
-  fmtNum,
-  graphemes,
-  mergeSpans,
-  plural,
-  pushSpan,
-  sameStyle,
-  spanWidth,
-  superscript,
-  truncate,
-  truncateLeft,
-  width,
-} from "../../src/lib/text"
+import { clamp, fmtNum, graphemes, mergeSpans, plural, pushSpan, sameStyle, spanWidth, superscript, truncate, truncateLeft, width } from "../../src/lib/text"
 import { SCALE, expectLinear } from "../helpers/perf"
 
 describe("width", () => {
@@ -49,7 +36,10 @@ describe("span merging", () => {
     pushSpan(out, { text: "", fg: "#000" })
     pushSpan(out, { text: "b", fg: "#fff" })
     pushSpan(out, { text: "c", fg: "#000" })
-    expect(out).toEqual([{ text: "ab", fg: "#fff" }, { text: "c", fg: "#000" }])
+    expect(out).toEqual([
+      { text: "ab", fg: "#fff" },
+      { text: "c", fg: "#000" },
+    ])
     expect(first.text).toBe("a")
   })
 
@@ -100,7 +90,37 @@ describe("truncate", () => {
   })
 
   test("matches the per-code-point rule on mixed text", () => {
-    const pool = ["a", " ", "日", "👨", "👩", "‍", "́", "🇺", "🇸", "❤", "️", "︎", "👍", "🏽", "ᄀ", "ᅡ", "ශ", "්", "ර", "क", "्", "‌", "\x1b", "[", "m", "\x9b", " ", "1", "⃣"]
+    const pool = [
+      "a",
+      " ",
+      "日",
+      "👨",
+      "👩",
+      "‍",
+      "́",
+      "🇺",
+      "🇸",
+      "❤",
+      "️",
+      "︎",
+      "👍",
+      "🏽",
+      "ᄀ",
+      "ᅡ",
+      "ශ",
+      "්",
+      "ර",
+      "क",
+      "्",
+      "‌",
+      "\x1b",
+      "[",
+      "m",
+      "\x9b",
+      " ",
+      "1",
+      "⃣",
+    ]
     let seed = 7
     const rnd = (n: number) => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff

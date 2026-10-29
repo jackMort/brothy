@@ -8,7 +8,23 @@ const at = (W: number, H: number, patch: Partial<State> = {}) => layout(W, H, { 
 
 test("wide enough, the panel is a column left of the measure, centred in what is left", () => {
   const L = at(120, 40)
-  expect(L).toMatchObject({ zen: false, mode: "inline", shown: true, inline: true, SW: 32, DW: 40, PNW: 32, gap: 1, bodyH: 36, areaW: 85, CW: MEASURE, CH: 36, padL: 2, mini: false, PH: 16 })
+  expect(L).toMatchObject({
+    zen: false,
+    mode: "inline",
+    shown: true,
+    inline: true,
+    SW: 32,
+    DW: 40,
+    PNW: 32,
+    gap: 1,
+    bodyH: 36,
+    areaW: 85,
+    CW: MEASURE,
+    CH: 36,
+    padL: 2,
+    mini: false,
+    PH: 16,
+  })
 })
 
 test("a hidden panel gives the document the whole width; `wide` drops the measure for a 2-column margin", () => {

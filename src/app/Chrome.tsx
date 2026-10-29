@@ -4,7 +4,22 @@ import { basename, dirname, resolve } from "node:path"
 import type { ReactNode } from "react"
 import { fadeSpans } from "../ui/chrome"
 import type { Span } from "../lib/spans"
-import { GHOST_STEPS, HINT_HOLD, fadeStep, gapSpans, headerLayout, hintSpans, logoState, mainHeadingVisible, notePath, progressLabel, progressSpans, toastSpans, topLineSpans, type HintItem } from "../ui/status"
+import {
+  GHOST_STEPS,
+  HINT_HOLD,
+  fadeStep,
+  gapSpans,
+  headerLayout,
+  hintSpans,
+  logoState,
+  mainHeadingVisible,
+  notePath,
+  progressLabel,
+  progressSpans,
+  toastSpans,
+  topLineSpans,
+  type HintItem,
+} from "../ui/status"
 import { spanWidth } from "../lib/text"
 import { headingPath, minutesLeft } from "../ui/zen"
 import type { AppCtx } from "./ctx"

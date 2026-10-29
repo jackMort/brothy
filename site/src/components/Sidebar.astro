@@ -6,11 +6,14 @@ import type { StarlightRouteData } from "@astrojs/starlight/route-data"
 type SidebarEntry = StarlightRouteData["sidebar"][number]
 
 const { sidebar, toc, entry, editUrl } = Astro.locals.starlightRoute
-const name = (e: SidebarEntry) => (e.type === "link" ? (e.href.replace(/\/$/, "").split("/").pop() || e.label) : e.label).toLowerCase().replace(/\s+/g, "-")
+const name = (e: SidebarEntry) => (e.type === "link" ? e.href.replace(/\/$/, "").split("/").pop() || e.label : e.label).toLowerCase().replace(/\s+/g, "-")
 const count = (e: SidebarEntry): number => (e.type === "link" ? 1 : e.entries.reduce((n, c) => n + count(c), 0))
 const current = (e: SidebarEntry): boolean => (e.type === "link" ? e.isCurrent : e.entries.some(current))
 const body = entry.body ?? ""
-const words = body.replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length
+const words = body
+  .replace(/```[\s\S]*?```/g, " ")
+  .split(/\s+/)
+  .filter(Boolean).length
 const sections = toc?.items.reduce((n, i) => n + 1 + i.children.length, 0) ?? 0
 const items = toc?.items ?? []
 ---

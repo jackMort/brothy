@@ -69,7 +69,10 @@ test("labels drop when the view moves", async () => {
 })
 
 test("link labels: survive code highlighting landing, and the typed label is followed", async () => {
-  const root = tmp({ "a.md": "see [[b]]\n\n```ts\nconst labelsLand = 20260429 // not highlighted by an earlier test: the cache is shared\n```\n", "b.md": "# Bee\n" })
+  const root = tmp({
+    "a.md": "see [[b]]\n\n```ts\nconst labelsLand = 20260429 // not highlighted by an earlier test: the cache is shared\n```\n",
+    "b.md": "# Bee\n",
+  })
   const s = await mount(root, "a.md")
   expect(await keys(s, "f")).toContain("a–z follow")
   // `f` came before the parser answered (or at least right with it); the highlight re-render keeps the geometry
@@ -112,7 +115,10 @@ test("labels gone stale (live reload) end label mode: the footer drops them and 
 
 test("unresolved wikilinks are drawn muted in the document", async () => {
   const s = await mount(linkVault(), "a.md")
-  const nope = s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes("nope"))!
+  const nope = s
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .find((sp) => sp.text.includes("nope"))!
   expect(hex(nope.fg)).toBe(B.textMuted) // brothy textMuted
 })
 
@@ -137,7 +143,10 @@ test("a single note inside a vault resolves links against the vault root", async
   const v = tmp({ "Journal/a.md": "see [[Elsewhere/b]] and [[c]]\n", "Elsewhere/b.md": "# Bee\n", "c.md": "# Sea note\n" })
   mkdirSync(join(v, ".obsidian"))
   const s = await mount(join(v, "Journal"), "a.md")
-  const b = s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text === "b")!
+  const b = s
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .find((sp) => sp.text === "b")!
   expect(hex(b.fg)).toBe(B.info) // brothy info: resolved, not muted
   expect(await keys(s, "f", "s")).toContain("Sea note")
 })

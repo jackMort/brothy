@@ -68,7 +68,16 @@ test("⏎ sends only the question; the answers are vault places with hits/all an
   ai.end(0)
   const f = await waitFrame(s, (fr) => fr.includes("Answers"))
   // the list is narrower beside the peek pane: the note name keeps its quarter, cut with …
-  for (const x of ["llama3.2", "getting-sta… › Open a single file", "2/3", "README › Quick start", "1/3", "↻ rerank with excerpts", "searched: single file · path · cli"]) expect(f).toContain(x)
+  for (const x of [
+    "llama3.2",
+    "getting-sta… › Open a single file",
+    "2/3",
+    "README › Quick start",
+    "1/3",
+    "↻ rerank with excerpts",
+    "searched: single file · path · cli",
+  ])
+    expect(f).toContain(x)
   expect(existsSync(join(cacheDir, "brothy"))).toBe(false) // nothing on disk
 })
 
@@ -144,7 +153,9 @@ test("excerpts are sent only from the rerank row; the model's order shows with i
   expect(await keys(s)).toContain("reranking…")
   const [sys, user] = ai.calls[1]!.body.messages.map((m) => m.content)
   expect(sys).toBe(RERANK_PROMPT)
-  expect(user).toStartWith("Question: how do I open one file\n\nc1 · getting-started › Getting started › Open a single file\nSee below. Give a single file path to brothy.")
+  expect(user).toStartWith(
+    "Question: how do I open one file\n\nc1 · getting-started › Getting started › Open a single file\nSee below. Give a single file path to brothy.",
+  )
   ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }, { id: "c7" }, { id: "c1", why: "dup" }] }))
   ai.end(1)
   const f = await waitFrame(s, (fr) => fr.includes("Other matches"))

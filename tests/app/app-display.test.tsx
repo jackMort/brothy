@@ -10,7 +10,10 @@ const { cfgDir, tmp, mount, unmount, savedConfig } = useAppHarness()
 
 /** Background alpha of the first span containing `text` (0 = unpainted). */
 function bgAlpha(s: Setup, text: string): number {
-  const span = s.captureSpans().lines.flatMap((l) => l.spans).find((x) => x.text.includes(text))
+  const span = s
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .find((x) => x.text.includes(text))
   expect(span).toBeDefined()
   return span!.bg.a
 }
@@ -18,7 +21,11 @@ function bgAlpha(s: Setup, text: string): number {
 test("w toggles full width in the normal view and persists it", async () => {
   const s = await mount(tmp({ "a.md": "lorem ipsum dolor ".repeat(80) }), "a.md", { size: { width: 160, height: 30 } })
   const f = await keys(s, "w")
-  const text = (fr: string) => fr.split("\n").filter((l) => l.includes("lorem")).map((l) => [...l].slice(0, 160 - 4).join("")) // without the minimap
+  const text = (fr: string) =>
+    fr
+      .split("\n")
+      .filter((l) => l.includes("lorem"))
+      .map((l) => [...l].slice(0, 160 - 4).join("")) // without the minimap
   const rows = text(f)
   expect(Math.max(...rows.map((r) => r.trimEnd().length - r.search(/lorem|ipsum|dolor/)))).toBeGreaterThan(100)
   for (const r of rows) expect(r.trimEnd().length).toBeLessThanOrEqual(160 - 4) // left of the minimap's gap column (a capped row fills the measure)
@@ -134,7 +141,12 @@ test("minimap: shown in Source too, where the line-number gutter draws no dots",
   // text only at the far right of each line: the left cell stays empty
   const s2 = await mount(tmp({ "b.md": Array.from({ length: 40 }, () => " ".repeat(70) + "x").join("\n") }), "b.md", { size: { width: 120, height: 34 } })
   const f = await keys(s2, "s")
-  expect(f.split("\n").map((r) => [...r].slice(117, 119).join("")).some((c) => c[1] && BRAILLE.test(c[1]))).toBe(true)
+  expect(
+    f
+      .split("\n")
+      .map((r) => [...r].slice(117, 119).join(""))
+      .some((c) => c[1] && BRAILLE.test(c[1])),
+  ).toBe(true)
   expect(f.split("\n").some((r) => BRAILLE.test([...r][117] ?? ""))).toBe(false)
 })
 
@@ -178,7 +190,10 @@ test("minimap: a click scrolls to that part of the note", async () => {
   const s = await mount(tmp({ "a.md": LONG_NOTE }), "a.md", { size: { width: 120, height: 34 } })
   const before = await keys(s)
   const rows = before.split("\n")
-  const last = rows.map((r, y) => (BRAILLE.test([...r].slice(117, 119).join("")) ? y : -1)).filter((y) => y >= 0).at(-1)!
+  const last = rows
+    .map((r, y) => (BRAILLE.test([...r].slice(117, 119).join("")) ? y : -1))
+    .filter((y) => y >= 0)
+    .at(-1)!
   await s.mockMouse.click(117, last)
   const after = await keys(s)
   expect(after).toContain("Part 11")

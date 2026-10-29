@@ -123,7 +123,12 @@ export function makeAIJobs(c: AppCtx) {
     const g = ui.current.gloss
     if (!g || g.fadeAt !== null) return
     set({ gloss: { ...g, fadeAt: Date.now() } })
-    runFade("gloss", () => ui.current.gloss?.fadeAt ?? null, 0, () => set({ gloss: null }))
+    runFade(
+      "gloss",
+      () => ui.current.gloss?.fadeAt ?? null,
+      0,
+      () => set({ gloss: null }),
+    )
   }
 
   /** The reading line entered another section (or note, or zen): fade the old sheet; show a fresh cached gloss or a running stream. */
@@ -221,7 +226,8 @@ export function makeAIJobs(c: AppCtx) {
     focusPanel("info")
     const s = ui.current
     const path = s.openPath
-    if (path && cancelJob(jobKey("tldr", path))) { // a running request is cancelled first, whatever the config or the note now say
+    if (path && cancelJob(jobKey("tldr", path))) {
+      // a running request is cancelled first, whatever the config or the note now say
       bump((x) => x + 1)
       return flash("summary cancelled")
     }

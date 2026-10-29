@@ -26,7 +26,20 @@ import { askCandidates, askRows, questionOf, rerankCost, type AskState, type Can
 import { isFresh, textHash } from "../ai/cache"
 import { glossTarget, parseGlossStyle, type GlossState, type GlossTarget } from "../ai/gloss"
 import { noteTitle } from "../ui/status"
-import { extractLinks, fmtSize, infoItems, outlineRows, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type SummaryState, type SummaryView } from "../ui/panel"
+import {
+  extractLinks,
+  fmtSize,
+  infoItems,
+  outlineRows,
+  resolveLink,
+  type ChangeState,
+  type ChangeView,
+  type FileMeta,
+  type InfoItem,
+  type LinkRef,
+  type SummaryState,
+  type SummaryView,
+} from "../ui/panel"
 import { diffSections, hhmm, parseDelta, type Change, type DeltaNote } from "../ai/delta"
 import { pageSlice, sectionAt, sectionRanges, typewriterTop, wordSuffix } from "../ui/zen"
 import { WELCOME_RECENTS } from "../ui/welcome"
@@ -44,26 +57,54 @@ export function makeMemo(stdin: string | undefined) {
     // the welcome page's recent projects: the `o` picker's rows with an empty query, header first; read again
     // after every workspace switch (`watchGen`) and a dropped missing one (`gen`)
     recents: cached((root: string, _gen: number, _watchGen: number) =>
-      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS)),
-    read: cached((path: string, nonce: number): DocFile =>
-      path !== STDIN || stdin === undefined
-        ? readDoc(path, nonce)
-        : Buffer.byteLength(stdin) > MAX_BYTES
-          ? { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
-          : { src: stdin, info: null, error: null },
+      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS),
+    ),
+    read: cached(
+      (path: string, nonce: number): DocFile =>
+        path !== STDIN || stdin === undefined
+          ? readDoc(path, nonce)
+          : Buffer.byteLength(stdin) > MAX_BYTES
+            ? { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
+            : { src: stdin, info: null, error: null },
     ),
     fm: cached(parseFrontMatter),
-    doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) => render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings })),
+    doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) =>
+      render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
+    ),
     source: cached((src: string, w: number, t: Theme, tree: FileNode) => renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
     stats: cached(stats),
     props: cached(parseProperties),
     linkTargets: cached(extractLinks),
-    links: cached((targets: string[], tree: FileNode, from: string | null): LinkRef[] => targets.map((target) => ({ target, path: resolveLink(target, tree, from) }))),
+    links: cached((targets: string[], tree: FileNode, from: string | null): LinkRef[] =>
+      targets.map((target) => ({ target, path: resolveLink(target, tree, from) })),
+    ),
     info: cached(
-      (p: Property[], st: Stats, l: LinkRef[], w: number, f: FileMeta | null, sText: string, sState: SummaryState | "", sModel: string,
-        cState: ChangeState | "", cLabel: string, cChanges: readonly Change[], cSummary: string, cNotes: readonly (DeltaNote | undefined)[], title: string) =>
-        infoItems(p, st, l, w, f, undefined, sState ? { text: sText, state: sState, model: sModel } : undefined,
-          cState ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title } : undefined),
+      (
+        p: Property[],
+        st: Stats,
+        l: LinkRef[],
+        w: number,
+        f: FileMeta | null,
+        sText: string,
+        sState: SummaryState | "",
+        sModel: string,
+        cState: ChangeState | "",
+        cLabel: string,
+        cChanges: readonly Change[],
+        cSummary: string,
+        cNotes: readonly (DeltaNote | undefined)[],
+        title: string,
+      ) =>
+        infoItems(
+          p,
+          st,
+          l,
+          w,
+          f,
+          undefined,
+          sState ? { text: sText, state: sState, model: sModel } : undefined,
+          cState ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title } : undefined,
+        ),
     ),
     note: cached(noteText),
     diff: cached(diffSections),
@@ -101,10 +142,20 @@ export function makeMemo(stdin: string | undefined) {
     ),
     // Source rows open with the line-number gutter (`gutter` columns), which draws no dots
     mini: cached((view: Rendered, w: number, rows: number, gutter: number) =>
-      miniInk(gutter ? view.plain.map((p) => p.slice(gutter)) : view.plain, view.lines.map((l) => l.fill !== undefined), w - gutter, rows),
+      miniInk(
+        gutter ? view.plain.map((p) => p.slice(gutter)) : view.plain,
+        view.lines.map((l) => l.fill !== undefined),
+        w - gutter,
+        rows,
+      ),
     ),
     words: cached((view: Rendered) => wordSuffix(view.plain)),
-    ranges: cached((view: Rendered) => sectionRanges(view.headings.map((h) => h.line), view.lines.length)),
+    ranges: cached((view: Rendered) =>
+      sectionRanges(
+        view.headings.map((h) => h.line),
+        view.lines.length,
+      ),
+    ),
     /** where an ask would go: null without an `ai` block, else the host or why not */
     host: cached((ai: AIConfig | null) => {
       if (!ai) return null
@@ -114,8 +165,15 @@ export function makeMemo(stdin: string | undefined) {
     cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) => askCandidates(ix, tree, queries)),
     cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) => rerankCost(question, cands, ix)),
     ask: cached(
-      (question: string, cut: boolean, target: { host: string } | { error: string } | null, state: AskState | undefined, cands: readonly Candidate[], cost: string, indexing: boolean) =>
-        askRows({ question, cut, target, state, cands, cost, indexing }),
+      (
+        question: string,
+        cut: boolean,
+        target: { host: string } | { error: string } | null,
+        state: AskState | undefined,
+        cands: readonly Candidate[],
+        cost: string,
+        indexing: boolean,
+      ) => askRows({ question, cut, target, state, cands, cost, indexing }),
     ),
   }
 }
@@ -198,8 +256,22 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
           : base && changes?.length
             ? { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
             : null
-    const infoRows = memo.info(props, st, links, L.PNW - 2, file?.info ?? null, sv?.text ?? "", sv?.state ?? "", sv?.model ?? "",
-      cv?.state ?? "", cv?.label ?? "", cv?.changes ?? NO_CHANGES, cv?.summary ?? "", cv?.notes ?? NO_NOTES, title)
+    const infoRows = memo.info(
+      props,
+      st,
+      links,
+      L.PNW - 2,
+      file?.info ?? null,
+      sv?.text ?? "",
+      sv?.state ?? "",
+      sv?.model ?? "",
+      cv?.state ?? "",
+      cv?.label ?? "",
+      cv?.changes ?? NO_CHANGES,
+      cv?.summary ?? "",
+      cv?.notes ?? NO_NOTES,
+      title,
+    )
     const linkRows = memo.linkIdx(infoRows)
     const question = s.switcher ? questionOf(s.switcher.q) : null
     const askState = s.switcher?.ask
@@ -225,9 +297,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     if (rows !== seen.rows) {
       const paths = rows.map((r) => r.node.path)
       // filter results keep the cursor's note when it is still listed, else start on the top result
-      const r = filtered
-        ? relocate(paths, [seen.cursorPath], 0, 0, LH)
-        : relocate(paths, [seen.cursorPath, s.openPath], s.cursor, s.listTop.files, LH)
+      const r = filtered ? relocate(paths, [seen.cursorPath], 0, 0, LH) : relocate(paths, [seen.cursorPath, s.openPath], s.cursor, s.listTop.files, LH)
       s.cursor = r.cursor
       s.listTop.files = r.sideTop
       seen.rows = rows

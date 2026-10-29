@@ -6,7 +6,8 @@ import { HINT_ROW, keys, loremWidth, numbered, onBg, openHelp, panelShown, READI
 
 const { cfgDir, tmp, mount, unmount, zenConfig, savedConfig } = useAppHarness()
 
-const OPENING = "**brothy** is a terminal Markdown reader with a calm, panel-based interface. Browse a folder of notes on the left, read on the right, and never leave the terminal."
+const OPENING =
+  "**brothy** is a terminal Markdown reader with a calm, panel-based interface. Browse a folder of notes on the left, read on the right, and never leave the terminal."
 const ZEN_BODY = "lorem ipsum dolor sit amet consectetur ".repeat(8)
 
 test("z hides the status rows, panel and hints, and z brings them back", async () => {

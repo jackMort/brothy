@@ -52,9 +52,17 @@ describe("front matter", () => {
     const src = '---\ntitle: "T\x1b[5mBLINK\tx"\naliases: [\x1b[7mREV, plain]\ntags:\n  - a\x9bb\n---\nbody'
     const ctl = /[\x00-\x1f\x7f-\x9f]/
     const fm = parseFrontMatter(src)
-    expect(fm.entries).toEqual([["title", "T\ufffd[5mBLINK x"], ["aliases", "[\ufffd[7mREV, plain]"], ["tags", ""]])
+    expect(fm.entries).toEqual([
+      ["title", "T\ufffd[5mBLINK x"],
+      ["aliases", "[\ufffd[7mREV, plain]"],
+      ["tags", ""],
+    ])
     const props = parseProperties(src)
-    expect(props).toEqual([["title", "T\ufffd[5mBLINK x"], ["aliases", ["\ufffd[7mREV", "plain"]], ["tags", ["a\ufffdb"]]])
+    expect(props).toEqual([
+      ["title", "T\ufffd[5mBLINK x"],
+      ["aliases", ["\ufffd[7mREV", "plain"]],
+      ["tags", ["a\ufffdb"]],
+    ])
     expect(JSON.stringify(props).match(ctl)).toBeNull()
   })
   test("closing fence must be a whole line", () => {
@@ -95,7 +103,11 @@ describe("graphemes", () => {
   test("continuation rows respect a wider rest prefix", () => {
     const rows = wrap([{ text: "x".repeat(20) }], 10, [{ text: "• " }], [{ text: "    " }])
     for (const r of rowText(rows)) expect(width(r)).toBeLessThanOrEqual(10)
-    expect(rowText(rows).map((r) => r.replace(/^(• |    )/, "")).join("")).toBe("x".repeat(20))
+    expect(
+      rowText(rows)
+        .map((r) => r.replace(/^(• |    )/, ""))
+        .join(""),
+    ).toBe("x".repeat(20))
   })
 })
 
@@ -225,13 +237,19 @@ describe("entity safety", () => {
   })
   test("raw control characters in the file are neutralised in both views", () => {
     const src = "x \u001b[31m `a\u001bb` y\n\n```\nc\u001bd\n```\n"
-    for (const r of [render(src, 60, t), renderSource(src, 60, t)])
-      for (const l of r.lines) for (const s of l.spans) expect(s.text).not.toContain("\u001b")
+    for (const r of [render(src, 60, t), renderSource(src, 60, t)]) for (const l of r.lines) for (const s of l.spans) expect(s.text).not.toContain("\u001b")
   })
 })
 
 describe("deep quote prefixes at narrow widths", () => {
-  const cases = ["> ".repeat(60) + "---", "> > > > > > # T", "> > > > > > ## T", "> ".repeat(60) + "```\ncode\n```", "- ".repeat(40) + "---", "> ".repeat(30) + "| a |\n> ".repeat(1) + "|---|\n> | b |"]
+  const cases = [
+    "> ".repeat(60) + "---",
+    "> > > > > > # T",
+    "> > > > > > ## T",
+    "> ".repeat(60) + "```\ncode\n```",
+    "- ".repeat(40) + "---",
+    "> ".repeat(30) + "| a |\n> ".repeat(1) + "|---|\n> | b |",
+  ]
   test("render and renderSource never throw", () => {
     const th = brothy
     for (const src of cases)
@@ -246,10 +264,16 @@ describe("CR-only line endings", () => {
   const src = "---\rtitle: x\rtags: [a, b]\r---\r# Real\r"
   test("front matter and properties are read, and Preview and Source agree", () => {
     const fm = parseFrontMatter(src)
-    expect(fm.entries).toEqual([["title", "x"], ["tags", "[a, b]"]])
+    expect(fm.entries).toEqual([
+      ["title", "x"],
+      ["tags", "[a, b]"],
+    ])
     expect(fm.body).toBe("# Real\n")
     expect(fm.offset).toBe(4)
-    expect(parseProperties(src)).toEqual([["title", "x"], ["tags", ["a", "b"]]])
+    expect(parseProperties(src)).toEqual([
+      ["title", "x"],
+      ["tags", ["a", "b"]],
+    ])
     const out = (r: ReturnType<typeof render>) => r.headings.map((h) => h.text)
     expect(out(renderSource(src, 60, t))).toEqual(["Real"])
     expect(out(render(fm.body, 60, t))).toEqual(["Real"])
@@ -296,7 +320,12 @@ describe("pathological inline input stays fast", () => {
     const r = render(`# T\n\n${head}${tail}\n\n## After\n`, 80, t)
     expect(r.headings.map((h) => h.text)).toEqual(["T", "After"])
     expect(r.links).toHaveLength(0)
-    expect(r.lines.map((l) => l.spans.map((s) => s.text).join("")).join(" ").replace(/\s+/g, " ")).toContain("**not bold** [[not a link]] ==not marked==")
+    expect(
+      r.lines
+        .map((l) => l.spans.map((s) => s.text).join(""))
+        .join(" ")
+        .replace(/\s+/g, " "),
+    ).toContain("**not bold** [[not a link]] ==not marked==")
     expect(r.lines.some((l) => l.spans.some((s) => s.text === "bold" && (s.attr ?? 0) & A.BOLD))).toBe(true)
   })
 
