@@ -17,9 +17,9 @@ import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { SwitcherControl } from "./switcher"
 
-/** The workspace over the app context; a switch drops the ask, the vault index and the change baseline first. */
-export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherControl, "dropAsk" | "dropIndex">, { dropDelta }: Pick<AIJobs, "dropDelta">) {
-  const { ui, set, bump, derive, memo, W, H, timers, zenBack, scrolls, sidebarSeen, left, welcome, alive, flash, stopRolling } = c
+/** The recent-projects record and the last one on the way out. */
+function makeRecents(c: AppCtx) {
+  const { ui, zenBack, scrolls, left } = c
 
   /**
    * Write the workspace to the recents: the open note and its Preview top with the geometry it was
@@ -42,17 +42,33 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
     recordProject()
   }
 
+  return { recordProject, leave }
+}
+
+/** Why `root` cannot be a workspace, as a toast; null when it is a folder. */
+function rootProblem(root: string) {
+  try {
+    if (!statSync(root).isDirectory()) return `not a folder: ${tildify(root)}`
+  } catch (e) {
+    return `cannot open ${tildify(root)}: ${errText(e)}`
+  }
+  return null
+}
+
+type SwitchDeps = Pick<ReturnType<typeof makeRecents>, "recordProject"> & Pick<SwitcherControl, "dropAsk" | "dropIndex"> & Pick<AIJobs, "dropDelta">
+
+/** Make a folder the workspace: `switchWorkspace`, the one rebuild everything goes through. */
+function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }: SwitchDeps) {
+  const { ui, set, bump, derive, memo, timers, zenBack, scrolls, sidebarSeen, flash, stopRolling } = c
+
   /**
    * Make `root` the workspace, opening `note` (when it still exists) at Preview line `top`; a
    * `single` note (opened on its own, as from the CLI) links through its vault. Every workspace
    * rebuild goes through here: tree, link tree, switcher index, watcher, history.
    */
   const switchWorkspace = (root: string, note?: string | null, top = 0, single = false, geo?: Geometry) => {
-    try {
-      if (!statSync(root).isDirectory()) return flash(`not a folder: ${tildify(root)}`, "error")
-    } catch (e) {
-      return flash(`cannot open ${tildify(root)}: ${errText(e)}`, "error")
-    }
+    const problem = rootProblem(root)
+    if (problem) return flash(problem, "error")
     const keepNote = note && existsSync(note) ? note : null
     dropAsk() // the big set below closes the switcher
     recordProject()
@@ -96,6 +112,15 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
     recordProject()
     flash(`opened ${projectName(projectRoot(ui.current))}`)
   }
+
+  return switchWorkspace
+}
+
+type SwitchWorkspace = ReturnType<typeof makeSwitch>
+
+/** The `o` opener. */
+function makeOpener(c: AppCtx, switchWorkspace: SwitchWorkspace) {
+  const { ui, set, derive, flash } = c
 
   /** New query: the highlight goes back to the first row. */
   const opType = (q: string) => {
@@ -144,6 +169,13 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
     switchWorkspace(dirname(r.path), r.path, 0, true)
   }
 
+  return { opType, opGo, openOpener, opComplete, opOpen }
+}
+
+/** The welcome page's recent rows and keys. */
+function makeWelcomeRows(c: AppCtx, switchWorkspace: SwitchWorkspace) {
+  const { ui, bump, derive, memo, welcome, flash } = c
+
   /** The welcome page's recent rows (header first) and how many of them are on screen. */
   const welcomeRows = () => {
     const rows = memo.recents(ui.current.root, welcome.current.gen, ui.current.watchGen)
@@ -174,6 +206,13 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
     bump((x) => x + 1)
     return true
   }
+
+  return { welcomeRows, welcomeOpen, welcomeKey }
+}
+
+/** The welcome page's ink-in / steam animation. */
+function makeWelcomeMotion(c: AppCtx) {
+  const { ui, bump, W, H, timers, welcome, alive } = c
 
   // welcome: the wordmark and bowl ink in once (INK_MS frames) and the steam rises every STEAM_MS, until a key,
   // a resize or a note opening stops it for good (`stopWelcome`); with motion off it is drawn still and inked
@@ -206,7 +245,14 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
     timers.current.steam = setTimeout(step, INK_MS)
   }
 
-  return { recordProject, leave, opType, opGo, openOpener, opComplete, opOpen, welcomeRows, welcomeOpen, welcomeKey, stopWelcome, animateWelcome }
+  return { stopWelcome, animateWelcome }
+}
+
+/** The workspace over the app context; a switch drops the ask, the vault index and the change baseline first. */
+export function makeWorkspace(c: AppCtx, drops: Pick<SwitcherControl, "dropAsk" | "dropIndex">, delta: Pick<AIJobs, "dropDelta">) {
+  const { recordProject, leave } = makeRecents(c)
+  const switchWorkspace = makeSwitch(c, { recordProject, ...drops, ...delta })
+  return { recordProject, leave, ...makeOpener(c, switchWorkspace), ...makeWelcomeRows(c, switchWorkspace), ...makeWelcomeMotion(c) }
 }
 /** What `makeWorkspace` gives App and the effects. */
 export type WorkspaceControl = ReturnType<typeof makeWorkspace>
