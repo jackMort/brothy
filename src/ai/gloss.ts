@@ -1,7 +1,6 @@
 // Zen gloss, pure: which text is sent for the section under the reading line, how it is asked for, how the sheet reads.
 
 import { clip, cleanSummary, type ChatReq } from "./client"
-import * as aiConfig from "./config"
 import type { GlossStyle } from "./config"
 import { truncate, width, wrap } from "../lib/text"
 import { cached } from "../ui/nav"
@@ -19,7 +18,7 @@ export const GLOSS_CHARS = 12_000
 const GLOSS_MIN_WORDS = 20
 
 /** `ai.gloss` in config.json (validated by ai/config.ts); anything unrecognised is `explain`. */
-export const parseGlossStyle = (raw: unknown): GlossStyle => aiConfig.parseGlossStyle(raw, "explain")
+export { parseGlossStyle } from "./config"
 
 const PLAIN = "Plain text only: no markdown, no lists, no preamble."
 const SAME = "Write in the same language as the section."

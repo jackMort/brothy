@@ -32,3 +32,18 @@ jobs:
       - run: bun test
       - run: bun run build
       - run: ./brothy --version
+
+  # fallow audit gates only what the pull request introduces (the 85 older complexity findings are inherited and reported, not failed);
+  # it needs the base branch's history, hence the full checkout, and the version is pinned so a new release cannot turn a run red
+  fallow:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bunx fallow@3.37.0 audit --base origin/${{ github.base_ref }}

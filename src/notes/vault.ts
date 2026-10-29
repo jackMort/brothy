@@ -153,7 +153,7 @@ export async function refreshIndex(
 
 export const SWITCH_CAP = { notes: 30, headings: 30, text: 50, perNote: 3 }
 /** Fewest code points a query needs before note bodies are searched. */
-export const TEXT_MIN = 3
+const TEXT_MIN = 3
 /** Code points of context kept before a text match. */
 const BEFORE = 20
 

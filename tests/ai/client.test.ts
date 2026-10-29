@@ -74,7 +74,7 @@ describe("normalizeAI", () => {
   test("gloss: explain, simplify or translate:<language tag>; anything else is dropped alone", () => {
     for (const g of ["explain", "simplify", "translate:pl", "translate:pt-BR", "translate:zh-Hant-TW", "translate:fil"]) {
       expect(normalizeAI({ provider: "openai", model: "m", gloss: g })?.gloss as string).toBe(g)
-      expect(parseGlossStyle(g) as string).toBe(g)
+      expect(parseGlossStyle(g, null) as string).toBe(g)
     }
     for (const g of [
       "Explain",
@@ -91,7 +91,7 @@ describe("normalizeAI", () => {
       ["explain"],
     ]) {
       expect(normalizeAI({ provider: "openai", model: "m", gloss: g })).toEqual({ provider: "openai", model: "m" })
-      expect(parseGlossStyle(g)).toBeUndefined()
+      expect(parseGlossStyle(g, null)).toBeUndefined()
     }
   })
 })

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "ignoreDependencies": [
+    // pinned for astro:assets (`<Image>` in Shot.astro): Astro's default image service loads it by name, so nothing imports it
+    "sharp"
+  ],
+  "ignoreExports": [
+    // the private brothy-studio repo imports it (`@brothy/scripts/session`): scripts/session.tsx keeps its exports
+    { "file": "scripts/session.tsx", "exports": ["frameKey"] },
+    // same name, different list: `remember` in notes/vault.ts moves a path to the front of the recent ring
+    { "file": "src/notes/projects.ts", "exports": ["remember"] }
+  ],
+  "duplicates": {
+    "ignoredClones": [
+      // scripts/session.tsx (frozen, the golden harness) and tests/helpers/theme.ts: both turn a captured colour into #rrggbb, and session.tsx exports no helper
+      "dup:8e0ad40b:2",
+      // site/src/themes.ts and src/theme/themepick.ts group palettes by family: the site builds with only site/ deps and themepick.ts imports the app
+      "dup:b55517e2:2"
+    ]
+  }
+}

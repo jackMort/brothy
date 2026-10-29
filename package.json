@@ -32,7 +32,8 @@
     "build": "bun build --compile src/cli.tsx --outfile brothy",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "knip": "knip"
+    "knip": "knip",
+    "fallow": "bunx fallow@3.37.0"
   },
   "dependencies": {
     "@opentui/core": "0.5.17",

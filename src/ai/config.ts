@@ -50,13 +50,13 @@ export type GlossStyle = "explain" | "simplify" | `translate:${string}`
 /** a BCP 47-ish language tag: `pl`, `pt-BR`, `zh-Hant-TW` */
 const LANG_TAG = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
 
-/** A valid style, else `fallback`; with no fallback, undefined (`normalizeAI` drops the field then). */
-export function parseGlossStyle(v: unknown): GlossStyle | undefined
-export function parseGlossStyle(v: unknown, fallback: GlossStyle): GlossStyle
-export function parseGlossStyle(v: unknown, fallback?: GlossStyle): GlossStyle | undefined {
+/** A valid style, else `fallback`: `explain` by default, or `null` for none (`normalizeAI` then drops the field). */
+export function parseGlossStyle(v: unknown, fallback?: GlossStyle): GlossStyle
+export function parseGlossStyle(v: unknown, fallback: null): GlossStyle | undefined
+export function parseGlossStyle(v: unknown, fallback: GlossStyle | null = "explain"): GlossStyle | undefined {
   if (v === "explain" || v === "simplify") return v
   if (typeof v === "string" && v.startsWith("translate:") && LANG_TAG.test(v.slice("translate:".length))) return v as GlossStyle
-  return fallback
+  return fallback ?? undefined
 }
 
 /** An http(s) base without userinfo (fetch refuses credentials in URLs). */
@@ -91,7 +91,7 @@ export function normalizeAI(raw: unknown): AIConfig | undefined {
       if (HEADER_NAME.test(k) && k.toLowerCase() !== "authorization" && typeof v === "string" && !/[\r\n\0]/.test(v)) h[k] = v
     if (Object.keys(h).length) out.headers = h
   }
-  const gloss = parseGlossStyle(raw.gloss)
+  const gloss = parseGlossStyle(raw.gloss, null)
   if (gloss) out.gloss = gloss
   return out
 }
