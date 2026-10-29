@@ -6,5 +6,11 @@ export const MAX_JOBS = 3
 export type JobKind = "tldr" | "gloss" | "delta" | "ask"
 /** The `jobs` key of a job: `<kind>:<id>`, or the bare kind without an id. */
 export const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
+/** A request in flight: its kind, the raw text streamed so far and how to cancel it. */
+export interface Job {
+  kind: JobKind
+  raw: string
+  abort: AbortController
+}
 /** streamed summary text re-renders at most this often (ms) */
 export const AI_FRAME = 100
