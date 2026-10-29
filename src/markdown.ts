@@ -343,8 +343,11 @@ interface Ctx {
   headingStyle: HeadingStyle
 }
 
+/** The `bars` and `ladder` heading marks, h1 to h6. */
 const BARS = ["█ ", "▌ ", "┃ ", "│ ", "┆ ", "┊ "]
 const LADDER = ["██ ", "▓▓▓ ", "▒▒▒▒ ", "░░░░░ ", "░░░░░░ ", "░░░░░░░ "]
+/** The `rules` leads of h1 to h3; deeper headings are bare text. */
+const RULE_LEADS = ["━━ ", "── ", "╌╌ "]
 
 function emitRows(ctx: Ctx, rows: Span[][], extra: Partial<Line> = {}) {
   rows.forEach((spans, i) => ctx.lines.push(i === 0 ? { spans, ...extra } : { spans }))
@@ -366,6 +369,41 @@ function muteQuote(ctx: Ctx, from: number) {
         s.fg = t.textMuted
         s.attr = (s.attr ?? 0) | A.ITALIC
       }
+}
+
+/**
+ * A heading's rows in `ctx.headingStyle`, the first one tagged `heading: idx`. `styled` is the title in `fg`, the
+ * depth's color; `p` prefixes the first row and `rest` the others. A mark before the title indents the wrapped rows
+ * by its display width.
+ */
+function headingRows(ctx: Ctx, depth: number, styled: Span[], fg: string, idx: number, max: number, p: Span[], rest: Span[]) {
+  const { t } = ctx
+  const style = ctx.headingStyle
+  const emit = (rows: Span[][]) => emitRows(ctx, rows, { heading: idx })
+  const marked = (mark: Span, w = max) => wrap(styled, w, [...p, mark], [...rest, { text: pad(width(mark.text)) }])
+  if (style === "bars" || style === "ladder") return emit(marked({ text: (style === "bars" ? BARS : LADDER)[depth - 1]!, fg }))
+  if (style === "rules") {
+    if (depth > 3) return emit(wrap(styled, max, p, rest))
+    const lead = { text: RULE_LEADS[depth - 1]!, fg: [fg, t.border, t.textMuted][depth - 1]! }
+    if (depth === 3) return emit(marked(lead))
+    // h1 and h2 run a rule to the right edge: a rule row reserves " " and one fill cell, so the last row always has room for its fill
+    const rows = marked(lead, max - 2)
+    const last = rows[rows.length - 1]!
+    last.push({ text: " " }, { text: (depth === 1 ? "━" : "─").repeat(Math.max(0, max - spanWidth(last) - 1)), fg: depth === 1 ? fg : t.border })
+    return emit(rows)
+  }
+  // classic: h2 and deeper show their `#`s; an h1 is underlined across the measure, `━` under its text and `─` after
+  if (depth > 1) return emit(marked({ text: "#".repeat(depth) + " ", fg: t.textMuted, attr: A.BOLD }))
+  const rows = wrap(styled, max, p, rest)
+  emit(rows)
+  const tw = Math.max(0, Math.min(max - spanWidth(rest), maxOf(rows.map((r) => spanWidth(r) - spanWidth(rest)))))
+  ctx.lines.push({
+    spans: [
+      ...rest,
+      { text: "━".repeat(tw), fg },
+      { text: "─".repeat(Math.max(0, max - spanWidth(rest) - tw)), fg: t.border },
+    ],
+  })
 }
 
 /** A callout: a header row (icon, title, ▾ when it has a fold marker), then the body under a bar in the kind color. */
@@ -411,40 +449,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/\u00a0/g, " "), line: ctx.lines.length })
         blank(ctx, rest)
         ctx.headings[idx]!.line = ctx.lines.length
-        const p = pre()
-        const style = ctx.headingStyle
-        const rule = style === "rules" && h.depth <= 2
-        if (style === "bars" || style === "ladder") {
-          const text = (style === "bars" ? BARS : LADDER)[h.depth - 1]!
-          emitRows(ctx, wrap(styled, max, [...p, { text, fg }], [...rest, { text: pad(text.length) }]), { heading: idx })
-        } else if (rule || (style === "rules" && h.depth === 3)) {
-          const lead = h.depth === 1 ? "━━ " : h.depth === 2 ? "── " : "╌╌ "
-          const mark = { text: lead, fg: h.depth === 1 ? fg : h.depth === 2 ? t.border : t.textMuted }
-          // a rule row reserves " " and one fill cell, so the last row always has room for its fill
-          const rows = wrap(styled, rule ? max - 2 : max, [...p, mark], [...rest, { text: pad(lead.length) }])
-          if (rule) {
-            const last = rows[rows.length - 1]!
-            last.push({ text: " " }, { text: (h.depth === 1 ? "━" : "─").repeat(Math.max(0, max - spanWidth(last) - 1)), fg: h.depth === 1 ? fg : t.border })
-          }
-          emitRows(ctx, rows, { heading: idx })
-        } else if (style === "rules") {
-          emitRows(ctx, wrap(styled, max, p, rest), { heading: idx })
-        } else if (h.depth === 1) {
-          const rows = wrap(styled, max, p, rest)
-          emitRows(ctx, rows, { heading: idx })
-          const tw = Math.max(0, Math.min(max - spanWidth(rest), maxOf(rows.map((r) => spanWidth(r) - spanWidth(rest)))))
-          ctx.lines.push({
-            spans: [
-              ...rest,
-              { text: "━".repeat(tw), fg: fg },
-              { text: "─".repeat(Math.max(0, max - spanWidth(rest) - tw)), fg: t.border },
-            ],
-          })
-        } else {
-          const mark = { text: "#".repeat(h.depth) + " ", fg: t.textMuted, attr: A.BOLD }
-          const rows = wrap(styled, max, [...p, mark], [...rest, { text: pad(h.depth + 1) }])
-          emitRows(ctx, rows, { heading: idx })
-        }
+        headingRows(ctx, h.depth, styled, fg, idx, max, pre(), rest)
         ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
         break
       }
