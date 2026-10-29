@@ -3,7 +3,7 @@
 // Outline parity: these headings are Preview's, in the same order, so anything Preview hides is skipped here too.
 
 import type { Token, Tokens } from "marked"
-import type { Theme } from "./theme"
+import { themes, type Theme } from "./theme"
 
 import { parseFrontMatter } from "./frontmatter"
 import { lexInline, lexOutline, normalize, parseWikilink, scanComments } from "./lexer"
@@ -24,11 +24,14 @@ interface SourceHeading {
  * fences (matching char and length), ATX and setext headings, quotes. `lines` have their
  * `%%comments%%` cut (`scanComments().kept`), so titles and structure match what Preview lexes.
  */
+/** A heading's outline title from its inline tokens: Preview's text (NBSP read as a space), which no theme changes. */
+const titleOf = (tokens: Token[] | undefined, t: Theme) => plainOf(inline(tokens, t)).replace(/\u00a0/g, " ")
+
 export function sourceStructureLines(lines: string[], from: number, t: Theme, hidden: boolean[]) {
   const headings = new Map<number, SourceHeading>()
   const fenceLines = new Set<number>()
   const codeLines = new Set<number>()
-  const title = (raw: string) => plainOf(inline(lexInline(raw), t)).replace(/\u00a0/g, " ")
+  const title = (raw: string) => titleOf(lexInline(raw), t)
   // fences and paragraphs remember their quote depth: a quote ending closes a fence, and an
   // underline only makes a setext heading at its paragraph's depth
   let fence: { ch: string; len: number; depth: number } | null = null
@@ -183,7 +186,7 @@ export function sourceStructureLexed(lines: string[], from: number, t: Theme, hi
       switch (tok.type) {
         case "heading": {
           const h = tok as Tokens.Heading
-          const title = plainOf(inline(h.tokens, t)).replace(/\u00a0/g, " ")
+          const title = titleOf(h.tokens, t)
           headings.set(at[line]!, { depth: h.depth, text: title, end: at[line + rowsOf() - 1] ?? at[line]!, setext: !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(tok.raw) })
           break
         }
@@ -238,8 +241,11 @@ export interface SourceScan {
   text: string[]
 }
 
-/** A note's outline and searchable lines without laying it out (the switcher's index). */
-export function sourceScan(src: string, t: Theme): SourceScan {
+/**
+ * A note's outline and searchable lines without laying it out (the switcher's index). The theme only feeds the
+ * title pass, whose text no theme changes, so callers without one (sections, the vault index) can leave it out.
+ */
+export function sourceScan(src: string, t: Theme = themes[0]!): SourceScan {
   src = normalize(src)
   const fmLines = parseFrontMatter(src).offset
   const lines = src.split("\n")

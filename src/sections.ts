@@ -7,7 +7,6 @@
 import { parseFrontMatter } from "./frontmatter"
 import { normalize, scanComments } from "./lexer"
 import { sourceScan } from "./source"
-import { themes } from "./theme"
 
 /** Heading text as a lenient key: lowercase, `#` dropped, dashes and runs of spaces as one space, punctuation removed. */
 export const headingKey = (s: string) =>
@@ -32,7 +31,7 @@ export interface NoteSection {
 
 /** `[0]` is the lead-in, `[i + 1]` heading `i`. */
 export function noteSections(src: string): NoteSection[] {
-  const { headings, text } = sourceScan(src, themes[0]!) // the theme only colors fences
+  const { headings, text } = sourceScan(src)
   const n = text.length
   const seen = new Map<string, number>()
   const ordOf = (key: string) => {
