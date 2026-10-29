@@ -1,17 +1,20 @@
-// The app's store: the one mutable UI object every handler reads at call time, its parts and the app's tunables. No React.
+// The app's store: the one mutable UI object every handler reads at call time, its parts and the app's tunables.
+// No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
 import type { AIConfig } from "../ai"
 import type { AskState, Candidate } from "../ask"
-import type { View } from "../config"
+import { loadConfig, type View } from "../config"
 import type { Change, DeltaNote } from "../delta"
 import type { FileNode, TreeRow } from "../files"
-import type { History } from "../history"
+import { startHistory, type History } from "../history"
 import type { HeadingStyle } from "../markdown"
 import type { Geometry, LinkSpot } from "../nav"
 import type { ProjectEntry } from "../projects"
 import type { Toast } from "../status"
-import type { Glosses, Summaries } from "../summaries"
-import type { ThemePick } from "../themepick"
-import type { ZenConfig } from "../zen"
+import { loadSummaries, type Glosses, type Summaries } from "../summaries"
+import { themes } from "../theme"
+import { resolveTheme, type ThemePick } from "../themepick"
+import { stdinWorkspace, workspace } from "../workspace"
+import { normalizeZen, type ZenConfig } from "../zen"
 import type { Ctx } from "./keymap"
 
 /** Sidebar j/k opens the file under the cursor once it rests this long. */
@@ -154,4 +157,65 @@ export interface UI {
   baseline: Baseline | null
   /** the explanation running or shown for `baseline.path` */
   delta: DeltaState | null
+}
+
+/** The store at mount: the workspace from the CLI's root and note (or the piped document), the saved config, the summary cache. */
+export function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined): UI {
+  const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
+  const openPath = w.openPath
+  const cfg = loadConfig()
+  return {
+    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
+    themePick: null,
+    ...w,
+    filter: "",
+    filterTyping: false,
+    cursor: 0,
+    listTop: { files: 0, outline: 0, info: 0 },
+    infoSeen: "",
+    reload: 0,
+    watchGen: 0,
+    source: false,
+    focus: "doc",
+    hidden: cfg.sidebar?.hidden ?? false,
+    wide: cfg.wide ?? false,
+    minimap: cfg.minimap ?? true,
+    headings: cfg.headings ?? "classic",
+    transparent: transparent ?? cfg.transparent ?? false,
+    motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
+    drawerOpen: false,
+    view: piped ? "outline" : (cfg.sidebar?.view ?? "files"),
+    hl: 0,
+    prompt: null,
+    labels: null,
+    query: "",
+    matchLine: null,
+    help: false,
+    helpTop: 0,
+    outlineFilter: "",
+    outlineCur: 0,
+    infoCur: 0,
+    zen: false,
+    zenCfg: normalizeZen(cfg.zen),
+    zenOrig: null,
+    zenRow: 0,
+    switcher: null,
+    opener: null,
+    recent: openPath ? [openPath] : [],
+    history: startHistory(openPath),
+    indexing: null,
+    ixVer: 0,
+    rolling: false,
+    ghostAt: null,
+    reloadedAt: null,
+    toast: null,
+    hintAt: null,
+    hintCtx: "doc",
+    ai: cfg.ai ?? null,
+    summaries: loadSummaries(),
+    glosses: null,
+    gloss: null,
+    baseline: null,
+    delta: null,
+  }
 }

@@ -10,11 +10,11 @@ import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProper
 import { safeLine } from "./spans"
 import { Row } from "./app/Row"
 import { AI_FRAME, MAX_JOBS, jobKey, type JobKind } from "./app/ai-jobs"
-import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, type FileRow, type Focus, type Spot, type UI } from "./app/store"
+import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, type FileRow, type Focus, type Spot, type UI, initUI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { MAX_BYTES } from "./stdin"
 import { readDoc, type DocFile } from "./doc"
-import { STDIN, projectRoot, stdinWorkspace, workspace } from "./workspace"
+import { STDIN, projectRoot, workspace } from "./workspace"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
 import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, fitHits, hitSpans as markHits, usePointer, type PickerItem } from "./overlay"
 import { helpLayout } from "./help"
@@ -31,7 +31,7 @@ import { watchPath } from "./watch"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
 import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, resolveAI, shortModel, stripThink, summarize, type AIConfig, type AITarget, type Failure } from "./ai"
 import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askCandidates, askLocate, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, type AskState, type Candidate } from "./ask"
-import { isFresh, loadGlosses, loadSummaries, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
+import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
 import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, glossTarget, parseGlossStyle, type GlossState, type GlossStyle, type GlossTarget } from "./gloss"
 import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type ToastKind } from "./status"
 import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type OutlineRow, type SummaryState, type SummaryView } from "./panel"
@@ -71,66 +71,6 @@ const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, row
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
-
-function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined): UI {
-  const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
-  const openPath = w.openPath
-  const cfg = loadConfig()
-  return {
-    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
-    themePick: null,
-    ...w,
-    filter: "",
-    filterTyping: false,
-    cursor: 0,
-    listTop: { files: 0, outline: 0, info: 0 },
-    infoSeen: "",
-    reload: 0,
-    watchGen: 0,
-    source: false,
-    focus: "doc",
-    hidden: cfg.sidebar?.hidden ?? false,
-    wide: cfg.wide ?? false,
-    minimap: cfg.minimap ?? true,
-    headings: cfg.headings ?? "classic",
-    transparent: transparent ?? cfg.transparent ?? false,
-    motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
-    drawerOpen: false,
-    view: piped ? "outline" : (cfg.sidebar?.view ?? "files"),
-    hl: 0,
-    prompt: null,
-    labels: null,
-    query: "",
-    matchLine: null,
-    help: false,
-    helpTop: 0,
-    outlineFilter: "",
-    outlineCur: 0,
-    infoCur: 0,
-    zen: false,
-    zenCfg: normalizeZen(cfg.zen),
-    zenOrig: null,
-    zenRow: 0,
-    switcher: null,
-    opener: null,
-    recent: openPath ? [openPath] : [],
-    history: startHistory(openPath),
-    indexing: null,
-    ixVer: 0,
-    rolling: false,
-    ghostAt: null,
-    reloadedAt: null,
-    toast: null,
-    hintAt: null,
-    hintCtx: "doc",
-    ai: cfg.ai ?? null,
-    summaries: loadSummaries(),
-    glosses: null,
-    gloss: null,
-    baseline: null,
-    delta: null,
-  }
-}
 
 /**
  * Screen rows: top line, gap (H ≥ 28), body (panel + document), ghost line, progress line.
