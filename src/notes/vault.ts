@@ -35,7 +35,7 @@ export const emptyIndex = (): VaultIndex => ({ docs: new Map() })
 export function foldSame(s: string): string {
   const l = s.toLowerCase()
   if (l.length === s.length) return l
-  return s.replace(/[^]/gu, (c) => {
+  return s.replace(/[\s\S]/gu, (c) => {
     const x = c.toLowerCase()
     return x.length === c.length ? x : c
   })
