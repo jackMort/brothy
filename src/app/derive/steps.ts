@@ -77,13 +77,12 @@ function changeBlock(s: UI, base: UI["baseline"], changes: readonly Change[] | n
   const dJob = dl ? jobs.get(jobKey("delta", dl.path)) : undefined
   const live = dl && dJob ? memo.partial(dJob.raw, dl.changes) : null
   // loading, else the reply while nothing changed since the explained text, else the idle list
-  return dl && dJob
-    ? { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
-    : dl?.result && changes !== null && !changes.length // null: too large to compare, not unchanged
-      ? { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
-      : base && changes?.length
-        ? { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
-        : null
+  if (dl && dJob) return { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
+  // null: too large to compare, not unchanged
+  if (dl?.result && changes !== null && !changes.length)
+    return { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
+  if (base && changes?.length) return { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
+  return null
 }
 
 /** A live reload's changes: the open note against the text it had when it opened (memory only), and the Changed block. */
