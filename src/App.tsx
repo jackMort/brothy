@@ -23,7 +23,7 @@ import { STEAM_MS, STILL_TICK, WELCOME_RECENTS, welcomeFit } from "./welcome"
 import { INK_MS, INK_STEPS } from "./chrome"
 import { fsDirIO, loadProjects, openRows, projectName, remember as rememberProject, saveProjects, tildify, type OpenRow, type ProjectEntry } from "./projects"
 import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, isStop, refreshIndex, nextSection, recentSection, remember, searchVault, stepRow, switchRows, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit, type VaultIndex } from "./vault"
-import { MINI_COLS, MINI_MIN_W, MINI_W, miniCells, miniColors, miniInk, miniJump } from "./minimap"
+import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniInk, miniJump } from "./minimap"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "./peek"
 import { filterFamilies, onlyMode, paneLines, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, sampleView, themeSplit, type ThemePick } from "./themepick"
 import { VIEWS, loadConfig, saveConfig, type Config, type SidebarConfig, type View } from "./config"
@@ -35,7 +35,7 @@ import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askCandidate
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
 import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, glossTarget, parseGlossStyle, type GlossState, type GlossStyle, type GlossTarget } from "./gloss"
 import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type ToastKind } from "./status"
-import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type OutlineRow, type SummaryState, type SummaryView } from "./panel"
+import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type SummaryState, type SummaryView } from "./panel"
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, diffSections, hhmm, parseDelta, quoteNeedle, reloadToast, type Change, type DeltaNote } from "./delta"
 import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
@@ -77,8 +77,8 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const dims = useRef({ W, H })
   dims.current = { W, H }
 
-  const ui = useRef<UI>(null as unknown as UI)
-  if (!ui.current) ui.current = initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion)
+  // a ref-like box built once, on the first render: handlers read `ui.current` at call time
+  const [ui] = useState(() => ({ current: initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion) }))
   const [, bump] = useState(0)
   const set = (patch: Partial<UI>) => {
     Object.assign(ui.current, patch)
@@ -1970,7 +1970,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
 
   // ---------------------------------------------------- render
   const d = derive()
-  const { s, L, t, file, doc, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, question, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win, sheet } = d
+  const { s, L, t, file, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, question, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win, sheet } = d
   const { SW, bodyH, CW, CH, padL } = L
   const { filter, cursor, query, prompt, help } = s
 
