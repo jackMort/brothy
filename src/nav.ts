@@ -10,9 +10,9 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 /** Case-insensitive match ranges, as offsets into `text` itself (no lowercased copy). */
 export function matchRanges(text: string, q: string): [number, number][] {
   if (!q) return []
-  const re = new RegExp(escapeRe(q.replace(/ /g, " ")), "giu")
+  const re = new RegExp(escapeRe(q.replace(/\u00a0/g, " ")), "giu")
   const out: [number, number][] = []
-  for (const m of text.replace(/ /g, " ").matchAll(re)) out.push([m.index, m.index + m[0].length])
+  for (const m of text.replace(/\u00a0/g, " ").matchAll(re)) out.push([m.index, m.index + m[0].length])
   return out
 }
 

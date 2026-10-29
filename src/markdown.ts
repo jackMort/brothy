@@ -415,7 +415,7 @@ function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> 
         break
       case "codespan":
         out.push({
-          text: safe((tok as Tokens.Codespan).text).replace(/ /g, " "),
+          text: safe((tok as Tokens.Codespan).text).replace(/ /g, "\u00a0"),
           fg: t.accent,
           bg: t.backgroundElement,
         })
@@ -446,7 +446,7 @@ function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> 
       }
       case "image": {
         const im = tok as Tokens.Image
-        out.push({ text: `▣ ${safe(im.text) || "image"}`, fg: t.textMuted, attr: A.ITALIC })
+        out.push({ text: `▣\u00a0${safe(im.text) || "image"}`, fg: t.textMuted, attr: A.ITALIC })
         break
       }
       case "br":
@@ -631,7 +631,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         const fg = colors[h.depth - 1] ?? t.text
         const styled = text.map((s) => ({ ...s, fg: s.bg ? s.fg : fg, attr: (s.attr ?? 0) | A.BOLD }))
         const idx = ctx.headings.length
-        ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/ /g, " "), line: ctx.lines.length })
+        ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/\u00a0/g, " "), line: ctx.lines.length })
         blank(ctx, rest)
         ctx.headings[idx]!.line = ctx.lines.length
         const p = pre()
@@ -941,7 +941,7 @@ export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}
   return {
     lines: ctx.lines,
     headings: ctx.headings,
-    plain: ctx.lines.map((l) => plainOf(l.spans).replace(/ /g, " ").toLowerCase()),
+    plain: ctx.lines.map((l) => plainOf(l.spans).replace(/\u00a0/g, " ").toLowerCase()),
     pending: ctx.pending,
     links: ctx.sink.links,
   }
