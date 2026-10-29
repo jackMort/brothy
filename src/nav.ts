@@ -1,7 +1,7 @@
 // Pure navigation helpers for App: search, scroll anchoring, sidebar cursor, key specs.
-import type { Span } from "./markdown"
+import type { Span } from "./spans"
+import { clamp, pushSpan, segmenter, superscript, width } from "./text"
 import type { Theme } from "./theme"
-import { superscript } from "./glyphs"
 
 // ------------------------------------------------------------- search
 
@@ -10,9 +10,9 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 /** Case-insensitive match ranges, as offsets into `text` itself (no lowercased copy). */
 export function matchRanges(text: string, q: string): [number, number][] {
   if (!q) return []
-  const re = new RegExp(escapeRe(q.replace(/ /g, " ")), "giu")
+  const re = new RegExp(escapeRe(q.replace(/\u00a0/g, " ")), "giu")
   const out: [number, number][] = []
-  for (const m of text.replace(/ /g, " ").matchAll(re)) out.push([m.index, m.index + m[0].length])
+  for (const m of text.replace(/\u00a0/g, " ").matchAll(re)) out.push([m.index, m.index + m[0].length])
   return out
 }
 
@@ -99,7 +99,7 @@ export function remapTop(top: number, from: Geometry, to: Geometry): number {
 
 /** First row of a `h`-tall window over `len` rows, moved as little as possible to show row `i`. */
 export function keepVisible(top: number, i: number, h: number, len: number): number {
-  let t = Math.max(0, Math.min(top, len - h))
+  let t = clamp(top, 0, len - h)
   if (i < t) t = i
   if (i >= t + h) t = i - h + 1
   return Math.max(0, t)
@@ -116,7 +116,7 @@ export function relocate(
   if (!paths.length) return { cursor: 0, sideTop: 0 }
   let c = -1
   for (const p of prefer) if (p && (c = paths.indexOf(p)) >= 0) break
-  if (c < 0) c = Math.max(0, Math.min(cursor, paths.length - 1))
+  if (c < 0) c = clamp(cursor, 0, paths.length - 1)
   return { cursor: c, sideTop: keepVisible(sideTop, c, height, paths.length) }
 }
 
@@ -126,7 +126,7 @@ export function relocate(
 export function thumb(top: number, h: number, n: number): { start: number; size: number } | null {
   if (h <= 0 || n <= h) return null
   const size = Math.max(1, Math.round((h * h) / n))
-  const t = Math.max(0, Math.min(top, n - h))
+  const t = clamp(top, 0, n - h)
   return { start: Math.round(((h - size) * t) / (n - h)), size }
 }
 
@@ -209,8 +209,6 @@ export interface LinkSpot {
 /** Home-row-first keys for link labels. */
 export const LABEL_KEYS = "asdjklghreui"
 
-const labelSeg = new Intl.Segmenter(undefined, { granularity: "grapheme" })
-
 /** Links on rows `first`..`first+h`, each once (a wrapped link at its first visible row), in reading order. */
 export function visibleLinks(lines: { spans: Span[] }[], first: number, h: number): LinkSpot[] {
   const seen = new Set<number>()
@@ -222,7 +220,7 @@ export function visibleLinks(lines: { spans: Span[] }[], first: number, h: numbe
         seen.add(s.link)
         out.push({ link: s.link, row, col })
       }
-      col += Bun.stringWidth(s.text)
+      col += width(s.text)
     }
   }
   return out
@@ -242,18 +240,14 @@ export function narrowLabels(labels: string[], typed: string): number[] {
 
 /** Draw `text` over the cells from column `col`, keeping the row's width; a wide grapheme it cuts becomes spaces. */
 export function overlayAt(spans: Span[], col: number, text: string, style: Omit<Span, "text">): Span[] {
-  const end = col + Bun.stringWidth(text)
+  const end = col + width(text)
   const out: Span[] = []
-  const add = (s: Span) => {
-    const last = out[out.length - 1]
-    if (last && last.fg === s.fg && last.bg === s.bg && last.attr === s.attr && last.link === s.link) last.text += s.text
-    else out.push({ ...s })
-  }
+  const add = (s: Span) => pushSpan(out, s)
   let x = 0
   let placed = false
   for (const s of spans)
-    for (const { segment: g } of labelSeg.segment(s.text)) {
-      const gw = Bun.stringWidth(g)
+    for (const { segment: g } of segmenter.segment(s.text)) {
+      const gw = width(g)
       if (x + gw <= col || x >= end) add({ ...s, text: g })
       else {
         if (x < col) add({ ...s, text: " ".repeat(col - x) })

@@ -1,3 +1,6 @@
+// Styled text: the `Span` every renderer returns, its attribute flags `A`, and `safe`/`safeLine`, which keep
+// what reaches the terminal from injecting escapes or hiding text. Pure; a leaf (markdown, highlight and text build on it).
+
 export const A = {
   NONE: 0,
   BOLD: 1 << 0,

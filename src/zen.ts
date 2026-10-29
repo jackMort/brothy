@@ -1,7 +1,10 @@
 // Zen mode: settings model and pure helpers (sections, typewriter, pages, dimming, timing).
 
 import type { Span } from "./spans"
+import { clamp } from "./text"
 import { mix, type Theme } from "./theme"
+
+export { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, fadeStep } from "./status"
 
 export type Flow = "scroll" | "pages"
 
@@ -31,7 +34,6 @@ export const ZEN_DEFAULTS: ZenConfig = {
 export const ZEN_WPM = { min: 120, max: 400, step: 20 } as const
 export const ZEN_MEASURE = { min: 60, max: 100, step: 4 } as const
 
-const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 const BOOLS = ["spotlight", "typewriter", "ghost", "prompter"] as const
 
 /** The valid fields of a raw `zen` config value (numbers rounded and clamped); everything else is dropped. */
@@ -185,18 +187,4 @@ export function prompterRate(lines: string[], wpm: number): number {
   }
   const avg = Math.max(1, filled ? total / filled : 1)
   return wpm / 60 / avg
-}
-
-/** Fade timing: full for a hold, then `GHOST_STEPS` steps of `GHOST_STEP` ms, then hidden. Zen's top line holds `GHOST_HOLD`. */
-export const GHOST_HOLD = 1500
-export const GHOST_STEP = 120
-export const GHOST_STEPS = 4
-/** Key hints hold this long after a context change before they fade. */
-export const HINT_HOLD = 2000
-
-/** 0 = full, 4 = faintest, null = hidden: full for `hold` ms after the trigger, then the fade steps. */
-export function fadeStep(elapsed: number, hold = GHOST_HOLD): 0 | 1 | 2 | 3 | 4 | null {
-  if (elapsed < hold) return 0
-  const k = 1 + Math.floor((elapsed - hold) / GHOST_STEP)
-  return k <= GHOST_STEPS ? (k as 1 | 2 | 3 | 4) : null
 }

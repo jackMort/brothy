@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { superscript } from "../src/glyphs"
+import { superscript } from "../src/text"
 
 test("superscript writes digits as superscripts", () => {
   expect(superscript(1)).toBe("¹")

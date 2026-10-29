@@ -1,36 +1,15 @@
-// Status rows (top line, ghost line, progress line): pure string helpers. Span styling stays in App.
+// Status rows (top line, ghost line, progress line) and toasts: pure string helpers and the fade timing. Span styling stays in App.
 
 import { basename } from "node:path"
 import { stem } from "./files"
-import { width as sw } from "./markdown"
-import { fadeStep } from "./zen"
+import { truncate, width } from "./text"
 
-/** Cut `s` to `max` columns, ending in `…` when it had to be cut. */
-export function truncate(s: string, max: number): string {
-  if (max <= 0) return ""
-  if (sw(s) <= max) return s
-  let out = ""
-  for (const ch of s) {
-    if (sw(out + ch) > max - 1) break
-    out += ch
-  }
-  return out + "…"
-}
-
-/** Cut `s` from the left to `max` columns, starting with `…` when it had to be cut. */
-export function truncateLeft(s: string, max: number): string {
-  if (max <= 0) return ""
-  if (sw(s) <= max) return s
-  const chars = [...s]
-  let out = ""
-  for (let i = chars.length - 1; i >= 0; i--) {
-    if (sw(chars[i] + out) > max - 1) break
-    out = chars[i] + out
-  }
-  return "…" + out
-}
+export { truncate, truncateLeft } from "./text"
 
 // ------------------------------------------------------------- top line
+
+/** Equal as titles: case and surrounding spaces ignored. */
+const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 /** The note's name: front-matter `title` (quotes, `*`, `_` and backticks stripped), else the file name without extension. */
 export function noteTitle(props: readonly (readonly [string, string | string[]])[], path: string): string {
@@ -57,10 +36,10 @@ export interface Location {
 
 const SEP = 3 // " / " and " › "
 const locWidth = (l: Location) =>
-  (l.folder ? sw(l.folder) + SEP : 0) +
-  sw(l.title) +
-  l.ancestors.reduce((n, a) => n + SEP + sw(a), 0) +
-  (l.section ? SEP + sw(l.section) : 0)
+  (l.folder ? width(l.folder) + SEP : 0) +
+  width(l.title) +
+  l.ancestors.reduce((n, a) => n + SEP + width(a), 0) +
+  (l.section ? SEP + width(l.section) : 0)
 
 /**
  * The top line's `folder / Title › ancestors › section`, fitted to `room` columns. `trail` is
@@ -70,8 +49,7 @@ const locWidth = (l: Location) =>
  * title is cut.
  */
 export function locationParts(dir: string, title: string, trail: string[], room: number): Location {
-  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-  const path = trail.length && same(trail[0]!, title) ? trail.slice(1) : trail.slice()
+  const path = trail.length && sameText(trail[0]!, title) ? trail.slice(1) : trail.slice()
   const l: Location = { folder: dir === "." ? "" : dir, title, ancestors: path.slice(0, -1), section: path.at(-1) ?? "" }
   const segs = l.folder ? l.folder.split("/") : []
   while (locWidth(l) > room && segs.length > 1) {
@@ -81,7 +59,7 @@ export function locationParts(dir: string, title: string, trail: string[], room:
   if (locWidth(l) > room) l.folder = ""
   while (locWidth(l) > room && l.ancestors.length) l.ancestors.shift()
   if (locWidth(l) > room && l.section) {
-    const left = room - (locWidth(l) - sw(l.section))
+    const left = room - (locWidth(l) - width(l.section))
     l.section = left >= 8 ? truncate(l.section, left) : ""
   }
   if (locWidth(l) > room) l.title = truncate(l.title, room)
@@ -114,10 +92,10 @@ export function stateCluster(
   if (o.query) items.push({ kind: "search", query: truncate(o.query, 20), idx: o.matchIdx, count: o.count })
   if (o.source) items.push({ kind: "source" })
   if (o.wide && !o.zen) items.push({ kind: "wide" })
-  const total = () => items.reduce((n, it, i) => n + (i ? GAP : 0) + sw(clusterText(it)), 0)
+  const total = () => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
   while (total() > room && items.length && items[items.length - 1]!.kind !== "search") items.pop()
   const s = items[0]
-  if (s?.kind === "search") while (total() > room && sw(s.query) > 4) s.query = truncate(o.query, sw(s.query) - 1)
+  if (s?.kind === "search") while (total() > room && width(s.query) > 4) s.query = truncate(o.query, width(s.query) - 1)
   return items
 }
 
@@ -130,7 +108,7 @@ export function stateCluster(
 export function shrinkFolder(folder: string, room: number): string {
   if (!folder || room <= 0) return ""
   const segs = folder.split("/")
-  const fits = (s: string) => sw(s) <= room
+  const fits = (s: string) => width(s) <= room
   const full = segs.join(" / ")
   if (fits(full)) return full
   if (segs.length > 2) {
@@ -153,7 +131,7 @@ export const WORDMARK: readonly string[] = [
   "██▄██ ██▄█▄ ██▀██  ██   ██▄██ ▀███▀ ",
   "██▄█▀ ██ ██ ▀███▀  ██   ██ ██   █   ",
 ]
-export const WORDMARK_W = Math.max(...WORDMARK.map((l) => sw(l)))
+export const WORDMARK_W = Math.max(...WORDMARK.map((l) => width(l)))
 
 /** The wordmark when a `w`×`h` area can hold it, else null. */
 export function fitWordmark(w: number, h: number): readonly string[] | null {
@@ -172,8 +150,7 @@ export function logoState(o: { gone: boolean; reloadedAt: number | null; now: nu
 
 /** Is the note's own main heading (the first heading equal to `title`) on screen, lines `[top, top + rows)`? */
 export function mainHeadingVisible(hs: readonly { text: string; line: number }[], title: string, top: number, rows: number): boolean {
-  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-  const h = hs.find((x) => same(x.text, title))
+  const h = hs.find((x) => sameText(x.text, title))
   return !!h && h.line >= top && h.line < top + rows
 }
 
@@ -189,7 +166,7 @@ export interface HeaderLayout {
   rule: { col: number; width: number } | null
 }
 
-const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + sw(clusterText(it)), 0)
+const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
 
 /**
  * Row 0 beyond the logo (always column 0): the folder over the panel column (inline panel only),
@@ -221,7 +198,7 @@ export function headerLayout(o: {
       : null
   const cluster = stateCluster(
     { query: o.query, matchIdx: o.matchIdx, count: o.count, source: o.source, wide: o.wide, zen: o.zen },
-    Math.max(0, o.textWidth - SEP - Math.min(sw(o.title), 12)),
+    Math.max(0, o.textWidth - SEP - Math.min(width(o.title), 12)),
   )
   const cw = clusterW(cluster)
   const room = o.textWidth - cw - (cluster.length ? SEP : 0)
@@ -242,7 +219,7 @@ export function headerLayout(o: {
 const fraction = (top: number, maxTop: number) => (maxTop === 0 ? 1 : Math.max(0, Math.min(1, top / maxTop)))
 
 /** Columns of the progress line drawn as read. */
-export const fillWidth = (top: number, maxTop: number, width: number) => Math.round(Math.max(0, width) * fraction(top, maxTop))
+export const fillWidth = (top: number, maxTop: number, cols: number) => Math.round(Math.max(0, cols) * fraction(top, maxTop))
 
 /** Progress label parts: `pre` (teleprompter), `main` (percentage or page), `rest` (time left). App colors them. */
 export function progressLabel(o: {
@@ -262,13 +239,27 @@ export function progressLabel(o: {
 
 // ------------------------------------------------------------- ghost line
 
+/** Fade timing: full for a hold, then `GHOST_STEPS` steps of `GHOST_STEP` ms, then hidden. Zen's top line holds `GHOST_HOLD`. */
+export const GHOST_HOLD = 1500
+export const GHOST_STEP = 120
+export const GHOST_STEPS = 4
+/** Key hints hold this long after a context change before they fade. */
+export const HINT_HOLD = 2000
+
+/** 0 = full, 4 = faintest, null = hidden: full for `hold` ms after the trigger, then the fade steps. */
+export function fadeStep(elapsed: number, hold = GHOST_HOLD): 0 | 1 | 2 | 3 | 4 | null {
+  if (elapsed < hold) return 0
+  const k = 1 + Math.floor((elapsed - hold) / GHOST_STEP)
+  return k <= GHOST_STEPS ? (k as 1 | 2 | 3 | 4) : null
+}
+
 export interface HintItem {
   key: string
   word: string
   /** dropped before any other hint when they do not all fit */
   spare?: boolean
 }
-const hintW = (h: HintItem) => sw(h.key) + (h.word ? 1 + sw(h.word) : 0)
+const hintW = (h: HintItem) => width(h.key) + (h.word ? 1 + width(h.word) : 0)
 
 /** The leading hints that fit in `room` columns (3-space gaps); the rest are dropped. */
 export function fitHints(items: HintItem[], room: number): HintItem[] {
@@ -316,6 +307,6 @@ export const toastIcon = (t: Toast) => (t.kind === "ok" ? "✓" : t.kind === "er
 /** The too-small-terminal message as lines that each fit `W` columns, whole words only; the longest form that fits wins. */
 export function tooSmall(W: number, H: number, need = "60×14"): string[] {
   const forms = [[`terminal too small (${W}×${H}) · need ${need}`], [`too small (${W}×${H})`, `need ${need}`], [`need ${need}`], [need]]
-  const fit = forms.find((f) => f.length <= Math.max(1, H) && f.every((l) => sw(l) <= W))
+  const fit = forms.find((f) => f.length <= Math.max(1, H) && f.every((l) => width(l) <= W))
   return fit ?? [truncate(need, Math.max(1, W))]
 }

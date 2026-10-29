@@ -4,8 +4,9 @@ import type { Theme } from "./theme"
 import { isMarkdown } from "./files"
 import { codeSpans, type HighlightRequest } from "./highlight"
 import { A, safe, safeLine, type Span } from "./spans"
+import { graphemes, pushSpan, spanWidth, width } from "./text"
 
-export { A }
+export { A, width }
 export type { Span }
 
 export interface Line {
@@ -42,8 +43,6 @@ export interface FrontMatter {
   body: string
   offset: number // number of source lines consumed by front matter
 }
-
-export const width = (s: string) => Bun.stringWidth(s)
 
 /** Drop a BOM and unify line endings so every later stage can split on "\n". */
 export const normalize = (s: string) => safe(s.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"))
@@ -277,20 +276,6 @@ export function parseProperties(src: string): Property[] {
 
 // ---------------------------------------------------------------- wrapping
 
-const same = (a: Span, b: Span) => a.fg === b.fg && a.bg === b.bg && (a.attr ?? 0) === (b.attr ?? 0) && a.link === b.link
-
-function push(spans: Span[], s: Span) {
-  if (!s.text) return
-  const last = spans[spans.length - 1]
-  if (last && same(last, s)) last.text += s.text
-  else spans.push({ ...s })
-}
-
-const spanWidth = (spans: Span[]) => spans.reduce((n, s) => n + width(s.text), 0)
-
-const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" })
-const graphemes = (s: string) => Array.from(segmenter.segment(s), (x) => x.segment)
-
 /**
  * Word-wrap styled spans to `max` columns. `first`/`rest` are prefixes drawn
  * on the first and following rows (indentation, bullets, quote bars).
@@ -316,7 +301,7 @@ export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[
     for (const g of graphemes(text)) {
       const gw = width(g)
       if (w + gw > max && w > base) newRow()
-      push(row, { ...s, text: g })
+      pushSpan(row, { ...s, text: g })
       w += gw
     }
   }
@@ -346,13 +331,13 @@ export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[
       const sp = pendingSpace ? 1 : 0
       if (w > base && w + sp + pw > max) newRow()
       else if (pendingSpace) {
-        push(row, pendingSpace)
+        pushSpan(row, pendingSpace)
         w += 1
       }
       pendingSpace = null
       if (pw > max - base) place(s, part)
       else {
-        push(row, { ...s, text: part })
+        pushSpan(row, { ...s, text: part })
         w += pw
       }
     }
@@ -415,7 +400,7 @@ function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> 
         break
       case "codespan":
         out.push({
-          text: safe((tok as Tokens.Codespan).text).replace(/ /g, " "),
+          text: safe((tok as Tokens.Codespan).text).replace(/ /g, "\u00a0"),
           fg: t.accent,
           bg: t.backgroundElement,
         })
@@ -446,7 +431,7 @@ function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> 
       }
       case "image": {
         const im = tok as Tokens.Image
-        out.push({ text: `▣ ${safe(im.text) || "image"}`, fg: t.textMuted, attr: A.ITALIC })
+        out.push({ text: `▣\u00a0${safe(im.text) || "image"}`, fg: t.textMuted, attr: A.ITALIC })
         break
       }
       case "br":
@@ -631,7 +616,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         const fg = colors[h.depth - 1] ?? t.text
         const styled = text.map((s) => ({ ...s, fg: s.bg ? s.fg : fg, attr: (s.attr ?? 0) | A.BOLD }))
         const idx = ctx.headings.length
-        ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/ /g, " "), line: ctx.lines.length })
+        ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/\u00a0/g, " "), line: ctx.lines.length })
         blank(ctx, rest)
         ctx.headings[idx]!.line = ctx.lines.length
         const p = pre()
@@ -864,10 +849,10 @@ function truncate(spans: Span[], max: number): Span[] {
     for (const g of graphemes(s.text)) {
       const gw = width(g)
       if (w + gw > max - 1) {
-        push(out, { ...s, text: "…" })
+        pushSpan(out, { ...s, text: "…" })
         return out
       }
-      push(out, { ...s, text: g })
+      pushSpan(out, { ...s, text: g })
       w += gw
     }
   }
@@ -941,7 +926,7 @@ export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}
   return {
     lines: ctx.lines,
     headings: ctx.headings,
-    plain: ctx.lines.map((l) => plainOf(l.spans).replace(/ /g, " ").toLowerCase()),
+    plain: ctx.lines.map((l) => plainOf(l.spans).replace(/\u00a0/g, " ").toLowerCase()),
     pending: ctx.pending,
     links: ctx.sink.links,
   }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { render, renderSource, width } from "../src/markdown"
+import { render, renderSource } from "../src/markdown"
 import { safe, safeLine } from "../src/spans"
+import { width } from "../src/text"
 import { themes } from "../src/theme"
 
 const t = themes[0]!

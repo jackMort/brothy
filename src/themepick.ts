@@ -4,8 +4,10 @@
 // sample note rendered in the candidate theme on its own background. App holds the state and
 // applies the theme; nothing here saves config or re-themes the app.
 import { fuzzyHits } from "./files"
-import { A, render, width as sw, type HeadingStyle, type Rendered, type Span } from "./markdown"
+import { render, type HeadingStyle, type Rendered } from "./markdown"
 import { PEEK_MIN_W } from "./peek"
+import { A, type Span } from "./spans"
+import { clamp, spanWidth, width } from "./text"
 import { contrast, themes, type Theme } from "./theme"
 
 export type ThemeMode = Theme["mode"]
@@ -114,7 +116,7 @@ export const pickMode = (p: ThemePick, mode?: ThemeMode, fams: readonly Family[]
   onlyMode(pickFamily(p, fams)) ? p : { ...p, mode: mode ?? (p.mode === "dark" ? "light" : "dark") }
 
 /** Name column: the longest family name plus a 2-cell gap before the board's cells. */
-export const NAME_W = Math.max(...FAMILIES.map((f) => sw(f.name))) + 2
+export const NAME_W = Math.max(...FAMILIES.map((f) => width(f.name))) + 2
 /** List width with the pane: board text 33 = name 12 + a 10-cell slot + a gap + a slot (`boardLayout`). */
 export const THEME_LIST_W = 41
 /** Popup width without the pane. */
@@ -128,11 +130,11 @@ export const THEME_NARROW_W = 48
  */
 export function themeSplit(W: number, H: number, ph: number): { split: boolean; width: number; listW: number; peekW: number; rows: number } {
   if (W < PEEK_MIN_W) {
-    const width = Math.min(THEME_NARROW_W, W - 2)
-    return { split: false, width, listW: width - 2, peekW: 0, rows: ph }
+    const popupW = Math.min(THEME_NARROW_W, W - 2)
+    return { split: false, width: popupW, listW: popupW - 2, peekW: 0, rows: ph }
   }
-  const width = Math.min(W - 12, 116)
-  return { split: true, width, listW: THEME_LIST_W, peekW: width - 2 - THEME_LIST_W - 1 - 6, rows: Math.max(ph, H - 10) }
+  const popupW = Math.min(W - 12, 116)
+  return { split: true, width: popupW, listW: THEME_LIST_W, peekW: popupW - 2 - THEME_LIST_W - 1 - 6, rows: Math.max(ph, H - 10) }
 }
 
 /** The board's modes, left to right (the switch's order too). */
@@ -190,8 +192,8 @@ export function boardFrames(f: Family, mode: ThemeMode, orig: string, sel: boole
 
 /** `word` centred in `w` cells, struck through in `fg`. */
 const struckWord = (word: string, w: number, fg: string): Span[] => {
-  const l = (w - sw(word)) >> 1
-  return [{ text: " ".repeat(l) }, { text: word, fg, attr: A.STRIKE }, { text: " ".repeat(w - l - sw(word)) }]
+  const l = (w - width(word)) >> 1
+  return [{ text: " ".repeat(l) }, { text: word, fg, attr: A.STRIKE }, { text: " ".repeat(w - l - width(word)) }]
 }
 
 /**
@@ -212,18 +214,18 @@ export function boardHeader(t: Theme, shown: ThemeMode, L: BoardLayout): Span[] 
   const out: Span[] = [{ text: " ".repeat(L.nameW) }]
   BOARD_MODES.forEach((m, i) => {
     if (i) out.push({ text: " ".repeat(L.gap) })
-    const l = (SLOT_W - sw(m)) >> 1
-    out.push({ text: " ".repeat(l) }, { text: m, fg: m === shown ? t.primary : t.textMuted, attr: A.BOLD }, { text: " ".repeat(SLOT_W - l - sw(m)) })
+    const l = (SLOT_W - width(m)) >> 1
+    out.push({ text: " ".repeat(l) }, { text: m, fg: m === shown ? t.primary : t.textMuted, attr: A.BOLD }, { text: " ".repeat(SLOT_W - l - width(m)) })
   })
   return out
 }
 
 /** First list row shown: the highlight kept centred, as the picker always has. */
-export const listTop = (hl: number, rows: number, n: number) => Math.max(0, Math.min(n - rows, hl - (rows >> 1)))
+export const listTop = (hl: number, rows: number, n: number) => clamp(hl - (rows >> 1), 0, n - rows)
 
 /** The board's first row on screen: the held `top` (clamped), else centred on the highlight `hl`. */
 export const pickTop = (p: ThemePick, hl: number, rows: number, n: number) =>
-  p.top === null ? listTop(Math.max(0, hl), rows, n) : Math.max(0, Math.min(n - rows, p.top))
+  p.top === null ? listTop(Math.max(0, hl), rows, n) : clamp(p.top, 0, n - rows)
 
 /** The pane's note: one of each thing a theme colours (marks, links, code, callout, tasks, table). */
 export const SAMPLE = [
@@ -257,10 +259,9 @@ const SHORT: Partial<Record<(typeof ROLES)[number], string>> = { textMuted: "mut
 export function roleWords(t: Theme, w: number): Span[] {
   const line = (roles: readonly (typeof ROLES)[number][], labels: typeof LABEL, gap: string): Span[] =>
     roles.flatMap((r, i) => [...(i ? [{ text: gap }] : []), { text: labels[r] ?? r, fg: t[r] }])
-  const width = (sp: Span[]) => sp.reduce((n, s) => n + sw(s.text), 0)
   for (const [labels, gap] of [[LABEL, "  "], [LABEL, " "], [SHORT, " "]] as const) {
     const sp = line(ROLES, labels, gap)
-    if (width(sp) <= w) return sp
+    if (spanWidth(sp) <= w) return sp
   }
   return line(ROLES.slice(0, 6), SHORT, " ")
 }
@@ -272,8 +273,8 @@ export function roleWords(t: Theme, w: number): Span[] {
  */
 export function paneLines(t: Theme, view: Rendered, w: number, h: number): Span[][] {
   const right = `text ${contrast(t.text, t.background).toFixed(1)}:1`
-  const head: Span[] = sw(t.name) + 1 + sw(right) <= w
-    ? [{ text: t.name, fg: t.textMuted }, { text: " ".repeat(w - sw(t.name) - sw(right)) }, { text: right, fg: t.textMuted }]
+  const head: Span[] = width(t.name) + 1 + width(right) <= w
+    ? [{ text: t.name, fg: t.textMuted }, { text: " ".repeat(w - width(t.name) - width(right)) }, { text: right, fg: t.textMuted }]
     : [{ text: t.name, fg: t.textMuted }]
   const out: Span[][] = [head, roleWords(t, w), []]
   for (const l of view.lines) {
@@ -281,7 +282,7 @@ export function paneLines(t: Theme, view: Rendered, w: number, h: number): Span[
       out.push(l.spans)
       continue
     }
-    const used = l.spans.reduce((n, s) => n + sw(s.text), 0)
+    const used = spanWidth(l.spans)
     out.push([...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - used)), bg: l.fill }])
   }
   return out.slice(0, h)
