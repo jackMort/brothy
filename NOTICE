@@ -28,10 +28,11 @@ licensed under the MIT License:
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
-The ayu, nightfox, nightowl, iceberg, oxocarbon, cyberdream, melange,
-synthwave84 and vesper palettes (and their '-light' twins: dayfox for nightfox,
-Light Owl for nightowl) are adapted from the following projects, each licensed
-under the MIT License with the same permission notice as above:
+The ayu, nightfox, nightowl, iceberg, oxocarbon, cyberdream and melange
+palettes (and their '-light' twins: dayfox for nightfox, Light Owl for
+nightowl), and the dark-only synthwave84 and vesper palettes, are adapted from
+the following projects, each licensed under the MIT License with the same
+permission notice as above:
 
   ayu (https://github.com/ayu-theme/ayu-colors)
     Copyright (c) Konstantin Pschera <me@kons.ch> (kons.ch)
