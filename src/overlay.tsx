@@ -264,6 +264,40 @@ export function PickerInput({
   )
 }
 
+/**
+ * List │ pane: `list` in a `listW` column, a `│` divider, then `lines` (cut to `rows`) in a `paneW` column. A
+ * `paneBg` paints the pane on a candidate's background; `paneKey` keeps boxes that differ in style apart.
+ */
+function SplitPane({ t, rows, listW, paneW, list, lines, paneKey, paneBg }: {
+  t: Theme
+  rows: number
+  listW: number
+  paneW: number
+  list: ReactNode
+  lines: Span[][]
+  paneKey?: string
+  paneBg?: string
+}) {
+  return (
+    <box style={{ flexDirection: "row", height: rows }}>
+      <box style={{ width: listW, flexShrink: 0 }}>{list}</box>
+      <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
+        {Array.from({ length: rows }, (_, i) => (
+          <Line key={i} spans={[{ text: "│", fg: t.border }]} />
+        ))}
+      </box>
+      <box
+        key={paneKey}
+        style={{ width: paneW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(paneBg ? { backgroundColor: paneBg } : {}) }}
+      >
+        {lines.slice(0, rows).map((spans, i) => (
+          <Line key={i} spans={spans} />
+        ))}
+      </box>
+    </box>
+  )
+}
+
 /** `C-p` popup: the query and one list of sections (Notes / Headings / Text, or Recent); controlled by App. */
 export function Switcher({
   t,
@@ -321,23 +355,7 @@ export function Switcher({
   return (
     <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
-      {split ? (
-        <box key="split" style={{ flexDirection: "row", height }}>
-          <box style={{ width: listW, flexShrink: 0 }}>{list}</box>
-          <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
-            {Array.from({ length: height }, (_, i) => (
-              <Line key={i} spans={[{ text: "│", fg: t.border }]} />
-            ))}
-          </box>
-          <box style={{ width: g.peekW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0 }}>
-            {peek!.slice(0, height).map((spans, i) => (
-              <Line key={i} spans={spans} />
-            ))}
-          </box>
-        </box>
-      ) : (
-        list
-      )}
+      {split ? <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={peek!} /> : list}
     </Overlay>
   )
 }
@@ -560,22 +578,17 @@ export function ThemePicker({
     <Overlay t={t} W={W} H={H} width={geo.width} title="Themes" note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Theme…" right={modeSwitch(t, shown, only)} onRight={(i) => !only && onMode?.(SWITCH_MODES[i]!)} width={geo.width} />
       {geo.split ? (
-        <box key="split" style={{ flexDirection: "row", height: geo.rows }}>
-          <box style={{ width: geo.listW, flexShrink: 0 }}>{list}</box>
-          <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
-            {Array.from({ length: geo.rows }, (_, i) => (
-              <Line key={i} spans={[{ text: "│", fg: t.border }]} />
-            ))}
-          </box>
-          <box
-            key={pane ? "pane" : "pane-none"}
-            style={{ width: geo.peekW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(pane ? { backgroundColor: pane.theme.background } : {}) }}
-          >
-            {(pane?.lines ?? []).slice(0, geo.rows).map((spans, i) => (
-              <Line key={i} spans={spans} />
-            ))}
-          </box>
-        </box>
+        <SplitPane
+          key="split"
+          t={t}
+          rows={geo.rows}
+          listW={geo.listW}
+          paneW={geo.peekW}
+          list={list}
+          lines={pane?.lines ?? []}
+          paneKey={pane ? "pane" : "pane-none"}
+          paneBg={pane?.theme.background}
+        />
       ) : (
         list
       )}
