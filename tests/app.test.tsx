@@ -225,6 +225,20 @@ test("esc clears the filter while typing; ⌫ on an empty query stops typing", a
   expect(await keys(s, "/", "type:p", "backspace", "backspace")).not.toContain("▏")
 })
 
+test("filter: ⌫ erases a whole character, never half of an emoji", async () => {
+  const s0 = await mount(pocs(), "other.md")
+  expect(await keys(s0, "tab", "/", "type:a", "😀")).toContain("/ a😀▏") // typeText splits the pair, so the emoji is one key
+  const f = await keys(s0, "backspace")
+  expect(f).toContain("/ a▏")
+  expect(f).not.toContain("\uFFFD")
+})
+
+test("find: ⌫ erases a whole character, never half of an emoji", async () => {
+  const f = await keys(await mount(pocs(), "other.md"), "/", "type:a", "😀", "backspace")
+  expect(f).toContain("a▏")
+  expect(f).not.toContain("\uFFFD")
+})
+
 test("while typing, j k 1 ? are text, not commands", async () => {
   const f = await keys(await mount(pocs(), "other.md"), "tab", "/", "type:jk1?")
   expect(f).toContain("/ jk1?")

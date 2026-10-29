@@ -2330,7 +2330,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     filterErase: () => {
       const v = filterText()
       if (!v) return filterStop(true)
-      filterType(v.slice(0, -1))
+      filterType([...v].slice(0, -1).join(""))
     },
 
     helpScroll: (k) => {
@@ -2349,7 +2349,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     },
     promptApply: () => promptSubmit(),
     promptClear: promptClose,
-    promptErase: () => promptType(ui.current.prompt!.value.slice(0, -1)),
+    promptErase: () => promptType([...ui.current.prompt!.value].slice(0, -1).join("")),
     swType: () => {},
     swMove: (k) => {
       const { swRows, swHl } = derive()
