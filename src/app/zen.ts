@@ -44,14 +44,17 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
     stopRolling()
     clearTimeout(timers.current.ghost)
     const s = ui.current
-    if (on && !s.zen && !s.source) {
-      const d = derive()
-      zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo }
+    if (on) {
+      if (!s.zen && !s.source) {
+        const d = derive()
+        zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo }
+      }
+      ensureGlosses()
+    } else {
+      if (zenBack.current) scrolls.current.set(zenBack.current.key, { ...zenBack.current })
+      zenBack.current = null
+      clearTimeout(timers.current.gloss)
     }
-    if (!on && zenBack.current) scrolls.current.set(zenBack.current.key, { ...zenBack.current })
-    if (!on) zenBack.current = null
-    if (on) ensureGlosses()
-    else clearTimeout(timers.current.gloss)
     set({ zen: on, ghostAt: null, filterTyping: false, ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : { gloss: null }) })
     if (on && ui.current.zenCfg.ghost) pokeGhost()
   }
