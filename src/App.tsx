@@ -1,9 +1,8 @@
 // The app's root: the store and refs, the context and feature factories rebuilt every render, the effects that need
 // this render's values, and the screen (zen or main) laid out from the parts in src/app/. Not pure.
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ensureHighlights } from "./markdown/highlight"
-import { pendingHighlights, type Geometry, type Rendered } from "./markdown/render"
+import { useRef, useState, type ReactNode } from "react"
+import type { Geometry, Rendered } from "./markdown/render"
 import { makeAIJobs } from "./app/ai-jobs"
 import { makeDerive, makeMemo, type Derived } from "./app/derive"
 import { makeCtx, type Timers, type WelcomeState } from "./app/ctx"
@@ -11,7 +10,7 @@ import { makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
-import { useAppEffects } from "./app/effects"
+import { useAppEffects, useRenderEffects } from "./app/effects"
 import { makeActions } from "./app/actions"
 import { makePopups } from "./app/popups"
 import { panelBox } from "./app/Panel"
@@ -19,7 +18,7 @@ import { docBox, miniBox } from "./app/Document"
 import { gapRow, ghostLine, progressLine, topRow } from "./app/Chrome"
 import { findOverlay, helpOverlay, openOverlay, switchOverlay, themeOverlay, themePickView, zenOverlay } from "./app/Overlays"
 import { MIN_H, MIN_W, ZEN_DIM, initUI, type FileRow, type Job, type Spot, type UI } from "./app/store"
-import { PINNED, footerHints, type Ctx, type FooterState } from "./app/keymap"
+import { PINNED, footerHints, type FooterState } from "./app/keymap"
 import { STDIN } from "./notes/workspace"
 import { DRAWER_BELOW } from "./ui/layout"
 import { surface } from "./theme/theme"
@@ -93,14 +92,8 @@ export function App({
   const jobs = useRef(new Map<string, Job>())
   const askMemo = useRef(new Map<string, { queries: string[]; model: string }>())
   const rerankMemo = useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>())
-  /** the context the hints were last poked for */
-  const ctxSeen = useRef<Ctx | null>(null)
-  /** the note and section the gloss auto-show last ran for (null: outside zen) */
-  const glossSeen = useRef<string | null>(null)
   const alive = useRef(true)
   const hlSeen = useRef<Rendered | null>(null)
-  /** the theme sample whose code highlighting was last asked for */
-  const hlSample = useRef<Rendered | null>(null)
   const left = useRef(false)
   const welcome = useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H })
 
@@ -159,21 +152,7 @@ export function App({
   const miniEl = miniBox(ctx, d)
   const progressEl = progressLine(ctx, d)
 
-  // any context change (focus, view, zen, popup closed, typing ended) shows the new context's hints
   const ctxNow = currentCtx()
-  useEffect(() => {
-    if (ctxNow === ctxSeen.current) return
-    ctxSeen.current = ctxNow
-    pokeHints(ctxNow)
-  })
-
-  // zen gloss: runs when the reading line changes section (not on every scroll tick)
-  const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
-  useEffect(() => {
-    if (glossAt === glossSeen.current) return
-    glossSeen.current = glossAt
-    aiJobs.glossEntered()
-  })
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
   const footer = footerState(d)
@@ -184,17 +163,9 @@ export function App({
   const openEl = openOverlay(ctx, d, workspace)
   const findEl = findOverlay(ctx, d, popups)
   const pickView = themePickView(ctx, d)
-  const pickSample = pickView?.sample ?? null
-  // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
-  useEffect(() => {
-    if (!pickSample || pickSample === hlSample.current) return
-    hlSample.current = pickSample
-    const reqs = pendingHighlights(pickSample)
-    if (reqs.length)
-      ensureHighlights(reqs).then((changed) => {
-        if (changed && alive.current) set({ hl: ui.current.hl + 1 })
-      })
-  })
+  // zen gloss: runs when the reading line changes section (not on every scroll tick)
+  const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
+  useRenderEffects(ctx, { ctxNow, glossAt, sample: pickView?.sample ?? null }, { pokeHints, glossEntered: aiJobs.glossEntered })
   const themeEl = themeOverlay(ctx, d, pickView, popups)
   const zenEl = zenOverlay(ctx, d, zen)
 
