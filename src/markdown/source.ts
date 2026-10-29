@@ -3,13 +3,12 @@
 // Outline parity: these headings are Preview's, in the same order, so anything Preview hides is skipped here too.
 
 import type { Token } from "marked"
-import { themes, type Theme } from "../theme/theme"
-
-import { parseFrontMatter } from "./frontmatter"
-import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf } from "./lexer"
-import { CALLOUT_KINDS, calloutKind, calloutOf, inline, pad, plainOf, type Heading, type Line, type RenderOpts, type Rendered } from "./render"
 import { A, type Span } from "../lib/spans"
 import { wrap } from "../lib/text"
+import { type Theme, themes } from "../theme/theme"
+import { parseFrontMatter } from "./frontmatter"
+import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf } from "./lexer"
+import { CALLOUT_KINDS, calloutKind, calloutOf, type Heading, inline, type Line, pad, plainOf, type Rendered, type RenderOpts } from "./render"
 
 /** A heading found on source lines, keyed by its first line. */
 interface SourceHeading {

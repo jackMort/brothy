@@ -2,41 +2,41 @@
 // index it searches, opening what a row points at, and the peek pane's data. Not pure: `makeSwitcher` closes over the
 // app context.
 import { relative } from "node:path"
-import { shortModel, type Failure } from "../ai/client"
 import {
   ASK_MEMO,
   ASK_MIN,
-  RERANK_MEMO,
+  type AskState,
   askLocate,
   askRequest,
   parseQueries,
   parseRerank,
   putNewest,
   questionOf,
+  RERANK_MEMO,
   rerankRequest,
-  type AskState,
 } from "../ai/ask"
-import { folderCounts } from "../notes/files"
-import { keepHitVisible } from "../ui/nav"
-import { peekLines, peekWindow, switchSplit } from "../notes/peek"
+import { isFresh, type Summary, textHash } from "../ai/cache"
+import { type Failure, shortModel } from "../ai/client"
 import type { Rendered } from "../markdown/render"
-import { PEEK_MIN_W } from "../ui/geometry"
-import { errText } from "../ui/status"
-import { isFresh, textHash, type Summary } from "../ai/cache"
+import { folderCounts } from "../notes/files"
+import { peekLines, peekWindow, switchSplit } from "../notes/peek"
 import {
+  type AnswerRow,
   emptyIndex,
   firstHit,
   foldSame,
   fsIO,
   hitOrdinal,
   indexNote,
-  refreshIndex,
-  type AnswerRow,
   type NoteDoc,
+  refreshIndex,
   type SwitchRow,
   type TextHit,
 } from "../notes/vault"
-import { AI_OFF, makeJobs, type Jobs } from "./ai-jobs"
+import { PEEK_MIN_W } from "../ui/geometry"
+import { keepHitVisible } from "../ui/nav"
+import { errText } from "../ui/status"
+import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { A } from "../../src/lib/spans"
-import { artSpans, fitHits, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem } from "../../src/ui/rows"
 import { themes } from "../../src/theme/theme"
+import { artSpans, fitHits, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem } from "../../src/ui/rows"
 import { BIG, welcomeArt } from "../../src/ui/welcome"
 import { brothy } from "../helpers/theme"
 

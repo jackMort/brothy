@@ -1,8 +1,9 @@
 // Zen mode in the app: on and off, the `Z` settings popup, pages, manual scrolling, the Ghost top line and the
 // teleprompter. Not pure: `makeZen` closes over the app context (the settings model is ../zen.ts).
-import { GHOST_HOLD } from "../ui/status"
+
 import { clamp } from "../lib/text"
-import { ZEN_ROWS, normalizeZen, prompterRate, zenAdjust, type ZenConfig } from "../ui/zen"
+import { GHOST_HOLD } from "../ui/status"
+import { normalizeZen, prompterRate, ZEN_ROWS, type ZenConfig, zenAdjust } from "../ui/zen"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Focus } from "./store"

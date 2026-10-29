@@ -1,33 +1,33 @@
 // Popups and the empty state: Overlay frames the picker, switcher, theme, open, help and zen popups and Welcome; the
 // pure rows they draw live in rows.ts. All controlled by App.
-import { MouseButton, RGBA, type MouseEvent } from "@opentui/core"
+import { MouseButton, type MouseEvent, RGBA } from "@opentui/core"
 import { useRenderer } from "@opentui/react"
 import type { ReactNode } from "react"
-import { contrastOn, type Theme } from "../theme/theme"
-import { safe, safeLine, type Span } from "../lib/spans"
-import { WORDMARK } from "./status"
-import { spanWidth, truncate, truncateLeft, width as sw } from "../lib/text"
-import { chip, groupColor, keycaps } from "./chrome"
-import { BIG, artWidth, welcomeArt, welcomeFit } from "./welcome"
-import type { HelpLayout, HelpLine } from "./help"
+import { type Span, safe, safeLine } from "../lib/spans"
+import { spanWidth, width as sw, truncate, truncateLeft } from "../lib/text"
+import { switchSplit } from "../notes/peek"
 import type { OpenRow } from "../notes/projects"
 import type { SwitchRow } from "../notes/vault"
-import type { ZenRow } from "./zen"
-import { BODY_PAD, PANE_PAD, POPUP_INSET, ROW_PAD, ZEN_POPUP_W, innerWidth, popupWidth } from "./geometry"
-import { switchSplit } from "../notes/peek"
+import { contrastOn, type Theme } from "../theme/theme"
 import {
   BOARD_MODES,
-  FAMILIES,
-  SLOT_W,
   boardFrames,
   boardHeader,
   boardLayout,
   boardSlot,
+  FAMILIES,
   type FamilyHit,
+  SLOT_W,
   type ThemeMode,
   type themeSplit,
 } from "../theme/themepick"
-import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
+import { chip, groupColor, keycaps } from "./chrome"
+import { BODY_PAD, innerWidth, PANE_PAD, POPUP_INSET, popupWidth, ROW_PAD, ZEN_POPUP_W } from "./geometry"
+import type { HelpLayout, HelpLine } from "./help"
+import { artSpans, hitSpans, modeSwitch, openItem, type PickerItem, padTo, SWITCH_MODES, scrim, switchItem } from "./rows"
+import { WORDMARK } from "./status"
+import { artWidth, BIG, welcomeArt, welcomeFit } from "./welcome"
+import type { ZenRow } from "./zen"
 
 /** A single unwrapped row of spans (`app/Row.tsx` draws the document and panel through it); every span's text goes through `safe`. */
 export function Line({ spans, bg }: { spans: Span[]; bg?: string }) {

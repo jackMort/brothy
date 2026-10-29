@@ -3,6 +3,7 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   ancestorsOf,
+  type FileNode,
   findVault,
   folderCounts,
   folderOf,
@@ -12,7 +13,6 @@ import {
   scoreName,
   stem,
   visibleRows,
-  type FileNode,
 } from "../../src/notes/files"
 import { useTmp } from "../helpers/tmp"
 

@@ -1,17 +1,17 @@
 #!/usr/bin/env bun
-// The CLI entry: parse args, stat the path, check the TTY, read a piped document, create the renderer and mount <App>.
-import { createCliRenderer } from "@opentui/core"
-import { createRoot } from "@opentui/react"
 import { openSync, readdirSync, statSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { ReadStream } from "node:tty"
+// The CLI entry: parse args, stat the path, check the TTY, read a piped document, create the renderer and mount <App>.
+import { createCliRenderer } from "@opentui/core"
+import { createRoot } from "@opentui/react"
 import { App, VERSION } from "./App"
+import { isMarkdown } from "./notes/files"
+import { readCapped } from "./notes/stdin"
 import { parseArgs } from "./system/args"
 import { loadConfig } from "./system/config"
-import { readCapped } from "./notes/stdin"
-import { isMarkdown } from "./notes/files"
-import { WORDMARK } from "./ui/status"
 import { FAMILIES, onlyMode } from "./theme/themepick"
+import { WORDMARK } from "./ui/status"
 
 const die: (msg: string) => never = (msg) => {
   console.error(`brothy: ${msg}`)

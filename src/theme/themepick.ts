@@ -3,13 +3,14 @@
 // the board (a `dark` / `light` column per family, each cell a specimen in that theme's own roles) and the pane's
 // sample note rendered in the candidate theme on its own background. App holds the state and
 // applies the theme; nothing here saves config or re-themes the app.
-import { fuzzyHits } from "../notes/files"
-import { PEEK_MIN_W, SPLIT_ROWS_MARGIN, innerWidth, paneWidth, popupWidth, splitWidth } from "../ui/geometry"
-import { render, type Rendered } from "../markdown/render"
-import type { HeadingStyle } from "../markdown/heading-style"
+
 import { A, type Span } from "../lib/spans"
 import { clamp, spanWidth, width } from "../lib/text"
-import { contrast, themes, type Theme } from "./theme"
+import type { HeadingStyle } from "../markdown/heading-style"
+import { type Rendered, render } from "../markdown/render"
+import { fuzzyHits } from "../notes/files"
+import { innerWidth, PEEK_MIN_W, paneWidth, popupWidth, SPLIT_ROWS_MARGIN, splitWidth } from "../ui/geometry"
+import { contrast, type Theme, themes } from "./theme"
 
 export type ThemeMode = Theme["mode"]
 

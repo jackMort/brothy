@@ -1,9 +1,9 @@
 // App: the C-p switcher and its peek pane.
-import { expect, test, spyOn } from "bun:test"
+import { expect, spyOn, test } from "bun:test"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import * as vaultModule from "../../src/notes/vault"
-import { filler, keys, OLLAMA, onBg, PRIMARY, sleep, waitFrame, useAppHarness } from "./helpers"
+import { filler, keys, OLLAMA, onBg, PRIMARY, sleep, useAppHarness, waitFrame } from "./helpers"
 
 const { tmp, mount, aiConfig, seedSummary } = useAppHarness()
 

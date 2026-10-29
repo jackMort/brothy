@@ -1,18 +1,19 @@
 // The workspace in the app: the recent-projects record, `switchWorkspace` (every rebuild after the start), the `o` opener
 // and the welcome page (its recent rows, keys and ink-in / steam animation). Not pure: `makeWorkspace` closes over the
 // app context.
-import type { KeyEvent } from "@opentui/core"
+
 import { existsSync, statSync } from "node:fs"
 import { dirname } from "node:path"
-import { INK_MS, INK_STEPS } from "../ui/chrome"
-import { startHistory } from "../notes/history"
+import type { KeyEvent } from "@opentui/core"
 import type { Geometry } from "../markdown/render"
-import { keepHitVisible } from "../ui/nav"
-import { loadProjects, projectName, remember, saveProjects, tildify, type OpenRow } from "../notes/projects"
-import { errText } from "../ui/status"
+import { startHistory } from "../notes/history"
+import { loadProjects, type OpenRow, projectName, remember, saveProjects, tildify } from "../notes/projects"
 import { firstHit } from "../notes/vault"
-import { STEAM_MS, welcomeFit } from "../ui/welcome"
 import { projectRoot, workspace } from "../notes/workspace"
+import { INK_MS, INK_STEPS } from "../ui/chrome"
+import { keepHitVisible } from "../ui/nav"
+import { errText } from "../ui/status"
+import { STEAM_MS, welcomeFit } from "../ui/welcome"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { SwitcherControl } from "./switcher"

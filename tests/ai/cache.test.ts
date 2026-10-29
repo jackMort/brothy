@@ -2,24 +2,24 @@ import { describe, expect, test } from "bun:test"
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
-import { PROMPT_V } from "../../src/ai/config"
 import {
   CACHE_CAP,
-  GLOSS_CAP,
-  loadGlosses,
-  saveGlosses,
-  type Gloss,
   cacheFile,
   cachePath,
+  GLOSS_CAP,
+  type Gloss,
   isFresh,
   loadCache,
+  loadGlosses,
   loadSummaries,
   pruneSummaries,
+  type Summary,
   saveCache,
+  saveGlosses,
   saveSummaries,
   textHash,
-  type Summary,
 } from "../../src/ai/cache"
+import { PROMPT_V } from "../../src/ai/config"
 import { useXdgDir } from "../helpers/env"
 
 const cache = useXdgDir("XDG_CACHE_HOME")

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { render } from "../../src/markdown/render"
-import { renderSource } from "../../src/markdown/source"
 import { lineText, safe, safeLine } from "../../src/lib/spans"
 import { width } from "../../src/lib/text"
+import { render } from "../../src/markdown/render"
+import { renderSource } from "../../src/markdown/source"
 import { brothy } from "../helpers/theme"
 
 const t = brothy

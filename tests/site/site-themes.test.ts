@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { themes } from "../../src/theme/theme"
 import { families, headScript, onlyModes, siteThemesCss } from "../../site/src/themes"
+import { themes } from "../../src/theme/theme"
 
 const css = siteThemesCss()
 const block = (sel: string) => {

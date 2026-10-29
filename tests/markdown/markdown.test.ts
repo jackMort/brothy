@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { rankNotes, scanTree, visibleRows, folderCounts } from "../../src/notes/files"
+import { join } from "node:path"
+import { width, wrap } from "../../src/lib/text"
 import { parseFrontMatter, parseProperties } from "../../src/markdown/frontmatter"
 import { HEADING_STYLES, type HeadingStyle } from "../../src/markdown/heading-style"
 import { render } from "../../src/markdown/render"
 import { renderSource } from "../../src/markdown/source"
 import { stats, stripCode, wordStats } from "../../src/markdown/stats"
-import { width, wrap } from "../../src/lib/text"
+import { folderCounts, rankNotes, scanTree, visibleRows } from "../../src/notes/files"
 import { contrast, themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
-import { join } from "node:path"
 
 const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))

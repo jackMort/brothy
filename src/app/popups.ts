@@ -1,10 +1,11 @@
 // What the popups and the panel filter row do to the store: Find in Document, the `t` theme picker, the help sheet's
 // scroll and the filter's typing. Not pure: `makePopups` closes over the app context.
-import { helpLayout } from "../ui/help"
-import { keepVisible } from "../ui/nav"
+
 import { clamp } from "../lib/text"
 import { themes } from "../theme/theme"
 import { filterFamilies, pickIndex, pickStart, pickTheme, type ThemePick } from "../theme/themepick"
+import { helpLayout } from "../ui/help"
+import { keepVisible } from "../ui/nav"
 import type { AppCtx } from "./ctx"
 import { HELP_GROUPS } from "./keymap"
 

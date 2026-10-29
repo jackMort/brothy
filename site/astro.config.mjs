@@ -1,7 +1,7 @@
-import { defineConfig } from "astro/config"
+import { mkdirSync, writeFileSync } from "node:fs"
 import starlight from "@astrojs/starlight"
 import { ExpressiveCodeTheme } from "@astrojs/starlight/expressive-code"
-import { mkdirSync, writeFileSync } from "node:fs"
+import { defineConfig } from "astro/config"
 import { codeTheme, followPalette } from "./src/code-theme.mjs"
 import { pickerData, siteThemesCss } from "./src/themes"
 

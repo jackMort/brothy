@@ -1,16 +1,17 @@
 // The side panel: tab strip, rule, filter row and the Files / Outline / Info list, inline or as a drawer.
 // Not pure: drawn from the app context, and it writes the Outline and Info list tops (and `infoSeen`) back to the store
 // as it draws, so App calls it once per render, before its too-small return. Row spans come from panel.ts.
-import { MouseButton, type MouseEvent } from "@opentui/core"
+
 import { dirname } from "node:path"
+import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
-import type { View } from "../system/config"
-import { folderCounts, folderOf, stem } from "../notes/files"
-import { keepVisible, stripLayout, thumb } from "../ui/nav"
-import { fileRowSpans, infoSpans, outlineRowSpans } from "../ui/panel"
 import type { Span } from "../lib/spans"
 import { fmtNum, spanWidth, truncate, truncateLeft, width, wrap } from "../lib/text"
+import { folderCounts, folderOf, stem } from "../notes/files"
+import type { View } from "../system/config"
 import { contrastOn, mix, surface } from "../theme/theme"
+import { keepVisible, stripLayout, thumb } from "../ui/nav"
+import { fileRowSpans, infoSpans, outlineRowSpans } from "../ui/panel"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"

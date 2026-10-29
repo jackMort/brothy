@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { basename, join } from "node:path"
-import { STDIN, projectRoot, stdinWorkspace, workspace } from "../../src/notes/workspace"
+import { projectRoot, STDIN, stdinWorkspace, workspace } from "../../src/notes/workspace"
 import { useTmp } from "../helpers/tmp"
 
 const fixture = useTmp("brothy-workspace-")

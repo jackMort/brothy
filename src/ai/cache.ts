@@ -2,8 +2,8 @@
 // Split from client.ts so system/config.ts and client.ts do not import each other.
 import { mkdirSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
-import { PROMPT_V } from "./config"
 import { cacheHome, isRecord, readJSON, writeFileAtomic } from "../lib/json"
+import { PROMPT_V } from "./config"
 
 /** Every cache entry carries its time (epoch ms): the newest wins on merge, the oldest goes on prune. */
 export interface Stamped {

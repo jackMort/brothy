@@ -1,6 +1,6 @@
 // The Markdown tree: the scan (`scanTree`, the only disk access), its rows and counts, and the fuzzy name scoring and ranking the filters and switcher use.
 
-import { readdirSync, realpathSync, statSync, type Dirent } from "node:fs"
+import { type Dirent, readdirSync, realpathSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { safeLine } from "../lib/spans"
 

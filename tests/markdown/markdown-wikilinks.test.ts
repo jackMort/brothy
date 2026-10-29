@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { A } from "../../src/lib/spans"
+import { width } from "../../src/lib/text"
 import { parseWikilink, wikiLabel } from "../../src/markdown/lexer"
 import { render } from "../../src/markdown/render"
 import { renderSource } from "../../src/markdown/source"
-import { A } from "../../src/lib/spans"
-import { width } from "../../src/lib/text"
 import { brothy } from "../helpers/theme"
 
 const t = brothy

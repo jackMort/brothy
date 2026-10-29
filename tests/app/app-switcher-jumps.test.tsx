@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { type Setup, type aiStub, filler, keys, OLLAMA, W120, waitFor, waitFrame, useAppHarness } from "./helpers"
+import { type aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
 
 const { tmp, aiConfig, mountAI } = useAppHarness()
 

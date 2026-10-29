@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { aiStub, HINT_ROW, keys, OLLAMA, panelShown, W120, waitFor, waitFrame, withEnv, useAppHarness } from "./helpers"
+import { aiStub, HINT_ROW, keys, OLLAMA, panelShown, useAppHarness, W120, waitFor, waitFrame, withEnv } from "./helpers"
 
 const { cfgDir, tmp, mount, aiConfig, glossFile, glossCache, seedGloss, mountAI } = useAppHarness()
 

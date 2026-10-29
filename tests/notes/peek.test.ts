@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
-import { render } from "../../src/markdown/render"
-import { normalize } from "../../src/markdown/lexer"
-import { parseFrontMatter } from "../../src/markdown/frontmatter"
-import { PEEK_BYTES, PEEK_TLDR, peekLines, peekWindow, switchSplit, type PeekInput } from "../../src/notes/peek"
 import type { Span } from "../../src/lib/spans"
-import { brothy } from "../helpers/theme"
+import { parseFrontMatter } from "../../src/markdown/frontmatter"
+import { normalize } from "../../src/markdown/lexer"
+import { render } from "../../src/markdown/render"
+import { PEEK_BYTES, PEEK_TLDR, type PeekInput, peekLines, peekWindow, switchSplit } from "../../src/notes/peek"
 import { indexNote, type SwitchRow } from "../../src/notes/vault"
+import { brothy } from "../helpers/theme"
 
 const t = brothy
 const W = 40

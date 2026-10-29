@@ -5,10 +5,10 @@
 import { readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path"
-import { configPath } from "../system/config"
-import { SCORE_PATH, fuzzyHits, isMarkdown, scoreName } from "./files"
 import { isRecord, readJSON, writeFileAtomic } from "../lib/json"
 import type { Geometry } from "../markdown/render"
+import { configPath } from "../system/config"
+import { fuzzyHits, isMarkdown, SCORE_PATH, scoreName } from "./files"
 
 /** Entries kept; the oldest go first. */
 export const PROJECTS_CAP = 20

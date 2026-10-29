@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
+import { closestPair, HOUSE, HOUSE_APART, HOUSE_TEXT, ratios, worst } from "../../scripts/contrast"
 import { CLEAR, contrast, contrastOn, mix, surface, themeByName, themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
-import { closestPair, HOUSE, HOUSE_APART, HOUSE_TEXT, ratios, worst } from "../../scripts/contrast"
 
 test("contrastOn picks dark text on light backgrounds and light on dark", () => {
   expect(contrastOn("#ffffff")).toBe("#1a1a1a")

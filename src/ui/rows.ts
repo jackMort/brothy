@@ -1,15 +1,15 @@
 // Pure row builders for the popups: hit highlighting and fitting, switcher and open-picker rows, the theme mode switch,
 // the scrim colour and the welcome art spans. No React: overlay.tsx draws them.
 import { basename, dirname } from "node:path"
-import { A, safeLine, type Span } from "../lib/spans"
+import { A, type Span, safeLine } from "../lib/spans"
 import { spanWidth, truncate, truncateLeft, width } from "../lib/text"
-import { chip, inkAt, steamColors } from "./chrome"
 import { stem } from "../notes/files"
-import { tildify, type OpenRow } from "../notes/projects"
+import { type OpenRow, tildify } from "../notes/projects"
 import type { SwitchRow } from "../notes/vault"
-import type { ArtCell } from "./welcome"
-import { BOARD_MODES, type ThemeMode } from "../theme/themepick"
 import type { Theme } from "../theme/theme"
+import { BOARD_MODES, type ThemeMode } from "../theme/themepick"
+import { chip, inkAt, steamColors } from "./chrome"
+import type { ArtCell } from "./welcome"
 
 /** Wash drawn over the page behind a popup: black over dark themes, white over light ones. */
 export function scrim(t: Theme): { r: number; g: number; b: number; a: number } {

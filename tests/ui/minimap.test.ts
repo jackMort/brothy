@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { MINI_COLS, MINI_W, miniCells, miniColors, miniInk, miniJump } from "../../src/ui/minimap"
 import { contrast, themes } from "../../src/theme/theme"
+import { MINI_COLS, MINI_W, miniCells, miniColors, miniInk, miniJump } from "../../src/ui/minimap"
 
 test("the minimap is a gap, two braille cells and the find lane", () => {
   expect(MINI_COLS).toBe(2)

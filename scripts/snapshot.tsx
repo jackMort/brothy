@@ -1,10 +1,10 @@
 // Render the app headlessly and print the frame. Usage:
 //   bun scripts/snapshot.tsx [path] [--size 120x36] [--keys "j j tab 3"] [--json out.json] [--theme name] [--transparent] [--config dir] [--stdin file]
 // Config (theme, folds) lives in a throwaway temp dir unless --config <dir> points at a real XDG_CONFIG_HOME.
-import { resolve, dirname } from "node:path"
+
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { shutdownHighlighter } from "../src/markdown/highlight"
 import { frame, mount, press, settle, sleep } from "./session"
 

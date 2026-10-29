@@ -4,12 +4,12 @@
  * `ai` config block in `ai/config.ts`.
  */
 
-import type { AITarget } from "./config"
 import { isRecord } from "../lib/json"
-import { parseFrontMatter } from "../markdown/frontmatter"
-import { stripComments } from "../markdown/lexer"
 import { safeLine } from "../lib/spans"
 import { truncate } from "../lib/text"
+import { parseFrontMatter } from "../markdown/frontmatter"
+import { stripComments } from "../markdown/lexer"
+import type { AITarget } from "./config"
 
 /** What is summarized and hashed: the body without front matter and `%%comments%%`. */
 export function noteText(src: string): string {

@@ -3,16 +3,16 @@
 // Not pure: it holds the store and the timers.
 import type { CliRenderer } from "@opentui/core"
 import type { Dispatch, SetStateAction } from "react"
-import { VIEWS, saveConfig, type Config, type SidebarConfig, type View } from "../system/config"
+import { safeLine } from "../lib/spans"
+import { clamp } from "../lib/text"
+import type { Rendered } from "../markdown/render"
 import { ancestorsOf, type FileNode } from "../notes/files"
 import { keep, visit } from "../notes/history"
-import type { Rendered } from "../markdown/render"
-import { keepVisible } from "../ui/nav"
-import { safeLine } from "../lib/spans"
-import { GHOST_STEP, TOAST_HOLD, fadeStep, nextToast, type ToastKind } from "../ui/status"
-import { clamp } from "../lib/text"
 import { remember } from "../notes/vault"
-import type { DeriveRefs, Derived } from "./derive"
+import { type Config, type SidebarConfig, saveConfig, VIEWS, type View } from "../system/config"
+import { keepVisible } from "../ui/nav"
+import { fadeStep, GHOST_STEP, nextToast, TOAST_HOLD, type ToastKind } from "../ui/status"
+import type { Derived, DeriveRefs } from "./derive"
 import { OPEN_DELAY, type Spot, type UI } from "./store"
 
 /** The timer slots: one pending timeout each (toast and hint fades, Files preview, teleprompter, AI redraw, …). */

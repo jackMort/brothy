@@ -2,7 +2,7 @@
 // `[[wikilinks]]`), the capped lexers and `%%comments%%`. Pure. Every lex in brothy goes through here, so Preview,
 // the Source outline and stats see the same tokens; never lex with `new Lexer` or `Lexer.lexInline`.
 
-import { Marked, type MarkedToken, type Token, type Tokens, type TokenizerExtension } from "marked"
+import { Marked, type MarkedToken, type Token, type TokenizerExtension, type Tokens } from "marked"
 
 import { safe } from "../lib/spans"
 

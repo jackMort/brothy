@@ -1,12 +1,13 @@
 // The Ctrl-P peek pane, pure: what the highlighted row's note holds. The path and length, its
 // outline as a tree (from the vault index), a fresh cached TL;DR, then its first rendered lines
 // from where the row points. App renders the `peekWindow` of the note; nothing here reads a file or calls AI.
-import type { Rendered } from "../markdown/render"
-import { LIST_MAX_W, PEEK_MIN_W, innerWidth, paneWidth, popupWidth, splitWidth } from "../ui/geometry"
-import { findQuote } from "../ui/nav"
+
 import { A, type Span } from "../lib/spans"
 import { clamp, plural, truncate, truncateLeft, width, wrap } from "../lib/text"
+import type { Rendered } from "../markdown/render"
 import type { Theme } from "../theme/theme"
+import { innerWidth, LIST_MAX_W, PEEK_MIN_W, paneWidth, popupWidth, splitWidth } from "../ui/geometry"
+import { findQuote } from "../ui/nav"
 import type { AnswerRow, NoteDoc, SwitchHit, SwitchRow } from "./vault"
 
 /** outline rows shown around the hit's heading */

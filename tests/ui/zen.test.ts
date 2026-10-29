@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { mix } from "../../src/theme/theme"
-import { brothy } from "../helpers/theme"
-import { GHOST_HOLD, HINT_HOLD, fadeStep } from "../../src/ui/status"
+import { fadeStep, GHOST_HOLD, HINT_HOLD } from "../../src/ui/status"
 import {
-  ZEN_DEFAULTS,
-  ZEN_ROWS,
   dimSpans,
   headingPath,
   minutesLeft,
@@ -16,9 +13,12 @@ import {
   sectionRanges,
   typewriterTop,
   wordSuffix,
+  ZEN_DEFAULTS,
+  ZEN_ROWS,
   zenAdjust,
   zenRows,
 } from "../../src/ui/zen"
+import { brothy } from "../helpers/theme"
 
 describe("normalizeZen", () => {
   test("no config gives the defaults", () => {

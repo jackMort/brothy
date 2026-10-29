@@ -3,8 +3,8 @@ import { expect, test } from "bun:test"
 import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { GHOST_STEP, HINT_HOLD } from "../../src/ui/status"
-import { type Setup, B, HINT_ROW, keys, numbered, openHelp, PRIMARY, sections, spansOf, waitFor, waitFrame, withClock, useAppHarness } from "./helpers"
 import { hex } from "../helpers/theme"
+import { B, HINT_ROW, keys, numbered, openHelp, PRIMARY, type Setup, sections, spansOf, useAppHarness, waitFor, waitFrame, withClock } from "./helpers"
 
 const { tmp, mount, unmount, projectsFile, readProjects } = useAppHarness()
 

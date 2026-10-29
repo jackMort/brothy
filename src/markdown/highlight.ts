@@ -1,5 +1,5 @@
-import type { Theme } from "../theme/theme"
 import { A, type Span } from "../lib/spans"
+import type { Theme } from "../theme/theme"
 
 /**
  * Code highlighting for fenced blocks.

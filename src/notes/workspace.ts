@@ -1,7 +1,7 @@
 // What a folder opens as: its Files tree, the tree links resolve against and the first note; the piped document's
 // stand-in. Reads the folder (`scanTree`, `findVault`), otherwise pure.
 import { basename } from "node:path"
-import { ancestorsOf, findVault, firstFile, scanTree, type FileNode } from "./files"
+import { ancestorsOf, type FileNode, findVault, firstFile, scanTree } from "./files"
 
 /** The open path of the piped document: relative, so it can never be a file on disk. */
 export const STDIN = "stdin"

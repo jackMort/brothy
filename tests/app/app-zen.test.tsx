@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { HINT_ROW, keys, loremWidth, numbered, onBg, openHelp, panelShown, READING_ROW, sections, waitFrame, useAppHarness } from "./helpers"
+import { HINT_ROW, keys, loremWidth, numbered, onBg, openHelp, panelShown, READING_ROW, sections, useAppHarness, waitFrame } from "./helpers"
 
 const { cfgDir, tmp, mount, unmount, zenConfig, savedConfig } = useAppHarness()
 

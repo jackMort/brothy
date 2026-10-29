@@ -3,12 +3,12 @@ import type { FileNode } from "../../src/notes/files"
 import {
   BODY_LIMIT,
   CHUNK,
-  SWITCH_CAP,
   emptyIndex,
   firstHit,
   foldSame,
   headingAt,
   hitOrdinal,
+  type IndexIO,
   indexNote,
   isStop,
   lineOf,
@@ -17,12 +17,12 @@ import {
   recentSection,
   refreshIndex,
   remember,
+  SWITCH_CAP,
+  type SwitchHit,
+  type SwitchRow,
   searchVault,
   stepRow,
   switchRows,
-  type IndexIO,
-  type SwitchHit,
-  type SwitchRow,
 } from "../../src/notes/vault"
 
 /** An in-memory tree under /v from "dir/name.md" paths (folders created on the way). */

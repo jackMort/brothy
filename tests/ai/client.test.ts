@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
-  MAX_SUMMARY,
-  SYSTEM_PROMPT,
+  type AIEvent,
   aiError,
   buildRequest,
   chat,
@@ -11,19 +10,21 @@ import {
   errMessage,
   extractJSON,
   fmtTokens,
+  IDLE_MS,
   jsonReply,
+  MAX_SUMMARY,
   noteText,
+  SYSTEM_PROMPT,
   shortModel,
   sseParser,
   stripThink,
   summarize,
   summaryRequest,
+  TOTAL_MS,
   tokens,
-  type AIEvent,
 } from "../../src/ai/client"
-import { PRESETS, PROMPTS, PROMPT_V, normalizeAI, parseGlossStyle, resolveAI, type AITarget } from "../../src/ai/config"
-import { IDLE_MS, TOTAL_MS } from "../../src/ai/client"
 import * as aiConfig from "../../src/ai/config"
+import { type AITarget, normalizeAI, PRESETS, PROMPT_V, PROMPTS, parseGlossStyle, resolveAI } from "../../src/ai/config"
 
 const ok = (r: ReturnType<typeof resolveAI>) => {
   if ("error" in r) throw new Error(r.error)

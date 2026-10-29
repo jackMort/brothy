@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { EditResult } from "../../src/system/editor"
-import { type Setup, keys, OLLAMA, spansOf, W120, waitFor, waitFrame, withEnv, useAppHarness } from "./helpers"
+import { keys, OLLAMA, type Setup, spansOf, useAppHarness, W120, waitFor, waitFrame, withEnv } from "./helpers"
 
 const { mount, cfgDir, tmp, aiConfig, cacheFile, cached, mountAI } = useAppHarness()
 

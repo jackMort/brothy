@@ -1,32 +1,32 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
-import { scanTree } from "../../src/notes/files"
+import type { Change } from "../../src/ai/delta"
+import { width } from "../../src/lib/text"
 import { headingKey } from "../../src/markdown/sections"
 import type { Stats } from "../../src/markdown/stats"
-import type { Change } from "../../src/ai/delta"
+import type { FileNode } from "../../src/notes/files"
+import { scanTree } from "../../src/notes/files"
+import { mix, themeByName } from "../../src/theme/theme"
 import {
-  MAX_CHANGE_ROWS,
-  SUMMARY_ROWS,
+  type ChangeView,
   changeItems,
   extractLinks,
   fileRowSpans,
   findHeading,
   fmtAge,
+  type InfoItem,
   infoItems,
   infoSpans,
   linkDest,
+  MAX_CHANGE_ROWS,
   noteIndex,
   outlineRowSpans,
   outlineRows,
   resolveLink,
+  SUMMARY_ROWS,
   tldrItems,
   wrapProperty,
-  type ChangeView,
-  type InfoItem,
 } from "../../src/ui/panel"
-import { mix, themeByName } from "../../src/theme/theme"
-import { width } from "../../src/lib/text"
-import type { FileNode } from "../../src/notes/files"
 import { useTmp } from "../helpers/tmp"
 
 const fixture = useTmp("brothy-panel-")

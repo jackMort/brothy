@@ -1,36 +1,36 @@
 import { describe, expect, test } from "bun:test"
-import { cleanReply, fmtTokens, tokens } from "../../src/ai/client"
 import {
   ASK_MEMO,
   ASK_PROMPT,
-  EXCERPT,
-  MAX_ASK,
-  MAX_CANDIDATES,
-  MAX_QUERIES,
-  MAX_RERANK,
-  QUESTION_MAX,
-  RERANK_PROMPT,
-  WHY_W,
+  type AskState,
+  type AskView,
   askCandidates,
   askLocate,
   askRequest,
   askRows,
   askSection,
   askTitleNote,
+  EXCERPT,
+  MAX_ASK,
+  MAX_CANDIDATES,
+  MAX_QUERIES,
+  MAX_RERANK,
   parseQueries,
   parseRerank,
   putNewest,
+  QUESTION_MAX,
   questionOf,
+  RERANK_PROMPT,
   rerankCost,
   rerankMessage,
   rerankRequest,
-  type AskState,
-  type AskView,
+  WHY_W,
 } from "../../src/ai/ask"
+import { cleanReply, fmtTokens, tokens } from "../../src/ai/client"
 import { truncate } from "../../src/lib/text"
-import type { FileNode } from "../../src/notes/files"
 import { noteSections, sectionId } from "../../src/markdown/sections"
-import { emptyIndex, indexNote, type AnswerRow, type SwitchRow, type VaultIndex } from "../../src/notes/vault"
+import type { FileNode } from "../../src/notes/files"
+import { type AnswerRow, emptyIndex, indexNote, type SwitchRow, type VaultIndex } from "../../src/notes/vault"
 
 describe("questionOf", () => {
   test("a leading ? (after spaces) makes a question; the rest is trimmed; only one ? is taken", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Span } from "../../src/lib/spans"
 import { clamp, fmtNum, graphemes, mergeSpans, plural, pushSpan, sameStyle, spanWidth, superscript, truncate, truncateLeft, width } from "../../src/lib/text"
-import { SCALE, expectLinear } from "../helpers/perf"
+import { expectLinear, SCALE } from "../helpers/perf"
 
 describe("width", () => {
   test("counts display columns: wide, zero-width and clustered characters", () => {

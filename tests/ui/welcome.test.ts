@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { BIG, SMALL, STILL_TICK, steamRows, welcomeArt, welcomeFit, type ArtCell } from "../../src/ui/welcome"
 import { WORDMARK } from "../../src/ui/status"
+import { type ArtCell, BIG, SMALL, STILL_TICK, steamRows, welcomeArt, welcomeFit } from "../../src/ui/welcome"
 
 const text = (rows: ArtCell[][]) => rows.map((r) => r.map((c) => c.ch).join(""))
 

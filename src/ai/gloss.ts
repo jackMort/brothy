@@ -1,12 +1,12 @@
 // Zen gloss, pure: which text is sent for the section under the reading line, how it is asked for, how the sheet reads.
 
-import { clip, cleanSummary, type ChatReq } from "./client"
-import type { GlossStyle } from "./config"
-import { truncate, width, wrap } from "../lib/text"
-import { cached } from "../ui/nav"
-import { noteSections, sectionId, sectionSource } from "../markdown/sections"
 import { safeLine } from "../lib/spans"
+import { truncate, width, wrap } from "../lib/text"
+import { noteSections, sectionId, sectionSource } from "../markdown/sections"
+import { cached } from "../ui/nav"
 import { headingPath } from "../ui/zen"
+import { type ChatReq, cleanSummary, clip } from "./client"
+import type { GlossStyle } from "./config"
 
 /** muted rows under the sheet's rule */
 export const GLOSS_ROWS = 3

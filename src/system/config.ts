@@ -1,6 +1,6 @@
 // config.json under $XDG_CONFIG_HOME/brothy: validated load, merge-on-save that refuses to overwrite a file that does not parse.
 import { join } from "node:path"
-import { normalizeAI, type AIConfig } from "../ai/config"
+import { type AIConfig, normalizeAI } from "../ai/config"
 import { configHome, isRecord, readJSON, writeFileAtomic } from "../lib/json"
 import { HEADING_STYLES, type HeadingStyle } from "../markdown/heading-style"
 import { pickZen, type ZenConfig } from "../ui/zen"

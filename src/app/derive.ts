@@ -2,47 +2,46 @@
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
 // Its steps, one per area, live in derive/steps.ts.
 import { existsSync } from "node:fs"
-import { rankNotes, visibleRows, type FileNode } from "../notes/files"
-import { render, type Geometry, type Rendered } from "../markdown/render"
-import { normalize } from "../markdown/lexer"
-import { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "../markdown/frontmatter"
-import { stats, wordStats, type Stats } from "../markdown/stats"
-import type { HeadingStyle } from "../markdown/heading-style"
-import { renderSource } from "../markdown/source"
+import { type AskState, askCandidates, askRows, type Candidate, rerankCost } from "../ai/ask"
+import { textHash } from "../ai/cache"
+import { cleanSummary, noteText } from "../ai/client"
+import { type AIConfig, resolveAI } from "../ai/config"
+import { type Change, type DeltaNote, diffSections, parseDelta } from "../ai/delta"
+import { glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
-import { readDoc, type DocFile } from "../notes/doc"
-import { STDIN } from "../notes/workspace"
-import { layout } from "../ui/layout"
-import { themes, type Theme } from "../theme/theme"
-import { MAX_BYTES } from "../notes/stdin"
+import { type FrontMatter, type Property, parseFrontMatter, parseProperties } from "../markdown/frontmatter"
+import type { HeadingStyle } from "../markdown/heading-style"
+import { normalize } from "../markdown/lexer"
+import { type Geometry, type Rendered, render } from "../markdown/render"
+import { renderSource } from "../markdown/source"
+import { type Stats, stats, wordStats } from "../markdown/stats"
+import { type DocFile, readDoc } from "../notes/doc"
+import { type FileNode, rankNotes, visibleRows } from "../notes/files"
 import { fsDirIO, loadProjects, openRows, type ProjectEntry } from "../notes/projects"
+import { MAX_BYTES } from "../notes/stdin"
 import { recentSection, searchVault, switchRows, type VaultIndex } from "../notes/vault"
-import { miniInk } from "../ui/minimap"
+import { STDIN } from "../notes/workspace"
+import type { View } from "../system/config"
+import { type Theme, themes } from "../theme/theme"
 import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
+import { layout } from "../ui/layout"
+import { miniInk } from "../ui/minimap"
 import { cached, findLines, matchIndex } from "../ui/nav"
-import { cleanSummary, noteText } from "../ai/client"
-import { resolveAI, type AIConfig } from "../ai/config"
-import { askCandidates, askRows, rerankCost, type AskState, type Candidate } from "../ai/ask"
-import { textHash } from "../ai/cache"
-import { glossTarget } from "../ai/gloss"
 import {
+  type ChangeState,
   extractLinks,
+  type FileMeta,
   fmtSize,
+  type InfoItem,
   infoItems,
+  type LinkRef,
   outlineRows,
   resolveLink,
-  type ChangeState,
-  type FileMeta,
-  type InfoItem,
-  type LinkRef,
   type SummaryState,
 } from "../ui/panel"
-import { diffSections, parseDelta, type Change, type DeltaNote } from "../ai/delta"
-import { sectionRanges, wordSuffix } from "../ui/zen"
 import { WELCOME_RECENTS } from "../ui/welcome"
-import type { View } from "../system/config"
-import type { FileRow, Job, UI } from "./store"
+import { sectionRanges, wordSuffix } from "../ui/zen"
 import {
   filesCursor,
   filesList,
@@ -56,6 +55,7 @@ import {
   switcherList,
   truncationNote,
 } from "./derive/steps"
+import type { FileRow, Job, UI } from "./store"
 
 /** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
 function documentMemo(stdin: string | undefined) {

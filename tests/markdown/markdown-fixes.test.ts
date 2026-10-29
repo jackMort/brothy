@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test"
+import { A } from "../../src/lib/spans"
+import { width, wrap } from "../../src/lib/text"
 import { parseFrontMatter, parseProperties } from "../../src/markdown/frontmatter"
 import { canonicalLang } from "../../src/markdown/highlight"
 import { calloutKind, render } from "../../src/markdown/render"
 import { renderSource, sourceScan } from "../../src/markdown/source"
-import { A } from "../../src/lib/spans"
 import { stats } from "../../src/markdown/stats"
-import { width, wrap } from "../../src/lib/text"
+import { expectLinear, SCALE } from "../helpers/perf"
 import { brothy } from "../helpers/theme"
-import { SCALE, expectLinear } from "../helpers/perf"
 
 const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))

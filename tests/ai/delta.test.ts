@@ -6,17 +6,17 @@ import {
   DIFF_BUDGET,
   DIFF_CELLS,
   DIFF_LIMIT,
-  MAX_DELTA,
   deltaMessage,
   deltaRequest,
   diffSections,
   hhmm,
   hunks,
   lineDiff,
+  MAX_DELTA,
+  type Op,
   parseDelta,
   quoteNeedle,
   reloadToast,
-  type Op,
 } from "../../src/ai/delta"
 import { expectLinear, manyHeadings, SCALE } from "../helpers/perf"
 

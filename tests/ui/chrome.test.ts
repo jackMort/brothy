@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { HELP_GROUP_TITLES, INK_STEPS, STEAM_FLOOR, chip, fade, fadeSpans, groupColor, inkAt, keycap, keycaps, steamColors } from "../../src/ui/chrome"
 import { contrast, themes } from "../../src/theme/theme"
+import { chip, fade, fadeSpans, groupColor, HELP_GROUP_TITLES, INK_STEPS, inkAt, keycap, keycaps, STEAM_FLOOR, steamColors } from "../../src/ui/chrome"
 import { brothy } from "../helpers/theme"
 
 test("groupColor: Global primary, Document secondary, Zen info, Panel success, AI accent", () => {

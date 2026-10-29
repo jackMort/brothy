@@ -1,9 +1,10 @@
 // Pure navigation helpers for App: search and the Find picker's rows, scroll anchoring, sidebar cursor, key specs.
-import { fitHits, hitSpans, type PickerItem } from "./rows"
+
 import { lineText, type Span } from "../lib/spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "../lib/text"
 import type { Geometry } from "../markdown/render"
 import type { Theme } from "../theme/theme"
+import { fitHits, hitSpans, type PickerItem } from "./rows"
 
 // ------------------------------------------------------------- search
 

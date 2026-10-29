@@ -2,17 +2,17 @@
 // lifecycle every AI action shares (the switcher's ask too); then `makeAIJobs`, the TL;DR, gloss and reload-explain
 // requests and their keys (`a`, `D`, zen `a`). Not pure: both close over the app context.
 import { basename } from "node:path"
-import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai/client"
-import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai/config"
-import { loadConfig } from "../system/config"
-import { deltaRequest, hhmm, parseDelta, type Change, type DeltaParse } from "../ai/delta"
-import { stem } from "../notes/files"
-import { glossKey, glossRequest, type GlossTarget } from "../ai/gloss"
+import { type Gloss, isFresh, loadGlosses, saveGlosses, saveSummaries, textHash } from "../ai/cache"
+import { aiError, type ChatReq, type ChatResult, chat, type ErrCtx, type Failure, noteText, shortModel, summaryRequest } from "../ai/client"
+import { type AIConfig, type AITarget, type GlossStyle, PROMPT_V, PROMPTS, resolveAI } from "../ai/config"
+import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta } from "../ai/delta"
+import { type GlossTarget, glossKey, glossRequest } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
-import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../ai/cache"
+import { stem } from "../notes/files"
 import { STDIN } from "../notes/workspace"
+import { loadConfig } from "../system/config"
 import type { AppCtx } from "./ctx"
-import { jobKey, type Job, type JobKind, type UI } from "./store"
+import { type Job, type JobKind, jobKey, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
 const MAX_JOBS = 3

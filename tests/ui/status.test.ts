@@ -1,36 +1,36 @@
 import { describe, expect, test } from "bun:test"
+import { width as sw, truncate, truncateLeft } from "../../src/lib/text"
+import { themeByName } from "../../src/theme/theme"
+import { fade } from "../../src/ui/chrome"
 import {
   clusterText,
   errText,
   fillWidth,
   fitHints,
+  GHOST_STEP,
   gapSpans,
   headerLayout,
   hintSpans,
+  LOGO,
   LOGO_HOLD,
+  locationParts,
   logoState,
   mainHeadingVisible,
-  shrinkFolder,
-  locationParts,
   nextToast,
   notePath,
   noteTitle,
   progressLabel,
   progressSpans,
+  shrinkFolder,
   stateCluster,
+  TOAST_HOLD,
+  type Toast,
   toastIcon,
   toastSpans,
   toastStep,
   tooSmall,
   topLineSpans,
-  LOGO,
-  TOAST_HOLD,
-  GHOST_STEP,
-  type Toast,
 } from "../../src/ui/status"
-import { truncate, truncateLeft, width as sw } from "../../src/lib/text"
-import { themeByName } from "../../src/theme/theme"
-import { fade } from "../../src/ui/chrome"
 
 describe("truncate", () => {
   test("cuts at either end with …, by columns", () => {

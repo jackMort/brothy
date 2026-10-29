@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { FOOTERS, HELP_GROUPS, PINNED, footerHints, isDown, modeOf, type FooterState } from "../../src/app/keymap"
+import { FOOTERS, type FooterState, footerHints, HELP_GROUPS, isDown, modeOf, PINNED } from "../../src/app/keymap"
 
 const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true }
 const NONE: FooterState = { query: false, preview: false, disk: false, ai: false, changes: false }

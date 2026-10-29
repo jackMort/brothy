@@ -4,14 +4,13 @@
 // inline spans, callouts, blocks and tables; the lexer, front matter, Source view and stats have their own modules.
 
 import type { Token, Tokens } from "marked"
-import type { Theme } from "../theme/theme"
-
+import { A, type Span, safe } from "../lib/spans"
+import { graphemes, pushSpan, spanWidth, width, wrap } from "../lib/text"
 import { isMarkdown } from "../notes/files"
+import type { Theme } from "../theme/theme"
 import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
 import { isWikilink, lexBlocks, lexInline, normalize, stripComments, tokenOf, wikiLabel } from "./lexer"
-import { A, safe, type Span } from "../lib/spans"
-import { graphemes, pushSpan, spanWidth, width, wrap } from "../lib/text"
 
 export interface Line {
   spans: Span[]

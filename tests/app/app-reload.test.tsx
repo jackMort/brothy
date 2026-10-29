@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { DELTA_PROMPT } from "../../src/ai/delta"
-import { bodyRows, keys, OLLAMA, openHelp, W120, waitFor, waitFrame, withClock, useAppHarness } from "./helpers"
+import { bodyRows, keys, OLLAMA, openHelp, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
 
 const { cfgDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 

@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { A } from "../../src/lib/spans"
+import { width } from "../../src/lib/text"
 import {
-  PARSER_FILETYPES,
   cachedHighlight,
   canonicalLang,
   clearHighlightCache,
@@ -8,14 +9,13 @@ import {
   ensureHighlights,
   fallbackTokens,
   groupKind,
+  type Kind,
   kindStyle,
+  PARSER_FILETYPES,
   shutdownHighlighter,
   tokenize,
-  type Kind,
 } from "../../src/markdown/highlight"
 import { pendingHighlights, render } from "../../src/markdown/render"
-import { A } from "../../src/lib/spans"
-import { width } from "../../src/lib/text"
 import { themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
 

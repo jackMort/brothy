@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { editorCommand, runEditor, sourceLineAt, type EditorIO } from "../../src/system/editor"
-import { render } from "../../src/markdown/render"
 import { parseFrontMatter } from "../../src/markdown/frontmatter"
+import { render } from "../../src/markdown/render"
 import { renderSource, sourceScan } from "../../src/markdown/source"
+import { type EditorIO, editorCommand, runEditor, sourceLineAt } from "../../src/system/editor"
 import { brothy } from "../helpers/theme"
 
 const t = brothy

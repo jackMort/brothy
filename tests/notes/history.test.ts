@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { HISTORY_CAP, drop, go, keep, startHistory, stepTo, visit, type History } from "../../src/notes/history"
+import { drop, go, HISTORY_CAP, type History, keep, startHistory, stepTo, visit } from "../../src/notes/history"
 
 const paths = (h: History<number>) => h.entries.map((e) => e.path)
 

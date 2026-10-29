@@ -2,13 +2,15 @@
 // toast, row H-2) and the progress line (row H-1). Not pure: drawn from the app context; the spans come from status.ts.
 import { basename, dirname, resolve } from "node:path"
 import type { ReactNode } from "react"
-import { fadeSpans } from "../ui/chrome"
 import type { Span } from "../lib/spans"
+import { spanWidth } from "../lib/text"
+import { fadeSpans } from "../ui/chrome"
 import {
-  GHOST_STEPS,
-  HINT_HOLD,
   fadeStep,
+  GHOST_STEPS,
   gapSpans,
+  HINT_HOLD,
+  type HintItem,
   headerLayout,
   hintSpans,
   logoState,
@@ -18,9 +20,7 @@ import {
   progressSpans,
   toastSpans,
   topLineSpans,
-  type HintItem,
 } from "../ui/status"
-import { spanWidth } from "../lib/text"
 import { headingPath, minutesLeft } from "../ui/zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"

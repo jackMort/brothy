@@ -3,10 +3,10 @@ import { expect, test } from "bun:test"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
-import { MINI_W } from "../../src/ui/minimap"
 import { themeByName } from "../../src/theme/theme"
-import { keys, onBg, PRIMARY, sleep, spansOf, waitFor, waitFrame, useAppHarness } from "./helpers"
+import { MINI_W } from "../../src/ui/minimap"
 import { hex } from "../helpers/theme"
+import { keys, onBg, PRIMARY, sleep, spansOf, useAppHarness, waitFor, waitFrame } from "./helpers"
 
 const { cfgDir, tmp, mount, savedConfig, seedProjects } = useAppHarness()
 

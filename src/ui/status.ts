@@ -2,11 +2,11 @@
 // spans each row is drawn with.
 
 import { basename, relative } from "node:path"
-import { fadeSpans } from "./chrome"
-import { stem } from "../notes/files"
 import { A, type Span } from "../lib/spans"
 import { spanWidth, truncate, width } from "../lib/text"
+import { stem } from "../notes/files"
 import type { Theme } from "../theme/theme"
+import { fadeSpans } from "./chrome"
 
 // ------------------------------------------------------------- top line
 

@@ -1,14 +1,14 @@
 // Ask → jump (`?` in the `C-p` switcher). The model turns a question into search queries (tier 0)
 // or orders excerpts brothy picked (tier 1); every answer is a place the local index found. Pure.
 
-import { cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens, type ChatReq } from "./client"
-import { SCORE_SUBSEQUENCE, scoreName, stem, type FileNode } from "../notes/files"
 import { isRecord } from "../lib/json"
-import { headingKey, sectionId } from "../markdown/sections"
 import { safeLine } from "../lib/spans"
 import { truncate } from "../lib/text"
-import { SWITCH_CAP, foldSame, headingAt, lineOf, nextSection, notesOf, type AnswerRow, type NoteDoc, type SwitchRow, type VaultIndex } from "../notes/vault"
+import { headingKey, sectionId } from "../markdown/sections"
+import { type FileNode, SCORE_SUBSEQUENCE, scoreName, stem } from "../notes/files"
+import { type AnswerRow, foldSame, headingAt, lineOf, type NoteDoc, nextSection, notesOf, SWITCH_CAP, type SwitchRow, type VaultIndex } from "../notes/vault"
 import { headingPath } from "../ui/zen"
+import { type ChatReq, cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./client"
 
 /** `PROMPTS.ask` (ai/config.ts): bump it with any change. */
 export const ASK_PROMPT =

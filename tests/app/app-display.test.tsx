@@ -3,8 +3,8 @@ import { expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { themeByName } from "../../src/theme/theme"
-import { type Setup, keys, loremWidth, spansOf, useAppHarness } from "./helpers"
 import { hex } from "../helpers/theme"
+import { keys, loremWidth, type Setup, spansOf, useAppHarness } from "./helpers"
 
 const { cfgDir, tmp, mount, unmount, savedConfig } = useAppHarness()
 

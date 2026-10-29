@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, normalize, relative } from "node:path"
 
 // The folder rules of src/, read off the import lines: lib/ is a leaf, the domain folders never reach up into the

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ASK_PROMPT, RERANK_PROMPT } from "../../src/ai/ask"
-import { type Setup, aiStub, filler, keys, OLLAMA, W120, waitFor, waitFrame, useAppHarness } from "./helpers"
+import { aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
 
 const { cacheDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 

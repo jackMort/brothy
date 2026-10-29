@@ -2,20 +2,20 @@ import { describe, expect, test } from "bun:test"
 import { chmodSync, lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
-  PATH_CAP,
-  PROJECTS_CAP,
+  type DirIO,
   expandTilde,
   loadProjects,
   looksLikePath,
   openRows,
+  PATH_CAP,
+  PROJECTS_CAP,
+  type ProjectEntry,
   pathCompletions,
   projectsPath,
   rankProjects,
   remember,
   saveProjects,
   tildify,
-  type DirIO,
-  type ProjectEntry,
 } from "../../src/notes/projects"
 import { useXdgDir } from "../helpers/env"
 

@@ -2,15 +2,15 @@
 
 import { dirname, resolve, sep } from "node:path"
 import type { Change, DeltaNote } from "../ai/delta"
-import { folderOf, fuzzyHits, isMarkdown, stem, type FileNode } from "../notes/files"
-import type { LinkTarget } from "../markdown/render"
-import { stripCode, type Stats } from "../markdown/stats"
-import type { Property } from "../markdown/frontmatter"
-import { hitSpans } from "./rows"
-import { headingKey } from "../markdown/sections"
-import { A, safeLine, type Span } from "../lib/spans"
+import { A, type Span, safeLine } from "../lib/spans"
 import { plural, spanWidth, truncate, truncateLeft, width, wrap } from "../lib/text"
+import type { Property } from "../markdown/frontmatter"
+import type { LinkTarget } from "../markdown/render"
+import { headingKey } from "../markdown/sections"
+import { type Stats, stripCode } from "../markdown/stats"
+import { type FileNode, folderOf, fuzzyHits, isMarkdown, stem } from "../notes/files"
 import { mix, type Theme } from "../theme/theme"
+import { hitSpans } from "./rows"
 
 // ------------------------------------------------------------- formatting
 

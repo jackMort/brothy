@@ -3,10 +3,10 @@
  * baseline, the hunks sent to the model, and what of its reply is kept.
  */
 
-import { cleanReply, cleanSummary, stripThink, type ChatReq } from "./client"
-import { noteSections, type NoteSection } from "../markdown/sections"
 import { truncate } from "../lib/text"
+import { type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
+import { type ChatReq, cleanReply, cleanSummary, stripThink } from "./client"
 
 /** One line of a diff: unchanged (" "), removed ("-") or added ("+"). */
 export type Op = { op: " " | "-" | "+"; text: string }

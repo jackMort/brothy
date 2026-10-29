@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { firstDocRow, HINT_ROW, keys, numbered, openHelp, sections, sleep, topLine, wrapped, useAppHarness } from "./helpers"
+import { firstDocRow, HINT_ROW, keys, numbered, openHelp, sections, sleep, topLine, useAppHarness, wrapped } from "./helpers"
 
 const { tmp, mount, configFile, writeConfig, savedConfig, writeProjects, readProjects } = useAppHarness()
 

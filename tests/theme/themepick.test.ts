@@ -1,27 +1,23 @@
 import { afterAll, expect, test } from "bun:test"
-import { cachedHighlight, ensureHighlights, shutdownHighlighter } from "../../src/markdown/highlight"
-import { pendingHighlights } from "../../src/markdown/render"
-import { PEEK_MIN_W } from "../../src/ui/geometry"
 import { A, type Span } from "../../src/lib/spans"
 import { width as sw } from "../../src/lib/text"
-import { contrast, themeByName, themes, type Theme } from "../../src/theme/theme"
-import { brothy } from "../helpers/theme"
+import { cachedHighlight, ensureHighlights, shutdownHighlighter } from "../../src/markdown/highlight"
+import { pendingHighlights } from "../../src/markdown/render"
+import { contrast, type Theme, themeByName, themes } from "../../src/theme/theme"
 import {
   BOARD_MODES,
-  CELL_W,
-  FAMILIES,
-  NAME_W,
-  SLOT_W,
-  SAMPLE,
-  THEME_LIST_W,
   boardFrames,
   boardHeader,
   boardLayout,
   boardSlot,
+  CELL_W,
+  FAMILIES,
   familyOf,
   familyTheme,
   filterFamilies,
   listTop,
+  NAME_W,
+  onlyMode,
   paneLines,
   pickIndex,
   pickMode,
@@ -30,15 +26,19 @@ import {
   pickShown,
   pickStart,
   pickTheme,
-  resolveTheme,
   pickTop,
-  onlyMode,
+  resolveTheme,
   roleWords,
+  SAMPLE,
+  SLOT_W,
   sampleView,
   specimen,
+  THEME_LIST_W,
   themeFamilies,
   themeSplit,
 } from "../../src/theme/themepick"
+import { PEEK_MIN_W } from "../../src/ui/geometry"
+import { brothy } from "../helpers/theme"
 
 afterAll(() => shutdownHighlighter())
 

@@ -3,10 +3,10 @@
 
 import { statSync } from "node:fs"
 import { dirname, sep } from "node:path"
-import { rankNotes, scoreName, stem, type FileNode } from "./files"
 import { parseProperties } from "../markdown/frontmatter"
 import { parseWikilink, wikiLabel } from "../markdown/lexer"
 import { sourceScan } from "../markdown/source"
+import { type FileNode, rankNotes, scoreName, stem } from "./files"
 
 /** Notes larger than this (bytes) are indexed by name and headings only. */
 export const BODY_LIMIT = 2 * 1024 * 1024

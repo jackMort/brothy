@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
-import { bodyRows, HINT_ROW, keys, longB, openHelp, panelShown, waitFrame, useAppHarness } from "./helpers"
+import { bodyRows, HINT_ROW, keys, longB, openHelp, panelShown, useAppHarness, waitFrame } from "./helpers"
 
 const { tmp, mount } = useAppHarness()
 

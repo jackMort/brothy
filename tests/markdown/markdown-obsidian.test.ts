@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { A } from "../../src/lib/spans"
+import { width } from "../../src/lib/text"
 import { parseFrontMatter } from "../../src/markdown/frontmatter"
 import { scanComments, stripComments } from "../../src/markdown/lexer"
 import { CALLOUT_KINDS, render, stripTags } from "../../src/markdown/render"
 import { needsLexer, renderSource, sourceScan, sourceStructureLexed, sourceStructureLines } from "../../src/markdown/source"
-import { A } from "../../src/lib/spans"
 import { stats } from "../../src/markdown/stats"
-import { width } from "../../src/lib/text"
 import { contrast, themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
 
