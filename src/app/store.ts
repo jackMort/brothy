@@ -2,7 +2,7 @@
 // holds and the app's tunables. No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
 import type { AIConfig } from "../ai/config"
 import type { AskState, Candidate } from "../ai/ask"
-import { loadConfig, type View } from "../system/config"
+import { loadConfig, type Config, type View } from "../system/config"
 import type { Change, DeltaNote } from "../ai/delta"
 import type { FileNode, TreeRow } from "../notes/files"
 import { startHistory, type History } from "../notes/history"
@@ -180,6 +180,22 @@ export interface UI {
   delta: DeltaState | null
 }
 
+/** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
+function savedSettings(cfg: Config, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined) {
+  return {
+    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
+    hidden: cfg.sidebar?.hidden ?? false,
+    wide: cfg.wide ?? false,
+    minimap: cfg.minimap ?? true,
+    headingStyle: cfg.headings ?? "classic",
+    transparent: transparent ?? cfg.transparent ?? false,
+    motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
+    view: piped ? ("outline" as const) : (cfg.sidebar?.view ?? "files"),
+    zenCfg: normalizeZen(cfg.zen),
+    ai: cfg.ai ?? null,
+  }
+}
+
 /** The store at mount: the workspace from the CLI's root and note (or the piped document), the saved config, the summary cache. */
 export function initUI(
   root: string,
@@ -193,7 +209,7 @@ export function initUI(
   const openPath = w.openPath
   const cfg = loadConfig()
   return {
-    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
+    ...savedSettings(cfg, themeName, transparent, piped, motion),
     themePick: null,
     ...w,
     filter: "",
@@ -205,14 +221,7 @@ export function initUI(
     watchGen: 0,
     source: false,
     focus: "doc",
-    hidden: cfg.sidebar?.hidden ?? false,
-    wide: cfg.wide ?? false,
-    minimap: cfg.minimap ?? true,
-    headingStyle: cfg.headings ?? "classic",
-    transparent: transparent ?? cfg.transparent ?? false,
-    motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
     drawerOpen: false,
-    view: piped ? "outline" : (cfg.sidebar?.view ?? "files"),
     hl: 0,
     prompt: null,
     labels: null,
@@ -224,7 +233,6 @@ export function initUI(
     outlineCur: 0,
     infoCur: 0,
     zen: false,
-    zenCfg: normalizeZen(cfg.zen),
     zenOrig: null,
     zenRow: 0,
     switcher: null,
@@ -239,7 +247,6 @@ export function initUI(
     toast: null,
     hintAt: null,
     hintCtx: "doc",
-    ai: cfg.ai ?? null,
     summaries: loadSummaries(),
     glosses: null,
     gloss: null,

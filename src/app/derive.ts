@@ -57,19 +57,9 @@ import {
   truncationNote,
 } from "./derive/steps"
 
-/** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
-export function makeMemo(stdin: string | undefined) {
+/** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
+function documentMemo(stdin: string | undefined) {
   return {
-    switch: cached((ix: VaultIndex, tree: FileNode, q: string, _ver: number, recent: readonly string[], open: string | null) =>
-      switchRows(q.trim() ? searchVault(ix, tree, q, open) : recentSection(tree, recent, open)),
-    ),
-    // relative paths resolve against the workspace folder; the current project is not listed
-    open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) => openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current })),
-    // the welcome page's recent projects: the `o` picker's rows with an empty query, header first; read again
-    // after every workspace switch (`watchGen`) and a dropped missing one (`gen`)
-    recents: cached((root: string, _gen: number, _watchGen: number) =>
-      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS),
-    ),
     read: cached(
       (path: string, nonce: number): DocFile =>
         path !== STDIN || stdin === undefined
@@ -85,6 +75,19 @@ export function makeMemo(stdin: string | undefined) {
     source: cached((src: string, w: number, t: Theme, tree: FileNode) => renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
     stats: cached(stats),
     props: cached(parseProperties),
+    propsKey: cached((fm: FrontMatter) => JSON.stringify(fm.entries)),
+    note: cached(noteText),
+    hash: cached((src: string) => textHash(noteText(src))),
+    clean: cached(cleanSummary),
+    gloss: cached(glossTarget),
+    glossHash: cached(textHash),
+    glossClean: cached(cleanSummary),
+  }
+}
+
+/** Memo builders for the panel's rows: links, Info, Files and Outline. */
+function panelMemo() {
+  return {
     linkTargets: cached(extractLinks),
     links: cached((targets: string[], tree: FileNode, from: string | null): LinkRef[] =>
       targets.map((target) => ({ target, path: resolveLink(target, tree, from) })),
@@ -117,15 +120,6 @@ export function makeMemo(stdin: string | undefined) {
           cState ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title } : undefined,
         ),
     ),
-    note: cached(noteText),
-    diff: cached(diffSections),
-    propsKey: cached((fm: FrontMatter) => JSON.stringify(fm.entries)),
-    partial: cached((raw: string, changes: Change[]) => parseDelta(raw, changes, true)),
-    hash: cached((src: string) => textHash(noteText(src))),
-    clean: cached(cleanSummary),
-    gloss: cached(glossTarget),
-    glossHash: cached(textHash),
-    glossClean: cached(cleanSummary),
     // Info cursor stops: links and change rows (removed sections are not stops)
     linkIdx: cached((items: InfoItem[]) => items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : []))),
     rows: cached(visibleRows),
@@ -134,23 +128,16 @@ export function makeMemo(stdin: string | undefined) {
       const r = rankNotes(tree, q)
       return { total: r.total, rows: r.rows.map((x): FileRow => ({ node: x.node, depth: 0, hits: x.hits })) }
     }),
+    diff: cached(diffSections),
+    partial: cached((raw: string, changes: Change[]) => parseDelta(raw, changes, true)),
+  }
+}
+
+/** Memo builders for what is drawn from the rendered view: matches, geometry, minimap, zen. */
+function viewMemo() {
+  return {
     matches: cached((view: Rendered, q: string) => findLines(view.lines.map(lineText), q)),
     geo: cached((view: Rendered): Geometry => ({ heads: view.headings.map((h) => h.line), total: view.lines.length })),
-    /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
-    themeRows: cached((q: string) => filterFamilies(q)),
-    themeSample: cached((t: Theme, w: number, _hl: number, headings: HeadingStyle) => sampleView(t, w, headings)),
-    themePane: cached(paneLines),
-    /** the switcher's peek: the highlighted note read (one note at a time), then only its `peekWindow` rendered at the pane width */
-    peekFile: cached((path: string, mtime: number) => {
-      const f = readDoc(path, mtime)
-      if (f.error) return null
-      const fm = parseFrontMatter(f.src)
-      const st = wordStats(fm.body) // stats() would lex the whole note
-      return { lines: normalize(f.src).split("\n"), fm: fm.offset, hash: textHash(noteText(f.src)), words: st.words, minutes: st.minutes }
-    }),
-    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode, headings: HeadingStyle) =>
-      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
-    ),
     // Source rows open with the line-number gutter (`gutter` columns), which draws no dots
     mini: cached((view: Rendered, w: number, rows: number, gutter: number) =>
       miniInk(
@@ -167,6 +154,43 @@ export function makeMemo(stdin: string | undefined) {
         view.lines.length,
       ),
     ),
+  }
+}
+
+/** Memo builders for the popups: switcher, Open, welcome recents, theme picker and the switcher's peek. */
+function pickerMemo() {
+  return {
+    switch: cached((ix: VaultIndex, tree: FileNode, q: string, _ver: number, recent: readonly string[], open: string | null) =>
+      switchRows(q.trim() ? searchVault(ix, tree, q, open) : recentSection(tree, recent, open)),
+    ),
+    // relative paths resolve against the workspace folder; the current project is not listed
+    open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) => openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current })),
+    // the welcome page's recent projects: the `o` picker's rows with an empty query, header first; read again
+    // after every workspace switch (`watchGen`) and a dropped missing one (`gen`)
+    recents: cached((root: string, _gen: number, _watchGen: number) =>
+      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS),
+    ),
+    /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
+    themeRows: cached((q: string) => filterFamilies(q)),
+    themeSample: cached((t: Theme, w: number, _hl: number, headings: HeadingStyle) => sampleView(t, w, headings)),
+    themePane: cached(paneLines),
+    /** the switcher's peek: the highlighted note read (one note at a time), then only its `peekWindow` rendered at the pane width */
+    peekFile: cached((path: string, mtime: number) => {
+      const f = readDoc(path, mtime)
+      if (f.error) return null
+      const fm = parseFrontMatter(f.src)
+      const st = wordStats(fm.body) // stats() would lex the whole note
+      return { lines: normalize(f.src).split("\n"), fm: fm.offset, hash: textHash(noteText(f.src)), words: st.words, minutes: st.minutes }
+    }),
+    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode, headings: HeadingStyle) =>
+      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
+    ),
+  }
+}
+
+/** Memo builders for the switcher's ask mode: target, candidates, rerank cost and rows. */
+function askMemo() {
+  return {
     /** where an ask would go: null without an `ai` block, else the host or why not */
     host: cached((ai: AIConfig | null) => {
       if (!ai) return null
@@ -187,6 +211,11 @@ export function makeMemo(stdin: string | undefined) {
       ) => askRows({ question, cut, target, state, cands, cost, indexing }),
     ),
   }
+}
+
+/** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
+export function makeMemo(stdin: string | undefined) {
+  return { ...documentMemo(stdin), ...panelMemo(), ...viewMemo(), ...pickerMemo(), ...askMemo() }
 }
 /** The memo table: one `cached` builder per derived value. */
 export type Memo = ReturnType<typeof makeMemo>
@@ -222,70 +251,42 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     const opened = noteView(s, L, t, memo)
     const { file, fm, doc, view, st } = opened
     const files = filesList(s, memo)
-    const { filtered, rows, total } = files
     const note = truncationNote(s, L)
-    const { props, title, changes, propsChanged, after, propsKey, cv, infoRows, linkRows } = infoPanel(s, L, opened, memo, jobs.current)
-    const { question, askCands, swRows, swHl } = switcherList(s, memo, vault.current.ix)
-    const { opRows, opHl } = openerList(s, memo)
-    const { filterRow, LH } = filesCursor(s, L, files, note.length, sidebarSeen.current)
+    const info = infoPanel(s, L, opened, memo, jobs.current)
+    const switcher = switcherList(s, memo, vault.current.ix)
     const scroll = scrollState(s, L, view, memo, scrolls.current)
     const { scrollKey, geo, maxTop, top, tw } = scroll
     const matches = matchState(s, view, memo, matchSeen)
     // the heading the reader is in: last one at (or just above) the top line
     const currentHeading = view.headings.findLastIndex((h) => h.line <= top + 1)
     const oRows = memo.outline(view.headings, currentHeading, s.outlineFilter)
-    const { gHere, gHash, gStyle, sheet } = glossSheet(s, L, opened, currentHeading, title, memo, jobs.current)
-    const sideFocus: View | null = L.shown && s.focus === "panel" ? s.view : null
-    const { ranges, spot, win, pg, prompter } = readingWindow(s, L, view, scroll, memo)
     return {
       s,
       L,
-      prompter,
       t,
       file,
       fm,
       doc,
       view,
       st,
-      rows,
-      filtered,
-      total,
-      filterRow,
-      props,
-      infoRows,
-      linkRows,
-      swRows,
-      swHl,
-      question,
-      askCands,
-      opRows,
-      opHl,
-      infoCur: clamp(s.infoCur, 0, linkRows.length - 1),
-      LH,
+      ...files,
+      ...info,
+      ...switcher,
+      ...openerList(s, memo),
+      ...filesCursor(s, L, files, note.length, sidebarSeen.current),
+      ...glossSheet(s, L, opened, currentHeading, info.title, memo, jobs.current),
+      ...readingWindow(s, L, view, scroll, memo),
+      infoCur: clamp(s.infoCur, 0, info.linkRows.length - 1),
       note,
       scrollKey,
       geo,
       maxTop,
       top,
       tw,
-      pg,
-      ranges,
-      spot,
-      win,
       matches,
       matchIdx: matchIndex(matches, s.matchLine),
-      title,
-      changes,
-      propsChanged,
-      after,
-      propsKey,
-      cv,
       currentHeading,
-      gHere,
-      gHash,
-      gStyle,
-      sheet,
-      sideFocus,
+      sideFocus: (L.shown && s.focus === "panel" ? s.view : null) as View | null,
       oRows,
       outlineCur: clamp(s.outlineCur, 0, oRows.length - 1),
     }

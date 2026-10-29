@@ -2,6 +2,49 @@
 import { statSync, watch, type FSWatcher } from "node:fs"
 import { basename, dirname } from "node:path"
 
+/** Identity of the file's current content (mtime, size, inode), or `"missing"`. */
+function fileSignature(path: string): string {
+  try {
+    const st = statSync(path)
+    return `${st.mtimeMs}:${st.size}:${st.ino}`
+  } catch {
+    return "missing"
+  }
+}
+
+/** Inode of the watched folder, or undefined once it is gone. */
+function dirInode(dir: string): number | undefined {
+  try {
+    return statSync(dir).ino
+  } catch {
+    return undefined
+  }
+}
+
+/** Debounced change detection: `fire` schedules a look, `report` calls `change` only when the signature differs from the last one reported. */
+function makeReporter(path: string, change: () => void, debounce: number) {
+  let last = fileSignature(path)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const r = {
+    closed: false,
+    report() {
+      const now = fileSignature(path)
+      if (r.closed || now === last) return
+      last = now
+      change()
+    },
+    fire() {
+      clearTimeout(timer)
+      timer = setTimeout(r.report, debounce)
+    },
+    stop() {
+      r.closed = true
+      clearTimeout(timer)
+    },
+  }
+  return r
+}
+
 /**
  * Watch one file for changes, including atomic saves (write temp + rename) that swap the
  * inode: the parent directory is watched and events are filtered by file name. If the
@@ -19,27 +62,7 @@ export function watchPath(
   on: { change: () => void; error: (msg: string) => void },
   { debounce = 50, poll = 500, check = 1000 } = {},
 ): () => void {
-  const signature = () => {
-    try {
-      const st = statSync(path)
-      return `${st.mtimeMs}:${st.size}:${st.ino}`
-    } catch {
-      return "missing"
-    }
-  }
-  let last = signature()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let closed = false
-  const report = () => {
-    const now = signature()
-    if (closed || now === last) return
-    last = now
-    on.change()
-  }
-  const fire = () => {
-    clearTimeout(timer)
-    timer = setTimeout(report, debounce)
-  }
+  const rep = makeReporter(path, on.change, debounce)
 
   let w: FSWatcher | undefined
   let polling = false
@@ -47,32 +70,25 @@ export function watchPath(
   const fallback = (e: unknown) => {
     w?.close()
     w = undefined
-    if (closed || polling) return
+    if (rep.closed || polling) return
     polling = true
     on.error(`live reload: ${(e as Error)?.message ?? e} · polling instead`)
-    pollTimer = setInterval(report, poll)
+    pollTimer = setInterval(rep.report, poll)
     pollTimer.unref()
   }
 
   const name = basename(path)
   const dir = dirname(path)
-  const inode = () => {
-    try {
-      return statSync(dir).ino
-    } catch {
-      return undefined
-    }
-  }
   let watched: number | undefined
   let guard: ReturnType<typeof setInterval> | undefined
   const arm = (first = false) => {
     w?.close()
     w = undefined
-    watched = inode()
+    watched = dirInode(dir)
     if (watched === undefined && !first) return // gone; the guard re-arms when it is back
     try {
       w = watch(dir, { persistent: false }, (_ev, file) => {
-        if (file === null || String(file) === name) fire()
+        if (file === null || String(file) === name) rep.fire()
       })
       w.on("error", fallback)
     } catch (e) {
@@ -83,16 +99,15 @@ export function watchPath(
   if (!polling) {
     guard = setInterval(() => {
       if (polling) return clearInterval(guard)
-      if (inode() === watched) return
+      if (dirInode(dir) === watched) return
       arm()
-      fire() // the file went away or is a different one now
+      rep.fire() // the file went away or is a different one now
     }, check)
     guard.unref()
   }
 
   return () => {
-    closed = true
-    clearTimeout(timer)
+    rep.stop()
     w?.close()
     clearInterval(pollTimer)
     clearInterval(guard)

@@ -25,7 +25,18 @@ export type EffectDeps = Pick<AIJobs, "dropDelta"> & Pick<Links, "ensureLinks"> 
 
 /** Register every effect of App on the app context (hooks: call it unconditionally, before any early return). */
 export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject, leave, animateWelcome }: EffectDeps) {
-  const { ui, set, bump, derive, memo, timers, jobs, vault, alive, hlSeen, renderer, themeName, linkScanDelay, flash } = c
+  useNoteWatch(c, dropDelta)
+  useStartup(c, ensureLinks, recordProject)
+  useRendererListeners(c, leave)
+  useUnmountCleanups(c)
+  // the welcome page's ink-in and steam
+  useEffect(animateWelcome)
+  // code blocks render plain first; once their parser results land, re-render the document
+  useEffect(() => colourIn(c, c.derive().doc, c.hlSeen))
+}
+
+/** Live reload of the open note, then its change baseline. */
+function useNoteWatch({ ui, set, bump, derive, memo, timers, jobs, flash }: AppCtx, dropDelta: EffectDeps["dropDelta"]) {
   const { openPath, watchGen } = ui.current
   useEffect(() => {
     if (!openPath || openPath === STDIN) return
@@ -54,6 +65,10 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
     dropDelta()
     set({ baseline: { path: openPath, text: memo.note(f.src), props: memo.propsKey(memo.fm(f.src)), at: Date.now() } })
   }, [openPath, reload])
+}
+
+/** What runs once at mount: the project record, the config theme toast and a piped document's link scan. */
+function useStartup({ ui, themeName, linkScanDelay, flash }: AppCtx, ensureLinks: EffectDeps["ensureLinks"], recordProject: EffectDeps["recordProject"]) {
   // the start is a project opened too
   useEffect(recordProject, [])
   // `--theme` is checked by the CLI, so a name nothing resolves came from config.json (brothy stands in)
@@ -66,6 +81,10 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
     const id = setTimeout(ensureLinks, linkScanDelay)
     return () => clearTimeout(id)
   }, [])
+}
+
+/** The renderer's `destroy` and `selection` events. */
+function useRendererListeners({ renderer, flash }: AppCtx, leave: EffectDeps["leave"]) {
   // SIGTERM / SIGHUP (the terminal closing) end the renderer without `quit`
   useEffect(() => {
     renderer.on("destroy", leave)
@@ -82,6 +101,10 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
     renderer.on("selection", copy)
     return () => void renderer.off("selection", copy)
   }, [])
+}
+
+/** What stops on unmount: the index build, the timers and AI jobs, and the `alive` flag. */
+function useUnmountCleanups({ timers, jobs, vault, alive }: AppCtx) {
   // a build still running after unmount must not touch the store
   useEffect(() => () => void (vault.current = { ...vault.current }), [])
   useEffect(
@@ -92,10 +115,6 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
     [],
   )
   useEffect(() => () => void (alive.current = false), [])
-  // the welcome page's ink-in and steam
-  useEffect(animateWelcome)
-  // code blocks render plain first; once their parser results land, re-render the document
-  useEffect(() => colourIn(c, derive().doc, hlSeen))
 }
 
 /** What the render-time effects watch, as App draws it: the hint context, the zen reading section and the theme sample. */
