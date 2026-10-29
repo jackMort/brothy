@@ -13,7 +13,7 @@ import type { HelpLayout, HelpLine } from "./help"
 import type { OpenRow } from "./projects"
 import type { SwitchRow } from "./vault"
 import type { ZenRow } from "./zen"
-import { BODY_PAD, POPUP_INSET, ROW_PAD, ZEN_POPUP_W, innerWidth, popupWidth } from "./geometry"
+import { BODY_PAD, PANE_PAD, POPUP_INSET, ROW_PAD, ZEN_POPUP_W, innerWidth, popupWidth } from "./geometry"
 import { switchSplit } from "./peek"
 import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "./themepick"
 import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
@@ -311,7 +311,7 @@ function SplitPane({ t, rows, listW, paneW, list, lines, paneKey, paneBg }: {
       </box>
       <box
         key={paneKey}
-        style={{ width: paneW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(paneBg ? { backgroundColor: paneBg } : {}) }}
+        style={{ width: paneW + PANE_PAD, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(paneBg ? { backgroundColor: paneBg } : {}) }}
       >
         {lines.slice(0, rows).map((spans, i) => (
           <Line key={i} spans={spans} />
@@ -349,9 +349,9 @@ export function Switcher({
   peek?: Span[][]
 }) {
   const g = switchSplit(W)
-  const split = g.split && peek !== undefined
-  const width = split ? g.width : popupWidth(W)
-  const listW = split ? g.listW : innerWidth(width)
+  const lines = g.split ? peek : undefined
+  const width = lines ? g.width : popupWidth(W)
+  const listW = lines ? g.listW : innerWidth(width)
   const list = (
     <PickerList
       t={t}
@@ -368,7 +368,7 @@ export function Switcher({
   return (
     <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
-      {split ? <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={peek!} /> : list}
+      {lines ? <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={lines} /> : list}
     </Overlay>
   )
 }
@@ -591,6 +591,9 @@ export function ThemePicker({
   )
 }
 
+/** Columns of the zen settings' label column. */
+const ZEN_LABEL_W = 16
+
 /** `Z` popup: one row per zen setting, label left and value right of it; controlled by App. */
 export function ZenSettings({
   t,
@@ -620,7 +623,7 @@ export function ZenSettings({
         t={t}
         items={rows.map((r) => ({
           spans: [
-            { text: r.label.padEnd(16), fg: r.disabled ? t.textMuted : t.text },
+            { text: r.label.padEnd(ZEN_LABEL_W), fg: r.disabled ? t.textMuted : t.text },
             { text: r.value, fg: r.disabled ? t.textMuted : t.secondary },
           ],
         }))}
@@ -643,7 +646,7 @@ function helpCell(t: Theme, l: HelpLine | undefined, { colW, keyW }: HelpLayout)
   return padTo([{ text: " " + keys + " ".repeat(keyW - sw(keys)), fg: t.text }, { text: truncate(l.desc, colW - keyW), fg: t.textMuted }], 1 + colW)
 }
 
-/** `? ?`: the keys sheet, today's popup with role chips per group and, from 100 columns, two columns; App owns `top`. */
+/** `? ?`: the keys sheet with role chips per group and, from 100 columns, two columns; App owns `top`. */
 export function HelpSheet({ t, W, H, layout, top, title, note, onClose, onScroll }: {
   t: Theme
   W: number
@@ -669,8 +672,11 @@ export function HelpSheet({ t, W, H, layout, top, title, note, onClose, onScroll
   )
 }
 
+/** The widest the welcome page's recent-projects list gets. */
+const RECENT_W = 58
+
 /**
- * The empty state (no Markdown files): the wordmark over a bowl with steam rising off the broth, today's message,
+ * The empty state (no Markdown files): the wordmark over a bowl with steam rising off the broth, the message,
  * keycap actions, recent projects as `o` picker rows (pointing selects, a click opens) and the hint row.
  * Blocks drop as the area shrinks (`welcomeFit`); App owns the selection, the steam tick and the ink step.
  */
@@ -706,15 +712,15 @@ export function Welcome({ t, CW, CH, root, recents, hl, tick, ink, keys, home, o
   line(centre([{ text: truncate(`No Markdown files found in ${safeLine(root)}`, CW), fg: t.textMuted }]))
   line([])
   line(centre(keycaps(t, keys)))
-  // PickerList pads one cell each side of the rows
-  const FW = Math.min(58, CW - 2)
+  const FW = Math.min(RECENT_W, CW - 2)
   const fx = Math.max(0, Math.floor((CW - FW) / 2))
+  const innerW = FW + 2 // PickerList pads one cell each side of the rows
   const list = fit.recents ? recents.slice(0, 1 + fit.recents) : []
   if (list.length) {
     line([])
     rows.push(
       <box key="recent" style={{ flexDirection: "column", alignItems: "flex-start", flexShrink: 0, paddingLeft: Math.max(0, fx - 1) }}>
-        <PickerList t={t} items={list.map((r) => openItem(r, t, FW - 6, home))} hl={hl} top={0} height={list.length} innerW={FW + 2} onHover={onHover} onActivate={onActivate} />
+        <PickerList t={t} items={list.map((r) => openItem(r, t, innerW - ROW_PAD, home))} hl={hl} top={0} height={list.length} innerW={innerW} onHover={onHover} onActivate={onActivate} />
       </box>,
     )
   }
