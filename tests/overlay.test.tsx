@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { testRender } from "@opentui/react/test-utils"
 import { quietAct } from "./quiet-act"
-import { HelpSheet, OpenPicker, Overlay, PickerInput, Switcher, ThemeBoard, ThemePicker, ZenSettings, fitHits, modeSwitch, scrim } from "../src/overlay"
+import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemeBoard, ThemePicker, ZenSettings, fitHits, modeSwitch, scrim } from "../src/overlay"
 import { helpLayout } from "../src/help"
 import { WORDMARK } from "../src/status"
 import type { OpenRow } from "../src/projects"
@@ -89,6 +89,18 @@ test("Switcher: section headers with counts, rows per kind, folder on the right,
   expect(rowText(setup, "Kafka setup").spans.some((sp) => hex(sp.bg) === t.primary)).toBe(true)
   const ka = rowText(setup, "run kafka now").spans.find((sp) => sp.text === "ka")!
   expect(hex(ka.fg)).toBe(t.primary)
+})
+
+test("PickerList: a row cut inside astral characters keeps whole characters and stays within the width", async () => {
+  const t = themes[0]!
+  const items = [{ spans: [{ text: "😀".repeat(12) }], right: "dev" }]
+  setup = quietAct(await testRender(<PickerList t={t} items={items} hl={-1} top={0} height={1} innerW={21} />, { width: 30, height: 3 }))
+  await setup.renderOnce()
+  const row = setup.captureCharFrame().split("\n")[0]!
+  expect(row).not.toContain("\uFFFD")
+  expect(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(row)).toBe(false) // no lone surrogate
+  expect(row).toContain("😀😀😀😀  dev") // textW 13 − "dev" 3 − 1 = 9 cells: four whole emoji
+  expect(Bun.stringWidth(row.trimEnd())).toBeLessThanOrEqual(30)
 })
 
 test("Switcher: empty states", async () => {

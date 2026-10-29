@@ -183,7 +183,16 @@ export function PickerList({
         let used = 0
         for (const s of it.spans) {
           let text = s.text
-          while (text && used + sw(text) > leftMax) text = text.slice(0, -1)
+          if (used + sw(text) > leftMax) {
+            // cut by code point, measuring each once
+            let w = used
+            let kept = ""
+            for (const ch of text) {
+              if ((w += sw(ch)) > leftMax) break
+              kept += ch
+            }
+            text = kept
+          }
           if (text) spans.push({ ...s, text, fg: sel ? fgOn : s.fg })
           used += sw(text)
         }
