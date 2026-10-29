@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { A, calloutKind, parseFrontMatter, parseProperties, render, renderSource, sourceScan, stats, wrap, width } from "../src/markdown"
+import { parseFrontMatter, parseProperties } from "../src/frontmatter"
+import { A, calloutKind, render, renderSource, sourceScan, wrap, width } from "../src/markdown"
+import { stats } from "../src/stats"
 import { canonicalLang } from "../src/highlight"
 import { themes } from "../src/theme"
 

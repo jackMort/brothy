@@ -4,8 +4,9 @@
  * `i` is heading `i` in Preview, Source and the switcher's index.
  */
 
+import { parseFrontMatter } from "./frontmatter"
 import { normalize, scanComments } from "./lexer"
-import { parseFrontMatter, sourceScan } from "./markdown"
+import { sourceScan } from "./markdown"
 import { themes } from "./theme"
 
 /** Heading text as a lenient key: lowercase, `#` dropped, dashes and runs of spaces as one space, punctuation removed. */

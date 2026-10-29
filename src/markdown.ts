@@ -2,16 +2,19 @@ import type { Token, Tokens } from "marked"
 import type { Theme } from "./theme"
 
 import { isMarkdown } from "./files"
+import { parseFrontMatter } from "./frontmatter"
 import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
 import { lexBlocks, lexInline, lexOutline, normalize, parseWikilink, scanComments, stripComments, wikiLabel, type Wikilink } from "./lexer"
-import { A, safe, safeLine, type Span } from "./spans"
+import { A, safe, type Span } from "./spans"
 import { graphemes, pushSpan, spanWidth, width } from "./text"
 
 export { A, width }
 export type { Span }
 export { HEADING_STYLES, type HeadingStyle } from "./heading-style"
 export { normalize, parseWikilink, scanComments, stripComments, wikiLabel, type Wikilink } from "./lexer"
+export { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "./frontmatter"
+export { stats, stripCode, wordStats, type Stats } from "./stats"
 
 export interface Line {
   spans: Span[]
@@ -42,12 +45,6 @@ export interface Rendered {
 /** Blocks `r` is still waiting on: `await ensureHighlights(...)`, then re-render if it returns true. */
 export const pendingHighlights = (r: Rendered): HighlightRequest[] => r.pending ?? []
 
-export interface FrontMatter {
-  entries: [string, string][]
-  body: string
-  offset: number // number of source lines consumed by front matter
-}
-
 export type LinkTarget =
   | { kind: "wiki"; target: string; heading?: string; embed: boolean }
   | { kind: "md"; href: string }
@@ -67,59 +64,6 @@ export interface RenderOpts {
 }
 
 const maxOf = (xs: number[], init = 0) => xs.reduce((m, x) => (x > m ? x : m), init)
-
-const FRONT = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/
-
-export function parseFrontMatter(src: string): FrontMatter {
-  src = normalize(src)
-  const m = FRONT.exec(src)
-  if (!m) return { entries: [], body: src, offset: 0 }
-  const entries: [string, string][] = []
-  for (const line of (m[1] ?? "").split(/\r?\n/)) {
-    const kv = /^([\w.-]+)\s*:\s*(.*)$/.exec(line)
-    if (kv) entries.push([kv[1]!, safeLine(kv[2]!.replace(/^["']|["']$/g, ""))])
-  }
-  return { entries, body: src.slice(m[0].length), offset: m[0].replace(/\r?\n$/, "").split("\n").length }
-}
-
-export type Property = [string, string | string[]]
-/** Keys whose plain `a, b` values are lists (Obsidian writes `tags: a, b`). */
-const LIST_KEYS = new Set(["tags", "tag", "aliases", "alias", "cssclasses"])
-const unquote = (s: string) => {
-  const t = safeLine(s).trim()
-  return t.length >= 2 && /^(["']).*\1$/.test(t) ? t.slice(1, -1) : t
-}
-
-/**
- * Front-matter properties, tolerant of the YAML Obsidian writes: `k: v` scalars (quotes
- * stripped), flow lists `[a, b]`, comma lists for list-like keys, and block lists (`k:` then
- * `  - a` lines). Other nested YAML is skipped.
- */
-export function parseProperties(src: string): Property[] {
-  const m = FRONT.exec(normalize(src))
-  if (!m) return []
-  const lines = (m[1] ?? "").split(/\r?\n/)
-  const out: Property[] = []
-  for (let i = 0; i < lines.length; i++) {
-    const kv = /^([\w.-]+)\s*:\s*(.*)$/.exec(lines[i]!)
-    if (!kv) continue
-    const key = kv[1]!
-    const raw = kv[2]!.trim()
-    if (raw === "") {
-      const items: string[] = []
-      while (i + 1 < lines.length && /^\s*-(\s|$)/.test(lines[i + 1]!)) {
-        const item = unquote(lines[++i]!.replace(/^\s*-\s*/, ""))
-        if (item) items.push(item)
-      }
-      out.push([key, items.length ? items : ""])
-    } else if (raw.startsWith("[") && raw.endsWith("]")) {
-      out.push([key, raw.slice(1, -1).split(",").map(unquote).filter(Boolean)])
-    } else if (LIST_KEYS.has(key.toLowerCase()) && raw.includes(",")) {
-      out.push([key, raw.split(",").map(unquote).filter(Boolean)])
-    } else out.push([key, unquote(raw)])
-  }
-  return out
-}
 
 // ---------------------------------------------------------------- wrapping
 
@@ -1091,79 +1035,4 @@ export function renderSource(src: string, max: number, t: Theme, opts: RenderOpt
     rows.forEach((r, k) => lines.push(k === 0 && idx >= 0 ? { spans: r, heading: idx } : { spans: r }))
   })
   return { lines, headings, plain: lines.map((l) => plainOf(l.spans).replace(/\u00a0/g, " ").toLowerCase()), srcRow }
-}
-
-export interface Stats {
-  words: number
-  lines: number
-  headings: number
-  links: number
-  codeBlocks: number
-  tables: number
-  tasks: [number, number]
-  minutes: number
-}
-
-/** `stats`' words and reading minutes alone, without lexing (the Ctrl-P peek); `src` already normalized and without comments. */
-function countWords(src: string): { words: number; minutes: number } {
-  const words = (src.replace(/```[\s\S]*?```/g, "").replace(/\[[ xX]\]/g, "").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
-  return { words, minutes: Math.max(1, Math.round(words / 220)) }
-}
-/** The same `words` and `minutes` as `stats(src)`. */
-export const wordStats = (src: string) => countWords(stripComments(normalize(src)))
-
-export function stats(src: string): Stats {
-  const lines = normalize(src).split("\n").length
-  src = stripComments(normalize(src))
-  const tokens = lexBlocks(src)
-  const s: Stats = { words: 0, lines, headings: 0, links: 0, codeBlocks: 0, tables: 0, tasks: [0, 0], minutes: 0 }
-  const walk = (toks: Token[]) => {
-    for (const tok of toks) {
-      if (tok.type === "heading") s.headings++
-      if (tok.type === "link") s.links++
-      if (tok.type === "code") s.codeBlocks++
-      if (tok.type === "table") {
-        s.tables++
-        const tb = tok as Tokens.Table
-        for (const cell of [...tb.header, ...tb.rows.flat()]) walk(cell.tokens)
-      }
-      if (tok.type === "list")
-        for (const it of (tok as Tokens.List).items)
-          if (it.task || /^\[[ xX]\]$/.test(it.text.trim())) {
-            s.tasks[1]++
-            if (it.task ? it.checked : !/^\[ \]$/.test(it.text.trim())) s.tasks[0]++
-          }
-      const anyTok = tok as unknown as { tokens?: Token[]; items?: Token[] }
-      if (anyTok.tokens) walk(anyTok.tokens)
-      if (anyTok.items) walk(anyTok.items)
-    }
-  }
-  walk(tokens)
-  Object.assign(s, countWords(src))
-  // wikilinks (`[[note]]`, `![[embed]]`) are links too; marked leaves them as text
-  s.links += (stripCode(src).match(/!?\[\[[^\[\]\n]+\]\]/g) ?? []).length
-  return s
-}
-
-/**
- * The source with fenced code blocks (``` or ~~~, unclosed ones run to the end) and inline
- * code spans removed, so text that only looks like markup inside code is ignored.
- */
-export function stripCode(src: string): string {
-  const out: string[] = []
-  let fence: string | null = null
-  for (const line of src.split("\n")) {
-    const open = /^ {0,3}(`{3,}|~{3,})/.exec(line)
-    if (fence) {
-      const t = line.trim()
-      if (t.length >= fence.length && [...t].every((c) => c === fence![0])) fence = null
-      continue
-    }
-    if (open) {
-      fence = open[1]!
-      continue
-    }
-    out.push(line.replace(/`[^`\n]*`/g, ""))
-  }
-  return out.join("\n")
 }
