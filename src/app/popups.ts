@@ -13,7 +13,6 @@ export function makePopups(c: AppCtx) {
   const { ui, set, derive, dims, timers, flash, persist, focusDoc, showMatch } = c
 
   // ---------------------------------------------------- panel filter
-  const startFilter = () => set({ filterTyping: true })
   /** The filter text of the shown view (Files or Outline). */
   const filterText = () => (ui.current.view === "outline" ? ui.current.outlineFilter : ui.current.filter)
   const filterType = (v: string) => {
@@ -82,7 +81,7 @@ export function makePopups(c: AppCtx) {
   }
 
   return {
-    startFilter, filterText, filterType, filterStop,
+    filterText, filterType, filterStop,
     promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose,
     openTheme, closeTheme, themeSet, applyTheme, helpGo,
   }

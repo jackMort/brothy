@@ -6,7 +6,7 @@ import { ensureHighlights } from "./markdown/highlight"
 import { pendingHighlights, type Geometry, type Rendered } from "./markdown/render"
 import { makeAIJobs } from "./app/ai-jobs"
 import { makeDerive, makeMemo } from "./app/derive"
-import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
+import { makeCtx, type Timers, type WelcomeState } from "./app/ctx"
 import { makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
@@ -108,14 +108,12 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
 
   const derive = makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen })
 
-  // the app context in layers (core, then nav) and the feature factories over it, rebuilt every render: handlers close
-  // over this render's size and props, and read the store at call time
-  const ctx = makeNav(
-    makeCore({
-      ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer,
-      fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome,
-    }),
-  )
+  // the app context and the feature factories over it, rebuilt every render: handlers close over this render's size and
+  // props, and read the store at call time
+  const ctx = makeCtx({
+    ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer,
+    fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome,
+  })
   const aiJobs = makeAIJobs(ctx)
   const links = makeLinks(ctx)
   const zen = makeZen(ctx, aiJobs)

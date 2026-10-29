@@ -54,7 +54,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
   const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = zen
   const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate } = switcher
   const { leave, opType, opGo, openOpener, opComplete, opOpen, welcomeKey, stopWelcome } = workspace
-  const { startFilter, filterText, filterType, filterStop, promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose, openTheme, closeTheme, themeSet, applyTheme, helpGo } = popups
+  const { filterText, filterType, filterStop, promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose, openTheme, closeTheme, themeSet, applyTheme, helpGo } = popups
 
   /** Context id outside popups and zen: the focused panel view, else the document. */
   const docMode = (): Ctx => {
@@ -183,7 +183,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       const { sideFocus } = derive()
       if (!sideFocus) return set({ prompt: { value: "", hl: -1, top: 0 } })
       if (sideFocus === "info") selectView("files")
-      startFilter()
+      set({ filterTyping: true })
     },
     focus: () => (derive().sideFocus ? focusDoc() : focusPanel()),
     theme: openTheme,

@@ -1,6 +1,6 @@
-// The app context every `src/app/*` factory closes over, built each render in two layers: the core (the store, the
-// refs, this render's size and props, toasts, fades and config saves) and navigation on top of it (scrolling, opening
-// a note, focus, the Files cursor). Not pure: it holds the store and the timers.
+// The app context every `src/app/*` factory closes over, built each render: the store, the refs, this render's size and
+// props, toasts, fades and config saves, then navigation over them (scrolling, opening a note, focus, the Files cursor).
+// Not pure: it holds the store and the timers.
 import type { CliRenderer } from "@opentui/core"
 import type { Dispatch, SetStateAction } from "react"
 import { VIEWS, saveConfig, type Config, type SidebarConfig, type View } from "../system/config"
@@ -72,11 +72,9 @@ export interface Base extends DeriveRefs {
   welcome: { current: WelcomeState }
 }
 
-// ------------------------------------------------------------- core
-
-/** The core layer: `base` plus fades, toasts and config saves. */
-export function makeCore(base: Base) {
-  const { ui, set, bump, timers } = base
+/** The app context: `base` plus fades, toasts and config saves, then scrolling, opening a note, the Files cursor and focus. */
+export function makeCtx(base: Base) {
+  const { ui, set, bump, derive, timers, scrolls, sidebarSeen, zenBack } = base
   /** Re-render through a fade: wait out `hold` after `at()`, then step every GHOST_STEP until hidden, then `done()`. */
   const runFade = (slot: "ghost" | "hints" | "toast" | "gloss", at: () => number | null, hold: number, done: () => void) => {
     clearTimeout(timers.current[slot])
@@ -108,16 +106,7 @@ export function makeCore(base: Base) {
     return ok
   }
 
-  return { ...base, runFade, flash, persist }
-}
-/** The core layer. */
-export type Core = ReturnType<typeof makeCore>
-
-// ------------------------------------------------------------- nav
-
-/** The navigation layer over `core`: scroll, open a note, move the Files cursor, focus the panel or the document. */
-export function makeNav(core: Core) {
-  const { ui, set, bump, derive, timers, scrolls, sidebarSeen, zenBack, persist } = core
+  // navigation: scroll, open a note, move the Files cursor, focus the panel or the document
   const setTop = (n: number) => {
     zenBack.current = null // an explicit move (keys, find, jump, teleprompter tick) drops the exact restore
     const d = derive()
@@ -225,7 +214,7 @@ export function makeNav(core: Core) {
     setTop(d.tw || d.pg ? m : m - Math.floor(d.L.CH / 3))
   }
 
-  return { ...core, setTop, scrollBy, stopRolling, currentSpot, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch }
+  return { ...base, runFade, flash, persist, setTop, scrollBy, stopRolling, currentSpot, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch }
 }
-/** What every `src/app/*` factory takes: the core and navigation layers. */
-export type AppCtx = ReturnType<typeof makeNav>
+/** What every `src/app/*` factory takes. */
+export type AppCtx = ReturnType<typeof makeCtx>

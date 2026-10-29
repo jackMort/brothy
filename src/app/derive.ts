@@ -120,10 +120,10 @@ export function makeMemo(stdin: string | undefined) {
   }
 }
 /** The memo table: one `cached` builder per derived value. */
-export type Memo = ReturnType<typeof makeMemo>
+type Memo = ReturnType<typeof makeMemo>
 
 /** A scroll entry: the top line and the geometry it was taken at, so a re-layout can remap it. */
-export interface ScrollEntry {
+interface ScrollEntry {
   top: number
   geo: Geometry
 }

@@ -174,8 +174,6 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   const jumpToText = (row: TextHit, q: string, doc: NoteDoc | undefined) => {
     set({ query: q, matchLine: null })
     const { view, matches, s } = derive()
-    // Source rows map to source lines; Preview has no such map, so the hit is found by counting
-    // matches from the start of its section
     const from = s.source ? (view.srcRow?.[row.line] ?? 0) : row.heading === null ? 0 : (view.headings[row.heading]?.line ?? 0)
     const end = s.source ? Infinity : (view.headings[row.heading === null ? 0 : row.heading + 1]?.line ?? Infinity)
     const inSection = matches.filter((x) => x >= from && x < end)
@@ -235,7 +233,8 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
 
   /** The peek pane (from PEEK_MIN_W): the highlighted row's note, its TL;DR only while fresh; undefined without one. */
   const peekPane = ({ s, swRows, swHl, t, L }: Derived) => {
-    const peekRow = s.switcher && W >= PEEK_MIN_W ? swRows[swHl] : undefined
+    if (!s.switcher || W < PEEK_MIN_W) return undefined
+    const peekRow = swRows[swHl]
     const peekPath = peekRow && "path" in peekRow ? peekRow.path : null
     const peekDoc = peekPath ? vault.current.ix.docs.get(peekPath) : undefined
     const peekW = switchSplit(W).peekW
@@ -243,23 +242,21 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const peekWin = peekNote && peekDoc && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc, peekRow) : null
     const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headingStyle) : undefined
     const peekSaved = peekPath ? s.summaries[peekPath] : undefined
-    return s.switcher && W >= PEEK_MIN_W
-      ? peekLines(
-          {
-            row: peekRow,
-            rel: peekPath ? relative(s.linkTree.path, peekPath) : "",
-            doc: peekDoc,
-            view: peekView,
-            base: peekWin?.base,
-            words: peekNote?.words,
-            minutes: peekNote?.minutes,
-            summary: peekSaved && peekNote && isFresh(peekSaved, peekNote.hash) ? { text: peekSaved.summary, model: shortModel(peekSaved.model) } : undefined,
-          },
-          t,
-          peekW,
-          L.PH,
-        )
-      : undefined
+    return peekLines(
+      {
+        row: peekRow,
+        rel: peekPath ? relative(s.linkTree.path, peekPath) : "",
+        doc: peekDoc,
+        view: peekView,
+        base: peekWin?.base,
+        words: peekNote?.words,
+        minutes: peekNote?.minutes,
+        summary: peekSaved && peekNote && isFresh(peekSaved, peekNote.hash) ? { text: peekSaved.summary, model: shortModel(peekSaved.model) } : undefined,
+      },
+      t,
+      peekW,
+      L.PH,
+    )
   }
 
   return { dropAsk, closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane }

@@ -15,13 +15,13 @@ import type { AppCtx } from "./ctx"
 import { jobKey, type Job, type JobKind } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
-export const MAX_JOBS = 3
+const MAX_JOBS = 3
 /** streamed summary text re-renders at most this often (ms) */
-export const AI_FRAME = 100
+const AI_FRAME = 100
 
 /** Toasts every AI action shares. */
 export const AI_OFF = `AI off · set "ai" in config.json`
-export const AI_BUSY = `AI busy · ${MAX_JOBS} requests running`
+const AI_BUSY = `AI busy · ${MAX_JOBS} requests running`
 
 /** How `startJob` runs a request. */
 export interface JobRun {

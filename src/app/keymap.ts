@@ -46,7 +46,7 @@ export interface FooterState {
  * Every binding: dispatch, the `? ?` sheet and the footer words all read it, so they cannot drift apart (`FOOTERS` picks
  * which hints a context shows). Specs are matched by `matchKey` (`S-g` is G, `C-d` is ^d).
  */
-export const KEYMAP = {
+const KEYMAP = {
   views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", desc: "Files · Outline · Info (piped: 1 2 only)" },
   source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview" },
   width: { modes: ["global"], keys: ["w"], label: "w", desc: "full width / measure" },
@@ -199,7 +199,7 @@ export function footerHints(c: Ctx, on: FooterState): HintItem[] {
 }
 
 /** Help sections by mode, in sheet order; `AI` collects bindings that name it as their `group`. */
-export const HELP_SECTIONS: [readonly Mode[], string][] = [
+const HELP_SECTIONS: [readonly Mode[], string][] = [
   [["global"], "Global"],
   [["doc"], "Document"],
   [["zen"], "Zen"],

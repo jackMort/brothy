@@ -93,11 +93,11 @@ export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScr
       </box>
     )
   } else {
+    const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
     content = (
       <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
         {view.lines.slice(top, top + CH).map((l: Line, i) => {
           let spans = markMatches(l.spans, query, t)
-          const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
           if (lb)
             lb.spots.forEach((sp, k) => {
               const label = lb.labels[k]!
