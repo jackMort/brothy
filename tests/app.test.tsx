@@ -1,4 +1,4 @@
-import { afterAll, afterEach, expect, setSystemTime, test } from "bun:test"
+import { afterAll, afterEach, expect, setSystemTime, spyOn, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, dirname, join } from "node:path"
@@ -24,6 +24,7 @@ afterAll(async () => {
 const { App } = await import("../src/App")
 import type { EditResult } from "../src/editor"
 const { shutdownHighlighter } = await import("../src/highlight")
+import * as vaultModule from "../src/vault"
 import { mix, themeByName } from "../src/theme"
 import { GHOST_STEP, HINT_HOLD } from "../src/zen"
 
@@ -1991,6 +1992,19 @@ test("a note reached outside the opened folder names its vault folder in the top
 test("outside a vault, a single note's links resolve only within its folder", async () => {
   const v = tmp({ "Journal/a.md": "see [[c]]\n", "c.md": "# Sea note\n" })
   expect(await keys(await mount(join(v, "Journal"), "a.md"), "f", "a")).toContain("no note named “c”")
+})
+
+test("switcher: an index build that fails toasts the error and ends indexing", async () => {
+  const spy = spyOn(vaultModule, "refreshIndex").mockRejectedValue(new Error("boom"))
+  try {
+    const s = await mount(tmp({ "a.md": "# a\n", "b.md": "# b\n" }), "a.md")
+    await keys(s, "C-p")
+    const f = await waitFrame(s, (f) => f.includes("index failed"))
+    expect(f).toContain("index failed · boom")
+    expect(f).not.toMatch(/indexing \d/) // the header counter is gone
+  } finally {
+    spy.mockRestore()
+  }
 })
 
 test("C-p, type, ⏎ opens the note; esc closes and keeps the document", async () => {

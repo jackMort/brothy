@@ -1628,7 +1628,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const tree = ui.current.linkTree
     set({ indexing: [0, folderCounts(tree).get(tree.path) ?? 0] })
     refreshIndex(v.ix, tree, fsIO, (done, total) => live() && set({ indexing: [done, total], ixVer: ui.current.ixVer + 1 }), live)
-      .catch(() => {})
+      .catch((e) => live() && flash(`index failed · ${errText(e)}`, "error")) // a throwing note scan or progress callback; unreadable files never get here
       .finally(() => {
         v.running = false
         if (live()) set({ indexing: null, ixVer: ui.current.ixVer + 1 })
