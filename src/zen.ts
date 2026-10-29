@@ -1,6 +1,7 @@
 // Zen mode: settings model and pure helpers (sections, typewriter, pages, dimming, timing).
 
 import type { Span } from "./spans"
+import { clamp } from "./text"
 import { mix, type Theme } from "./theme"
 
 export type Flow = "scroll" | "pages"
@@ -31,7 +32,6 @@ export const ZEN_DEFAULTS: ZenConfig = {
 export const ZEN_WPM = { min: 120, max: 400, step: 20 } as const
 export const ZEN_MEASURE = { min: 60, max: 100, step: 4 } as const
 
-const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 const BOOLS = ["spotlight", "typewriter", "ghost", "prompter"] as const
 
 /** The valid fields of a raw `zen` config value (numbers rounded and clamped); everything else is dropped. */

@@ -3,32 +3,10 @@
 import { basename } from "node:path"
 import { stem } from "./files"
 import { width as sw } from "./markdown"
+import { truncate } from "./text"
 import { fadeStep } from "./zen"
 
-/** Cut `s` to `max` columns, ending in `…` when it had to be cut. */
-export function truncate(s: string, max: number): string {
-  if (max <= 0) return ""
-  if (sw(s) <= max) return s
-  let out = ""
-  for (const ch of s) {
-    if (sw(out + ch) > max - 1) break
-    out += ch
-  }
-  return out + "…"
-}
-
-/** Cut `s` from the left to `max` columns, starting with `…` when it had to be cut. */
-export function truncateLeft(s: string, max: number): string {
-  if (max <= 0) return ""
-  if (sw(s) <= max) return s
-  const chars = [...s]
-  let out = ""
-  for (let i = chars.length - 1; i >= 0; i--) {
-    if (sw(chars[i] + out) > max - 1) break
-    out = chars[i] + out
-  }
-  return "…" + out
-}
+export { truncate, truncateLeft } from "./text"
 
 // ------------------------------------------------------------- top line
 

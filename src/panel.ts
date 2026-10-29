@@ -6,11 +6,11 @@ import { fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
 import { stripCode, wrap, width as sw, type LinkTarget, type Property, type Stats } from "./markdown"
 import { safeLine } from "./spans"
 import { truncate } from "./status"
+import { plural } from "./text"
+
+export { fmtNum, plural } from "./text"
 
 // ------------------------------------------------------------- formatting
-
-export const fmtNum = (n: number) => n.toLocaleString("en-US")
-export const plural = (n: number, word: string) => `${fmtNum(n)} ${word}${n === 1 ? "" : "s"}`
 
 export function fmtSize(b: number) {
   if (b < 1024) return `${b} B`
