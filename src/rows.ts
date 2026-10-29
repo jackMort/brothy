@@ -2,8 +2,7 @@
 // the scrim colour and the welcome art spans. No React: overlay.tsx draws them.
 import { basename, dirname } from "node:path"
 import { A, safeLine, type Span } from "./spans"
-import { width } from "./markdown"
-import { truncate, truncateLeft } from "./status"
+import { spanWidth, truncate, truncateLeft, width } from "./text"
 import { chip, inkAt, steamColors } from "./chrome"
 import { stem } from "./files"
 import { tildify, type OpenRow } from "./projects"
@@ -153,7 +152,7 @@ export const modeSwitch = (t: Theme, mode: ThemeMode, only?: ThemeMode): Span[][
   )
 
 /** `spans` padded with spaces to `w` cells. */
-export const padTo = (spans: Span[], w: number): Span[] => [...spans, { text: " ".repeat(Math.max(0, w - spans.reduce((n, s) => n + width(s.text), 0))) }]
+export const padTo = (spans: Span[], w: number): Span[] => [...spans, { text: " ".repeat(Math.max(0, w - spanWidth(spans))) }]
 
 /** Spans of one art row, `cells` coloured by role; neighbours with the same look share a span. */
 export function artSpans(t: Theme, cells: ArtCell[], ink: number): Span[] {

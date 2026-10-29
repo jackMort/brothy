@@ -4,15 +4,16 @@ import { MouseButton, RGBA, type MouseEvent } from "@opentui/core"
 import { useRenderer } from "@opentui/react"
 import type { ReactNode } from "react"
 import { contrastOn, type Theme } from "./theme"
-import { width as sw, type Span } from "./markdown"
-import { safe, safeLine } from "./spans"
-import { WORDMARK, truncate, truncateLeft } from "./status"
+import { safe, safeLine, type Span } from "./spans"
+import { WORDMARK } from "./status"
+import { spanWidth, truncate, truncateLeft, width as sw } from "./text"
 import { chip, groupColor, keycaps } from "./chrome"
 import { BIG, artWidth, welcomeArt, welcomeFit } from "./welcome"
 import type { HelpLayout, HelpLine } from "./help"
 import type { OpenRow } from "./projects"
 import type { SwitchRow } from "./vault"
 import type { ZenRow } from "./zen"
+import { BODY_PAD, POPUP_INSET, ROW_PAD, ZEN_POPUP_W, innerWidth, popupWidth } from "./geometry"
 import { switchSplit } from "./peek"
 import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "./themepick"
 import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
@@ -115,7 +116,7 @@ export function Overlay({
           e.stopPropagation()
         }}
         style={{
-          width: Math.min(width, W - 2),
+          width: popupWidth(W, width),
           flexShrink: 0,
           flexDirection: "column",
           backgroundColor: t.backgroundPanel,
@@ -169,7 +170,7 @@ export function PickerList({
   const fgOn = contrastOn(t.primary)
   const pointer = usePointer()
   const rows = items.slice(top, top + height)
-  const textW = innerW - 8
+  const textW = innerW - ROW_PAD
   return (
     <box key="picker-list" style={LIST_BOX}>
       {rows.map((it, j) => {
@@ -240,7 +241,7 @@ export function PickerInput({
 }) {
   // a long query shows its end, where the typing is; `width` is the popup's column count
   const side = note ? sw(note) : right?.length ? right.reduce((n, seg) => n + seg.reduce((m, s) => m + sw(s.text), 0), right.length - 1) : 0
-  const room = width === undefined ? Infinity : width - 2 - 8 - 1 - (side ? side + 1 : 0)
+  const room = width === undefined ? Infinity : width - POPUP_INSET - BODY_PAD - 1 - (side ? side + 1 : 0)
   const shown = safeLine(value)
   return (
     <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 4, paddingRight: 4, height: 1 }}>
@@ -349,12 +350,12 @@ export function Switcher({
 }) {
   const g = switchSplit(W)
   const split = g.split && peek !== undefined
-  const width = split ? g.width : Math.min(70, W - 2)
-  const listW = split ? g.listW : width - 2
+  const width = split ? g.width : popupWidth(W)
+  const listW = split ? g.listW : innerWidth(width)
   const list = (
     <PickerList
       t={t}
-      items={rows.map((r) => switchItem(r, t, listW - 8))}
+      items={rows.map((r) => switchItem(r, t, listW - ROW_PAD))}
       hl={hl}
       top={top}
       height={height}
@@ -393,18 +394,18 @@ export function OpenPicker({
   /** for `~` paths (tests pass a fake one) */
   home?: string
 }) {
-  const width = Math.min(70, W - 2)
+  const width = popupWidth(W)
   const paths = rows.some((r) => r.kind === "path")
   return (
     <Overlay t={t} W={W} H={H} width={width} title="Open" note={paths ? "tab completes" : undefined} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Recent project, or a path: ~/ / ./" width={width} />
       <PickerList
         t={t}
-        items={rows.map((r) => openItem(r, t, width - 10, home))}
+        items={rows.map((r) => openItem(r, t, innerWidth(width) - ROW_PAD, home))}
         hl={hl}
         top={top}
         height={height}
-        innerW={width - 2}
+        innerW={innerWidth(width)}
         empty={q.trim() ? "No results found" : "No recent projects · type a path: ~/ / ./"}
         onHover={onHover}
         onActivate={onActivate}
@@ -452,7 +453,7 @@ export function ThemeBoard({
   onActivate?: (i: number) => void
   onPick?: (i: number, mode: ThemeMode) => void
 }) {
-  const L = boardLayout(innerW - 8)
+  const L = boardLayout(innerW - ROW_PAD)
   const pointer = usePointer()
   return (
     <box key="theme-board" style={LIST_BOX}>
@@ -612,7 +613,7 @@ export function ZenSettings({
   /** row `i` clicked: move there and toggle it */
   onActivate?: (i: number) => void
 }) {
-  const width = Math.min(52, W - 2)
+  const width = popupWidth(W, ZEN_POPUP_W)
   return (
     <Overlay t={t} W={W} H={H} width={width} title="Zen settings" note="⏎ save" onClose={onClose}>
       <PickerList
@@ -626,7 +627,7 @@ export function ZenSettings({
         hl={cursor}
         top={0}
         height={rows.length}
-        innerW={width - 2}
+        innerW={innerWidth(width)}
         onHover={onHover}
         onActivate={onActivate}
       />
@@ -692,8 +693,7 @@ export function Welcome({ t, CW, CH, root, recents, hl, tick, ink, keys, home, o
   onActivate?: (i: number) => void
 }) {
   const fit = welcomeFit(CW, CH, recents.filter((r) => r.kind === "recent").length)
-  const width = (spans: Span[]) => spans.reduce((n, s) => n + sw(s.text), 0)
-  const centre = (spans: Span[]): Span[] => [{ text: " ".repeat(Math.max(0, Math.floor((CW - width(spans)) / 2))) }, ...spans]
+  const centre = (spans: Span[]): Span[] => [{ text: " ".repeat(Math.max(0, Math.floor((CW - spanWidth(spans)) / 2))) }, ...spans]
   const rows: ReactNode[] = []
   const line = (spans: Span[]) => rows.push(<Line key={rows.length} spans={spans} />)
   for (let i = 0; i < fit.top; i++) line([])
