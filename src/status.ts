@@ -2,8 +2,7 @@
 
 import { basename } from "node:path"
 import { stem } from "./files"
-import { width as sw } from "./markdown"
-import { truncate } from "./text"
+import { truncate, width } from "./text"
 import { fadeStep } from "./zen"
 
 export { truncate, truncateLeft } from "./text"
@@ -35,10 +34,10 @@ export interface Location {
 
 const SEP = 3 // " / " and " › "
 const locWidth = (l: Location) =>
-  (l.folder ? sw(l.folder) + SEP : 0) +
-  sw(l.title) +
-  l.ancestors.reduce((n, a) => n + SEP + sw(a), 0) +
-  (l.section ? SEP + sw(l.section) : 0)
+  (l.folder ? width(l.folder) + SEP : 0) +
+  width(l.title) +
+  l.ancestors.reduce((n, a) => n + SEP + width(a), 0) +
+  (l.section ? SEP + width(l.section) : 0)
 
 /**
  * The top line's `folder / Title › ancestors › section`, fitted to `room` columns. `trail` is
@@ -59,7 +58,7 @@ export function locationParts(dir: string, title: string, trail: string[], room:
   if (locWidth(l) > room) l.folder = ""
   while (locWidth(l) > room && l.ancestors.length) l.ancestors.shift()
   if (locWidth(l) > room && l.section) {
-    const left = room - (locWidth(l) - sw(l.section))
+    const left = room - (locWidth(l) - width(l.section))
     l.section = left >= 8 ? truncate(l.section, left) : ""
   }
   if (locWidth(l) > room) l.title = truncate(l.title, room)
@@ -92,10 +91,10 @@ export function stateCluster(
   if (o.query) items.push({ kind: "search", query: truncate(o.query, 20), idx: o.matchIdx, count: o.count })
   if (o.source) items.push({ kind: "source" })
   if (o.wide && !o.zen) items.push({ kind: "wide" })
-  const total = () => items.reduce((n, it, i) => n + (i ? GAP : 0) + sw(clusterText(it)), 0)
+  const total = () => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
   while (total() > room && items.length && items[items.length - 1]!.kind !== "search") items.pop()
   const s = items[0]
-  if (s?.kind === "search") while (total() > room && sw(s.query) > 4) s.query = truncate(o.query, sw(s.query) - 1)
+  if (s?.kind === "search") while (total() > room && width(s.query) > 4) s.query = truncate(o.query, width(s.query) - 1)
   return items
 }
 
@@ -108,7 +107,7 @@ export function stateCluster(
 export function shrinkFolder(folder: string, room: number): string {
   if (!folder || room <= 0) return ""
   const segs = folder.split("/")
-  const fits = (s: string) => sw(s) <= room
+  const fits = (s: string) => width(s) <= room
   const full = segs.join(" / ")
   if (fits(full)) return full
   if (segs.length > 2) {
@@ -131,7 +130,7 @@ export const WORDMARK: readonly string[] = [
   "██▄██ ██▄█▄ ██▀██  ██   ██▄██ ▀███▀ ",
   "██▄█▀ ██ ██ ▀███▀  ██   ██ ██   █   ",
 ]
-export const WORDMARK_W = Math.max(...WORDMARK.map((l) => sw(l)))
+export const WORDMARK_W = Math.max(...WORDMARK.map((l) => width(l)))
 
 /** The wordmark when a `w`×`h` area can hold it, else null. */
 export function fitWordmark(w: number, h: number): readonly string[] | null {
@@ -167,7 +166,7 @@ export interface HeaderLayout {
   rule: { col: number; width: number } | null
 }
 
-const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + sw(clusterText(it)), 0)
+const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
 
 /**
  * Row 0 beyond the logo (always column 0): the folder over the panel column (inline panel only),
@@ -199,7 +198,7 @@ export function headerLayout(o: {
       : null
   const cluster = stateCluster(
     { query: o.query, matchIdx: o.matchIdx, count: o.count, source: o.source, wide: o.wide, zen: o.zen },
-    Math.max(0, o.textWidth - SEP - Math.min(sw(o.title), 12)),
+    Math.max(0, o.textWidth - SEP - Math.min(width(o.title), 12)),
   )
   const cw = clusterW(cluster)
   const room = o.textWidth - cw - (cluster.length ? SEP : 0)
@@ -220,7 +219,7 @@ export function headerLayout(o: {
 const fraction = (top: number, maxTop: number) => (maxTop === 0 ? 1 : Math.max(0, Math.min(1, top / maxTop)))
 
 /** Columns of the progress line drawn as read. */
-export const fillWidth = (top: number, maxTop: number, width: number) => Math.round(Math.max(0, width) * fraction(top, maxTop))
+export const fillWidth = (top: number, maxTop: number, cols: number) => Math.round(Math.max(0, cols) * fraction(top, maxTop))
 
 /** Progress label parts: `pre` (teleprompter), `main` (percentage or page), `rest` (time left). App colors them. */
 export function progressLabel(o: {
@@ -246,7 +245,7 @@ export interface HintItem {
   /** dropped before any other hint when they do not all fit */
   spare?: boolean
 }
-const hintW = (h: HintItem) => sw(h.key) + (h.word ? 1 + sw(h.word) : 0)
+const hintW = (h: HintItem) => width(h.key) + (h.word ? 1 + width(h.word) : 0)
 
 /** The leading hints that fit in `room` columns (3-space gaps); the rest are dropped. */
 export function fitHints(items: HintItem[], room: number): HintItem[] {
@@ -294,6 +293,6 @@ export const toastIcon = (t: Toast) => (t.kind === "ok" ? "✓" : t.kind === "er
 /** The too-small-terminal message as lines that each fit `W` columns, whole words only; the longest form that fits wins. */
 export function tooSmall(W: number, H: number, need = "60×14"): string[] {
   const forms = [[`terminal too small (${W}×${H}) · need ${need}`], [`too small (${W}×${H})`, `need ${need}`], [`need ${need}`], [need]]
-  const fit = forms.find((f) => f.length <= Math.max(1, H) && f.every((l) => sw(l) <= W))
+  const fit = forms.find((f) => f.length <= Math.max(1, H) && f.every((l) => width(l) <= W))
   return fit ?? [truncate(need, Math.max(1, W))]
 }

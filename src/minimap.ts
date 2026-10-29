@@ -1,6 +1,7 @@
 // The braille minimap: every rendered line is a dot row, every textW/(2·cols) display columns a dot column.
 // A note taller than 4·maxRows lines is scaled (each dot row ORs `scale` lines) so it always fits.
 // A one-cell lane to its right marks the find hits, one dot per match line.
+import { clamp, segmenter, width } from "./text"
 import type { Theme } from "./theme"
 
 export const MINI_COLS = 2
@@ -10,7 +11,6 @@ export const MINI_MIN_W = 110
 
 const BIT = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]] as const
 const braille = (v: number) => (v ? String.fromCharCode(0x2800 + v) : " ")
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
 /** Dot columns `0 … dots − 1` with ink in `line`: each grapheme covers its display width in cells, `per` cells a dot column. */
 function inkedColumns(line: string, per: number, dots: number): boolean[] {
@@ -21,8 +21,8 @@ function inkedColumns(line: string, per: number, dots: number): boolean[] {
     return on
   }
   let col = 0
-  for (const { segment } of graphemes.segment(line)) {
-    const w = Bun.stringWidth(segment)
+  for (const { segment } of segmenter.segment(line)) {
+    const w = width(segment)
     if (segment.trim() !== "") for (let c = col; c < col + Math.max(1, w); c++) if (c / per < dots) on[Math.floor(c / per)] = true
     col += w
   }
@@ -100,7 +100,7 @@ export function miniCells(
 
 /** The top that centres the first line of cell row `row`, clamped to [0, maxTop]. */
 export const miniJump = (row: number, ink: MiniInk, h: number, maxTop: number) =>
-  Math.max(0, Math.min(maxTop, row * 4 * ink.scale - Math.floor(h / 2)))
+  clamp(row * 4 * ink.scale - Math.floor(h / 2), 0, maxTop)
 
 /** Theme roles only: headings as H1s, text on screen muted on the band, the rest as faint as a rule, hits as find marks them. */
 export const miniColors = (t: Theme): Record<MiniKind, string> => ({

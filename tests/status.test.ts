@@ -16,12 +16,10 @@ import {
   stateCluster,
   toastIcon,
   toastStep,
-  truncate,
   tooSmall,
-  truncateLeft,
   type Toast,
 } from "../src/status"
-import { width as sw } from "../src/markdown"
+import { truncate, truncateLeft, width as sw } from "../src/text"
 
 describe("truncate", () => {
   test("cuts at either end with …, by columns", () => {

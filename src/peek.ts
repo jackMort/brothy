@@ -1,10 +1,10 @@
 // The Ctrl-P peek pane, pure: what the highlighted row's note holds. The path and length, its
 // outline as a tree (from the vault index), a fresh cached TL;DR, then its first rendered lines
 // from where the row points. App renders the `peekWindow` of the note; nothing here reads a file or calls AI.
-import { A, wrap, width as sw, type Rendered, type Span } from "./markdown"
+import { wrap, type Rendered } from "./markdown"
 import { findQuote } from "./nav"
-import { plural } from "./panel"
-import { truncate, truncateLeft } from "./status"
+import { A, type Span } from "./spans"
+import { clamp, plural, truncate, truncateLeft, width } from "./text"
 import type { Theme } from "./theme"
 import type { NoteDoc, SwitchRow } from "./vault"
 
@@ -25,13 +25,13 @@ const PEEK_AFTER = 64
  */
 export function switchSplit(W: number): { split: boolean; width: number; listW: number; peekW: number } {
   if (W < PEEK_MIN_W) {
-    const width = Math.min(70, W - 2)
-    return { split: false, width, listW: width - 2, peekW: 0 }
+    const popupW = Math.min(70, W - 2)
+    return { split: false, width: popupW, listW: popupW - 2, peekW: 0 }
   }
-  const width = Math.min(W - 12, 116)
-  const inner = width - 2
+  const popupW = Math.min(W - 12, 116)
+  const inner = popupW - 2
   const listW = Math.min(70, Math.round(inner * 0.55))
-  return { split: true, width, listW, peekW: inner - listW - 1 - 6 }
+  return { split: true, width: popupW, listW, peekW: inner - listW - 1 - 6 }
 }
 
 export interface PeekInput {
@@ -124,9 +124,9 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
 
   // path · length
   const right = p.words !== undefined && p.minutes !== undefined ? `${plural(p.words, "word")} · ${p.minutes} min` : ""
-  const fits = right && w - sw(right) - 1 >= 12
-  const path = truncateLeft(p.rel, fits ? w - sw(right) - 1 : w)
-  out.push(fits ? [muted(path), { text: " ".repeat(w - sw(path) - sw(right)) }, muted(right)] : [muted(path)])
+  const fits = right && w - width(right) - 1 >= 12
+  const path = truncateLeft(p.rel, fits ? w - width(right) - 1 : w)
+  out.push(fits ? [muted(path), { text: " ".repeat(w - width(path) - width(right)) }, muted(right)] : [muted(path)])
   out.push([])
 
   const doc = p.doc
@@ -141,7 +141,7 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
   if (kids.length) {
     const pre = treePrefixes(kids.map((x) => x.depth))
     const at = Math.max(0, kids.findIndex((x) => x.i === cur))
-    const from = Math.max(0, Math.min(at - Math.floor(PEEK_OUTLINE / 2), kids.length - PEEK_OUTLINE))
+    const from = clamp(at - Math.floor(PEEK_OUTLINE / 2), 0, kids.length - PEEK_OUTLINE)
     const to = Math.min(kids.length, from + PEEK_OUTLINE)
     if (from > 0) out.push([{ text: "   " }, muted("…")])
     for (let k = from; k < to; k++) {
@@ -149,7 +149,7 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
       const on = x.i === cur
       out.push([
         { text: " " + pre[k]!, fg: t.borderSubtle },
-        { text: truncate(x.text, Math.max(1, w - 1 - sw(pre[k]!))), fg: on ? t.primary : t.textMuted, ...(on ? { attr: A.BOLD } : {}) },
+        { text: truncate(x.text, Math.max(1, w - 1 - width(pre[k]!))), fg: on ? t.primary : t.textMuted, ...(on ? { attr: A.BOLD } : {}) },
       ])
     }
     if (to < kids.length) out.push([{ text: "   " }, muted("…")])
@@ -177,7 +177,7 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
     const blank = !l.fill && !view.plain[i]!.trim()
     if (blank && prevBlank) continue
     prevBlank = blank
-    const spans = l.fill ? [...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - sw(rowText(l.spans)))), bg: l.fill }] : l.spans
+    const spans = l.fill ? [...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - width(rowText(l.spans)))), bg: l.fill }] : l.spans
     out.push(spans)
   }
   return out.slice(0, h)

@@ -3,10 +3,9 @@
 import { dirname, resolve, sep } from "node:path"
 import type { Change, DeltaNote } from "./delta"
 import { fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
-import { stripCode, wrap, width as sw, type LinkTarget, type Property, type Stats } from "./markdown"
+import { stripCode, wrap, type LinkTarget, type Property, type Stats } from "./markdown"
 import { safeLine } from "./spans"
-import { truncate } from "./status"
-import { plural } from "./text"
+import { plural, truncate, width } from "./text"
 
 export { fmtNum, plural } from "./text"
 
@@ -91,8 +90,8 @@ const TAG_KEYS = new Set(["tags", "tag"])
 const ORDER = ["title", "aliases", "tags", "date", "created", "modified"]
 
 /** Rows for one property: the key on the first row, values wrapped under the value column, 4 rows at most. */
-export function wrapProperty(key: string, value: string | string[], width: number, keyW: number): InfoItem[] {
-  const room = Math.max(4, width - keyW)
+export function wrapProperty(key: string, value: string | string[], cols: number, keyW: number): InfoItem[] {
+  const room = Math.max(4, cols - keyW)
   const k = truncate(key, keyW - 1)
   let rows: InfoItem[]
   if (TAG_KEYS.has(key.toLowerCase())) {
@@ -100,7 +99,7 @@ export function wrapProperty(key: string, value: string | string[], width: numbe
     const lines: string[][] = []
     let w = 0
     for (const tg of tags) {
-      const cw = Math.min(room, sw(tg) + 1) // "#tag"
+      const cw = Math.min(room, width(tg) + 1) // "#tag"
       if (lines.length && w + 1 + cw <= room) {
         lines[lines.length - 1]!.push(tg)
         w += 1 + cw
@@ -137,21 +136,21 @@ export interface SummaryView {
 const OUTDATED = " · outdated · a to refresh"
 
 /** The TL;DR label row (muted suffix by state) and the wrapped text (spec: Mockups, Variant A). */
-export function tldrItems(sv: SummaryView, width: number): InfoItem[] {
+export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
   const label = "TL;DR"
   const status =
     sv.state === "streaming"
       ? " · summarizing…"
       : sv.state === "fresh"
-        ? truncate(" · " + sv.model, width - sw(label))
+        ? truncate(" · " + sv.model, cols - width(label))
         : sv.state === "outdated"
-          ? sw(label + OUTDATED) <= width ? OUTDATED : " · outdated · a"
+          ? width(label + OUTDATED) <= cols ? OUTDATED : " · outdated · a"
           : ""
   const out: InfoItem[] = [{ kind: "tldr", status }]
   if (sv.state === "none") return [...out, { kind: "summary", text: "a to summarize", muted: true }]
-  const rows = wrap([{ text: safeLine(sv.text) }], width).map((r) => r.map((s) => s.text).join(""))
+  const rows = wrap([{ text: safeLine(sv.text) }], cols).map((r) => r.map((s) => s.text).join(""))
   const shown = rows.slice(0, SUMMARY_ROWS)
-  if (rows.length > SUMMARY_ROWS) shown[SUMMARY_ROWS - 1] = truncate(shown[SUMMARY_ROWS - 1]! + "…", width)
+  if (rows.length > SUMMARY_ROWS) shown[SUMMARY_ROWS - 1] = truncate(shown[SUMMARY_ROWS - 1]! + "…", cols)
   for (const text of shown) out.push({ kind: "summary", text, muted: sv.state === "outdated" })
   return out
 }
@@ -175,33 +174,33 @@ const MARK = { edited: "~", added: "+", removed: "−" } as const
 export const changeCounts = (c: Pick<Change, "plus" | "minus">) => [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
 
 /** The `Changed` block (spec: Strings): label, summary, then a row per change with its model line under it. */
-export function changeItems(cv: ChangeView, title: string, width: number): InfoItem[] {
+export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
   const label = "Changed"
-  const status = cv.state === "loading" ? " · explaining…" : cv.state === "result" ? truncate(" · " + cv.label, width - sw(label)) : ` · since ${cv.label}`
+  const status = cv.state === "loading" ? " · explaining…" : cv.state === "result" ? truncate(" · " + cv.label, cols - width(label)) : ` · since ${cv.label}`
   const out: InfoItem[] = [{ kind: "changes", status }]
   if (cv.state !== "idle" && cv.summary) {
-    const rows = wrap([{ text: safeLine(cv.summary) }], width).map((r) => r.map((s) => s.text).join(""))
+    const rows = wrap([{ text: safeLine(cv.summary) }], cols).map((r) => r.map((s) => s.text).join(""))
     const shown = rows.slice(0, CHANGE_SUMMARY_ROWS)
-    if (rows.length > CHANGE_SUMMARY_ROWS) shown[CHANGE_SUMMARY_ROWS - 1] = truncate(shown[CHANGE_SUMMARY_ROWS - 1]! + "…", width)
+    if (rows.length > CHANGE_SUMMARY_ROWS) shown[CHANGE_SUMMARY_ROWS - 1] = truncate(shown[CHANGE_SUMMARY_ROWS - 1]! + "…", cols)
     for (const text of shown) out.push({ kind: "summary", text, muted: true })
   }
   cv.changes.slice(0, MAX_CHANGE_ROWS).forEach((c, at) => {
     const counts = changeCounts(c)
-    const room = Math.max(1, width - 2 - (counts ? sw(counts) + 1 : 0))
+    const room = Math.max(1, cols - 2 - (counts ? width(counts) + 1 : 0))
     const name = truncate(safeLine(c.index < 0 || !c.path.length ? title : c.path.at(-1)!), room)
-    const text = name + " ".repeat(Math.max(0, room - sw(name)) + (counts ? 1 : 0))
+    const text = name + " ".repeat(Math.max(0, room - width(name)) + (counts ? 1 : 0))
     out.push({ kind: "change", mark: MARK[c.status], text, counts, at, stop: c.status !== "removed" })
     const what = cv.state === "idle" ? undefined : cv.notes[at]?.what
-    if (what) out.push({ kind: "summary", text: truncate("    " + safeLine(what), width), muted: true })
+    if (what) out.push({ kind: "summary", text: truncate("    " + safeLine(what), cols), muted: true })
   })
   if (cv.changes.length > MAX_CHANGE_ROWS) out.push({ kind: "stat", text: `+ ${cv.changes.length - MAX_CHANGE_ROWS} more sections` })
   return out
 }
 
 /** The Info view, top to bottom: the TL;DR block (AI on), the Changed block (after a reload), properties, links, then three stat lines. */
-export function infoItems(props: Property[], st: Stats, links: LinkRef[], width: number, file: FileMeta | null, now = Date.now(), summary?: SummaryView, changes?: { view: ChangeView; title: string }): InfoItem[] {
-  const out: InfoItem[] = summary ? [...tldrItems(summary, width), { kind: "blank" }] : []
-  if (changes) out.push(...changeItems(changes.view, changes.title, width), { kind: "blank" })
+export function infoItems(props: Property[], st: Stats, links: LinkRef[], cols: number, file: FileMeta | null, now = Date.now(), summary?: SummaryView, changes?: { view: ChangeView; title: string }): InfoItem[] {
+  const out: InfoItem[] = summary ? [...tldrItems(summary, cols), { kind: "blank" }] : []
+  if (changes) out.push(...changeItems(changes.view, changes.title, cols), { kind: "blank" })
   const rank = (k: string) => {
     const i = ORDER.indexOf(k.toLowerCase())
     return i < 0 ? ORDER.length : i
@@ -211,8 +210,8 @@ export function infoItems(props: Property[], st: Stats, links: LinkRef[], width:
     .sort((a, b) => rank(a[0][0]) - rank(b[0][0]) || a[1] - b[1])
     .map(([p]) => p)
   if (sorted.length) {
-    const keyW = Math.min(8, Math.max(...sorted.map(([k]) => sw(k)))) + 1
-    for (const [k, v] of sorted) out.push(...wrapProperty(k, v, width, keyW))
+    const keyW = Math.min(8, Math.max(...sorted.map(([k]) => width(k)))) + 1
+    for (const [k, v] of sorted) out.push(...wrapProperty(k, v, cols, keyW))
     out.push({ kind: "blank" })
   }
   if (links.length) {
