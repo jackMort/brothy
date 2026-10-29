@@ -15,6 +15,7 @@ import { MAX_JOBS, jobKey, makeAIJobs, type Job } from "./app/ai-jobs"
 import { makeDerive, makeMemo } from "./app/derive"
 import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
 import { labelGeo, makeLinks } from "./app/links"
+import { makeZen } from "./app/zen"
 import { MAX_DEPTH, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { STDIN, projectRoot, workspace } from "./workspace"
@@ -39,10 +40,10 @@ import { resolveAI } from "./ai-config"
 import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askLocate, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankMessage, type AskState } from "./ask"
 import { isFresh, textHash } from "./summaries"
 import { GLOSS_ROWS, glossRows, glossRule } from "./gloss"
-import { GHOST_HOLD, GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
+import { GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
 import { findHeading, type InfoItem } from "./panel"
 import { quoteNeedle, reloadToast } from "./delta"
-import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, normalizeZen, prompterRate, stepMeasure, zenAdjust, zenRows, type ZenConfig } from "./zen"
+import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, stepMeasure, zenRows } from "./zen"
 
 export const VERSION = "0.2.0"
 
@@ -65,7 +66,6 @@ export interface AppProps {
 }
 
 // ------------------------------------------------------------- helpers
-
 
 // ------------------------------------------------------------- app
 
@@ -145,25 +145,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss } = aiJobs
   const links = makeLinks(ctx)
   const { ensureLinks, openLink, liveLabels, startLabels, histMove, labelType } = links
+  const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = makeZen(ctx, aiJobs)
 
   // ---------------------------------------------------- actions
-
-  // the rate is read afresh every line, so wpm changes, resizes and reloads apply at once
-  const startRolling = () => {
-    clearTimeout(timers.current.roll)
-    const d0 = derive()
-    if (!d0.prompter || d0.top >= d0.maxTop) return stopRolling()
-    set({ rolling: true })
-    const tick = () => {
-      const d = derive()
-      if (!d.prompter || d.top >= d.maxTop) return stopRolling()
-      setTop(d.top + 1)
-      const next = derive()
-      if (next.top >= next.maxTop) return stopRolling()
-      timers.current.roll = setTimeout(tick, 1000 / prompterRate(next.view.plain, next.s.zenCfg.wpm))
-    }
-    timers.current.roll = setTimeout(tick, 1000 / prompterRate(d0.view.plain, d0.s.zenCfg.wpm))
-  }
 
   const startFilter = () => set({ filterTyping: true })
   /** The filter text of the shown view (Files or Outline). */
@@ -236,12 +220,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     if (persist({ theme: name })) flash(`theme · ${name}`, "ok")
   }
 
-  /** Ghost chrome: show the zen top line now; it holds, fades in steps, then hides. */
-  const pokeGhost = () => {
-    set({ ghostAt: Date.now() })
-    runFade("ghost", () => ui.current.ghostAt, GHOST_HOLD, () => set({ ghostAt: null }))
-  }
-
   /** Show the key hints for context `c` now; they hold HINT_HOLD, then fade. */
   const pokeHints = (c: Ctx) => {
     set({ hintAt: Date.now(), hintCtx: c })
@@ -264,61 +242,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const s = ui.current
     return s.hintAt !== null && s.hintCtx === currentCtx() && fadeStep(Date.now() - s.hintAt, HINT_HOLD) !== null
   }
-
-  /** Zen on / off. Entering shows the Preview; only the settings persist, never the mode. */
-  const toggleZen = (on = !ui.current.zen) => {
-    stopRolling()
-    clearTimeout(timers.current.ghost)
-    const s = ui.current
-    if (on && !s.zen && !s.source) { const d = derive(); zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo } }
-    if (!on && zenBack.current) scrolls.current.set(zenBack.current.key, { ...zenBack.current })
-    if (!on) zenBack.current = null
-    if (on) ensureGlosses()
-    else clearTimeout(timers.current.gloss)
-    set({ zen: on, ghostAt: null, filterTyping: false, ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : { gloss: null }) })
-    if (on && ui.current.zenCfg.ghost) pokeGhost()
-  }
-  /** Change zen settings (clamped); `save` writes them to the config at once. False when that save failed. */
-  const setZen = (patch: Partial<ZenConfig>, save = false) => {
-    const zenCfg = normalizeZen({ ...ui.current.zenCfg, ...patch })
-    set({ zenCfg })
-    // only the keys changed (as clamped): another instance's other settings stay
-    const ok = !save || persist({ zen: Object.fromEntries(Object.keys(patch).map((k) => [k, zenCfg[k as keyof ZenConfig]])) })
-    if (ui.current.rolling) startRolling() // pick up the new speed now, not after the pending line
-    return ok
-  }
-  /** Pages flow: show page `i` (clamped) from its start. */
-  const goPage = (i: number) => {
-    const { ranges } = derive()
-    setTop(ranges[clamp(i, 0, ranges.length - 1)]![0])
-  }
-  /** Manual scroll inside zen; a page only scrolls within its own section. */
-  const zenScroll = (n: number) => {
-    stopRolling()
-    const { pg } = derive()
-    if (pg) return setTop(Math.max(pg.start, Math.min(pg.top + n, pg.maxTop)))
-    scrollBy(n)
-  }
-  // `Z` popup: live preview while editing, ⏎ saves, esc restores what was there before
-  const openZenSettings = () => {
-    const s = ui.current
-    set({ zenOrig: { cfg: s.zenCfg, zen: s.zen, source: s.source }, zenRow: 0 })
-    if (!s.zen || s.source) toggleZen(true)
-  }
-  const revertZen = () => {
-    const o = ui.current.zenOrig
-    if (!o) return
-    set({ zenCfg: o.cfg, source: o.source, zenOrig: null })
-    if (!o.zen) toggleZen(false)
-  }
-  const applyZen = () => {
-    const was = ui.current.zenOrig?.cfg
-    const cfg = ui.current.zenCfg
-    set({ zenOrig: null })
-    const changed = Object.fromEntries(Object.entries(cfg).filter(([k, v]) => was?.[k as keyof ZenConfig] !== v))
-    if (persist({ zen: changed })) flash("zen settings saved", "ok")
-  }
-  const zenEdit = (row: number, dir: -1 | 0 | 1) => setZen(zenAdjust(ui.current.zenCfg, ZEN_ROWS[row]!, dir))
 
   /** The popup row Enter acts on when the highlight hasn't been moved. */
   const promptDefault = () => {
