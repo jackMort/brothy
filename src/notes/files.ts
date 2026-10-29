@@ -36,6 +36,121 @@ export function findVault(dir: string): string | null {
   }
 }
 
+/** One `scanTree` run: the root, the realpaths already walked and the entry budget spent so far. */
+interface Scan {
+  root: string
+  rootReal: string | null
+  visited: Set<string>
+  seen: number
+  truncated: boolean
+  maxDepth: number
+  maxEntries: number
+}
+
+const realOf = (p: string) => {
+  try {
+    return realpathSync(p)
+  } catch {
+    return null
+  }
+}
+
+/** `entries` without the names that aren't valid UTF-8: they decode to U+FFFD and could never be opened by that string. */
+function decodable(dir: string, entries: Dirent[]): Dirent[] {
+  if (!entries.some((e) => e.name.includes("\uFFFD"))) return entries
+  const bad = new Set<string>()
+  try {
+    for (const b of readdirSync(dir, { encoding: "buffer" })) {
+      const text = b.toString("utf8")
+      if (!Buffer.from(text, "utf8").equals(b)) bad.add(text)
+    }
+  } catch {}
+  return bad.size ? entries.filter((e) => !bad.has(e.name)) : entries
+}
+
+/** `dir`'s entries in walk order, or null when it cannot be read. */
+function readEntries(dir: string): Dirent[] | null {
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  entries = decodable(dir, entries)
+  // real directories before symlinks, so an alias never claims a subtree first
+  entries.sort((a, b) => +a.isSymbolicLink() - +b.isSymbolicLink() || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  return entries
+}
+
+/** Whether an entry is a directory or a file, a symlink by its target; null for a link that cannot be followed. */
+function entryType(ent: Dirent, full: string): { dir: boolean; file: boolean } | null {
+  if (!ent.isSymbolicLink()) return { dir: ent.isDirectory(), file: ent.isFile() }
+  try {
+    const st = statSync(full)
+    return { dir: st.isDirectory(), file: st.isFile() }
+  } catch {
+    return null
+  }
+}
+
+/** A subfolder's node; null when it is too deep, already walked, a link into the tree, or holds no Markdown. */
+function subfolder(s: Scan, ent: Dirent, full: string, depth: number): FileNode | null {
+  if (depth >= s.maxDepth) return null
+  const rp = realOf(full)
+  if (!rp || s.visited.has(rp)) return null
+  // links into (or around) the tree alias directories the walk reaches anyway
+  if (ent.isSymbolicLink() && s.rootReal && (rp.startsWith(s.rootReal + sep) || s.rootReal.startsWith(rp + sep))) return null
+  s.visited.add(rp)
+  const sub = walkDir(s, full, depth + 1)
+  if (!sub || sub.children.length === 0) return null
+  return ent.isSymbolicLink() ? { ...sub, outside: true } : sub
+}
+
+/** A note's node, flagged `outside` when it is a symlink to a file beyond the root. */
+function noteNode(s: Scan, ent: Dirent, full: string): FileNode {
+  const rp = ent.isSymbolicLink() ? realOf(full) : null
+  const outside = !!rp && !!s.rootReal && !rp.startsWith(s.rootReal + sep)
+  return { name: safeLine(ent.name), path: full, rel: safeLine(relative(s.root, full)), dir: false, children: [], ...(outside ? { outside } : {}) }
+}
+
+/** README first, then natural order. */
+function byName(a: FileNode, b: FileNode) {
+  const ra = /^readme\./i.test(a.name) ? 0 : 1
+  const rb = /^readme\./i.test(b.name) ? 0 : 1
+  return ra - rb || a.name.localeCompare(b.name, undefined, { numeric: true })
+}
+
+/** `dir` as a folder node, subfolders before notes; null when it cannot be read. */
+function walkDir(s: Scan, dir: string, depth: number): FileNode | null {
+  const entries = readEntries(dir)
+  if (!entries) return null
+  const dirs: FileNode[] = []
+  const files: FileNode[] = []
+  for (const ent of entries) {
+    if (skipped(ent.name)) continue
+    if (++s.seen > s.maxEntries) {
+      s.truncated = true
+      break
+    }
+    const full = join(dir, ent.name)
+    const type = entryType(ent, full)
+    if (!type) continue
+    if (type.dir) {
+      const sub = subfolder(s, ent, full, depth)
+      if (sub) dirs.push(sub)
+    } else if (type.file && MD_EXT.test(ent.name)) files.push(noteNode(s, ent, full))
+  }
+  dirs.sort(byName)
+  files.sort(byName)
+  return {
+    name: safeLine(basename(dir)),
+    path: dir,
+    rel: safeLine(relative(s.root, dir)),
+    dir: true,
+    children: [...dirs, ...files],
+  }
+}
+
 /**
  * Recursively collect Markdown files; folders without Markdown are dropped.
  * Symlinked directories are followed only when they leave the tree, and once
@@ -43,92 +158,11 @@ export function findVault(dir: string): string | null {
  * examined; past that the scan stops and the root is flagged `truncated`.
  */
 export function scanTree(root: string, maxDepth = 8, maxEntries = SCAN_LIMIT): FileNode {
-  const visited = new Set<string>()
-  let seen = 0
-  let truncated = false
-  const real = (p: string) => {
-    try {
-      return realpathSync(p)
-    } catch {
-      return null
-    }
-  }
-  const rootReal = real(root)
-  if (rootReal) visited.add(rootReal)
-  const walk = (dir: string, depth: number): FileNode | null => {
-    let entries: Dirent[]
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      return null
-    }
-    // names that aren't valid UTF-8 decode to U+FFFD and could never be opened by that string
-    if (entries.some((e) => e.name.includes("\uFFFD"))) {
-      const bad = new Set<string>()
-      try {
-        for (const b of readdirSync(dir, { encoding: "buffer" })) {
-          const text = b.toString("utf8")
-          if (!Buffer.from(text, "utf8").equals(b)) bad.add(text)
-        }
-      } catch {}
-      if (bad.size) entries = entries.filter((e) => !bad.has(e.name))
-    }
-    // real directories before symlinks, so an alias never claims a subtree first
-    entries.sort((a, b) => +a.isSymbolicLink() - +b.isSymbolicLink() || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-    const dirs: FileNode[] = []
-    const files: FileNode[] = []
-    for (const ent of entries) {
-      const name = ent.name
-      if (skipped(name)) continue
-      if (++seen > maxEntries) {
-        truncated = true
-        break
-      }
-      const full = join(dir, name)
-      let isDir = ent.isDirectory()
-      let isFile = ent.isFile()
-      if (ent.isSymbolicLink()) {
-        try {
-          const st = statSync(full)
-          isDir = st.isDirectory()
-          isFile = st.isFile()
-        } catch {
-          continue
-        }
-      }
-      if (isDir) {
-        if (depth >= maxDepth) continue
-        const rp = real(full)
-        if (!rp || visited.has(rp)) continue
-        // links into (or around) the tree alias directories the walk reaches anyway
-        if (ent.isSymbolicLink() && rootReal && (rp.startsWith(rootReal + sep) || rootReal.startsWith(rp + sep))) continue
-        visited.add(rp)
-        const sub = walk(full, depth + 1)
-        if (sub && sub.children.length > 0) dirs.push(ent.isSymbolicLink() ? { ...sub, outside: true } : sub)
-      } else if (isFile && MD_EXT.test(name)) {
-        const rp = ent.isSymbolicLink() ? real(full) : null
-        const outside = !!rp && !!rootReal && !rp.startsWith(rootReal + sep)
-        files.push({ name: safeLine(name), path: full, rel: safeLine(relative(root, full)), dir: false, children: [], ...(outside ? { outside } : {}) })
-      }
-    }
-    const byName = (a: FileNode, b: FileNode) => {
-      // README first, then natural order
-      const ra = /^readme\./i.test(a.name) ? 0 : 1
-      const rb = /^readme\./i.test(b.name) ? 0 : 1
-      return ra - rb || a.name.localeCompare(b.name, undefined, { numeric: true })
-    }
-    dirs.sort(byName)
-    files.sort(byName)
-    return {
-      name: safeLine(basename(dir)),
-      path: dir,
-      rel: safeLine(relative(root, dir)),
-      dir: true,
-      children: [...dirs, ...files],
-    }
-  }
-  const tree = walk(root, 0) ?? { name: safeLine(basename(root)), path: root, rel: "", dir: true, children: [] }
-  if (truncated) tree.truncated = true
+  const rootReal = realOf(root)
+  const s: Scan = { root, rootReal, visited: new Set<string>(), seen: 0, truncated: false, maxDepth, maxEntries }
+  if (rootReal) s.visited.add(rootReal)
+  const tree = walkDir(s, root, 0) ?? { name: safeLine(basename(root)), path: root, rel: "", dir: true, children: [] }
+  if (s.truncated) tree.truncated = true
   return tree
 }
 
