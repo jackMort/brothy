@@ -40,9 +40,10 @@ export function mergeSpans(spans: Span[]): Span[] {
 // ------------------------------------------------------------- cutting
 
 /**
- * Widths are summed per grapheme, so cutting is linear. Two cases keep the old per-code-point rule: ANSI escapes
- * (their width is not a sum of their parts, so `s` is measured whole) and a grapheme of several code points (it
- * may be cut inside, and a part can be wider than the whole, as 👍 + U+FE0E is).
+ * A cut keeps the code points before the first one whose prefix no longer fits. Widths are summed per grapheme,
+ * so it is linear, but a grapheme of several code points is measured part by part (it may be cut inside, and a
+ * part can be wider than the whole, as 👍 + U+FE0E is), and text with escape sequences is measured whole (an
+ * escape's width is not the sum of its parts).
  */
 const ESCAPES = /[\x1b\x9b]/
 const clustered = (g: string) => g.length > (g.codePointAt(0)! > 0xffff ? 2 : 1)
