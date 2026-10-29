@@ -56,7 +56,7 @@ export interface Base extends DeriveRefs {
   /** the `themeName` prop (from `--theme` or the config) */
   themeName: string | undefined
   linkScanDelay: number
-  /** Normal-view position on entering zen; restored verbatim on exit unless the reader moved. */
+  /** normal-view position on entering zen; restored verbatim on exit unless the reader moved */
   zenBack: { current: Spot | null }
   timers: { current: Timers }
   /** tier 0 queries per question (foldSame), this session only: asking again sends nothing */
@@ -134,7 +134,7 @@ export function makeNav(core: Core) {
   }
 
   /** The open note's scroll entry, as history keeps it. */
-  const here = (): Spot | null => {
+  const currentSpot = (): Spot | null => {
     if (!ui.current.openPath) return null
     const d = derive()
     return { key: d.scrollKey, top: d.top, geo: d.geo }
@@ -145,7 +145,7 @@ export function makeNav(core: Core) {
     clearTimeout(timers.current.open)
     const s = ui.current
     if (path === s.openPath) return
-    const history = how === "history" ? s.history : visit(s.history, path, here(), how === "peek")
+    const history = how === "history" ? s.history : visit(s.history, path, currentSpot(), how === "peek")
     // reveal it: every folder above the note opens (they are never closed automatically)
     const expanded = new Set(s.expanded)
     for (const a of ancestorsOf(s.tree, path)) expanded.add(a)
@@ -225,7 +225,7 @@ export function makeNav(core: Core) {
     setTop(d.tw || d.pg ? m : m - Math.floor(d.L.CH / 3))
   }
 
-  return { ...core, setTop, scrollBy, stopRolling, here, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch }
+  return { ...core, setTop, scrollBy, stopRolling, currentSpot, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch }
 }
 /** What every `src/app/*` factory takes: the core and navigation layers. */
 export type AppCtx = ReturnType<typeof makeNav>

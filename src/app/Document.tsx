@@ -19,7 +19,7 @@ import type { Derived } from "./derive"
 import { WELCOME_KEYS, keyDef } from "./keymap"
 import { labelGeo } from "./links"
 import { Row } from "./Row"
-import { SCRIM_DIM } from "./store"
+import { SCRIM_DIM, WHEEL_ROWS } from "./store"
 import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
@@ -71,16 +71,16 @@ export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScr
     const sheetK = !sheet || sheet.fadeAt === null ? 0 : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
     const ink = (color: typeof t.text) => mix(color, t.background, sheetK)
     const sheetAt = sheet ? CH - 1 - GLOSS_ROWS : CH
-    const rule = sheet ? glossRule(sheet.state, sheet.heading, CW) : null
+    const sheetRule = sheet ? glossRule(sheet.state, sheet.heading, CW) : null
     const glossed = sheet ? glossRows(sheet.text, CW) : []
     content = (
       <box key="zen-lines" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
         {Array.from({ length: CH }, (_, i) => {
-          if (rule && i >= sheetAt) {
+          if (sheetRule && i >= sheetAt) {
             const r = i - sheetAt
             const spans: Span[] = r
               ? [{ text: glossed[r - 1] ?? "", fg: ink(t.textMuted) }]
-              : [{ text: rule[0], fg: ink(t.border) }, { text: rule[1], fg: ink(t.textMuted) }, { text: rule[2], fg: ink(t.border) }]
+              : [{ text: sheetRule[0], fg: ink(t.border) }, { text: sheetRule[1], fg: ink(t.textMuted) }, { text: sheetRule[2], fg: ink(t.border) }]
             return <Row key={"gloss" + r} spans={[{ text: "  " }, ...spans]} />
           }
           const n = win.first + i
@@ -114,7 +114,7 @@ export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScr
       key="doc"
       style={{ flexDirection: "column", flexGrow: 1, height: bodyH, paddingLeft: L.zen ? padL - 2 : padL }}
       onMouseDown={() => focusDoc()}
-      onMouseScroll={(e: MouseEvent) => (L.zen ? zenScroll : scrollBy)(e.scroll?.direction === "up" ? -3 : 3)}
+      onMouseScroll={(e: MouseEvent) => (L.zen ? zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)}
     >
       {content}
     </box>

@@ -16,7 +16,7 @@ import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
 import { Row } from "./Row"
-import { MAX_DEPTH } from "./store"
+import { MAX_DEPTH, WHEEL_ROWS } from "./store"
 
 /** What the panel's clicks do beyond the context: jump to a heading or a change, follow a link. */
 export interface PanelActions extends Pick<Links, "openLink"> {
@@ -73,7 +73,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
     stripSpans.push({ text: lb.text, fg: active ? (sideFocus ? t.primary : t.text) : t.textMuted, attr: active ? 1 : 0 })
   }
   const activeLabel = strip.labels.find((lb) => lb.view === s.view) ?? strip.labels[0]!
-  const rule: Span[] = [
+  const stripRule: Span[] = [
     { text: "─".repeat(activeLabel.lx), fg: t.border },
     { text: "━".repeat(activeLabel.x1 - activeLabel.lx), fg: sideFocus ? t.accent : t.textMuted },
     { text: "─".repeat(Math.max(0, PNW - 1 - activeLabel.x1)), fg: t.border },
@@ -177,17 +177,17 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
 
   const scrollList = (e: MouseEvent) => {
     const n = s.view === "files" ? rows.length : s.view === "outline" ? d.oRows.length : infoRows.length
-    const dlt = e.scroll?.direction === "up" ? -3 : 3
+    const dlt = e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS
     set({ listTop: { ...s.listTop, [s.view]: Math.max(0, Math.min(n - LH, topOf(s.view, n) + dlt)) } })
   }
   const cur = rows[cursor]
   // two results with the same name and folder: show the cursor row's full folder instead of the count
   const dup =
     filtered && cur && rows.some((r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node))
-  const filesRight = dup ? truncateLeft(dirname(cur!.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
+  const filesRight = dup ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
   const panelRows = [
     panelRow("strip", stripSpans, { onDown: onStrip }),
-    panelRow("rule", rule, { lead: false }),
+    panelRow("rule", stripRule, { lead: false }),
     ...(filterRow ? [filterRowEl(s.view === "outline" ? s.outlineFilter : filter, s.filterTyping && !!sideFocus, s.view === "outline" ? String(d.oRows.length) : filesRight)] : []),
     ...listEls,
   ]

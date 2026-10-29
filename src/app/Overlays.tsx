@@ -17,6 +17,7 @@ import { zenRows } from "../zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { HELP_GROUPS } from "./keymap"
+import { WHEEL_ROWS } from "./store"
 import type { Popups } from "./popups"
 import type { SwitcherControl } from "./switcher"
 import type { WorkspaceControl } from "./workspace"
@@ -34,7 +35,7 @@ export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { versio
   const helpFull = `Keybindings · brothy v${version} · ${t.name}`
   const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`, Math.max(1, titleRoom))
   return s.help ? (
-    <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * 3)} />
+    <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * WHEEL_ROWS)} />
   ) : null
 }
 
@@ -160,7 +161,7 @@ export function themePickView(c: AppCtx, d: Derived): ThemePickView | null {
   // the board's rows under the header; hover holds the window where it is, keys and the wheel centre it again
   const top = pickTop(pick, hl, Math.max(1, geo.rows - 1), rows.length)
   const cand = pickTheme(pick)
-  const sample = geo.split && hl >= 0 ? memo.themeSample(cand, geo.peekW, s.hl, s.headings) : null
+  const sample = geo.split && hl >= 0 ? memo.themeSample(cand, geo.peekW, s.hl, s.headingStyle) : null
   return { pick, rows, geo, hl, top, cand, sample }
 }
 
@@ -171,9 +172,8 @@ export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, 
   const { pick, rows, geo, hl, top, cand, sample } = view
   /** row `i` becomes the highlight (hover, click); the list stays where it is under the pointer */
   const pickAt = (i: number) => {
-    const p = ui.current.themePick
     const r = rows[i]
-    if (p && r && r.family.name !== p.family) themeSet({ ...p, family: r.family.name, top })
+    if (r && r.family.name !== ui.current.themePick?.family) themeSet((p) => ({ ...p, family: r.family.name, top }))
   }
   return (
     <ThemePicker
@@ -191,7 +191,7 @@ export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, 
       geo={geo}
       pane={sample ? { theme: cand, lines: memo.themePane(cand, sample, geo.peekW, geo.rows) } : undefined}
       onClose={closeTheme}
-      onScroll={(dir) => themeSet(pickMove(ui.current.themePick!, dir))}
+      onScroll={(dir) => themeSet((p) => pickMove(p, dir))}
       onHover={pickAt}
       onActivate={(i) => {
         pickAt(i)
@@ -199,10 +199,10 @@ export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, 
       }}
       onPick={(i, m) => {
         pickAt(i)
-        themeSet(pickMode(ui.current.themePick!, m))
+        themeSet((p) => pickMode(p, m))
         applyTheme()
       }}
-      onMode={(m) => themeSet(pickMode(ui.current.themePick!, m))}
+      onMode={(m) => themeSet((p) => pickMode(p, m))}
     />
   )
 }

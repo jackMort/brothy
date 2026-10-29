@@ -5,7 +5,7 @@ import { relative } from "node:path"
 import { shortModel, type Failure } from "../ai"
 import { ASK_MEMO, ASK_MIN, RERANK_MEMO, askLocate, askRequest, parseQueries, parseRerank, putNewest, questionOf, rerankRequest, type AskState } from "../ask"
 import { folderCounts } from "../files"
-import { keepVisible } from "../nav"
+import { keepHitVisible } from "../nav"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "../peek"
 import { errText } from "../status"
 import { isFresh, textHash } from "../summaries"
@@ -31,7 +31,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   /** New query: the highlight goes back to the first hit; a changed query drops the answers and aborts their request. */
   const swType = (q: string) => {
     if (ui.current.switcher?.q !== q) dropAsk()
-    set({ switcher: { q, hl: 0, top: 0 } })
+    ui.current.switcher = { q, hl: 0, top: 0 } // unbumped: only for `derive` below
     set({ switcher: { q, hl: Math.max(0, firstHit(derive().swRows)), top: 0 } })
   }
 
@@ -39,8 +39,8 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   const setAsk = (ask: AskState | undefined) => {
     const sw = ui.current.switcher
     if (!sw) return
-    set({ switcher: { ...sw, ask, hl: 0, top: 0 } })
-    set({ switcher: { ...ui.current.switcher!, hl: Math.max(0, firstHit(derive().swRows)) } })
+    const next = (ui.current.switcher = { ...sw, ask, hl: 0, top: 0 }) // unbumped: only for `derive` below
+    set({ switcher: { ...next, hl: Math.max(0, firstHit(derive().swRows)) } })
   }
 
   /**
@@ -121,7 +121,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
           return flash("AI: no usable ranking")
         }
         const order = picked.map((p) => ids[p.i]!)
-        const why = Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why]))
+        const why = Object.fromEntries(picked.map((p) => [ids[p.i], p.why]))
         putNewest(rerankMemo.current, memoKey, { order, why, model: ai.model }, RERANK_MEMO)
         setAsk({ ...now.ask, phase: "reranked", order, why })
       },
@@ -132,9 +132,8 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   const swGo = (hl: number) => {
     const sw = ui.current.switcher
     if (!sw) return
-    const { swRows: rows, L } = derive()
-    const head = rows[hl - 1]?.kind === "header" ? hl - 1 : hl
-    set({ switcher: { ...sw, hl, top: keepVisible(keepVisible(sw.top, head, L.PH, rows.length), hl, L.PH, rows.length) } })
+    const { swRows, L } = derive()
+    set({ switcher: { ...sw, hl, top: keepHitVisible(sw.top, swRows, hl, L.PH) } })
   }
 
   /** Bring the vault index up to date (one build at a time); progress re-runs the search. */
@@ -239,8 +238,8 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const peekDoc = peekPath ? vault.current.ix.docs.get(peekPath) : undefined
     const peekW = switchSplit(W).peekW
     const peekNote = peekPath && peekDoc ? memo.peekFile(peekPath, peekDoc.mtime) : null
-    const peekWin = peekNote && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc!, peekRow) : null
-    const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headings) : undefined
+    const peekWin = peekNote && peekDoc && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc, peekRow) : null
+    const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headingStyle) : undefined
     const peekSaved = peekPath ? s.summaries[peekPath] : undefined
     return s.switcher && W >= PEEK_MIN_W
       ? peekLines(

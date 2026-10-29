@@ -11,6 +11,7 @@ import { quoteNeedle } from "../delta"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "../editor"
 import { ancestorsOf, folderCounts, scanTree } from "../files"
 import { helpLayout } from "../help"
+import { MEASURE } from "../layout"
 import { HEADING_STYLES, parseFrontMatter, sourceScan } from "../markdown"
 import { MINI_MIN_W } from "../minimap"
 import { findQuote, matchKey, stepMatch } from "../nav"
@@ -18,7 +19,6 @@ import { findHeading } from "../panel"
 import { headingKey } from "../sections"
 import { HINT_HOLD, errText, fadeStep } from "../status"
 import { clamp } from "../text"
-import { themes } from "../theme"
 import { pickMode, pickMove, pickQuery } from "../themepick"
 import { nextSection, stepRow } from "../vault"
 import { STDIN } from "../workspace"
@@ -101,7 +101,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     const i = c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key ? c.index : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
     const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
     const to = hs[i + 1]?.line ?? view.lines.length
-    const quote = cv!.notes[at]?.quote
+    const quote = cv?.notes[at]?.quote
     const line = quote ? findQuote(view.plain, from, to, quoteNeedle(quote, s.source)) : null
     setTop(line === null ? from : Math.max(from, line - 1))
     focusDoc()
@@ -158,7 +158,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (derive().L.zen) return // zen has its own measure (< >); full width is not shown there
       const wide = !ui.current.wide
       set({ wide })
-      if (persist({ wide })) flash(wide ? "full width" : "measure 80")
+      if (persist({ wide })) flash(wide ? "full width" : `measure ${MEASURE}`)
     },
     minimap: () => {
       if (dims.current.W < MINI_MIN_W) return flash(`minimap needs ${MINI_MIN_W} columns`)
@@ -167,9 +167,9 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (persist({ minimap })) flash(minimap ? "minimap on" : "minimap off")
     },
     headings: () => {
-      const headings = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headings) + 1) % HEADING_STYLES.length]!
-      set({ headings })
-      if (persist({ headings })) flash(`headings · ${headings}`)
+      const headingStyle = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headingStyle) + 1) % HEADING_STYLES.length]!
+      set({ headingStyle })
+      if (persist({ headings: headingStyle })) flash(`headings · ${headingStyle}`)
     },
     transparent: () => {
       const transparent = !ui.current.transparent
@@ -225,7 +225,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (s.openPath === STDIN) return flash("stdin · nothing to edit")
       const d = derive()
       const src = memo.read(s.openPath, s.reload)?.src ?? ""
-      const line = sourceLineAt({ source: s.source, top: d.top, srcRow: d.view.srcRow, headings: d.view.headings, scan: sourceScan(src, themes[s.themeIdx]!).headings, offset: parseFrontMatter(src).offset })
+      const line = sourceLineAt({ source: s.source, top: d.top, srcRow: d.view.srcRow, headings: d.view.headings, scan: sourceScan(src).headings, offset: parseFrontMatter(src).offset })
       const argv = editorCommand(process.env, s.openPath, line)
       const run =
         editImpl ??
@@ -424,12 +424,14 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     helpClose: () => set({ help: false }),
 
     promptMove: (k) => {
-      const pr = ui.current.prompt!
-      if (promptCount() > 0) promptHighlight((pr.hl >= 0 ? pr.hl : promptDefault()) + (k.name === "down" ? 1 : -1))
+      const pr = ui.current.prompt
+      if (pr && promptCount() > 0) promptHighlight((pr.hl >= 0 ? pr.hl : promptDefault()) + (k.name === "down" ? 1 : -1))
     },
     promptApply: () => promptSubmit(),
     promptClear: promptClose,
-    promptErase: () => promptType(erase(ui.current.prompt!.value)),
+    promptErase: () => {
+      if (ui.current.prompt) promptType(erase(ui.current.prompt.value))
+    },
     swType: typing,
     swMove: (k) => {
       const { swRows, swHl } = derive()
@@ -461,15 +463,12 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     },
 
     themeType: typing,
-    themeMove: (k) => themeSet(pickMove(ui.current.themePick!, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
+    themeMove: (k) => themeSet((p) => pickMove(p, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
     // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
-    themeMode: (k) => themeSet(pickMode(ui.current.themePick!, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
+    themeMode: (k) => themeSet((p) => pickMode(p, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
     themeApply: applyTheme,
     themeClose: closeTheme,
-    themeErase: () => {
-      const p = ui.current.themePick!
-      themeSet(pickQuery(p, erase(p.q)))
-    },
+    themeErase: () => themeSet((p) => pickQuery(p, erase(p.q))),
 
     zsMove: (k) => set({ zenRow: clamp(ui.current.zenRow + (isDown(k) ? 1 : -1), 0, ZEN_ROWS.length - 1) }),
     zsToggle: () => zenEdit(ui.current.zenRow, 0),
@@ -501,7 +500,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     if (s.zen && s.zenCfg.ghost) pokeGhost()
     const text = typed(key)
     if (s.themePick) {
-      if (!dispatch(["theme"], key) && text) themeSet(pickQuery(s.themePick, s.themePick.q + text))
+      if (!dispatch(["theme"], key) && text) themeSet((p) => pickQuery(p, p.q + text))
       return
     }
     if (s.zenOrig !== null) return void dispatch(["zenSettings"], key)

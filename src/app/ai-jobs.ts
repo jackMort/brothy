@@ -164,9 +164,9 @@ export function makeAIJobs(c: AppCtx) {
         } else if ("failure" in r) {
           // the sheet closes; the cached gloss returns only when the reading line re-enters the section (or on `a`)
           if (ui.current.gloss?.id === g.id) set({ gloss: null })
-          const here = derive().gHere?.id === g.id
+          const reading = derive().gHere?.id === g.id
           bump((x) => x + 1)
-          flash(failText(target, r.failure, "gloss", here ? undefined : safeLine(g.heading)), "error")
+          flash(failText(target, r.failure, "gloss", reading ? undefined : safeLine(g.heading)), "error")
         }
       },
     })
@@ -265,10 +265,10 @@ export function makeAIJobs(c: AppCtx) {
   /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
   const zenGloss = () => {
     const ai = reloadAI()
-    const here = derive().gHere
+    const section = derive().gHere
     // cancel first: a request stays cancellable after its `ai` block goes
-    if (here && cancelJob(jobKey("gloss", here.id))) {
-      if (ui.current.gloss?.id === here.id) set({ gloss: null })
+    if (section && cancelJob(jobKey("gloss", section.id))) {
+      if (ui.current.gloss?.id === section.id) set({ gloss: null })
       bump((x) => x + 1)
       return flash("gloss cancelled")
     }

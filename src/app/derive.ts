@@ -85,8 +85,8 @@ export function makeMemo(stdin: string | undefined) {
     themeSample: cached((t: Theme, w: number, _hl: number, headings: HeadingStyle) => sampleView(t, w, headings)),
     themePane: cached(paneLines),
     /** the switcher's peek: the highlighted note read (one note at a time), then only its `peekWindow` rendered at the pane width */
-    peekFile: cached((path: string, _mtime: number) => {
-      const f = readDoc(path, _mtime)
+    peekFile: cached((path: string, mtime: number) => {
+      const f = readDoc(path, mtime)
       if (f.error) return null
       const fm = parseFrontMatter(f.src)
       const st = wordStats(fm.body) // stats() would lex the whole note
@@ -135,7 +135,7 @@ export interface DeriveRefs {
   jobs: { current: Map<string, Job> }
   sidebarSeen: { current: { rows: FileRow[] | null; cursorPath: string | null } }
   scrolls: { current: Map<string, ScrollEntry> }
-  /** The match list last derived, to remap `matchLine` when the lines are re-wrapped. */
+  /** the match list last derived, to remap `matchLine` when the lines are re-wrapped */
   matchSeen: { current: { matches: number[]; query: string } }
 }
 
@@ -149,7 +149,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     const file = s.openPath ? memo.read(s.openPath, s.reload) : null
     const src = file?.src ?? ""
     const fm = memo.fm(src)
-    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headings)
+    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headingStyle)
     const view = s.source ? memo.source(src, L.CW, t, s.linkTree) : doc
     const st = memo.stats(fm.body)
     const filtered = s.filter.trim() !== ""
@@ -208,9 +208,11 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
         ? memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null)
         : memo.switch(vault.current.ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
     // the highlight always sits on a stop (results change under it while typing or indexing)
-    const swHl = s.switcher && swRows[s.switcher.hl] && isStop(swRows[s.switcher.hl]!) ? s.switcher.hl : firstHit(swRows)
+    const swAt = s.switcher ? swRows[s.switcher.hl] : undefined
+    const swHl = s.switcher && swAt && isStop(swAt) ? s.switcher.hl : firstHit(swRows)
     const opRows: OpenRow[] = s.opener ? memo.open(s.opener.list, s.opener.q, s.root, projectRoot(s)) : []
-    const opHl = s.opener && opRows[s.opener.hl] && opRows[s.opener.hl]!.kind !== "header" ? s.opener.hl : firstHit(opRows)
+    const opAt = s.opener ? opRows[s.opener.hl] : undefined
+    const opHl = s.opener && opAt && opAt.kind !== "header" ? s.opener.hl : firstHit(opRows)
     const filterRow = (s.view === "files" && (s.filterTyping || s.filter !== "")) || (s.view === "outline" && (s.filterTyping || s.outlineFilter !== ""))
     const LH = Math.max(1, L.bodyH - 2 - (filterRow ? 1 : 0) - note.length)
 
@@ -247,13 +249,11 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     const prev = matchSeen.current
     if (prev.query === s.query && prev.matches !== matches && s.matchLine !== null) {
       const i = prev.matches.indexOf(s.matchLine)
-      s.matchLine = i >= 0 && i < matches.length ? matches[i]! : null
+      s.matchLine = matches[i] ?? null
     }
     matchSeen.current = { matches, query: s.query }
     // the heading the reader is in: last one at (or just above) the top line
-    const hs = view.headings
-    let currentHeading = -1
-    for (let i = 0; i < hs.length; i++) if (hs[i]!.line <= top + 1) currentHeading = i
+    const currentHeading = view.headings.findLastIndex((h) => h.line <= top + 1)
     const oRows = memo.outline(view.headings, currentHeading, s.outlineFilter)
     // zen gloss: the section under the reading line (currentHeading is sectionOf(view.headings, top)) and the sheet on screen
     // only with an ai block, or a gloss still running (`a` cancels it after the block goes)
@@ -274,7 +274,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     const sideFocus: View | null = L.shown && s.focus === "panel" ? s.view : null
     const ranges = memo.ranges(view)
     /** Spotlight: the section kept bright (the one holding the reading / top line) */
-    const spot = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.spotlight ? ranges[sectionAt(ranges, top)]! : null
+    const spot = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.spotlight ? (ranges[sectionAt(ranges, top)] ?? null) : null
     /** Rows on screen: row `i` shows line `first + i` when it lies in `lo..hi` (blank otherwise). */
     let win = { first: tw ? typewriterTop(top, L.CH) : top, lo: 0, hi: view.lines.length }
     let pg: { index: number; count: number; start: number; end: number; top: number; maxTop: number } | null = null

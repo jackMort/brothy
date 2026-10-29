@@ -6,7 +6,7 @@ import { existsSync, statSync } from "node:fs"
 import { dirname } from "node:path"
 import { INK_MS, INK_STEPS } from "../chrome"
 import { startHistory } from "../history"
-import { keepVisible, type Geometry } from "../nav"
+import { keepHitVisible, type Geometry } from "../nav"
 import { loadProjects, projectName, remember, saveProjects, tildify, type OpenRow } from "../projects"
 import { errText } from "../status"
 import { firstHit } from "../vault"
@@ -100,16 +100,16 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
   const opType = (q: string) => {
     const op = ui.current.opener
     if (!op) return
-    set({ opener: { ...op, q, hl: 0, top: 0 } })
-    set({ opener: { ...ui.current.opener!, hl: Math.max(0, firstHit(derive().opRows)) } })
+    const next = (ui.current.opener = { ...op, q, hl: 0, top: 0 }) // unbumped: only for `derive` below
+    set({ opener: { ...next, hl: Math.max(0, firstHit(derive().opRows)) } })
   }
 
+  /** Highlight row `hl`, scrolling so it (and its section title, when it is the first row) stays in view. */
   const opGo = (hl: number) => {
     const op = ui.current.opener
     if (!op) return
-    const { opRows: rows, L } = derive()
-    const head = rows[hl - 1]?.kind === "header" ? hl - 1 : hl
-    set({ opener: { ...op, hl, top: keepVisible(keepVisible(op.top, head, L.PH, rows.length), hl, L.PH, rows.length) } })
+    const { opRows, L } = derive()
+    set({ opener: { ...op, hl, top: keepHitVisible(op.top, opRows, hl, L.PH) } })
   }
 
   const openOpener = () => {

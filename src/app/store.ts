@@ -27,6 +27,11 @@ export const ZEN_DIM = 0.5
 export const SCRIM_DIM = 0.62
 /** Tree indent stops growing here; deeper rows keep this indent and cut the name. */
 export const MAX_DEPTH = 6
+/** Rows one wheel notch scrolls: the document, the panel lists and the help sheet. */
+export const WHEEL_ROWS = 3
+/** The smallest terminal drawn; below it a `tooSmall` notice. */
+export const MIN_W = 60
+export const MIN_H = 14
 
 /** Where keys go: the panel (when shown) or the document. */
 export type Focus = "doc" | "panel"
@@ -90,8 +95,8 @@ export interface UI {
   wide: boolean
   /** braille minimap on (saved by m; drawn from MINI_MIN_W columns, never in zen) */
   minimap: boolean
-  /** heading style (saved by #) */
-  headings: HeadingStyle
+  /** heading style (saved by #, as config `headings`) */
+  headingStyle: HeadingStyle
   /** main surfaces unpainted: the terminal background shows through (saved by T) */
   transparent: boolean
   /** animations on (prop, else config `motion`; always off under `bun test` unless the prop is given) */
@@ -121,7 +126,6 @@ export interface UI {
   zenCfg: ZenConfig
   /** zen settings popup open: what to restore on esc */
   zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
-  /** `C-p` popup: query, highlighted row, first visible row */
   /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
   switcher: { q: string; hl: number; top: number; ask?: AskState } | null
   /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */
@@ -180,7 +184,7 @@ export function initUI(root: string, initialFile: string | undefined, themeName:
     hidden: cfg.sidebar?.hidden ?? false,
     wide: cfg.wide ?? false,
     minimap: cfg.minimap ?? true,
-    headings: cfg.headings ?? "classic",
+    headingStyle: cfg.headings ?? "classic",
     transparent: transparent ?? cfg.transparent ?? false,
     motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
     drawerOpen: false,

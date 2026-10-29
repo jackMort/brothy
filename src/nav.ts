@@ -129,6 +129,12 @@ export function keepVisible(top: number, i: number, h: number, len: number): num
   return Math.max(0, t)
 }
 
+/** `keepVisible` for a picker list: row `hl`, and the section header right above it, in an `h`-tall window. */
+export function keepHitVisible(top: number, rows: readonly { kind: string }[], hl: number, h: number): number {
+  const head = rows[hl - 1]?.kind === "header" ? hl - 1 : hl
+  return keepVisible(keepVisible(top, head, h, rows.length), hl, h, rows.length)
+}
+
 /** Re-find the sidebar cursor after the row list changed, and keep it in view. */
 export function relocate(
   paths: string[],
