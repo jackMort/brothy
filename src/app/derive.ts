@@ -189,7 +189,7 @@ function pickerMemo() {
 }
 
 /** Memo builders for the switcher's ask mode: target, candidates, rerank cost and rows. */
-function askMemo() {
+function askRowsMemo() {
   return {
     /** where an ask would go: null without an `ai` block, else the host or why not */
     host: cached((ai: AIConfig | null) => {
@@ -215,7 +215,7 @@ function askMemo() {
 
 /** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
 export function makeMemo(stdin: string | undefined) {
-  return { ...documentMemo(stdin), ...panelMemo(), ...viewMemo(), ...pickerMemo(), ...askMemo() }
+  return { ...documentMemo(stdin), ...panelMemo(), ...viewMemo(), ...pickerMemo(), ...askRowsMemo() }
 }
 /** The memo table: one `cached` builder per derived value. */
 export type Memo = ReturnType<typeof makeMemo>
