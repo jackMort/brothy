@@ -39,22 +39,29 @@ function pickGeometry(raw: unknown): Geometry | undefined {
   return Array.isArray(heads) && heads.every(isCount) && isCount(total) ? { heads: heads as number[], total } : undefined
 }
 
+/** One stored entry with bad fields defaulted; null when it is not an object or has no absolute `root`. */
+function pickEntry(r: unknown): ProjectEntry | null {
+  if (!isRecord(r)) return null
+  const { root, lastNote, top, at, geo } = r
+  if (typeof root !== "string" || !isAbsolute(root)) return null
+  const g = pickGeometry(geo)
+  return {
+    root,
+    lastNote: typeof lastNote === "string" && isAbsolute(lastNote) ? lastNote : null,
+    top: isCount(top) ? top : 0,
+    ...(g ? { geo: g } : {}),
+    at: typeof at === "number" && Number.isFinite(at) ? at : 0,
+  }
+}
+
 /** The valid entries of a raw `projects` value: bad ones dropped, bad fields defaulted, deduped, capped. */
 function pickProjects(raw: unknown): ProjectEntry[] {
   if (!Array.isArray(raw)) return []
   const out: ProjectEntry[] = []
   for (const r of raw) {
-    if (!isRecord(r)) continue
-    const { root, lastNote, top, at, geo } = r
-    if (typeof root !== "string" || !isAbsolute(root) || out.some((e) => e.root === root)) continue
-    const g = pickGeometry(geo)
-    out.push({
-      root,
-      lastNote: typeof lastNote === "string" && isAbsolute(lastNote) ? lastNote : null,
-      top: isCount(top) ? top : 0,
-      ...(g ? { geo: g } : {}),
-      at: typeof at === "number" && Number.isFinite(at) ? at : 0,
-    })
+    const e = pickEntry(r)
+    if (!e || out.some((x) => x.root === e.root)) continue
+    out.push(e)
     if (out.length === PROJECTS_CAP) break
   }
   return out
