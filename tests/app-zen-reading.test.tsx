@@ -1,7 +1,8 @@
 // App: reading in zen: Typewriter, Spotlight, Pages, the teleprompter and the ghost chrome.
 import { expect, test } from "bun:test"
 import { mix } from "../src/theme"
-import { type Setup, B, hex, HINT_ROW, keys, numbered, parts, READING_ROW, sections, sleep, spansOf, waitFrame, useAppHarness } from "./helpers/app"
+import { type Setup, B, HINT_ROW, keys, numbered, parts, READING_ROW, sections, sleep, spansOf, waitFrame, useAppHarness } from "./helpers/app"
+import { hex } from "./helpers/theme"
 
 const { tmp, mount, zenConfig, savedConfig } = useAppHarness()
 

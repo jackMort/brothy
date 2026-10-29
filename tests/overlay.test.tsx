@@ -7,7 +7,7 @@ import { WORDMARK } from "../src/status"
 import type { OpenRow } from "../src/projects"
 import { switchRows, type SwitchRow } from "../src/vault"
 import { contrast, themeByName, themes } from "../src/theme"
-import { brothy } from "./helpers/theme"
+import { brothy, hex } from "./helpers/theme"
 import { A } from "../src/spans"
 import { filterFamilies, paneLines, sampleView, themeSplit } from "../src/themepick"
 import { ZEN_DEFAULTS, zenRows } from "../src/zen"
@@ -19,9 +19,6 @@ afterEach(() => {
   setup?.renderer.destroy()
   setup = undefined
 })
-
-const hex = (c: { r: number; g: number; b: number; a: number }) =>
-  c.a === 0 ? null : "#" + [c.r, c.g, c.b].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("")
 
 const rowText = (s: Setup, needle: string) =>
   s.captureSpans().lines.find((l) => l.spans.map((sp) => sp.text).join("").includes(needle))!

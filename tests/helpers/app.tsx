@@ -9,10 +9,10 @@ import { App, type AppProps } from "../../src/App"
 import { noteText } from "../../src/ai"
 import { glossKey, glossTarget } from "../../src/gloss"
 import { shutdownHighlighter } from "../../src/highlight"
-import { themeByName } from "../../src/theme"
 import { textHash } from "../../src/summaries"
 import { quietAct } from "../quiet-act"
 import { setEnv } from "./env"
+import { brothy, hex } from "./theme"
 import { makeTmp } from "./tmp"
 
 export type Setup = Awaited<ReturnType<typeof testRender>>
@@ -103,10 +103,8 @@ export async function withClock<T>(at: Date, fn: () => T | Promise<T>): Promise<
 // ------------------------------------------------------------- frames
 
 /** brothy's primary: the fill of a selected sidebar row */
-export const B = themeByName("brothy") // the default theme the tests render in
+export const B = brothy // the default theme the tests render in
 export const PRIMARY = B.primary
-export const hex = (c: { r: number; g: number; b: number; a: number }) =>
-  c.a === 0 ? null : "#" + [c.r, c.g, c.b].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("")
 /** Per screen row, the text drawn on background `bg` (rows without any are dropped). */
 export function onBg(s: Setup, bg = PRIMARY) {
   return s

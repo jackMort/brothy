@@ -3,7 +3,8 @@ import { expect, test } from "bun:test"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { EditResult } from "../src/editor"
-import { B, hex, HINT_ROW, keys, longB, onBg, spansOf, waitFor, waitFrame, useAppHarness } from "./helpers/app"
+import { B, HINT_ROW, keys, longB, onBg, spansOf, waitFor, waitFrame, useAppHarness } from "./helpers/app"
+import { hex } from "./helpers/theme"
 
 const { tmp, mount } = useAppHarness()
 

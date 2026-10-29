@@ -3,7 +3,8 @@ import { expect, test } from "bun:test"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { mix, themeByName } from "../src/theme"
-import { B, hex, keys, numbered, onBg, openHelp, panelShown, parts, sections, sleep, spansOf, topLine, useAppHarness } from "./helpers/app"
+import { B, keys, numbered, onBg, openHelp, panelShown, parts, sections, sleep, spansOf, topLine, useAppHarness } from "./helpers/app"
+import { hex } from "./helpers/theme"
 
 const { cfgDir, tmp, mount, unmount, zenConfig, savedConfig } = useAppHarness()
 

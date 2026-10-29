@@ -5,7 +5,8 @@ import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { MINI_W } from "../src/minimap"
 import { themeByName } from "../src/theme"
-import { hex, keys, onBg, PRIMARY, sleep, spansOf, waitFor, waitFrame, useAppHarness } from "./helpers/app"
+import { keys, onBg, PRIMARY, sleep, spansOf, waitFor, waitFrame, useAppHarness } from "./helpers/app"
+import { hex } from "./helpers/theme"
 
 const { cfgDir, tmp, mount, savedConfig, seedProjects } = useAppHarness()
 
