@@ -127,6 +127,63 @@ function sectionLines(doc: NoteDoc, i: number): [number, number] {
   return [from, doc.headings[i + 1]?.line ?? doc.starts.length]
 }
 
+type Hits = Map<number, { kinds: Map<string, number>; lines: Map<string, number> }>
+
+/** The sections of `doc` holding a query, by heading index (-1: the lead-in, where a name hit lands): the best kind per query, and its first text line. */
+function noteHits(doc: NoteDoc, name: string, queries: readonly string[]): Hits {
+  const secs: Hits = new Map()
+  const hit = (heading: number, q: string, kind: number, line?: number) => {
+    let a = secs.get(heading)
+    if (!a) secs.set(heading, (a = { kinds: new Map(), lines: new Map() }))
+    if ((a.kinds.get(q) ?? 0) < kind) a.kinds.set(q, kind)
+    if (line !== undefined && !a.lines.has(q)) a.lines.set(q, line)
+  }
+  for (const q of queries) {
+    if (sub(name, q)) hit(-1, q, NAME)
+    doc.headings.forEach((h, i) => void (sub(h.text, q) && hit(i, q, HEAD)))
+    const want = foldSame(q.trim())
+    let from = 0
+    for (let k = 0; doc.lower && k < SWITCH_CAP.perNote; k++) {
+      const at = doc.lower.indexOf(want, from)
+      if (at < 0) break
+      const line = lineOf(doc.starts, at)
+      hit(headingAt(doc.headings, line) ?? -1, q, TEXT, line)
+      from = doc.starts[line + 1] ?? doc.lower.length // one hit per line
+    }
+  }
+  return secs
+}
+
+/** One note's sections that hold a query, in heading order. */
+function noteCandidates(n: FileNode, doc: NoteDoc, queries: readonly string[]): Candidate[] {
+  const name = stem(n.name)
+  const ids = keysOf(doc)
+  const out: Candidate[] = []
+  for (const [heading, a] of [...noteHits(doc, name, queries)].sort(([x], [y]) => x - y)) {
+    let best = ""
+    let top = 0
+    for (const q of queries) {
+      const k = a.kinds.get(q) ?? 0
+      if (k > top) [top, best] = [k, q]
+    }
+    const { key, ord } = heading < 0 ? { key: "", ord: 0 } : ids[heading]!
+    const line = a.lines.get(best)
+    out.push({
+      path: n.path,
+      name,
+      heading,
+      text: heading < 0 ? "" : doc.headings[heading]!.text,
+      key,
+      ord,
+      id: sectionId(n.path, { key, ord }),
+      score: [...a.kinds.values()].reduce((x, y) => x + y, 0),
+      queries: a.kinds.size,
+      best: line === undefined ? { query: best } : { query: best, line },
+    })
+  }
+  return out
+}
+
 /**
  * Sections of the vault for the model's queries, best first, at most MAX_CANDIDATES. Per query: a
  * heading holding it scores 3, a text line 1 (first SWITCH_CAP.perNote lines per note), the note's
@@ -136,52 +193,7 @@ export function askCandidates(ix: VaultIndex, tree: FileNode, queries: readonly 
   const out: (Candidate & { order: number })[] = []
   for (const n of notesOf(tree)) {
     const doc = ix.docs.get(n.path)
-    if (!doc) continue
-    const secs = new Map<number, { kinds: Map<string, number>; lines: Map<string, number> }>()
-    const hit = (heading: number, q: string, kind: number, line?: number) => {
-      let a = secs.get(heading)
-      if (!a) secs.set(heading, (a = { kinds: new Map(), lines: new Map() }))
-      if ((a.kinds.get(q) ?? 0) < kind) a.kinds.set(q, kind)
-      if (line !== undefined && !a.lines.has(q)) a.lines.set(q, line)
-    }
-    const name = stem(n.name)
-    for (const q of queries) {
-      if (sub(name, q)) hit(-1, q, NAME)
-      doc.headings.forEach((h, i) => void (sub(h.text, q) && hit(i, q, HEAD)))
-      const want = foldSame(q.trim())
-      let from = 0
-      for (let k = 0; doc.lower && k < SWITCH_CAP.perNote; k++) {
-        const at = doc.lower.indexOf(want, from)
-        if (at < 0) break
-        const line = lineOf(doc.starts, at)
-        hit(headingAt(doc.headings, line) ?? -1, q, TEXT, line)
-        from = doc.starts[line + 1] ?? doc.lower.length // one hit per line
-      }
-    }
-    const ids = keysOf(doc)
-    for (const [heading, a] of [...secs].sort(([x], [y]) => x - y)) {
-      let best = ""
-      let top = 0
-      for (const q of queries) {
-        const k = a.kinds.get(q) ?? 0
-        if (k > top) [top, best] = [k, q]
-      }
-      const { key, ord } = heading < 0 ? { key: "", ord: 0 } : ids[heading]!
-      const line = a.lines.get(best)
-      out.push({
-        path: n.path,
-        name,
-        heading,
-        text: heading < 0 ? "" : doc.headings[heading]!.text,
-        key,
-        ord,
-        id: sectionId(n.path, { key, ord }),
-        score: [...a.kinds.values()].reduce((x, y) => x + y, 0),
-        queries: a.kinds.size,
-        best: line === undefined ? { query: best } : { query: best, line },
-        order: out.length,
-      })
-    }
+    if (doc) for (const c of noteCandidates(n, doc, queries)) out.push({ ...c, order: out.length })
   }
   out.sort((a, b) => b.score - a.score || b.queries - a.queries || a.order - b.order)
   return out.slice(0, MAX_CANDIDATES).map(({ order: _, ...c }) => c)
