@@ -8,14 +8,11 @@ import { dirname, isAbsolute, join } from "node:path"
 /** A non-null, non-array object. */
 export const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 
-/** What reading a JSON file found: its value, no file, or a file that can't be read or parsed. */
-export type JSONFile = { kind: "ok"; value: unknown } | { kind: "missing" } | { kind: "invalid" }
-
 /**
- * Never throws; only the read and the parse are inside the try. `lenient` is for files people edit:
- * a BOM is dropped and a blank file reads as `{}`.
+ * What reading a JSON file found: its value, no file, or a file that can't be read or parsed. Never throws; only the
+ * read and the parse are inside the try. `lenient` is for files people edit: a BOM is dropped and a blank file reads as `{}`.
  */
-export function readJSON(file: string, o: { lenient?: boolean } = {}): JSONFile {
+export function readJSON(file: string, o: { lenient?: boolean } = {}): { kind: "ok"; value: unknown } | { kind: "missing" } | { kind: "invalid" } {
   let text: string
   try {
     text = readFileSync(file, "utf8")
