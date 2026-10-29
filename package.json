@@ -33,7 +33,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "knip": "knip",
-    "fallow": "bunx fallow@3.37.0"
+    "fallow": "bunx fallow@3.37.0",
+    "fallow:gate": "bunx fallow@3.37.0 --health-baseline .github/fallow-health-baseline.json --baseline-mode identity --fail-on-stale-baseline"
   },
   "dependencies": {
     "@opentui/core": "0.5.17",

@@ -1,0 +1,634 @@
+{
+  "kind": "health",
+  "finding_counts": {
+    "scripts/session.tsx": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/frame.ts": {
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "site/src/scripts/fullscreen.ts": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts": {
+      "crap_moderate": {
+        "count": 8
+      }
+    },
+    "src/App.tsx": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/ask.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/client.ts": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/ai/config.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/delta.ts": {
+      "complexity_moderate": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/Panel.tsx": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/actions.ts": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/app/ai-jobs.ts": {
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/app/switcher.ts": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/workspace.ts": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/cli.tsx": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/lib/text.ts": {
+      "complexity_moderate": {
+        "count": 2
+      }
+    },
+    "src/markdown/frontmatter.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/highlight.ts": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/render.ts": {
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/markdown/source.ts": {
+      "complexity_moderate": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/stats.ts": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/files.ts": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/notes/peek.ts": {
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/notes/projects.ts": {
+      "complexity_moderate": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/vault.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/system/args.ts": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/system/config.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/system/editor.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/layout.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/minimap.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/nav.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/overlay.tsx": {
+      "complexity_moderate": {
+        "count": 4
+      }
+    },
+    "src/ui/panel.ts": {
+      "complexity_moderate": {
+        "count": 4
+      }
+    },
+    "src/ui/rows.ts": {
+      "complexity_moderate": {
+        "count": 2
+      }
+    },
+    "src/ui/welcome.ts": {
+      "complexity_moderate": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "tests/ai/ask.test.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "tests/markdown/markdown-obsidian.test.ts": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    }
+  },
+  "identity_finding_counts": {
+    "scripts/session.tsx\u0000press": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/frame.ts\u0000actionFor": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/frame.ts\u0000addEventListener(\"keydown\")": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/frame.ts\u0000notOurs": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/frame.ts\u0000setRunningHead": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/fullscreen.ts\u0000shut": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000draw": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000el.addEventListener(\"keydown\")": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000paint": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000paintBackgrounds": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000paintBox": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000paintCell": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000paintText": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "site/src/scripts/player.ts\u0000seek": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/App.tsx\u0000App": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/ask.ts\u0000askRows": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/client.ts\u0000streamResult": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/client.ts\u0000takeEvents": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/client.ts\u0000what": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/config.ts\u0000normalizeAI": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/delta.ts\u0000lineDiff": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/delta.ts\u0000parseDelta": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ai/delta.ts\u0000sectionsOf": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/Panel.tsx\u0000filterRows": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/actions.ts\u0000clear": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/actions.ts\u0000edit": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/ai-jobs.ts\u0000explainChange": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/ai-jobs.ts\u0000glossEntered": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/ai-jobs.ts\u0000summarizeNote": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/ai-jobs.ts\u0000zenGloss": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/switcher.ts\u0000peekNote": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/app/workspace.ts\u0000switchWorkspace": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/cli.tsx\u0000<arrow>": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/lib/text.ts\u0000truncate": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/lib/text.ts\u0000truncateLeft": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/frontmatter.ts\u0000parseProperties": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/highlight.ts\u0000paintKinds": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/render.ts\u0000headingRows": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/render.ts\u0000inlineHtml": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/render.ts\u0000inlineWikilink": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/source.ts\u0000needsLexer": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/source.ts\u0000sourceSpans": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/source.ts\u0000sourceStructureLines": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/markdown/stats.ts\u0000walk": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/files.ts\u0000subfolder": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/files.ts\u0000walk": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/files.ts\u0000walkDir": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/peek.ts\u0000anchorRow": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/peek.ts\u0000bodyRows": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/peek.ts\u0000outlineRows": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/projects.ts\u0000openRows": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/projects.ts\u0000pathCompletions": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/projects.ts\u0000pickEntry": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/notes/vault.ts\u0000refreshIndex": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/system/args.ts\u0000scanArgs": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/system/args.ts\u0000themeOption": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/system/config.ts\u0000loadConfig": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/system/editor.ts\u0000sourceLineAt": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/layout.ts\u0000layout": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/minimap.ts\u0000inkedColumns": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/nav.ts\u0000overlayAt": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/overlay.tsx\u0000PickerInput": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/overlay.tsx\u0000Switcher": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/overlay.tsx\u0000ThemePicker": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/overlay.tsx\u0000Welcome": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/panel.ts\u0000fileRowSpans": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/panel.ts\u0000infoSpans": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/panel.ts\u0000linkDest": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/panel.ts\u0000wrapProperty": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/rows.ts\u0000artSpans": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/rows.ts\u0000fitHits": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/welcome.ts\u0000drawBowl": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/ui/welcome.ts\u0000steamRows": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "tests/ai/ask.test.ts\u0000<arrow>": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "tests/markdown/markdown-obsidian.test.ts\u0000readable": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    }
+  },
+  "runtime_coverage_findings": [],
+  "target_keys": [
+    "src/app/ai-jobs.ts:high impact",
+    "src/notes/vault.ts:high impact",
+    "src/ui/nav.ts:high impact",
+    "src/ai/client.ts:high impact",
+    "src/markdown/source.ts:high impact",
+    "src/app/derive.ts:hidden coupling",
+    "src/ai/delta.ts:high impact",
+    "src/ai/ask.ts:high impact",
+    "src/ui/panel.ts:high impact",
+    "src/notes/peek.ts:untested risk",
+    "src/app/actions.ts:untested risk",
+    "src/notes/projects.ts:high impact",
+    "src/ai/config.ts:high impact",
+    "src/ui/status.ts:high impact",
+    "src/markdown/render.ts:high impact",
+    "src/markdown/lexer.ts:high impact",
+    "src/notes/workspace.ts:high impact",
+    "src/ui/welcome.ts:high impact",
+    "src/system/config.ts:high impact",
+    "src/notes/files.ts:high impact",
+    "tests/helpers/tmp.ts:high impact",
+    "src/lib/text.ts:high impact",
+    "src/system/args.ts:untested risk",
+    "site/src/scripts/frame.ts:untested risk",
+    "site/src/scripts/player.ts:untested risk"
+  ]
+}

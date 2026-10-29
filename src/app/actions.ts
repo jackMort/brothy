@@ -370,14 +370,15 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     infoMove: (k) => {
       const { linkRows, infoRows, infoCur, LH, s } = derive()
       const max = Math.max(0, infoRows.length - LH)
-      const scroll = (to: number) => set({ listTop: { ...s.listTop, info: Math.max(0, Math.min(max, to)) } })
-      const toEdge = k.name === "g" ? (k.shift ? max : 0) : undefined
       const dir = isDown(k) ? 1 : -1
-      if (!linkRows.length) return scroll(toEdge ?? s.listTop.info + dir)
-      // at the first/last link the keys scroll the rest of the list into view
-      const last = linkRows.length - 1
-      if (k.name === "g" ? infoCur === (k.shift ? last : 0) : infoCur === (dir > 0 ? last : 0)) return scroll(toEdge ?? s.listTop.info + dir)
-      set({ infoCur: clamp(k.name === "g" ? (k.shift ? last : 0) : infoCur + dir, 0, linkRows.length - 1) })
+      // g / G go to the first / last link (or row); the other keys step one
+      const jump = k.name === "g"
+      const toEnd = jump ? !!k.shift : dir > 0
+      const scroll = () => set({ listTop: { ...s.listTop, info: Math.max(0, Math.min(max, jump ? (toEnd ? max : 0) : s.listTop.info + dir)) } })
+      const edge = toEnd ? linkRows.length - 1 : 0
+      // without links, or at the first/last one, the keys scroll the rest of the list into view
+      if (!linkRows.length || infoCur === edge) return scroll()
+      set({ infoCur: jump ? edge : clamp(infoCur + dir, 0, linkRows.length - 1) })
     },
     infoOpen: () => {
       const { infoRows, linkRows, infoCur } = derive()

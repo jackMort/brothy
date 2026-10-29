@@ -33,10 +33,12 @@ jobs:
       - run: bun run build
       - run: ./brothy --version
 
-  # fallow audit gates only what the pull request introduces (the 85 older complexity findings are inherited and reported, not failed);
-  # it needs the base branch's history, hence the full checkout, and the version is pinned so a new release cannot turn a run red
+  # the whole tree against the committed health baseline (the accepted complexity findings, one entry per function): any new
+  # finding fails, and so does an entry nothing matches any more (prune it); git history and the clock never change the verdict.
+  # On a pull request, fallow audit also fails when an accepted function grows (--worsened error); it needs the base branch's
+  # history, hence the full checkout. The baseline is passed here, not set as audit.healthBaseline in .fallowrc.jsonc: the audit
+  # would then hide the accepted functions, growth included. The version is pinned so a new release cannot turn a run red.
   fallow:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,4 +48,6 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - run: bunx fallow@3.37.0 audit --base origin/${{ github.base_ref }}
+      - run: bunx fallow@3.37.0 --health-baseline .github/fallow-health-baseline.json --baseline-mode identity --fail-on-stale-baseline
+      - if: github.event_name == 'pull_request'
+        run: bunx fallow@3.37.0 audit --base origin/${{ github.base_ref }} --worsened error

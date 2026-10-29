@@ -24,6 +24,14 @@ export const BLOCK: Record<string, [number, number]> = { "▌": [0, 0.5], "▐":
 
 const CSI = /\x1b\[([?0-9;]*)([A-Za-z])|([^\x1b])|(\x1b)/gsu
 const SGR_FLAGS: Record<number, number> = { 1: 1, 3: 2, 4: 4, 9: 8 }
+/** the CSI finals the screen model handles, each with the parameters it takes */
+const FINALS: Record<string, (p: string) => boolean> = {
+  H: (p) => /^\d*(;\d*)?$/.test(p),
+  J: (p) => p === "2",
+  h: (p) => p === "?25",
+  l: (p) => p === "?25",
+  m: (p) => sgrOk(p),
+}
 
 /** The escape sequences in `d` the screen model does not handle (each as written). */
 export function unsupported(d: string): string[] {
@@ -34,10 +42,7 @@ export function unsupported(d: string): string[] {
       continue
     }
     if (m[3] !== undefined) continue
-    const p = m[1]!,
-      f = m[2]!
-    const ok = f === "H" ? /^\d*(;\d*)?$/.test(p) : f === "J" ? p === "2" : f === "l" || f === "h" ? p === "?25" : f === "m" ? sgrOk(p) : false
-    if (!ok) out.push(m[0])
+    if (!FINALS[m[2]!]?.(m[1]!)) out.push(m[0])
   }
   CSI.lastIndex = 0
   return out
