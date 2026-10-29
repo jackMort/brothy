@@ -3,12 +3,14 @@ import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
 import { closeSync, existsSync, openSync, statSync } from "node:fs"
 import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode, type TreeRow } from "./files"
+import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
-import { drop, go, keep, startHistory, stepTo, visit, type History } from "./history"
+import { drop, go, keep, startHistory, stepTo, visit } from "./history"
 import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
 import { safeLine } from "./spans"
 import { Row } from "./app/Row"
+import { AI_FRAME, MAX_JOBS, jobKey, type JobKind } from "./app/ai-jobs"
+import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, type FileRow, type Focus, type Spot, type UI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { MAX_BYTES } from "./stdin"
 import { readDoc, type DocFile } from "./doc"
@@ -23,26 +25,19 @@ import { MINI_COLS, MINI_MIN_W, MINI_W, miniCells, miniColors, miniInk, miniJump
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "./peek"
 import { filterFamilies, onlyMode, paneLines, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, sampleView, themeSplit, type ThemePick } from "./themepick"
 import { VIEWS, loadConfig, saveConfig, type Config, type SidebarConfig, type View } from "./config"
-import { cached, copiedCount, findLines, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry, type LinkSpot } from "./nav"
+import { cached, copiedCount, findLines, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry } from "./nav"
 import { watchPath } from "./watch"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
 import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, resolveAI, shortModel, stripThink, summarize, type AIConfig, type AITarget, type Failure } from "./ai"
 import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askCandidates, askLocate, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, type AskState, type Candidate } from "./ask"
-import { isFresh, loadGlosses, loadSummaries, saveGlosses, saveSummaries, textHash, type Gloss, type Glosses, type Summaries } from "./summaries"
+import { isFresh, loadGlosses, loadSummaries, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
 import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, glossTarget, parseGlossStyle, type GlossState, type GlossStyle, type GlossTarget } from "./gloss"
-import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type Toast, type ToastKind } from "./status"
+import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type ToastKind } from "./status"
 import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type OutlineRow, type SummaryState, type SummaryView } from "./panel"
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, diffSections, hhmm, parseDelta, quoteNeedle, reloadToast, type Change, type DeltaNote } from "./delta"
 import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
 export const VERSION = "0.2.0"
-
-/** Where keys go: the panel (when shown) or the document. */
-type Focus = "doc" | "panel"
-/** Find popup: `hl` is the highlighted row; -1 means "not moved yet". */
-type Prompt = { value: string; hl: number; top: number } | null
-/** A Files list row; filter results carry the matched code points of the note's name. */
-type FileRow = TreeRow & { hits?: number[] }
 
 export interface AppProps {
   root: string
@@ -65,26 +60,10 @@ export interface AppProps {
 /** The open path of the piped document: relative, so it can never be a file on disk. */
 export const STDIN = "stdin"
 
-/** Sidebar j/k opens the file under the cursor once it rests this long. */
-const OPEN_DELAY = 100
-/** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
-const MAX_JOBS = 3
-/** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
-type JobKind = "tldr" | "gloss" | "delta" | "ask"
-const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
-/** streamed summary text re-renders at most this often (ms) */
-const AI_FRAME = 100
-/** No candidates: one shared empty list, so the ask memos hold */
-const NO_CANDS: readonly Candidate[] = []
 /** Reading measure: the document never wraps wider than this. */
 const MEASURE = 80
 /** Below this width the panel is a drawer over the text instead of a column beside it. */
 const DRAWER_BELOW = 100
-
-/** Zen chrome without Ghost: the top line stays, mixed this far toward the background. */
-const ZEN_DIM = 0.5
-/** Scrim: the document under an open drawer is mixed this far toward the background. */
-const SCRIM_DIM = 0.62
 
 // ------------------------------------------------------------- helpers
 
@@ -94,134 +73,6 @@ const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, row
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
-
-/** Tree indent stops growing here; deeper rows keep this indent and cut the name. */
-const MAX_DEPTH = 6
-
-// ------------------------------------------------------------- store
-
-/** Where a note was left: its scroll entry (Preview or Source key) at that moment. */
-type Spot = { key: string; top: number; geo: Geometry }
-/** The open note's body (`noteText`) and properties when it was opened or last explained; memory only. */
-type Baseline = { path: string; text: string; props: string; at: number }
-/** `D` for `path`: the changes sent, the text and properties they lead to, and the reply once it is in. */
-type DeltaState = { path: string; changes: Change[]; text: string; props: string; result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null }
-const NO_CHANGES: Change[] = []
-const NO_NOTES: (DeltaNote | undefined)[] = []
-
-/**
- * All UI state lives in one mutable store read at call time, so key handlers never act
- * on a stale render (keys arriving faster than frames used to be dropped).
- */
-interface UI {
-  themeIdx: number
-  /** the `t` picker while open; the app keeps `themeIdx` until ⏎ */
-  themePick: ThemePick | null
-  /** the workspace folder (Files lists it; `o` replaces it) */
-  root: string
-  tree: FileNode
-  /** where wikilinks resolve: the enclosing vault when a single note was opened inside one, else `tree` */
-  linkTree: FileNode
-  /** a piped document's `linkTree` is a placeholder until the first link use scans the folder */
-  linkLazy: boolean
-  /** the session started on stdin and no `o` has replaced it, whichever note is open: no Files tab, no saved view, no project record */
-  piped: boolean
-  /** that vault's root when it differs from `root` (rescanned on reload) */
-  linkRoot: string | null
-  /** open folders (session only; the open note's path is always added) */
-  expanded: Set<string>
-  filter: string
-  /** typing into the panel's filter row */
-  filterTyping: boolean
-  cursor: number
-  /** first visible row of each panel view */
-  listTop: Record<View, number>
-  /** Info cursor the list was last scrolled to: wheel and edge scrolling stick until the cursor moves */
-  infoSeen: string
-  openPath: string | null
-  /** bumped to re-read the open file */
-  reload: number
-  /** bumped to re-arm the file watcher */
-  watchGen: number
-  /** when the last live reload landed (the logo stays bright for `LOGO_HOLD`) */
-  reloadedAt: number | null
-  /** Source instead of Preview */
-  source: boolean
-  focus: Focus
-  /** inline panel hidden (saved by ^b) */
-  hidden: boolean
-  /** full pane width instead of the fixed measure */
-  wide: boolean
-  /** braille minimap on (saved by m; drawn from MINI_MIN_W columns, never in zen) */
-  minimap: boolean
-  /** heading style (saved by #) */
-  headings: HeadingStyle
-  /** main surfaces unpainted: the terminal background shows through (saved by T) */
-  transparent: boolean
-  /** animations on (prop, else config `motion`; always off under `bun test` unless the prop is given) */
-  motion: boolean
-  /** drawer open (below DRAWER_BELOW; never saved) */
-  drawerOpen: boolean
-  /** panel view shown */
-  view: View
-  /** bumped when code-block highlighting lands, to re-render the document */
-  hl: number
-  prompt: Prompt
-  /** link labels on screen (`f`); dropped when the note, the mode, the width or the scroll position changes (`labelGeo`) */
-  labels: { spots: LinkSpot[]; labels: string[]; typed: string; geo: string } | null
-  query: string
-  /** line of the match `n`/`N` last landed on */
-  matchLine: number | null
-  help: boolean
-  helpTop: number
-  /** Outline heading filter */
-  outlineFilter: string
-  outlineCur: number
-  /** Info cursor: index into the link rows */
-  infoCur: number
-  /** zen layout requested (runtime only; never saved) */
-  zen: boolean
-  /** zen settings in effect */
-  zenCfg: ZenConfig
-  /** zen settings popup open: what to restore on esc */
-  zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
-  /** `C-p` popup: query, highlighted row, first visible row */
-  /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
-  switcher: { q: string; hl: number; top: number; ask?: AskState } | null
-  /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */
-  opener: { q: string; hl: number; top: number; list: ProjectEntry[] } | null
-  /** notes the document had focus with, newest first (this run only) */
-  recent: readonly string[]
-  /** back / forward (`H` / `L`) through the notes opened this run, each with where it was left */
-  history: History<Spot>
-  /** vault index build in progress: [done, total] */
-  indexing: [number, number] | null
-  /** bumped when the vault index changes, to re-run the search */
-  ixVer: number
-  /** highlighted popup row (index into ZEN_ROWS) */
-  zenRow: number
-  /** teleprompter auto-scroll running */
-  rolling: boolean
-  /** last zen keypress (ms) for Ghost chrome; null = chrome hidden */
-  ghostAt: number | null
-  toast: Toast | null
-  /** when the hints were last shown (context change or ?) */
-  hintAt: number | null
-  /** the context those hints are for */
-  hintCtx: Ctx
-  /** the config's `ai` block, re-read on every `a` (null: AI off) */
-  ai: AIConfig | null
-  /** summaries.json, loaded once at start, keyed by absolute note path */
-  summaries: Summaries
-  /** glosses.json, read on the first zen entry (or zen `a`) with an `ai` block; null: not read yet */
-  glosses: Glosses | null
-  /** the zen gloss sheet: its section id, cache key, label, the section's text hash when shown, and when it began fading */
-  gloss: { id: string; key: string; heading: string; hash: string; fadeAt: number | null } | null
-  /** what the open note's change list compares against (dropped on leaving the note) */
-  baseline: Baseline | null
-  /** the explanation running or shown for `baseline.path` */
-  delta: DeltaState | null
-}
 
 type Workspace = Pick<UI, "root" | "tree" | "linkTree" | "linkLazy" | "piped" | "linkRoot" | "openPath" | "expanded">
 
