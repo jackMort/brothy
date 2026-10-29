@@ -1,12 +1,13 @@
-// AI jobs: how many run at once, how they are keyed and how often streamed text redraws; then `makeAIJobs`, the
-// TL;DR, gloss and reload-explain requests and their keys (`a`, `D`, zen `a`). Not pure: it closes over the app context.
+// AI jobs: how many run at once, how they are keyed and how often streamed text redraws; `makeJobs`, the gate and
+// lifecycle every AI action shares (the switcher's ask too); then `makeAIJobs`, the TL;DR, gloss and reload-explain
+// requests and their keys (`a`, `D`, zen `a`). Not pure: both close over the app context.
 import { basename } from "node:path"
-import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, shortModel, stripThink, summarize, type Failure } from "../ai"
-import { resolveAI, type AITarget, type GlossStyle } from "../ai-config"
+import { PROMPTS, PROMPT_V, aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai"
+import { resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai-config"
 import { loadConfig } from "../config"
-import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, hhmm, parseDelta, type Change } from "../delta"
+import { deltaRequest, hhmm, parseDelta, type Change } from "../delta"
 import { stem } from "../files"
-import { GLOSS_MAX, glossKey, glossRequest, type GlossTarget } from "../gloss"
+import { glossKey, glossRequest, type GlossTarget } from "../gloss"
 import { safeLine } from "../spans"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../summaries"
 import { STDIN } from "../workspace"
@@ -27,11 +28,28 @@ export interface Job {
 /** streamed summary text re-renders at most this often (ms) */
 export const AI_FRAME = 100
 
-// ------------------------------------------------------------- jobs
+/** Toasts every AI action shares. */
+export const AI_OFF = `AI off · set "ai" in config.json`
+export const AI_BUSY = `AI busy · ${MAX_JOBS} requests running`
 
-/** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */
-export function makeAIJobs(c: AppCtx) {
-  const { ui, set, bump, derive, memo, jobs, timers, alive, fetchImpl, flash, runFade, focusPanel } = c
+/** How `startJob` runs a request. */
+export interface JobRun {
+  /** each delta lands in `job.raw` and redraws at most every AI_FRAME */
+  stream?: boolean
+  /** runs once the job is registered, before the request goes out */
+  begin?: () => void
+  /** the result, only while the job is still the one under its key (not cancelled or replaced), once it left `jobs`, and while App is mounted */
+  done: (r: ChatResult, job: Job) => void
+}
+
+// ------------------------------------------------------------- lifecycle
+
+/**
+ * What every AI action shares: re-reading the `ai` block, the gate, starting and cancelling a job, the failure toast.
+ * `makeAIJobs` and `makeSwitcher` each build one; its state lives in the context's refs (`jobs`, `timers`).
+ */
+export function makeJobs(c: AppCtx) {
+  const { set, bump, jobs, timers, alive, fetchImpl, flash } = c
 
   /** one redraw per AI_FRAME while text streams in */
   const aiRedraw = () => {
@@ -41,6 +59,68 @@ export function makeAIJobs(c: AppCtx) {
       if (alive.current) bump((x) => x + 1)
     }, AI_FRAME)
   }
+
+  /** Re-read the `ai` block into the store (editing config.json applies without a restart); null: AI off. */
+  const reloadAI = () => {
+    const ai = loadConfig().ai ?? null
+    set({ ai })
+    return ai
+  }
+
+  /** Abort job `key` and forget it; false when none runs. */
+  const cancelJob = (key: string) => {
+    const job = jobs.current.get(key)
+    if (!job) return false
+    job.abort.abort()
+    jobs.current.delete(key)
+    return true
+  }
+
+  /** Room for one more request and the target `ai` resolves to; else its toast (`busy` also hears the busy one) and null. */
+  const aiGate = (ai: AIConfig, busy?: (msg: string) => void): AITarget | null => {
+    if (jobs.current.size >= MAX_JOBS) {
+      flash(AI_BUSY)
+      busy?.(AI_BUSY)
+      return null
+    }
+    const target = resolveAI(ai, process.env)
+    if (!("error" in target)) return target
+    flash(target.error, "error")
+    return null
+  }
+
+  /** The toast for failure `f` of a request to `target`: what it was for (`noun`), and the note or heading when it is not the current one. */
+  const failText = (target: AITarget, f: Failure, noun?: ErrCtx["noun"], note?: string) =>
+    aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun, note })
+
+  /** Send `req` to `target` as job `<kind>:<id>` (`jobKey`); `run` says whether it streams and what follows. */
+  const startJob = (kind: JobKind, id: string | undefined, target: AITarget, req: ChatReq, run: JobRun) => {
+    const key = jobKey(kind, id)
+    const job: Job = { kind, raw: "", abort: new AbortController() }
+    jobs.current.set(key, job)
+    run.begin?.()
+    const onDelta = run.stream
+      ? (raw: string) => {
+          job.raw = raw
+          aiRedraw()
+        }
+      : undefined
+    void chat(target, req, { fetch: fetchImpl, signal: job.abort.signal, onDelta }).then((r) => {
+      if (jobs.current.get(key) !== job) return // cancelled, replaced, or the note was left
+      jobs.current.delete(key)
+      if (alive.current) run.done(r, job)
+    })
+  }
+
+  return { reloadAI, cancelJob, aiGate, failText, startJob }
+}
+
+// ------------------------------------------------------------- jobs
+
+/** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */
+export function makeAIJobs(c: AppCtx) {
+  const { ui, set, bump, derive, memo, jobs, flash, runFade, focusPanel } = c
+  const { reloadAI, cancelJob, aiGate, failText, startJob } = makeJobs(c)
 
   /** glosses.json is read once, and only when zen meets an `ai` block (auto-show needs it). */
   const ensureGlosses = () => {
@@ -72,181 +152,127 @@ export function makeAIJobs(c: AppCtx) {
   const startGloss = (g: GlossTarget, style: GlossStyle, title: string, target: AITarget, model: string) => {
     const hash = textHash(g.text) // taken now: a section edited meanwhile shows the result as outdated
     const key = glossKey(g.id, style)
-    const jk = jobKey("gloss", g.id)
-    const job = { kind: "gloss" as const, raw: "", abort: new AbortController() }
-    jobs.current.set(jk, job)
-    set({ gloss: { id: g.id, key, heading: g.heading, hash, fadeAt: null } })
-    const req = glossRequest(style, title, g.trail, g.text, target.maxChars)
-    void chat(target, { ...req, maxOut: GLOSS_MAX, clean: cleanSummary }, {
-      fetch: fetchImpl,
-      signal: job.abort.signal,
-      onDelta: (raw) => {
-        job.raw = raw
-        aiRedraw()
+    startJob("gloss", g.id, target, glossRequest(style, title, g.trail, g.text, target.maxChars), {
+      stream: true,
+      begin: () => set({ gloss: { id: g.id, key, heading: g.heading, hash, fadeAt: null } }),
+      done: (r) => {
+        if (r.ok) {
+          const entry: Gloss = { hash, v: PROMPTS.gloss, gloss: r.text, model, at: Date.now() }
+          set({ glosses: { ...(ui.current.glosses ?? {}), [key]: entry } })
+          // sectionId starts with the open path, and STDIN is the only relative one: a piped document lives for this run only
+          if (!g.id.startsWith(`${STDIN}#`)) saveGlosses({ [key]: entry })
+        } else if ("failure" in r) {
+          // the sheet closes; the cached gloss returns only when the reading line re-enters the section (or on `a`)
+          if (ui.current.gloss?.id === g.id) set({ gloss: null })
+          const here = derive().gHere?.id === g.id
+          bump((x) => x + 1)
+          flash(failText(target, r.failure, "gloss", here ? undefined : safeLine(g.heading)), "error")
+        }
       },
-    }).then((r) => {
-      if (jobs.current.get(jk) !== job) return // cancelled
-      jobs.current.delete(jk)
-      if (!alive.current) return
-      if (r.ok) {
-        const entry: Gloss = { hash, v: PROMPTS.gloss, gloss: r.text, model, at: Date.now() }
-        set({ glosses: { ...(ui.current.glosses ?? {}), [key]: entry } })
-        // sectionId starts with the open path, and STDIN is the only relative one: a piped document lives for this run only
-        if (!g.id.startsWith(`${STDIN}#`)) saveGlosses({ [key]: entry })
-      } else if ("failure" in r) {
-        // the sheet closes; the cached gloss returns only when the reading line re-enters the section (or on `a`)
-        if (ui.current.gloss?.id === g.id) set({ gloss: null })
-        const here = derive().gHere?.id === g.id
-        bump((x) => x + 1)
-        flash(aiError(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "gloss", note: here ? undefined : safeLine(g.heading) }), "error")
-      }
     })
   }
 
   /** Send `text` for `path`; the result is cached for that path whatever note is current by then. */
   const startSummary = (path: string, text: string, target: AITarget, model: string) => {
     const hash = textHash(text) // taken now: a note edited meanwhile shows the result as outdated
-    const key = jobKey("tldr", path)
-    const job = { kind: "tldr" as const, raw: "", abort: new AbortController() }
-    jobs.current.set(key, job)
-    bump((x) => x + 1)
-    void summarize(target, text, {
-      fetch: fetchImpl,
-      signal: job.abort.signal,
-      onDelta: (raw) => {
-        job.raw = raw
-        aiRedraw()
+    startJob("tldr", path, target, summaryRequest(text, target.maxChars), {
+      stream: true,
+      begin: () => bump((x) => x + 1),
+      done: (r) => {
+        if (r.ok) {
+          const entry = { hash, v: PROMPT_V, summary: r.text, model, at: Date.now() }
+          set({ summaries: { ...ui.current.summaries, [path]: entry } })
+          if (path !== STDIN) saveSummaries({ [path]: entry }) // a piped document lives for this run only
+        } else if ("failure" in r) {
+          const note = ui.current.openPath === path ? undefined : stem(basename(path))
+          bump((x) => x + 1)
+          flash(failText(target, r.failure, undefined, note), "error")
+        }
       },
-    }).then((r) => {
-      if (jobs.current.get(key) !== job) return // cancelled
-      jobs.current.delete(key)
-      if (!alive.current) return
-      if (r.ok) {
-        const entry = { hash, v: PROMPT_V, summary: r.text, model, at: Date.now() }
-        set({ summaries: { ...ui.current.summaries, [path]: entry } })
-        if (path !== STDIN) saveSummaries({ [path]: entry }) // a piped document lives for this run only
-      } else if ("failure" in r) {
-        const note = ui.current.openPath === path ? undefined : stem(basename(path))
-        bump((x) => x + 1)
-        flash(aiError(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key, note }), "error")
-      }
     })
   }
 
   /** Forget the open note's baseline and explanation; a `D` still running for it is cancelled. */
   const dropDelta = () => {
     const s = ui.current
-    if (s.delta) {
-      const key = jobKey("delta", s.delta.path)
-      jobs.current.get(key)?.abort.abort()
-      jobs.current.delete(key)
-    }
+    if (s.delta) cancelJob(jobKey("delta", s.delta.path))
     if (s.baseline || s.delta) set({ baseline: null, delta: null })
   }
 
   /** Send the changed hunks of `path`; on success the baseline moves to the sent text, so later edits list anew. */
   const startDelta = (path: string, changes: Change[], text: string, props: string, title: string, target: AITarget, model: string) => {
-    const key = jobKey("delta", path)
-    const job = { kind: "delta" as const, raw: "", abort: new AbortController() }
-    jobs.current.set(key, job)
-    set({ delta: { path, changes, text, props, result: null } })
-    const user = deltaMessage(title, changes, Math.min(target.maxChars, DELTA_MAX))
-    void chat(target, { system: DELTA_PROMPT, user, maxOut: MAX_DELTA, clean: (r) => stripThink(r).trim() }, {
-      fetch: fetchImpl,
-      signal: job.abort.signal,
-      onDelta: (raw) => {
-        job.raw = raw
-        aiRedraw()
+    startJob("delta", path, target, deltaRequest(title, changes, target.maxChars), {
+      stream: true,
+      begin: () => set({ delta: { path, changes, text, props, result: null } }),
+      done: (r, job) => {
+        const s = ui.current
+        if (s.delta?.path !== path) return bump((x) => x + 1)
+        const fail = (f: Failure) => {
+          set({ delta: null })
+          flash(failText(target, f, "explanation"), "error")
+        }
+        // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
+        const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(job.raw, changes, true) : null
+        if (!r.ok && !cut) return "failure" in r ? fail(r.failure) : set({ delta: null })
+        const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
+        if (!parsed) return fail({ kind: "invalid" })
+        // edits made during the request now differ from the moved baseline and list as a new idle
+        // change set; the reply is kept only when it still describes the note as it is
+        const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
+        set({ baseline, delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null })
       },
-    }).then((r) => {
-      if (jobs.current.get(key) !== job) return // cancelled, or the note was left
-      jobs.current.delete(key)
-      if (!alive.current) return
-      const s = ui.current
-      if (s.delta?.path !== path) return bump((x) => x + 1)
-      const fail = (f: Failure) => {
-        set({ delta: null })
-        flash(aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "explanation" }), "error")
-      }
-      // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
-      const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(job.raw, changes, true) : null
-      if (!r.ok && !cut) return "failure" in r ? fail(r.failure) : set({ delta: null })
-      const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
-      if (!parsed) return fail({ kind: "invalid" })
-      // edits made during the request now differ from the moved baseline and list as a new idle
-      // change set; the reply is kept only when it still describes the note as it is
-      const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
-      set({ baseline, delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null })
     })
   }
 
   /** `a`: summarize the open note into Info's TL;DR; a running summary is cancelled instead. */
   const summarizeNote = () => {
-    const ai = loadConfig().ai ?? null // re-read: editing config.json applies without a restart
-    set({ ai })
+    const ai = reloadAI()
     focusPanel("info")
     const s = ui.current
     const path = s.openPath
-    const key = path ? jobKey("tldr", path) : ""
-    const running = path ? jobs.current.get(key) : undefined
-    if (running) { // a running request is cancelled first, whatever the config or the note now say
-      running.abort.abort()
-      jobs.current.delete(key)
+    if (path && cancelJob(jobKey("tldr", path))) { // a running request is cancelled first, whatever the config or the note now say
       bump((x) => x + 1)
       return flash("summary cancelled")
     }
-    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    if (!ai) return flash(AI_OFF)
     const file = path ? memo.read(path, s.reload) : null
     const text = file && !file.error ? noteText(file.src) : ""
     if (!path || !text) return flash("nothing to summarize")
-    if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
-    const target = resolveAI(ai, process.env)
-    if ("error" in target) return flash(target.error, "error")
-    startSummary(path, text, target, ai.model) // a fresh summary is regenerated too: `a` is the explicit ask
+    const target = aiGate(ai)
+    if (target) startSummary(path, text, target, ai.model) // a fresh summary is regenerated too: `a` is the explicit ask
   }
 
   /** `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. */
   const explainChange = () => {
-    const ai = loadConfig().ai ?? null // re-read, as `a` does
-    set({ ai })
+    const ai = reloadAI()
     const d = derive()
     const path = d.s.openPath
-    const key = path ? jobKey("delta", path) : ""
-    const running = jobs.current.get(key)
     // cancel first: a request stays cancellable after its `ai` block goes or the note is reverted
-    if (running) {
-      running.abort.abort()
-      jobs.current.delete(key)
+    if (path && cancelJob(jobKey("delta", path))) {
       set({ delta: null })
       return flash("explanation cancelled")
     }
-    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    if (!ai) return flash(AI_OFF)
     if (d.changes === null) return flash("too large to compare")
     const base = d.s.baseline?.path === path ? d.s.baseline : null
     if (!path || !base || !d.changes.length) return flash(`no changes since ${hhmm(base?.at ?? Date.now())}`)
-    if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
-    const target = resolveAI(ai, process.env)
-    if ("error" in target) return flash(target.error, "error")
+    const target = aiGate(ai)
+    if (!target) return
     focusPanel("info")
     startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
   }
 
   /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
   const zenGloss = () => {
-    const ai = loadConfig().ai ?? null // re-read: editing config.json applies without a restart
-    set({ ai })
+    const ai = reloadAI()
     const here = derive().gHere
-    const jk = here ? jobKey("gloss", here.id) : ""
-    const running = jobs.current.get(jk)
     // cancel first: a request stays cancellable after its `ai` block goes
-    if (here && running) {
-      running.abort.abort()
-      jobs.current.delete(jk)
+    if (here && cancelJob(jobKey("gloss", here.id))) {
       if (ui.current.gloss?.id === here.id) set({ gloss: null })
       bump((x) => x + 1)
       return flash("gloss cancelled")
     }
-    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    if (!ai) return flash(AI_OFF)
     ensureGlosses()
     const { s, gHere, gHash, gStyle, title } = derive()
     if (!gHere) return flash("nothing to gloss here")
@@ -256,10 +282,8 @@ export function makeAIJobs(c: AppCtx) {
     // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
     if (e && !shown && isFresh(e, gHash, PROMPTS.gloss)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
     // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
-    if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
-    const target = resolveAI(ai, process.env)
-    if ("error" in target) return flash(target.error, "error")
-    startGloss(gHere, gStyle, title, target, ai.model)
+    const target = aiGate(ai)
+    if (target) startGloss(gHere, gStyle, title, target, ai.model)
   }
 
   return { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss }

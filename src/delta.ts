@@ -3,7 +3,7 @@
  * baseline, the hunks sent to the model, and what of its reply is kept.
  */
 
-import { cleanSummary, stripThink } from "./ai"
+import { cleanReply, cleanSummary, stripThink, type ChatReq } from "./ai"
 import { noteSections, type NoteSection } from "./sections"
 import { truncate } from "./status"
 import { plainLine } from "./vault"
@@ -253,6 +253,11 @@ export function deltaMessage(title: string, changes: Change[], max: number): str
     add(`${head} (not shown)`)
   }
   return out.join("\n")
+}
+
+/** The `D` request: `deltaMessage` within DELTA_MAX (or `maxChars`, the target's, if lower); the reply is parsed from `raw`. */
+export function deltaRequest(title: string, changes: Change[], maxChars: number): ChatReq {
+  return { system: DELTA_PROMPT, user: deltaMessage(title, changes, Math.min(maxChars, DELTA_MAX)), maxOut: MAX_DELTA, clean: cleanReply }
 }
 
 export interface DeltaNote {

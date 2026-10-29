@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
-import { GLOSS_CHARS, glossKey, glossRequest, glossRows, glossRule, glossSystem, glossTarget, parseGlossStyle } from "../src/gloss"
+import { cleanSummary } from "../src/ai"
+import { GLOSS_CHARS, GLOSS_MAX, glossKey, glossRequest, glossRows, glossRule, glossSystem, glossTarget, parseGlossStyle } from "../src/gloss"
 import { width } from "../src/markdown"
 import { noteSections } from "../src/sections"
 import { expectLinear, manyHeadings, SCALE } from "./perf"
@@ -34,6 +35,12 @@ test("glossRequest: the user message names the note and the heading path", () =>
   expect(r.user).toBe("Note: Fruit\nSection: Guide › Apples\n\nApples are red.")
   // the lead-in has no heading path: the note title stands in
   expect(glossRequest("explain", "Fruit", [], "Intro.", 48_000).user).toBe("Note: Fruit\nSection: Fruit\n\nIntro.")
+})
+
+test("glossRequest: plain text by cleanSummary, at most GLOSS_MAX characters", () => {
+  const r = glossRequest("simplify", "Fruit", ["Apples"], "Apples are red.", 48_000)
+  expect(r.maxOut).toBe(GLOSS_MAX)
+  expect(r.clean).toBe(cleanSummary)
 })
 
 test("glossRequest clips to min(maxChars, 12 000) code points", () => {

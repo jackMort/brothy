@@ -2,32 +2,26 @@
 // index it searches, opening what a row points at, and the peek pane's data. Not pure: `makeSwitcher` closes over the
 // app context.
 import { relative } from "node:path"
-import { aiError, chat, shortModel, stripThink, type Failure } from "../ai"
-import { resolveAI } from "../ai-config"
-import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askLocate, parseQueries, parseRerank, putNewest, questionOf, rerankMessage, type AskState } from "../ask"
-import { loadConfig } from "../config"
+import { shortModel, type Failure } from "../ai"
+import { ASK_MEMO, ASK_MIN, RERANK_MEMO, askLocate, askRequest, parseQueries, parseRerank, putNewest, questionOf, rerankRequest, type AskState } from "../ask"
 import { folderCounts } from "../files"
 import { keepVisible } from "../nav"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "../peek"
 import { errText } from "../status"
 import { isFresh, textHash } from "../summaries"
 import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, refreshIndex, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit } from "../vault"
-import { MAX_JOBS, jobKey } from "./ai-jobs"
+import { AI_OFF, jobKey, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
 
 /** The switcher over the app context; opening it scans a piped document's folder first (`ensureLinks`). */
 export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
-  const { ui, set, derive, memo, W, vault, jobs, askMemo, rerankMemo, alive, fetchImpl, flash, openFile, focusDoc, setTop, showMatch } = c
+  const { ui, set, derive, memo, W, vault, askMemo, rerankMemo, flash, openFile, focusDoc, setTop, showMatch } = c
+  const { reloadAI, cancelJob, aiGate, failText, startJob } = makeJobs(c)
 
   /** Abort a running ask (tier 0 or 1): nobody would see its result. */
-  const dropAsk = () => {
-    const job = jobs.current.get(jobKey("ask"))
-    if (!job) return
-    job.abort.abort()
-    jobs.current.delete(jobKey("ask"))
-  }
+  const dropAsk = () => void cancelJob(jobKey("ask"))
 
   const closeSwitcher = () => {
     dropAsk()
@@ -57,40 +51,33 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const sw = ui.current.switcher
     const qn = sw ? questionOf(sw.q) : null
     if (!sw || !qn || [...qn.text].length < ASK_MIN) return
-    const ai = loadConfig().ai ?? null // re-read: editing config.json applies without a restart
-    set({ ai })
-    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    const ai = reloadAI()
+    if (!ai) return flash(AI_OFF)
     dropAsk() // at most one ask
     const question = qn.text
     const known = askMemo.current.get(foldSame(question))
     if (known) return setAsk({ question, phase: "result", queries: known.queries, model: known.model })
-    if (jobs.current.size >= MAX_JOBS) {
-      const busy = `AI busy · ${MAX_JOBS} requests running`
-      flash(busy)
-      return setAsk({ question, phase: "error", error: busy })
-    }
-    const target = resolveAI(ai, process.env)
-    if ("error" in target) return flash(target.error, "error")
+    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy }))
+    if (!target) return
     const asked = sw.q
-    const job = { kind: "ask" as const, raw: "", abort: new AbortController() }
-    jobs.current.set(jobKey("ask"), job)
-    setAsk({ question, phase: "asking" })
-    void chat(target, { system: ASK_PROMPT, user: question, maxOut: 1000, clean: (r) => stripThink(r).trim() }, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
-      if (jobs.current.get(jobKey("ask")) !== job) return // aborted: edited, closed or asked again
-      jobs.current.delete(jobKey("ask"))
-      if (!alive.current || ui.current.switcher?.q !== asked) return
-      const queries = r.ok ? parseQueries(r.raw) : null
-      if (queries) {
-        putNewest(askMemo.current, foldSame(question), { queries, model: ai.model }, ASK_MEMO)
-        return setAsk({ question, phase: "result", queries, model: ai.model })
-      }
-      let f: Failure
-      if (r.ok) f = { kind: "invalid" }
-      else if ("failure" in r) f = r.failure
-      else return
-      const msg = aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" })
-      flash(msg, "error")
-      setAsk({ question, phase: "error", error: msg })
+    // an edit, a close or another ask aborts the job, so `done` never runs for it
+    startJob("ask", undefined, target, askRequest(question), {
+      begin: () => setAsk({ question, phase: "asking" }),
+      done: (r) => {
+        if (ui.current.switcher?.q !== asked) return
+        const queries = r.ok ? parseQueries(r.raw) : null
+        if (queries) {
+          putNewest(askMemo.current, foldSame(question), { queries, model: ai.model }, ASK_MEMO)
+          return setAsk({ question, phase: "result", queries, model: ai.model })
+        }
+        let f: Failure
+        if (r.ok) f = { kind: "invalid" }
+        else if ("failure" in r) f = r.failure
+        else return
+        const msg = failText(target, f, "answer")
+        flash(msg, "error")
+        setAsk({ question, phase: "error", error: msg })
+      },
     })
   }
 
@@ -104,44 +91,40 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     if (!sw || !st || (st.phase !== "result" && st.phase !== "reranked")) return
     const { askCands } = derive()
     const ids = askCands.map((c) => c.id)
-    const user = rerankMessage(st.question, askCands, vault.current.ix)
+    const req = rerankRequest(st.question, askCands, vault.current.ix)
     // keyed on exactly what would be sent, so an edited candidate is asked again
-    const memoKey = `${textHash(ids.join("\n"))}\n${textHash(user)}`
+    const memoKey = `${textHash(ids.join("\n"))}\n${textHash(req.user)}`
     const known = rerankMemo.current.get(memoKey)
     if (known) return setAsk({ ...st, phase: "reranked", order: known.order, why: known.why })
-    const ai = loadConfig().ai ?? null
-    set({ ai })
-    if (!ai) return flash(`AI off · set "ai" in config.json`)
+    const ai = reloadAI()
+    if (!ai) return flash(AI_OFF)
     dropAsk()
-    if (jobs.current.size >= MAX_JOBS) return flash(`AI busy · ${MAX_JOBS} requests running`)
-    const target = resolveAI(ai, process.env)
-    if ("error" in target) return flash(target.error, "error")
+    const target = aiGate(ai)
+    if (!target) return
     const asked = sw.q
-    const job = { kind: "ask" as const, raw: "", abort: new AbortController() }
-    jobs.current.set(jobKey("ask"), job)
-    setAsk({ ...st, phase: "reranking" })
-    void chat(target, { system: RERANK_PROMPT, user, maxOut: 2000, clean: (r) => stripThink(r).trim() }, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
-      if (jobs.current.get(jobKey("ask")) !== job) return
-      jobs.current.delete(jobKey("ask"))
-      const now = ui.current.switcher
-      if (!alive.current || now?.q !== asked || !now.ask) return
-      const back: AskState = { ...now.ask, phase: "result" }
-      // the index changed under the request: these ids are no longer the list on screen
-      if (derive().askCands.map((c) => c.id).join("\n") !== ids.join("\n")) return setAsk(back)
-      if (!r.ok) {
-        setAsk(back)
-        if ("failure" in r) flash(aiError(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" }), "error")
-        return
-      }
-      const picked = parseRerank(r.raw, ids.length)
-      if (!picked) {
-        setAsk(back)
-        return flash("AI: no usable ranking")
-      }
-      const order = picked.map((p) => ids[p.i]!)
-      const why = Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why]))
-      putNewest(rerankMemo.current, memoKey, { order, why, model: ai.model }, RERANK_MEMO)
-      setAsk({ ...now.ask, phase: "reranked", order, why })
+    startJob("ask", undefined, target, req, {
+      begin: () => setAsk({ ...st, phase: "reranking" }),
+      done: (r) => {
+        const now = ui.current.switcher
+        if (now?.q !== asked || !now.ask) return
+        const back: AskState = { ...now.ask, phase: "result" }
+        // the index changed under the request: these ids are no longer the list on screen
+        if (derive().askCands.map((c) => c.id).join("\n") !== ids.join("\n")) return setAsk(back)
+        if (!r.ok) {
+          setAsk(back)
+          if ("failure" in r) flash(failText(target, r.failure, "answer"), "error")
+          return
+        }
+        const picked = parseRerank(r.raw, ids.length)
+        if (!picked) {
+          setAsk(back)
+          return flash("AI: no usable ranking")
+        }
+        const order = picked.map((p) => ids[p.i]!)
+        const why = Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why]))
+        putNewest(rerankMemo.current, memoKey, { order, why, model: ai.model }, RERANK_MEMO)
+        setAsk({ ...now.ask, phase: "reranked", order, why })
+      },
     })
   }
 

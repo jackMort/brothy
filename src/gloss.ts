@@ -1,4 +1,4 @@
-import { clip } from "./ai"
+import { clip, cleanSummary, type ChatReq } from "./ai"
 import * as aiConfig from "./ai-config"
 import type { GlossStyle } from "./ai-config"
 import { width, wrap } from "./markdown"
@@ -34,10 +34,11 @@ export function glossSystem(style: GlossStyle): string {
   return `Explain this section of a note to its reader in 1–2 sentences, at most 35 words: what it says and why it matters. ${PLAIN} ${SAME}`
 }
 
-/** The system prompt and the one user message; the lead-in (empty trail) is named by the note title. */
-export function glossRequest(style: GlossStyle, title: string, trail: string[], text: string, maxChars: number): { system: string; user: string } {
+/** The request: the system prompt and the one user message (the lead-in, an empty trail, is named by the note title), cleaned to plain text, at most GLOSS_MAX. */
+export function glossRequest(style: GlossStyle, title: string, trail: string[], text: string, maxChars: number): ChatReq {
   const section = trail.length ? trail.join(" › ") : title
-  return { system: glossSystem(style), user: `Note: ${title}\nSection: ${section}\n\n${clip(text, Math.min(maxChars, GLOSS_CHARS))}` }
+  const user = `Note: ${title}\nSection: ${section}\n\n${clip(text, Math.min(maxChars, GLOSS_CHARS))}`
+  return { system: glossSystem(style), user, maxOut: GLOSS_MAX, clean: cleanSummary }
 }
 
 /** What `a` glosses: the section's stable id, its label, its heading path and the exact text sent (before clipping). */
