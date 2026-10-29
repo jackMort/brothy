@@ -1904,12 +1904,11 @@ test("labels drop when the view moves", async () => {
 })
 
 test("link labels: survive code highlighting landing, and the typed label is followed", async () => {
-  const root = tmp({ "a.md": "see [[b]]\n\n```ts\nconst x = 1\n```\n", "b.md": "# Bee\n" })
+  const root = tmp({ "a.md": "see [[b]]\n\n```ts\nconst labelsLand = 20260429 // not highlighted by an earlier test: the cache is shared\n```\n", "b.md": "# Bee\n" })
   const s = await mount(root, "a.md")
   expect(await keys(s, "f")).toContain("a–z follow")
-  const plain = () => hex(s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes("const"))?.fg ?? { r: 0, g: 0, b: 0, a: 0 })
-  const before = plain()
-  await waitFor(s, () => plain() !== before) // highlighting landed: a new Rendered with the same geometry
+  // `f` came before the parser answered (or at least right with it); the highlight re-render keeps the geometry
+  await waitFor(s, () => spansOf(s).some((sp) => sp.text.includes("const") && hex(sp.fg) === B.secondary), 5000)
   expect(s.captureCharFrame()).toContain("a–z follow")
   expect(onBg(s, B.warning).join("")).toBe("a")
   expect(await keys(s, "a")).toContain("Bee")
