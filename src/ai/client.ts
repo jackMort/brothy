@@ -293,8 +293,22 @@ export async function chat(t: AITarget, req: ChatReq, o: ChatOpts = {}): Promise
   return out === text ? r : { ok: false, failure: { ...f, message: out } as Failure }
 }
 
-async function send(t: AITarget, req: ChatReq, o: ChatOpts): Promise<ChatResult> {
-  if (o.signal?.aborted) return { ok: false, cancelled: true }
+/** One request's lifetime: the idle and total timers, the caller's abort, and why it stopped early. */
+interface Guard {
+  /** the fetch's signal: aborted by either timer, the caller's signal or `close` */
+  signal: AbortSignal
+  /** re-arms the idle timer */
+  poke: () => void
+  /** why the request stopped early, if it was stopped */
+  ended: () => ChatResult | null
+  /** a whole-body read that ignores the fetch signal (stubs, some proxies) still settles on abort */
+  whole: <T>(p: Promise<T>) => Promise<T>
+  /** clears the timers and closes the connection (stops billing where supported) */
+  close: () => void
+}
+
+/** Arms the total timer and follows `o.signal`; the idle timer starts on the first `poke`. */
+function guard(o: ChatOpts): Guard {
   const ctl = new AbortController()
   let why: "idle" | "total" | null = null
   const stop = (w: "idle" | "total") => {
@@ -302,93 +316,121 @@ async function send(t: AITarget, req: ChatReq, o: ChatOpts): Promise<ChatResult>
     ctl.abort()
   }
   let idle: ReturnType<typeof setTimeout> | undefined
-  const poke = () => {
-    clearTimeout(idle)
-    idle = setTimeout(() => stop("idle"), o.idleMs ?? IDLE_MS)
-  }
   const total = setTimeout(() => stop("total"), o.totalMs ?? TOTAL_MS)
   const onAbort = () => ctl.abort()
   o.signal?.addEventListener("abort", onAbort)
-  /** why the request stopped early, if it was stopped */
-  const ended = (): ChatResult | null => (why ? fail({ kind: why }) : ctl.signal.aborted ? { ok: false, cancelled: true } : null)
-  // a whole-body read that ignores the fetch signal (stubs, some proxies) still settles on abort
   const aborted = new Promise<never>((_, reject) => ctl.signal.addEventListener("abort", () => reject(new Error("aborted"))))
   aborted.catch(() => {})
-  const whole = <T>(p: Promise<T>) => Promise.race([p, aborted])
+  return {
+    signal: ctl.signal,
+    poke: () => {
+      clearTimeout(idle)
+      idle = setTimeout(() => stop("idle"), o.idleMs ?? IDLE_MS)
+    },
+    ended: () => (why ? fail({ kind: why }) : ctl.signal.aborted ? { ok: false, cancelled: true } : null),
+    whole: (p) => Promise.race([p, aborted]),
+    close: () => {
+      clearTimeout(idle)
+      clearTimeout(total)
+      o.signal?.removeEventListener("abort", onAbort)
+      ctl.abort()
+    },
+  }
+}
+
+/** A non-2xx answer: the server's message when the body is JSON that has one, else the status alone. */
+async function statusFailure(res: Response, g: Guard): Promise<ChatResult> {
+  const body = await g.whole(res.text()).catch(() => "")
+  let message: string | undefined
   try {
-    poke()
+    message = errMessage(JSON.parse(body))
+  } catch {
+    // not JSON (an HTML error page): status only
+  }
+  return g.ended() ?? fail({ kind: "status", status: res.status, message })
+}
+
+/** A 200 JSON body (a server that ignored `stream`). */
+async function jsonResult(res: Response, req: ChatReq, g: Guard): Promise<ChatResult> {
+  let body: unknown
+  try {
+    body = await g.whole(res.json())
+  } catch {
+    return g.ended() ?? fail({ kind: "unexpected" })
+  }
+  const r = jsonReply(body)
+  return "failure" in r ? fail(r.failure) : finish(r.text, req)
+}
+
+/** Stream events into `acc.raw`: a failure, "done" at the end marker, else null to read on. */
+function takeEvents(evs: AIEvent[], acc: { raw: string }, req: ChatReq, o: ChatOpts): Failure | "done" | null {
+  for (const ev of evs) {
+    if (ev.kind === "error") return { kind: "message", message: ev.message }
+    if (ev.kind === "done") return "done"
+    if (ev.kind === "finish") {
+      if (ev.reason === "length") return { kind: "length" }
+      if (ev.reason === "error") return { kind: "message", message: "stream failed" }
+      continue
+    }
+    acc.raw += ev.text
+    if (acc.raw.length > MAX_RAW || req.clean(acc.raw).length > req.maxOut) return { kind: "tooLong" }
+    o.onDelta?.(acc.raw)
+  }
+  return null
+}
+
+/** An SSE body, read until its end marker or its end; any bytes re-arm the idle timer. */
+async function streamResult(body: NonNullable<Response["body"]>, req: ChatReq, o: ChatOpts, g: Guard): Promise<ChatResult> {
+  const reader = body.getReader()
+  // a body that ignores the fetch signal still ends: a cancelled read resolves done
+  g.signal.addEventListener("abort", () => void reader.cancel().catch(() => {}))
+  const p = sseParser()
+  const acc = { raw: "" }
+  for (;;) {
+    let chunk: Awaited<ReturnType<typeof reader.read>>
+    try {
+      chunk = await reader.read()
+    } catch {
+      return g.ended() ?? fail({ kind: "network" })
+    }
+    const early = g.ended()
+    if (early) return early
+    const r = chunk.done ? takeEvents(p.end(), acc, req, o) : (g.poke(), takeEvents(p.push(chunk.value), acc, req, o))
+    if (r && r !== "done") return fail(r)
+    if (r === "done" || chunk.done) break
+  }
+  return finish(acc.raw, req)
+}
+
+/** The answer by its kind: a redirect or error status fails, a JSON or SSE body is read, anything else is unexpected. */
+function reply(res: Response, req: ChatReq, o: ChatOpts, g: Guard): Promise<ChatResult> | ChatResult {
+  if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) return fail({ kind: "redirect" })
+  if (!res.ok) return statusFailure(res, g)
+  const type = res.headers.get("content-type") ?? ""
+  if (type.includes("application/json")) return jsonResult(res, req, g)
+  if (!type.includes("text/event-stream") || !res.body) return fail({ kind: "unexpected" })
+  return streamResult(res.body, req, o, g)
+}
+
+async function send(t: AITarget, req: ChatReq, o: ChatOpts): Promise<ChatResult> {
+  if (o.signal?.aborted) return { ok: false, cancelled: true }
+  const g = guard(o)
+  try {
+    g.poke()
     const { url, init } = buildRequest(t, req.system, req.user)
     let res: Response
     try {
-      res = await (o.fetch ?? fetch)(url, { ...init, signal: ctl.signal })
+      res = await (o.fetch ?? fetch)(url, { ...init, signal: g.signal })
     } catch {
-      return ended() ?? fail({ kind: "network" })
+      return g.ended() ?? fail({ kind: "network" })
     }
-    const stopped = ended() // aborted while the headers arrived: a reader made now would never see the abort
+    const stopped = g.ended() // aborted while the headers arrived: a reader made now would never see the abort
     if (stopped) return stopped
-    poke()
-    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) return fail({ kind: "redirect" })
-    if (!res.ok) {
-      const body = await whole(res.text()).catch(() => "")
-      let message: string | undefined
-      try {
-        message = errMessage(JSON.parse(body))
-      } catch {
-        // not JSON (an HTML error page): status only
-      }
-      return ended() ?? fail({ kind: "status", status: res.status, message })
-    }
-    const type = res.headers.get("content-type") ?? ""
-    if (type.includes("application/json")) {
-      let body: unknown
-      try {
-        body = await whole(res.json())
-      } catch {
-        return ended() ?? fail({ kind: "unexpected" })
-      }
-      const r = jsonReply(body)
-      return "failure" in r ? fail(r.failure) : finish(r.text, req)
-    }
-    if (!type.includes("text/event-stream") || !res.body) return fail({ kind: "unexpected" })
-    const reader = res.body.getReader()
-    // a body that ignores the fetch signal still ends: a cancelled read resolves done
-    ctl.signal.addEventListener("abort", () => void reader.cancel().catch(() => {}))
-    const p = sseParser()
-    let raw = ""
-    const take = (evs: AIEvent[]): Failure | "done" | null => {
-      for (const ev of evs) {
-        if (ev.kind === "error") return { kind: "message", message: ev.message }
-        if (ev.kind === "done") return "done"
-        if (ev.kind === "finish") {
-          if (ev.reason === "length") return { kind: "length" }
-          if (ev.reason === "error") return { kind: "message", message: "stream failed" }
-          continue
-        }
-        raw += ev.text
-        if (raw.length > MAX_RAW || req.clean(raw).length > req.maxOut) return { kind: "tooLong" }
-        o.onDelta?.(raw)
-      }
-      return null
-    }
-    for (;;) {
-      let chunk: Awaited<ReturnType<typeof reader.read>>
-      try {
-        chunk = await reader.read()
-      } catch {
-        return ended() ?? fail({ kind: "network" })
-      }
-      const early = ended()
-      if (early) return early
-      const r = chunk.done ? take(p.end()) : (poke(), take(p.push(chunk.value)))
-      if (r && r !== "done") return fail(r)
-      if (r === "done" || chunk.done) break
-    }
-    return finish(raw, req)
+    g.poke()
+    // awaited here, so `close` runs only once the body is read
+    return await reply(res, req, o, g)
   } finally {
-    clearTimeout(idle)
-    clearTimeout(total)
-    o.signal?.removeEventListener("abort", onAbort)
-    ctl.abort() // closes the connection on every early return (stops billing where supported)
+    g.close() // closes the connection on every early return
   }
 }
 
