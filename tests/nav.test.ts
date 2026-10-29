@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { cached, copiedCount, findItems, findQuote, matchHits, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../src/nav"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 
 test("stepMatch continues from the current match, not the viewport top", () => {
   const m = [50, 60, 70]

@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test"
 import { render, renderSource } from "../src/markdown"
 import { lineText, safe, safeLine } from "../src/spans"
 import { width } from "../src/text"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 const FAMILY = "👨‍👩‍👧"
 
 describe("safe", () => {

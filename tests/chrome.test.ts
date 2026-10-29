@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test"
 import { HELP_GROUP_TITLES, INK_STEPS, STEAM_FLOOR, chip, fade, fadeSpans, groupColor, inkAt, keycap, keycaps, steamColors } from "../src/chrome"
 import { contrast, themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const brothy = themes[0]!
 
 test("groupColor: Global primary, Document secondary, Zen info, Panel success, AI accent", () => {
   expect(HELP_GROUP_TITLES).toEqual(["Global", "Document", "Zen", "Panel", "AI"])

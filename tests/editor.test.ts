@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { editorCommand, runEditor, sourceLineAt, type EditorIO } from "../src/editor"
 import { render, renderSource, sourceScan, parseFrontMatter } from "../src/markdown"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 const note = ["---", "title: x", "---", "intro line", "", "# One", "", "alpha", "", "## Two", "", "beta", "gamma"].join("\n")
 
 describe("sourceLineAt", () => {

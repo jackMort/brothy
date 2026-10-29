@@ -3,9 +3,9 @@ import { parseFrontMatter } from "../src/frontmatter"
 import { render } from "../src/markdown"
 import { noteSections, sectionId, sectionOf, sectionSource } from "../src/sections"
 import { renderSource } from "../src/source"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 // 0 ---  1 title  2 ---  3 lead in  4 # A  5 a text  6 ## A1  7 a1 text  8 # B  9 b %%secret%% text  10-12 %% hidden %%
 const NOTE = "---\ntitle: x\n---\nlead in\n# A\na text\n## A1\na1 text\n# B\nb %%secret%% text\n%%\nhidden\n%%\n"
 

@@ -6,9 +6,9 @@ import { renderSource, sourceScan } from "../src/source"
 import { A } from "../src/spans"
 import { stats } from "../src/stats"
 import { width } from "../src/text"
-import { themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
 const rowText = (rows: { text: string }[][]) => rows.map((r) => r.map((s) => s.text).join(""))
 
@@ -232,7 +232,7 @@ describe("entity safety", () => {
 describe("deep quote prefixes at narrow widths", () => {
   const cases = ["> ".repeat(60) + "---", "> > > > > > # T", "> > > > > > ## T", "> ".repeat(60) + "```\ncode\n```", "- ".repeat(40) + "---", "> ".repeat(30) + "| a |\n> ".repeat(1) + "|---|\n> | b |"]
   test("render and renderSource never throw", () => {
-    const th = themes[0]!
+    const th = brothy
     for (const src of cases)
       for (let w = 1; w <= 80; w++) {
         expect(() => render(src, w, th), `${JSON.stringify(src.slice(0, 20))} @${w}`).not.toThrow()

@@ -7,8 +7,9 @@ import { A } from "../src/spans"
 import { stats } from "../src/stats"
 import { width } from "../src/text"
 import { contrast, themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 
-const t = themes[0]!
+const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
 /** [depth, text] outlines of Preview (front matter cut, as App renders it) and Source; they must be equal (outline parity). */
 const outlines = (src: string): [[number, string][], [number, string][]] => [

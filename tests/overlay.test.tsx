@@ -7,10 +7,12 @@ import { WORDMARK } from "../src/status"
 import type { OpenRow } from "../src/projects"
 import { switchRows, type SwitchRow } from "../src/vault"
 import { contrast, themeByName, themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 import { A } from "../src/spans"
 import { filterFamilies, paneLines, sampleView, themeSplit } from "../src/themepick"
 import { ZEN_DEFAULTS, zenRows } from "../src/zen"
 
+const t = brothy
 type Setup = Awaited<ReturnType<typeof testRender>>
 let setup: Setup | undefined
 afterEach(() => {
@@ -22,7 +24,6 @@ const hex = (c: { r: number; g: number; b: number; a: number }) =>
   c.a === 0 ? null : "#" + [c.r, c.g, c.b].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("")
 
 test("ZenSettings lists every row with its value and fills the cursor row", async () => {
-  const t = themes[0]!
   setup = quietAct(await testRender(<ZenSettings t={t} W={80} H={24} rows={zenRows(ZEN_DEFAULTS)} cursor={1} />, { width: 80, height: 24 }))
   await setup.renderOnce()
   const f = setup.captureCharFrame()
@@ -35,7 +36,6 @@ test("ZenSettings lists every row with its value and fills the cursor row", asyn
 })
 
 test("disabled rows are drawn muted", async () => {
-  const t = themes[0]!
   setup = quietAct(await testRender(<ZenSettings t={t} W={80} H={24} rows={zenRows({ ...ZEN_DEFAULTS, flow: "pages" })} cursor={0} />, {
     width: 80,
     height: 24,
@@ -55,8 +55,8 @@ test("Overlay paints its backdrop with the theme's scrim", async () => {
     setup = undefined
     return hex(c)!
   }
-  const dark = await backdrop(themes.find((t) => t.name === "brothy")!)
-  const light = await backdrop(themes.find((t) => t.name === "brothy-light")!)
+  const dark = await backdrop(themeByName("brothy"))
+  const light = await backdrop(themeByName("brothy-light"))
   expect(contrast(light, "#ffffff")).toBeLessThan(contrast(dark, "#ffffff"))
   expect(light).not.toBe(dark)
 })
@@ -65,7 +65,6 @@ const rowText = (s: Setup, needle: string) =>
   s.captureSpans().lines.find((l) => l.spans.map((sp) => sp.text).join("").includes(needle))!
 
 test("Switcher: section headers with counts, rows per kind, folder on the right, only the hit row filled", async () => {
-  const t = themes[0]!
   const rows = switchRows([
     { title: "Notes", count: "1", hits: [{ kind: "note", path: "/v/s.md", name: "Streams", folder: "dev", hits: [], alias: { text: "Apache Kafka", hits: [7, 8] } }] },
     { title: "Headings", count: "1", hits: [{ kind: "heading", path: "/v/s.md", name: "Streams", folder: "dev", heading: 0, text: "Kafka setup", hits: [0, 1] }] },
@@ -82,7 +81,6 @@ test("Switcher: section headers with counts, rows per kind, folder on the right,
 })
 
 test("PickerList: a row cut inside astral characters keeps whole characters and stays within the width", async () => {
-  const t = themes[0]!
   const items = [{ spans: [{ text: "😀".repeat(12) }], right: "dev" }]
   setup = quietAct(await testRender(<PickerList t={t} items={items} hl={-1} top={0} height={1} innerW={21} />, { width: 30, height: 3 }))
   await setup.renderOnce()
@@ -94,14 +92,12 @@ test("PickerList: a row cut inside astral characters keeps whole characters and 
 })
 
 test("Switcher: empty states", async () => {
-  const t = themes[0]!
   setup = quietAct(await testRender(<Switcher t={t} W={80} H={24} q="zz" rows={[]} hl={-1} top={0} height={8} />, { width: 80, height: 24 }))
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("No results found")
 })
 
 test("Switcher: long note names and deep folders never push the match out of the row", async () => {
-  const t = themes[0]!
   const name = "2026-07-31-soup-kitchen-inventory-design-and-rollout"
   const folder = "Kitchenware/pantry/docs/soup/12-stock-pots/deeper/still"
   const rows = switchRows([
@@ -117,7 +113,6 @@ test("Switcher: long note names and deep folders never push the match out of the
 })
 
 test("Switcher at 60 columns: a match late in a long heading or note name stays on screen, cuts marked …", async () => {
-  const t = themes[0]!
   const heading = "State version management and the warning banner"
   const name = "2026-05-18-lentil-soup-configuration-callout-panel"
   const rows = switchRows([
@@ -134,7 +129,6 @@ test("Switcher at 60 columns: a match late in a long heading or note name stays 
 })
 
 test("OpenPicker: Recent rows with the ~ path and last note, missing ones muted, then the Path section", async () => {
-  const t = themes[0]!
   const home = "/home/me"
   const e = (root: string, lastNote: string | null) => ({ root, lastNote, top: 0, at: 0 })
   const rows: OpenRow[] = [
@@ -157,14 +151,12 @@ test("OpenPicker: Recent rows with the ~ path and last note, missing ones muted,
 })
 
 test("OpenPicker: no recents says how to start", async () => {
-  const t = themes[0]!
   setup = quietAct(await testRender(<OpenPicker t={t} W={80} H={24} q="" rows={[]} hl={-1} top={0} height={8} />, { width: 80, height: 24 }))
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("No recent projects")
 })
 
 test("PickerInput shows the tail of a long query with the cursor", async () => {
-  const t = themes[0]!
   const q = "a".repeat(80) + "END"
   setup = quietAct(await testRender(<PickerInput t={t} value={q} placeholder="x" note="3 matches" width={40} />, { width: 40, height: 2 }))
   await setup.renderOnce()
@@ -175,7 +167,6 @@ test("PickerInput shows the tail of a long query with the cursor", async () => {
 })
 
 test("Switcher in Ask mode: title, answers with hits on the right, action rows, muted notes never filled", async () => {
-  const t = themes[0]!
   const rows: SwitchRow[] = [
     { kind: "header", title: "Answers", count: "2" },
     { kind: "answer", path: "/v/g.md", name: "getting-started", heading: 2, text: "Open a single file", key: "open a single file", ord: 0, id: "/v/g.md#open a single file#0", query: "single file", hits: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], right: "3/5" },
@@ -194,7 +185,6 @@ test("Switcher in Ask mode: title, answers with hits on the right, action rows, 
 })
 
 test("Switcher in Ask mode: an error row leads with ✗ in the error color", async () => {
-  const t = themes[0]!
   const rows: SwitchRow[] = [{ kind: "askAction", act: "ask", text: "AI: rate limited · ⏎ asks again", note: "", error: true }]
   setup = quietAct(await testRender(<Switcher t={t} W={80} H={24} title="Ask" q="?how" rows={rows} hl={0} top={0} height={8} note="6 notes" />, { width: 80, height: 24 }))
   await setup.renderOnce()
@@ -206,7 +196,6 @@ test("Switcher in Ask mode: an error row leads with ✗ in the error color", asy
 })
 
 test("HelpSheet: primary wordmark, role chips on backgroundElement and today's key rows, two columns side by side at 120", async () => {
-  const t = themes[0]!
   const groups = [
     { title: "Global", entries: [{ keys: "q", desc: "quit" }, { keys: "t", desc: "pick theme" }] },
     { title: "Document", entries: [{ keys: "j k ↑ ↓", desc: "scroll a line" }] },
@@ -239,7 +228,6 @@ test("HelpSheet: primary wordmark, role chips on backgroundElement and today's k
 })
 
 test("Switcher with a peek at 120 columns: list, │ divider and pane side by side; no pane below 100", async () => {
-  const t = themes[0]!
   const rows = switchRows([{ title: "Notes", count: "1", hits: [{ kind: "note", path: "/v/s.md", name: "Streams", folder: "dev", hits: [] }] }])
   const peek = [
     [{ text: "dev/s.md", fg: t.textMuted }, { text: " ".repeat(41 - 8 - 5) }, { text: "2 min", fg: t.textMuted }],
@@ -267,7 +255,6 @@ test("Switcher with a peek at 120 columns: list, │ divider and pane side by si
 })
 
 test("ThemeBoard: a header, then the name and a specimen per mode; the cursor row tinted, its cell framed in primary, the theme in use in muted bars", async () => {
-  const t = themes[0]!
   const rows = filterFamilies("")
   const nord = rows.findIndex((r) => r.family.name === "nord")
   const pick = { i: -1, m: "" }
@@ -314,7 +301,6 @@ test("ThemeBoard: a header, then the name and a specimen per mode; the cursor ro
 })
 
 test("ThemePicker at 120 columns: query with the mode switch, 41-wide board, │, the pane on the candidate's background; no pane below 100", async () => {
-  const t = themes[0]!
   const x = themeByName("rosepine-light")
   const geo = themeSplit(120, 34, 16)
   const rows = filterFamilies("")

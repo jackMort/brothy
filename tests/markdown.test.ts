@@ -7,9 +7,10 @@ import { renderSource } from "../src/source"
 import { stats, stripCode, wordStats } from "../src/stats"
 import { width } from "../src/text"
 import { contrast, themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 import { join } from "node:path"
 
-const t = themes[0]!
+const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
 
 describe("heading styles", () => {

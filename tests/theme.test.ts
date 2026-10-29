@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { CLEAR, contrast, contrastOn, mix, surface, themeByName, themes } from "../src/theme"
+import { brothy } from "./helpers/theme"
 import { closestPair, HOUSE, HOUSE_APART, HOUSE_TEXT, ratios, worst } from "../scripts/contrast"
 
 test("contrastOn picks dark text on light backgrounds and light on dark", () => {
@@ -92,7 +93,7 @@ test("themes: the picker/selection fill (primary) carries readable text", () => 
 })
 
 test("surface: opaque keeps the theme fills, transparent clears them all", () => {
-  const t = themes[0]!
+  const t = brothy
   expect(surface(t, false)).toEqual({ main: t.background, side: mix(t.background, t.backgroundElement, 0.6) })
   expect(surface(t, true)).toEqual({ main: CLEAR, side: CLEAR })
 })
