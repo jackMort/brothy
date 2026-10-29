@@ -1,20 +1,24 @@
+// Popups and the empty state: Overlay frames the picker, switcher, theme, open, help and zen popups and Welcome; the
+// pure rows they draw live in rows.ts. All controlled by App.
 import { MouseButton, RGBA, type MouseEvent } from "@opentui/core"
 import { useRenderer } from "@opentui/react"
-import { basename, dirname } from "node:path"
 import type { ReactNode } from "react"
 import { contrastOn, type Theme } from "./theme"
-import { A, width as sw, type Span } from "./markdown"
+import { width as sw, type Span } from "./markdown"
 import { safe, safeLine } from "./spans"
 import { WORDMARK, truncate, truncateLeft } from "./status"
-import { chip, groupColor, inkAt, keycaps, steamColors } from "./chrome"
-import { BIG, artWidth, welcomeArt, welcomeFit, type ArtCell } from "./welcome"
+import { chip, groupColor, keycaps } from "./chrome"
+import { BIG, artWidth, welcomeArt, welcomeFit } from "./welcome"
 import type { HelpLayout, HelpLine } from "./help"
-import { stem } from "./files"
-import { tildify, type OpenRow } from "./projects"
+import type { OpenRow } from "./projects"
 import type { SwitchRow } from "./vault"
 import type { ZenRow } from "./zen"
 import { switchSplit } from "./peek"
 import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "./themepick"
+import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
+
+// App and the tests import the row builders from here
+export { SWITCH_MODES, fitHits, hitSpans, modeSwitch, openItem, scrim, switchItem, type PickerItem } from "./rows"
 
 function Line({ spans }: { spans: Span[] }) {
   return (
@@ -52,11 +56,6 @@ export function usePointer() {
       return !p || p.x !== e.x || p.y !== e.y
     },
   }
-}
-
-/** Wash drawn over the page behind a popup: black over dark themes, white over light ones. */
-export function scrim(t: Theme): { r: number; g: number; b: number; a: number } {
-  return t.mode === "light" ? { r: 255, g: 255, b: 255, a: 170 } : { r: 0, g: 0, b: 0, a: 150 }
 }
 
 /**
@@ -137,13 +136,11 @@ export function Overlay({
   )
 }
 
-export interface PickerItem {
-  spans: Span[]
-  /** right-aligned muted text */
-  right?: string
-  /** a section title: never highlighted, hovered or activated */
-  header?: boolean
-}
+/** The list box of PickerList and ThemeBoard: one cell of padding each side. */
+const LIST_BOX = { flexDirection: "column", paddingLeft: 1, paddingRight: 1 } as const
+
+/** A pickable row's frame, shared by PickerList and ThemeBoard: one line, 3 cells of padding, `bg` when highlighted. */
+const rowBox = (bg: string | undefined) => ({ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3, backgroundColor: bg })
 
 /** Rows with paddingX 3; the highlighted row is filled with `primary` and drawn in contrastOn(primary). */
 export function PickerList({
@@ -174,7 +171,7 @@ export function PickerList({
   const rows = items.slice(top, top + height)
   const textW = innerW - 8
   return (
-    <box key="picker-list" style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1 }}>
+    <box key="picker-list" style={LIST_BOX}>
       {rows.map((it, j) => {
         const sel = top + j === hl && !it.header
         const right = it.right ?? ""
@@ -205,7 +202,7 @@ export function PickerList({
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT && !it.header) onActivate?.(top + j)
             }}
-            style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3, backgroundColor: sel ? t.primary : undefined }}
+            style={rowBox(sel ? t.primary : undefined)}
           >
             <Line spans={spans} />
           </box>
@@ -273,96 +270,54 @@ export function PickerInput({
   )
 }
 
-/** `text` with the code points at `hits` drawn in `hit` and bold (`bold`: the rest bold too). */
-export function hitSpans(text: string, hits: readonly number[], fg: string, hit: string, bold = false): Span[] {
-  const on = new Set(hits)
-  const out: Span[] = []
-  ;[...text].forEach((ch, i) => {
-    const m = on.has(i)
-    const style = { fg: m ? hit : fg, attr: m || bold ? A.BOLD : 0 }
-    const last = out[out.length - 1]
-    if (last && last.fg === style.fg && last.attr === style.attr) last.text += ch
-    else out.push({ text: ch, ...style })
-  })
-  return out
+/** Props every query popup (Switcher, OpenPicker, ThemePicker) takes: its place on screen, the query, the highlight and the pointer callbacks. */
+interface PopupListProps {
+  t: Theme
+  W: number
+  H: number
+  q: string
+  /** the highlighted row */
+  hl: number
+  /** the first row on screen */
+  top: number
+  onClose?: () => void
+  onScroll?: (dir: 1 | -1) => void
+  onHover?: (i: number) => void
+  onActivate?: (i: number) => void
 }
 
 /**
- * `text` cut to `room` columns so its hits stay visible: the end goes first; when the hits lie past
- * it, a window from a little before the first hit. Each cut is marked `…`; hits are re-indexed.
+ * List │ pane: `list` in a `listW` column, a `│` divider, then `lines` (cut to `rows`) in a `paneW` column. A
+ * `paneBg` paints the pane on a candidate's background; `paneKey` keeps boxes that differ in style apart.
  */
-export function fitHits(text: string, hits: readonly number[], room: number): { text: string; hits: number[] } {
-  const cps = [...text]
-  const ws = cps.map((c) => sw(c))
-  const span = (a: number, b: number) => ws.slice(a, b).reduce((x, y) => x + y, 0)
-  if (span(0, cps.length) <= room) return { text, hits: [...hits] }
-  if (room < 2) return { text: "…".slice(0, Math.max(0, room)), hits: [] }
-  const first = hits.length ? Math.min(...hits) : 0
-  const last = hits.length ? Math.max(...hits) : 0
-  let a = 0
-  if (span(0, last + 1) > room - 1) {
-    // a third of the slack (both cuts marked) goes before the first hit
-    let lead = Math.max(0, Math.floor((room - 2 - span(first, last + 1)) / 3))
-    a = first
-    while (a > 0 && ws[a - 1]! <= lead) lead -= ws[--a]!
-    // a window that reaches the end spends what is left on text before the hit
-    let spare = room - 1 - span(a, cps.length)
-    while (a > 0 && ws[a - 1]! <= spare) spare -= ws[--a]!
-  }
-  const head = a > 0 ? "…" : ""
-  let budget = room - head.length
-  let b = cps.length
-  if (span(a, b) > budget) {
-    budget -= 1
-    b = a
-    for (let used = 0; b < cps.length && used + ws[b]! <= budget; b++) used += ws[b]!
-  }
-  const tail = b < cps.length ? "…" : ""
-  const shift = head.length - a
-  return { text: head + cps.slice(a, b).join("") + tail, hits: hits.filter((h) => h >= a && h < b).map((h) => h + shift) }
-}
-
-/**
- * One switcher row: a muted bold section title, or a hit with its matches in `primary`. Within
- * `w` columns the folder keeps at most a third (its tail) and a heading or text row's note name at
- * most a quarter; the matched text gets the rest, cut around its hits, so the match stays in view.
- */
-export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
-  if (r.kind === "header") return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
-  if (r.kind === "askNote") return { header: true, spans: [{ text: safeLine(r.text), fg: t.textMuted }] }
-  if (r.kind === "askAction")
-    return { spans: [...(r.error ? [{ text: "✗ ", fg: t.error }] : []), { text: safeLine(r.text), fg: t.text }, { text: safeLine(r.note), fg: t.textMuted }] }
-  if (r.kind === "answer") {
-    const room = w - (r.right ? sw(r.right) + 1 : 0)
-    if (r.heading < 0) {
-      const f = fitHits(r.name, [], room)
-      return { spans: hitSpans(f.text, f.hits, t.text, t.primary), right: r.right }
-    }
-    const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
-    const f = fitHits(r.text, r.hits, room - sw(name) - 3)
-    return { spans: [{ text: name + " › ", fg: t.textMuted }, ...hitSpans(f.text, f.hits, t.text, t.primary)], right: r.right }
-  }
-  const folder = r.kind === "text" ? "" : truncateLeft(r.folder, Math.floor(w / 3))
-  const room = w - (folder ? sw(folder) + 1 : 0)
-  const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
-  const fit = (text: string, hits: readonly number[], used: number, fg: string) => {
-    const f = fitHits(text, hits, room - used)
-    return hitSpans(f.text, f.hits, fg, t.primary)
-  }
-  switch (r.kind) {
-    case "note": {
-      if (!r.alias) return { spans: fit(r.name, r.hits, 0, t.text), right: folder }
-      const short = truncate(r.name, Math.max(8, Math.floor(room / 3)))
-      return {
-        spans: [...hitSpans(short, [], t.text, t.primary), { text: "  ← ", fg: t.textMuted }, ...fit(r.alias.text, r.alias.hits, sw(short) + 4, t.textMuted)],
-        right: folder,
-      }
-    }
-    case "heading":
-      return { spans: [{ text: name + " › ", fg: t.textMuted }, ...fit(r.text, r.hits, sw(name) + 3, t.text)], right: folder }
-    case "text":
-      return { spans: [{ text: name + "  ", fg: t.text }, ...fit(r.context, r.hits, sw(name) + 2, t.textMuted)] }
-  }
+function SplitPane({ t, rows, listW, paneW, list, lines, paneKey, paneBg }: {
+  t: Theme
+  rows: number
+  listW: number
+  paneW: number
+  list: ReactNode
+  lines: Span[][]
+  paneKey?: string
+  paneBg?: string
+}) {
+  return (
+    <box style={{ flexDirection: "row", height: rows }}>
+      <box style={{ width: listW, flexShrink: 0 }}>{list}</box>
+      <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
+        {Array.from({ length: rows }, (_, i) => (
+          <Line key={i} spans={[{ text: "│", fg: t.border }]} />
+        ))}
+      </box>
+      <box
+        key={paneKey}
+        style={{ width: paneW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(paneBg ? { backgroundColor: paneBg } : {}) }}
+      >
+        {lines.slice(0, rows).map((spans, i) => (
+          <Line key={i} spans={spans} />
+        ))}
+      </box>
+    </box>
+  )
 }
 
 /** `C-p` popup: the query and one list of sections (Notes / Headings / Text, or Recent); controlled by App. */
@@ -382,25 +337,15 @@ export function Switcher({
   onScroll,
   onHover,
   onActivate,
-}: {
-  t: Theme
-  W: number
-  H: number
+}: PopupListProps & {
   /** "Go to", or "Ask" for a `?` question */
   title?: string
-  q: string
   rows: SwitchRow[]
-  hl: number
-  top: number
   height: number
   /** right of the title: indexing progress or the note count */
   note?: string
   /** peek pane rows for the highlighted row (`peekLines`); shown from PEEK_MIN_W columns */
   peek?: Span[][]
-  onClose?: () => void
-  onScroll?: (dir: 1 | -1) => void
-  onHover?: (i: number) => void
-  onActivate?: (i: number) => void
 }) {
   const g = switchSplit(W)
   const split = g.split && peek !== undefined
@@ -422,48 +367,9 @@ export function Switcher({
   return (
     <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
-      {split ? (
-        <box key="split" style={{ flexDirection: "row", height }}>
-          <box style={{ width: listW, flexShrink: 0 }}>{list}</box>
-          <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
-            {Array.from({ length: height }, (_, i) => (
-              <Line key={i} spans={[{ text: "│", fg: t.border }]} />
-            ))}
-          </box>
-          <box style={{ width: g.peekW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0 }}>
-            {peek!.slice(0, height).map((spans, i) => (
-              <Line key={i} spans={spans} />
-            ))}
-          </box>
-        </box>
-      ) : (
-        list
-      )}
+      {split ? <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={peek!} /> : list}
     </Overlay>
   )
-}
-
-/**
- * One `o` picker row. Recent: the name (muted when the folder is gone), its `~` path cut from the
- * left, the last note on the right. Path: the entry's name (folders end in `/`), the typed folder
- * itself marked "this folder".
- */
-export function openItem(r: OpenRow, t: Theme, w = Infinity, home?: string): PickerItem {
-  if (r.kind === "header") return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
-  if (r.kind === "path") {
-    if (r.self) return { spans: [{ text: r.completion, fg: t.text }], right: "this folder" }
-    return { spans: [...hitSpans(r.name, r.hits, t.text, t.primary), ...(r.dir ? [{ text: "/", fg: t.textMuted }] : [])] }
-  }
-  const right = r.missing ? "missing" : r.entry.lastNote ? truncate(stem(basename(r.entry.lastNote)), Math.max(8, Math.floor(w / 3))) : ""
-  const name = fitHits(r.name, r.hits, Math.max(8, Math.floor(w / 3)))
-  const room = w - (right ? sw(right) + 1 : 0) - sw(name.text) - 2
-  // a path too long for the row drops its last segment (the name, already shown), then cuts from the left
-  const full = tildify(r.entry.root, home)
-  const path = sw(full) <= room ? full : room >= 6 ? truncateLeft(tildify(dirname(r.entry.root), home), room) : ""
-  return {
-    spans: [...hitSpans(name.text, name.hits, r.missing ? t.textMuted : t.text, t.primary), ...(path ? [{ text: "  " + path, fg: t.textMuted }] : [])],
-    right,
-  }
 }
 
 /** `o` popup: recent projects and, for a path-looking query, the folder's entries; controlled by App. */
@@ -481,21 +387,11 @@ export function OpenPicker({
   onScroll,
   onHover,
   onActivate,
-}: {
-  t: Theme
-  W: number
-  H: number
-  q: string
+}: PopupListProps & {
   rows: OpenRow[]
-  hl: number
-  top: number
   height: number
   /** for `~` paths (tests pass a fake one) */
   home?: string
-  onClose?: () => void
-  onScroll?: (dir: 1 | -1) => void
-  onHover?: (i: number) => void
-  onActivate?: (i: number) => void
 }) {
   const width = Math.min(70, W - 2)
   const paths = rows.some((r) => r.kind === "path")
@@ -559,7 +455,7 @@ export function ThemeBoard({
   const L = boardLayout(innerW - 8)
   const pointer = usePointer()
   return (
-    <box key="theme-board" style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1 }}>
+    <box key="theme-board" style={LIST_BOX}>
       {rows.length ? (
         <box key="head" style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3 }}>
           <Line spans={boardHeader(t, shown, L)} />
@@ -580,7 +476,7 @@ export function ThemeBoard({
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT) onActivate?.(i)
             }}
-            style={{ height: 1, flexShrink: 0, flexDirection: "row", paddingLeft: 3, paddingRight: 3, backgroundColor: sel ? t.backgroundElement : undefined }}
+            style={{ ...rowBox(sel ? t.backgroundElement : undefined), flexDirection: "row" }}
           >
             <box style={{ width: L.nameW, height: 1, flexShrink: 0 }}>
               <Line spans={hitSpans(h.family.name, h.hits, t.text, t.primary, sel)} />
@@ -605,18 +501,6 @@ export function ThemeBoard({
     </box>
   )
 }
-
-/** The modes in the switch's order: the board's (`BOARD_MODES`). */
-export const SWITCH_MODES = BOARD_MODES
-
-/**
- * The mode switch in the input row, one segment per SWITCH_MODES entry: the active side as a primary
- * chip, the other muted; with `only` (a single-mode family) the missing side is also struck through.
- */
-export const modeSwitch = (t: Theme, mode: ThemeMode, only?: ThemeMode): Span[][] =>
-  SWITCH_MODES.map((m) =>
-    m === mode ? chip(t, m, t.primary) : [{ text: ` ${m} `, fg: t.textMuted, ...(only && m !== only ? { attr: A.STRIKE } : {}) }],
-  )
 
 /**
  * `t` popup: the query with the dark/light switch, the board (`ThemeBoard`: a dark and a light specimen
@@ -644,11 +528,7 @@ export function ThemePicker({
   onActivate,
   onPick,
   onMode,
-}: {
-  t: Theme
-  W: number
-  H: number
-  q: string
+}: PopupListProps & {
   rows: FamilyHit[]
   /** the highlighted row, -1 for none */
   hl: number
@@ -665,10 +545,6 @@ export function ThemePicker({
   geo: ReturnType<typeof themeSplit>
   /** the candidate and its rows (`paneLines`); drawn only with `geo.split` */
   pane?: { theme: Theme; lines: Span[][] }
-  onClose?: () => void
-  onScroll?: (dir: 1 | -1) => void
-  onHover?: (i: number) => void
-  onActivate?: (i: number) => void
   /** a click on row `i`'s slot for `mode`: that theme, applied */
   onPick?: (i: number, mode: ThemeMode) => void
   onMode?: (mode: ThemeMode) => void
@@ -696,22 +572,17 @@ export function ThemePicker({
     <Overlay t={t} W={W} H={H} width={geo.width} title="Themes" note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Theme…" right={modeSwitch(t, shown, only)} onRight={(i) => !only && onMode?.(SWITCH_MODES[i]!)} width={geo.width} />
       {geo.split ? (
-        <box key="split" style={{ flexDirection: "row", height: geo.rows }}>
-          <box style={{ width: geo.listW, flexShrink: 0 }}>{list}</box>
-          <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
-            {Array.from({ length: geo.rows }, (_, i) => (
-              <Line key={i} spans={[{ text: "│", fg: t.border }]} />
-            ))}
-          </box>
-          <box
-            key={pane ? "pane" : "pane-none"}
-            style={{ width: geo.peekW + 6, flexDirection: "column", paddingLeft: 2, paddingRight: 4, flexShrink: 0, ...(pane ? { backgroundColor: pane.theme.background } : {}) }}
-          >
-            {(pane?.lines ?? []).slice(0, geo.rows).map((spans, i) => (
-              <Line key={i} spans={spans} />
-            ))}
-          </box>
-        </box>
+        <SplitPane
+          key="split"
+          t={t}
+          rows={geo.rows}
+          listW={geo.listW}
+          paneW={geo.peekW}
+          list={list}
+          lines={pane?.lines ?? []}
+          paneKey={pane ? "pane" : "pane-none"}
+          paneBg={pane?.theme.background}
+        />
       ) : (
         list
       )}
@@ -763,9 +634,6 @@ export function ZenSettings({
   )
 }
 
-/** `spans` padded with spaces to `w` cells. */
-const padTo = (spans: Span[], w: number): Span[] => [...spans, { text: " ".repeat(Math.max(0, w - spans.reduce((n, s) => n + sw(s.text), 0))) }]
-
 /** One column cell, 1 + `colW` wide: the lead cell holds a chip's left padding, so chips and keys share an edge. */
 function helpCell(t: Theme, l: HelpLine | undefined, { colW, keyW }: HelpLayout): Span[] {
   if (!l) return padTo([], 1 + colW)
@@ -798,21 +666,6 @@ export function HelpSheet({ t, W, H, layout, top, title, note, onClose, onScroll
       </box>
     </Overlay>
   )
-}
-
-/** Spans of one art row, `cells` coloured by role; neighbours with the same look share a span. */
-function artSpans(t: Theme, cells: ArtCell[], ink: number): Span[] {
-  const steam = steamColors(t)
-  const out: Span[] = []
-  for (const c of cells) {
-    const fg =
-      c.role === "mark" || c.role === "body" ? inkAt(t, ink, t.primary) : c.role === "edge" ? inkAt(t, ink, t.text) : c.role === "steam" ? steam[c.row ?? 4] : undefined
-    const bg = c.broth ? inkAt(t, ink, t.secondary) : undefined
-    const last = out.at(-1)
-    if (last && last.fg === fg && last.bg === bg) last.text += c.ch
-    else out.push({ text: c.ch, fg, bg })
-  }
-  return out
 }
 
 /**
