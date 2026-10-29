@@ -305,8 +305,11 @@ export function recentSection(tree: FileNode, recent: readonly string[], open: s
   return hits.length ? [{ title: "Recent", count: String(hits.length), hits }] : []
 }
 
+/** How many recent notes the ring keeps. */
+const RECENT_CAP = 20
+
 /** `path` moved to the front of the recent ring (same array when it already is). */
-export function remember(recent: readonly string[], path: string | null, max = 20): readonly string[] {
+export function remember(recent: readonly string[], path: string | null, max = RECENT_CAP): readonly string[] {
   if (!path || recent[0] === path) return recent
   return [path, ...recent.filter((p) => p !== path)].slice(0, max)
 }
