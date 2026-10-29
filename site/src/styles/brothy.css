@@ -1,4 +1,4 @@
-/* brothy's screen as a docs site. Every color is a `--b-*` token from the palette in use (src/theme.ts, via
+/* brothy's screen as a docs site. Every color is a `--b-*` token from the palette in use (src/theme/theme.ts, via
    src/generated/themes.css); one face, IBM Plex Mono. The frame (top line, panel, footer) is laid out by the components in
    src/components; this file draws it, and the document in brothy's Preview styles (headings, tables, kbd, callouts). */
 :root {

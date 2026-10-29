@@ -6,12 +6,12 @@ import { openSync, readdirSync, statSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { ReadStream } from "node:tty"
 import { App, VERSION } from "./App"
-import { parseArgs } from "./args"
-import { loadConfig } from "./config"
-import { readCapped } from "./stdin"
-import { isMarkdown } from "./files"
-import { WORDMARK } from "./status"
-import { FAMILIES, onlyMode } from "./themepick"
+import { parseArgs } from "./system/args"
+import { loadConfig } from "./system/config"
+import { readCapped } from "./notes/stdin"
+import { isMarkdown } from "./notes/files"
+import { WORDMARK } from "./ui/status"
+import { FAMILIES, onlyMode } from "./theme/themepick"
 
 const die: (msg: string) => never = (msg) => {
   console.error(`brothy: ${msg}`)

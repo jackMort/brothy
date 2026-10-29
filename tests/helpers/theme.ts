@@ -1,5 +1,5 @@
 // The theme the tests render in (looked up by name: list order is not identity) and reading colours back from a captured frame.
-import { themeByName } from "../../src/theme"
+import { themeByName } from "../../src/theme/theme"
 
 export const brothy = themeByName("brothy")
 

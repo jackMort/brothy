@@ -1,8 +1,8 @@
 // The keymap: modes, context ids, every binding, the footer hints per context and the `? ?` sheet's groups. Pure.
 import type { KeyEvent } from "@opentui/core"
-import type { View } from "../config"
-import type { HelpGroup } from "../help"
-import type { HintItem } from "../status"
+import type { View } from "../system/config"
+import type { HelpGroup } from "../ui/help"
+import type { HintItem } from "../ui/status"
 
 /** A group of bindings: global, the document, a panel view or a popup; dispatch tries them in order. */
 export type Mode = "global" | "files" | "doc" | "outline" | "info" | "filter" | "help" | "prompt" | "theme" | "zen" | "zenSettings" | "label" | "switch" | "open"

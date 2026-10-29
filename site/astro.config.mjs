@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { codeTheme, followPalette } from "./src/code-theme.mjs"
 import { pickerData, siteThemesCss } from "./src/themes"
 
-// Every palette on the site comes from ../src/theme.ts: this writes one block of `--b-*` tokens per theme (and the picker's
+// Every palette on the site comes from ../src/theme/theme.ts: this writes one block of `--b-*` tokens per theme (and the picker's
 // families) before Starlight reads its customCss (src/generated is not committed; see src/themes.ts).
 const brothyThemes = () => ({
   name: "brothy-themes",

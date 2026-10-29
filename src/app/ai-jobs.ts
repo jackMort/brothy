@@ -2,15 +2,15 @@
 // lifecycle every AI action shares (the switcher's ask too); then `makeAIJobs`, the TL;DR, gloss and reload-explain
 // requests and their keys (`a`, `D`, zen `a`). Not pure: both close over the app context.
 import { basename } from "node:path"
-import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai"
-import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai-config"
-import { loadConfig } from "../config"
-import { deltaRequest, hhmm, parseDelta, type Change } from "../delta"
-import { stem } from "../files"
-import { glossKey, glossRequest, type GlossTarget } from "../gloss"
-import { safeLine } from "../spans"
-import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../summaries"
-import { STDIN } from "../workspace"
+import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai/client"
+import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai/config"
+import { loadConfig } from "../system/config"
+import { deltaRequest, hhmm, parseDelta, type Change } from "../ai/delta"
+import { stem } from "../notes/files"
+import { glossKey, glossRequest, type GlossTarget } from "../ai/gloss"
+import { safeLine } from "../lib/spans"
+import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../ai/cache"
+import { STDIN } from "../notes/workspace"
 import type { AppCtx } from "./ctx"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */

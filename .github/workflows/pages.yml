@@ -3,7 +3,7 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: ["site/**", "docs/**", "README.md", "src/theme.ts"]
+    paths: ["site/**", "docs/**", "README.md", "src/theme/theme.ts"]
   workflow_dispatch:
 
 permissions:

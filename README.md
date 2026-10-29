@@ -404,10 +404,10 @@ bun scripts/snapshot.tsx examples           # print a headless frame
 bun scripts/snapshot.tsx examples --size 100x30 --keys "tab j s"
 ```
 
-`src/markdown.ts` turns Markdown (via `marked`'s lexer) into pre-wrapped,
+`src/markdown/render.ts` turns Markdown (via `marked`'s lexer) into pre-wrapped,
 styled terminal lines, so scrolling, heading jumps and search all work on exact
-line numbers. `src/highlight.ts` supplies code-block colors (cached; the parser
-runs in a worker), `src/App.tsx` is the UI and `src/nav.ts`, `src/panel.ts` and `src/status.ts` its pure helpers.
+line numbers. `src/markdown/highlight.ts` supplies code-block colors (cached; the parser
+runs in a worker), `src/App.tsx` is the UI and `src/ui/nav.ts`, `src/ui/panel.ts` and `src/ui/status.ts` its pure helpers.
 
 One OpenTUI quirk worth knowing: the React reconciler doesn't clear style
 props that disappear between renders, so conditional branches that render

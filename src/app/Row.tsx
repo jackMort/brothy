@@ -1,5 +1,5 @@
 // One terminal row of styled spans: the document, panel and chrome all draw through it.
-import { safe, type Span } from "../spans"
+import { safe, type Span } from "../lib/spans"
 
 /** A single unwrapped row; every span's text goes through `safe` on the way out. */
 export function Row({ spans, bg }: { spans: Span[]; bg?: string }) {
