@@ -1,6 +1,6 @@
-// The key side of the app: the action behind every KEYMAP binding, dispatch by mode, the key handler, and what decides
-// the context (popup, zen, panel view or document) the keys and hints go by. Not pure: `makeActions` closes over the
-// app context and the feature factories.
+// The key side of the app: the action behind every KEYMAP binding and what decides the context (popup, zen, panel view
+// or document) the keys and hints go by; the key handler is in dispatch.ts. Not pure: `makeActions` closes over the app
+// context and the feature factories.
 import type { KeyEvent } from "@opentui/core"
 import { closeSync, openSync } from "node:fs"
 import { basename, dirname } from "node:path"
@@ -15,7 +15,7 @@ import { HEADING_STYLES } from "../markdown/heading-style"
 import { parseFrontMatter } from "../markdown/frontmatter"
 import type { Rendered } from "../markdown/render"
 import { MINI_MIN_W } from "../ui/minimap"
-import { findQuote, matchKey, stepMatch } from "../ui/nav"
+import { findQuote, stepMatch } from "../ui/nav"
 import { findHeading } from "../ui/panel"
 import { headingKey } from "../markdown/sections"
 import { sourceScan } from "../markdown/source"
@@ -27,11 +27,12 @@ import { STDIN } from "../notes/workspace"
 import { ZEN_ROWS, ZEN_WPM, stepMeasure } from "../ui/zen"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
-import { erase, typed } from "./input"
-import { HELP_GROUPS, KEY_IDS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./keymap"
+import { erase } from "./input"
+import { makeOnKey } from "./dispatch"
+import { HELP_GROUPS, isDown, type Ctx, type KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { Popups } from "./popups"
-import type { Focus, UI } from "./store"
+import type { Focus } from "./store"
 import type { SwitcherControl } from "./switcher"
 import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
@@ -47,8 +48,12 @@ export interface Features {
   edit: ((argv: string[], piped: boolean) => EditResult | void) | undefined
 }
 
+/** One action per KEYMAP id. */
+export type Actions = Record<KeyId, (k: KeyEvent) => void>
+
 /** The actions over the app context; App registers `onKey` and draws with the rest. */
-export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace, popups, edit: editImpl }: Features) {
+export function makeActions(c: AppCtx, f: Features) {
+  const { aiJobs, links, zen, switcher, workspace, popups, edit: editImpl } = f
   const {
     ui,
     set,
@@ -73,10 +78,10 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     showMatch,
   } = c
   const { ensureGlosses, summarizeNote, explainChange, zenGloss } = aiJobs
-  const { openLink, liveLabels, startLabels, histMove, labelType } = links
-  const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = zen
+  const { openLink, liveLabels, startLabels, histMove } = links
+  const { startRolling, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = zen
   const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate } = switcher
-  const { leave, opType, opGo, openOpener, opComplete, opOpen, welcomeKey, stopWelcome } = workspace
+  const { leave, opType, opGo, openOpener, opComplete, opOpen } = workspace
   const {
     filterText,
     filterType,
@@ -171,7 +176,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
   /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
   const typing = () => {}
 
-  const actions: Record<KeyId, (k: KeyEvent) => void> = {
+  const actions: Actions = {
     views: (k) => {
       const v = panelViews()[Number(k.name) - 1]
       if (!v) return
@@ -523,83 +528,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     zsRevert: revertZen,
   }
 
-  /** Run the first binding of the given modes (in order) that matches `k`; `skip` bindings are ignored. */
-  const dispatch = (modes: Mode[], k: KeyEvent, skip: readonly KeyId[] = []) => {
-    for (const m of modes)
-      for (const id of KEY_IDS) {
-        if (skip.includes(id)) continue
-        const def = keyDef(id)
-        if (def.modes.includes(m) && def.keys.some((spec) => matchKey(spec, k))) {
-          actions[id](k)
-          return true
-        }
-      }
-    return false
-  }
-
-  /** The popups that take every key, in precedence order: each one's mode, and where a printable key no binding takes goes. */
-  const popupModes: { mode: Mode; open: (s: UI) => boolean; type?: (s: UI, text: string) => void }[] = [
-    { mode: "theme", open: (s) => !!s.themePick, type: (_, text) => themeSet((p) => pickQuery(p, p.q + text)) },
-    { mode: "zenSettings", open: (s) => s.zenOrig !== null },
-    { mode: "open", open: (s) => !!s.opener, type: (s, text) => s.opener && opType(s.opener.q + text) },
-    { mode: "switch", open: (s) => !!s.switcher, type: (s, text) => s.switcher && swType(s.switcher.q + text) },
-    { mode: "prompt", open: (s) => !!s.prompt, type: (s, text) => s.prompt && promptType(s.prompt.value + text) },
-  ]
-
-  /** The open popup's bindings, else typing into it; false with no popup open. */
-  const popupKey = (s: UI, key: KeyEvent, text: string | null) => {
-    const p = popupModes.find((x) => x.open(s))
-    if (!p) return false
-    if (!dispatch([p.mode], key) && text) p.type?.(s, text)
-    return true
-  }
-
-  /** Link labels: a label letter narrows them, any other key cancels them. */
-  const labelKey = (key: KeyEvent, text: string | null) => {
-    // labels the view has moved out from under (reload, resize, scroll) are dropped and the key is swallowed, like any other that cancels
-    if (!liveLabels()) return void set({ labels: null })
-    if (dispatch(["label"], key)) return
-    if (text && /^[a-z]$/.test(text)) return labelType(text)
-    return void set({ labels: null }) // any other key cancels
-  }
-
-  /** The modes over the document that take every key (labels, the help sheet, the panel filter); false when none is on. */
-  const modalKey = (s: UI, key: KeyEvent, text: string | null) => {
-    if (s.labels) {
-      labelKey(key, text)
-      return true
-    }
-    if (s.help) {
-      if (!dispatch(["help"], key)) set({ help: false })
-      return true
-    }
-    // the panel filter row captures typing, j k 1 2 3 / ? included
-    if (s.filterTyping && derive().sideFocus) {
-      if (!dispatch(["filter"], key) && text) filterType(filterText() + text)
-      return true
-    }
-    return false
-  }
-
-  /** Zen, the welcome page, or the global keys and the focused view's. */
-  const viewKey = (s: UI, key: KeyEvent) => {
-    // zen bindings shadow the document ones; n / N and the global keys fall through
-    if (derive().L.zen) return void dispatch(["zen", "global", "doc"], key, ZEN_OFF)
-    if (!s.openPath && docMode() === "doc" && welcomeKey(key)) return
-    dispatch(["global", modeOf(docMode())], key, s.openPath ? undefined : WELCOME_OFF)
-  }
-
-  /** The key handler: C-c, then the open popup or typing, then zen, the welcome page and the bindings of the focused view. */
-  const onKey = (key: KeyEvent) => {
-    // C-c quits the same way from every popup and mode (OpenTUI would only end the renderer)
-    if (matchKey("C-c", key)) return actions.quit(key)
-    stopWelcome()
-    const s = ui.current
-    if (s.zen && s.zenCfg.ghost) pokeGhost()
-    const text = typed(key)
-    if (popupKey(s, key, text) || modalKey(s, key, text)) return
-    viewKey(s, key)
-  }
+  const onKey = makeOnKey(c, f, actions, docMode)
 
   return { currentCtx, pokeHints, outlineGo, jumpChange, onKey }
 }
