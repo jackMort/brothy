@@ -86,6 +86,9 @@ const SCRIM_DIM = 0.62
 // ------------------------------------------------------------- helpers
 
 const clampIdx = (i: number, len: number) => Math.max(0, Math.min(i, len - 1))
+/** What the label spots depend on: a highlight re-render keeps it, a reload, the mode, the width or the scroll changes it. */
+const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, rows: number, top: number) =>
+  [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
 
@@ -374,8 +377,8 @@ interface UI {
   /** bumped when code-block highlighting lands, to re-render the document */
   hl: number
   prompt: Prompt
-  /** link labels on screen (`f`); dropped when the view or scroll position changes */
-  labels: { spots: LinkSpot[]; labels: string[]; typed: string; view: Rendered; top: number } | null
+  /** link labels on screen (`f`); dropped when the note, the mode, the width or the scroll position changes (`labelGeo`) */
+  labels: { spots: LinkSpot[]; labels: string[]; typed: string; geo: string } | null
   query: string
   /** line of the match `n`/`N` last landed on */
   matchLine: number | null
@@ -1225,12 +1228,12 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     focusDoc()
   }
 
-  /** Labels still match what is drawn: same view object and scroll position. */
+  /** Labels still match what is drawn: same note, mode, width, length and scroll position. */
   const liveLabels = () => {
     const lb = ui.current.labels
     if (!lb) return null
     const d = derive()
-    return lb.view === d.view && lb.top === d.top ? lb : null
+    return lb.geo === labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) ? lb : null
   }
 
   const startLabels = () => {
@@ -1240,7 +1243,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
     if (!spots.length) return flash("no links on screen")
     const labels = linkLabels(spots.length)
-    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", view: d.view, top: d.top } })
+    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) } })
   }
 
   /** Open where `l` leads: the note, then its heading; a URL or a missing target only says so. */
@@ -1290,7 +1293,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const left = narrowLabels(lb.labels, typed)
     if (!left.length) return set({ labels: null })
     if (left.length === 1 && lb.labels[left[0]!] === typed) {
-      const link = lb.view.links?.[lb.spots[left[0]!]!.link]
+      const link = derive().view.links?.[lb.spots[left[0]!]!.link]
       set({ labels: null })
       if (link) followLink(link)
       return
@@ -2448,9 +2451,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
         promptType(s.prompt.value + key.sequence)
       return
     }
-    // labels the view has moved out from under (reload, resize) are dropped and the key acts normally
-    if (s.labels && !liveLabels()) set({ labels: null })
-    else if (s.labels) {
+    // labels the view has moved out from under (reload, resize, scroll) are dropped and the key is swallowed, like any other that cancels
+    if (s.labels && !liveLabels()) return void set({ labels: null })
+    if (s.labels) {
       if (dispatch(["label"], key)) return
       if (key.sequence && !key.ctrl && !key.meta && /^[a-z]$/.test(key.sequence)) return labelType(key.sequence)
       return void set({ labels: null }) // any other key cancels
@@ -2803,7 +2806,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
         {view.lines.slice(top, top + CH).map((l: Line, i) => {
           let spans = markMatches(l.spans, query, t)
-          const lb = s.labels && s.labels.view === view && s.labels.top === top ? s.labels : null
+          const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
           if (lb)
             lb.spots.forEach((sp, k) => {
               const label = lb.labels[k]!

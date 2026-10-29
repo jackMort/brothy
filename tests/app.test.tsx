@@ -1888,13 +1888,48 @@ test("labels drop when the view moves", async () => {
   expect(f).not.toContain("Bee")
 })
 
-test("labels gone stale (live reload) end label mode: the footer drops them and the next key acts", async () => {
+test("link labels: survive code highlighting landing, and the typed label is followed", async () => {
+  const root = tmp({ "a.md": "see [[b]]\n\n```ts\nconst x = 1\n```\n", "b.md": "# Bee\n" })
+  const s = await mount(root, "a.md")
+  expect(await keys(s, "f")).toContain("a–z follow")
+  const plain = () => hex(s.captureSpans().lines.flatMap((l) => l.spans).find((sp) => sp.text.includes("const"))?.fg ?? { r: 0, g: 0, b: 0, a: 0 })
+  const before = plain()
+  await waitFor(s, () => plain() !== before) // highlighting landed: a new Rendered with the same geometry
+  expect(s.captureCharFrame()).toContain("a–z follow")
+  expect(onBg(s, B.warning).join("")).toBe("a")
+  expect(await keys(s, "a")).toContain("Bee")
+})
+
+test("link labels: a label letter typed after they went stale is swallowed, not run as a command", async () => {
+  const lines = Array.from({ length: 80 }, (_, i) => `line ${i}`).join("\n\n")
+  const root = tmp({ "a.md": "see [[b]]\n\n" + lines, "b.md": "# Bee\n" })
+  const spawned: string[][] = []
+  setup = quietAct(await testRender(<App root={root} initialFile={join(root, "a.md")} edit={(argv) => (spawned.push(argv), { code: 0, signal: null } as EditResult)} />, { width: 100, height: 30 }))
+  const s = setup
+  await s.renderOnce()
+  await keys(s, "f")
+  await s.mockMouse.scroll(70, 10, "down") // inside the document column: the labels are stale
+  await keys(s, "e")
+  expect(spawned).toEqual([])
+  await keys(s, "g") // the `e` above already dropped the labels: back to the link
+  s.resize(70, 30)
+  await keys(s)
+  await keys(s, "f") // fresh labels, then a resize makes them stale
+  expect(onBg(s, B.warning).join("")).toBe("a")
+  s.resize(80, 30)
+  await keys(s)
+  await keys(s, "s")
+  expect(await keys(s, "f")).not.toContain("links: preview only") // `s` did not toggle Source
+})
+
+test("labels gone stale (live reload) end label mode: the footer drops them and the next key is swallowed", async () => {
   const lines = Array.from({ length: 80 }, (_, i) => `line ${i}`).join("\n\n")
   const root = tmp({ "a.md": "see [[b]]\n\n" + lines, "b.md": "# Bee\n" })
   const s = await mount(root, "a.md")
   expect(await keys(s, "f")).toContain("a–z follow")
   writeFileSync(join(root, "a.md"), "# changed\n\nsee [[b]]\n\n" + lines)
   await waitFrame(s, (f) => f.includes("changed") && !f.includes("a–z follow"))
+  expect(await keys(s, "G")).not.toContain("line 79") // swallowed, like any key that cancels live labels
   expect(await keys(s, "G")).toContain("line 79")
 })
 
