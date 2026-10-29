@@ -1,3 +1,5 @@
+// The cache store under $XDG_CACHE_HOME/brothy (summaries.json, glosses.json): merge-on-save, newest entry wins, pruned to a cap.
+// Split from ai.ts so config.ts and ai.ts do not import each other.
 import { mkdirSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
 import { PROMPT_V } from "./ai-config"
