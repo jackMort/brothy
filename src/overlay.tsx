@@ -264,6 +264,22 @@ export function PickerInput({
   )
 }
 
+/** Props every query popup (Switcher, OpenPicker, ThemePicker) takes: its place on screen, the query, the highlight and the pointer callbacks. */
+interface PopupListProps {
+  t: Theme
+  W: number
+  H: number
+  q: string
+  /** the highlighted row */
+  hl: number
+  /** the first row on screen */
+  top: number
+  onClose?: () => void
+  onScroll?: (dir: 1 | -1) => void
+  onHover?: (i: number) => void
+  onActivate?: (i: number) => void
+}
+
 /**
  * List │ pane: `list` in a `listW` column, a `│` divider, then `lines` (cut to `rows`) in a `paneW` column. A
  * `paneBg` paints the pane on a candidate's background; `paneKey` keeps boxes that differ in style apart.
@@ -315,25 +331,15 @@ export function Switcher({
   onScroll,
   onHover,
   onActivate,
-}: {
-  t: Theme
-  W: number
-  H: number
+}: PopupListProps & {
   /** "Go to", or "Ask" for a `?` question */
   title?: string
-  q: string
   rows: SwitchRow[]
-  hl: number
-  top: number
   height: number
   /** right of the title: indexing progress or the note count */
   note?: string
   /** peek pane rows for the highlighted row (`peekLines`); shown from PEEK_MIN_W columns */
   peek?: Span[][]
-  onClose?: () => void
-  onScroll?: (dir: 1 | -1) => void
-  onHover?: (i: number) => void
-  onActivate?: (i: number) => void
 }) {
   const g = switchSplit(W)
   const split = g.split && peek !== undefined
@@ -375,21 +381,11 @@ export function OpenPicker({
   onScroll,
   onHover,
   onActivate,
-}: {
-  t: Theme
-  W: number
-  H: number
-  q: string
+}: PopupListProps & {
   rows: OpenRow[]
-  hl: number
-  top: number
   height: number
   /** for `~` paths (tests pass a fake one) */
   home?: string
-  onClose?: () => void
-  onScroll?: (dir: 1 | -1) => void
-  onHover?: (i: number) => void
-  onActivate?: (i: number) => void
 }) {
   const width = Math.min(70, W - 2)
   const paths = rows.some((r) => r.kind === "path")
@@ -526,11 +522,7 @@ export function ThemePicker({
   onActivate,
   onPick,
   onMode,
-}: {
-  t: Theme
-  W: number
-  H: number
-  q: string
+}: PopupListProps & {
   rows: FamilyHit[]
   /** the highlighted row, -1 for none */
   hl: number
@@ -547,10 +539,6 @@ export function ThemePicker({
   geo: ReturnType<typeof themeSplit>
   /** the candidate and its rows (`paneLines`); drawn only with `geo.split` */
   pane?: { theme: Theme; lines: Span[][] }
-  onClose?: () => void
-  onScroll?: (dir: 1 | -1) => void
-  onHover?: (i: number) => void
-  onActivate?: (i: number) => void
   /** a click on row `i`'s slot for `mode`: that theme, applied */
   onPick?: (i: number, mode: ThemeMode) => void
   onMode?: (mode: ThemeMode) => void
