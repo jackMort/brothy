@@ -39,29 +39,70 @@ export function mergeSpans(spans: Span[]): Span[] {
 
 // ------------------------------------------------------------- cutting
 
+/**
+ * Widths are summed per grapheme, so cutting is linear. Two cases keep the old per-code-point rule: ANSI escapes
+ * (their width is not a sum of their parts, so `s` is measured whole) and a grapheme of several code points (it
+ * may be cut inside, and a part can be wider than the whole, as 👍 + U+FE0E is).
+ */
+const ESCAPES = /[\x1b\x9b]/
+const clustered = (g: string) => g.length > (g.codePointAt(0)! > 0xffff ? 2 : 1)
+
 /** Cut `s` to `max` columns, ending in `…` when it had to be cut. */
 export function truncate(s: string, max: number): string {
   if (max <= 0) return ""
   if (width(s) <= max) return s
-  let out = ""
-  for (const ch of s) {
-    if (width(out + ch) > max - 1) break
-    out += ch
+  if (ESCAPES.test(s)) {
+    let out = ""
+    for (const ch of s) {
+      if (width(out + ch) > max - 1) break
+      out += ch
+    }
+    return out + "…"
   }
-  return out + "…"
+  let w = 0
+  for (const { segment: g, index } of segmenter.segment(s)) {
+    const gw = width(g)
+    if (w + gw > max - 1 || clustered(g)) {
+      let part = ""
+      for (const ch of g) {
+        if (w + width(part + ch) > max - 1) return s.slice(0, index) + part + "…"
+        part += ch
+      }
+    }
+    w += gw
+  }
+  return s + "…"
 }
 
 /** Cut `s` from the left to `max` columns, starting with `…` when it had to be cut. */
 export function truncateLeft(s: string, max: number): string {
   if (max <= 0) return ""
   if (width(s) <= max) return s
-  const chars = [...s]
-  let out = ""
-  for (let i = chars.length - 1; i >= 0; i--) {
-    if (width(chars[i] + out) > max - 1) break
-    out = chars[i] + out
+  if (ESCAPES.test(s)) {
+    const chars = [...s]
+    let out = ""
+    for (let i = chars.length - 1; i >= 0; i--) {
+      if (width(chars[i] + out) > max - 1) break
+      out = chars[i] + out
+    }
+    return "…" + out
   }
-  return "…" + out
+  const gs = Array.from(segmenter.segment(s))
+  let w = 0
+  for (let k = gs.length - 1; k >= 0; k--) {
+    const { segment: g, index } = gs[k]!
+    const gw = width(g)
+    if (w + gw > max - 1 || clustered(g)) {
+      const cps = [...g]
+      let part = ""
+      for (let i = cps.length - 1; i >= 0; i--) {
+        if (w + width(cps[i] + part) > max - 1) return "…" + part + s.slice(index + g.length)
+        part = cps[i] + part
+      }
+    }
+    w += gw
+  }
+  return "…" + s
 }
 
 // ------------------------------------------------------------- numbers
