@@ -5,7 +5,7 @@ import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ancestorsOf, folderCounts, scanTree, stem, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
-import { drop, go, keep, startHistory, stepTo, visit } from "./history"
+import { drop, go, keep, startHistory, stepTo } from "./history"
 import { HEADING_STYLES, parseFrontMatter, sourceScan, pendingHighlights, wrap, type Line, type LinkTarget, type Rendered } from "./markdown"
 import { A, lineText, safeLine, type Span } from "./spans"
 import { clamp, fmtNum, plural, spanWidth, truncate, truncateLeft, width } from "./text"
@@ -13,7 +13,8 @@ import { headingKey } from "./sections"
 import { Row } from "./app/Row"
 import { AI_FRAME, MAX_JOBS, jobKey, type Job } from "./app/ai-jobs"
 import { makeDerive, makeMemo } from "./app/derive"
-import { MAX_DEPTH, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
+import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
+import { MAX_DEPTH, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { STDIN, projectRoot, workspace } from "./workspace"
 import { DRAWER_BELOW } from "./layout"
@@ -24,11 +25,11 @@ import { helpLayout } from "./help"
 import { STEAM_MS, STILL_TICK, welcomeFit } from "./welcome"
 import { INK_MS, INK_STEPS } from "./chrome"
 import { loadProjects, projectName, remember as rememberProject, saveProjects, tildify, type OpenRow } from "./projects"
-import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, refreshIndex, nextSection, remember, stepRow, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit, type VaultIndex } from "./vault"
+import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, refreshIndex, nextSection, stepRow, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit, type VaultIndex } from "./vault"
 import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniJump } from "./minimap"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "./peek"
 import { filterFamilies, onlyMode, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, themeSplit, type ThemePick } from "./themepick"
-import { VIEWS, loadConfig, saveConfig, type Config, type SidebarConfig, type View } from "./config"
+import { loadConfig, type View } from "./config"
 import { copiedCount, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchKey, narrowLabels, overlayAt, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry } from "./nav"
 import { watchPath } from "./watch"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
@@ -37,7 +38,7 @@ import { resolveAI, type AITarget } from "./ai-config"
 import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askLocate, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankMessage, type AskState } from "./ask"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
 import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, type GlossStyle, type GlossTarget } from "./gloss"
-import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, progressLabel, toastIcon, toastStep, type HintItem, type ToastKind } from "./status"
+import { GHOST_HOLD, GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
 import { findHeading, linkDest, resolveLink, type InfoItem } from "./panel"
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, hhmm, parseDelta, quoteNeedle, reloadToast, type Change } from "./delta"
 import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, normalizeZen, prompterRate, stepMeasure, zenAdjust, zenRows, type ZenConfig } from "./zen"
@@ -109,19 +110,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const matchSeen = useRef<{ matches: number[]; query: string }>({ matches: [], query: "" })
   const scrolls = useRef(new Map<string, { top: number; geo: Geometry }>())
   /** Normal-view position on entering zen; restored verbatim on exit unless the reader moved. */
-  const zenBack = useRef<{ key: string; top: number; geo: Geometry } | null>(null)
+  const zenBack = useRef<Spot | null>(null)
   const sidebarSeen = useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null })
-  const timers = useRef<{
-    toast?: ReturnType<typeof setTimeout>
-    open?: ReturnType<typeof setTimeout>
-    roll?: ReturnType<typeof setTimeout>
-    ghost?: ReturnType<typeof setTimeout>
-    hints?: ReturnType<typeof setTimeout>
-    logo?: ReturnType<typeof setTimeout>
-    ai?: ReturnType<typeof setTimeout>
-    gloss?: ReturnType<typeof setTimeout>
-    steam?: ReturnType<typeof setTimeout>
-  }>({})
+  const timers = useRef<Timers>({})
   /** AI requests in flight by `jobKey`: the raw streamed text and how to cancel it */
   const jobs = useRef(new Map<string, Job>())
   /** tier 0 queries per question (foldSame), this session only: asking again sends nothing */
@@ -140,7 +131,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   /** `leave` has run: the last project record is written once */
   const left = useRef(false)
   /** the welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size */
-  const welcome = useRef({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle" as "idle" | "live" | "done", at: 0, W, H })
+  const welcome = useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H })
 
   const derive = makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen })
   /** Context id outside popups and zen: the focused panel view, else the document. */
@@ -150,30 +141,10 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     return v ? `panel:${v}` : "doc"
   }
 
-  // ---------------------------------------------------- actions
-  /** Re-render through a fade: wait out `hold` after `at()`, then step every GHOST_STEP until hidden, then `done()`. */
-  const runFade = (slot: "ghost" | "hints" | "toast" | "gloss", at: () => number | null, hold: number, done: () => void) => {
-    clearTimeout(timers.current[slot])
-    const tick = () => {
-      const a = at()
-      if (a === null) return
-      const e = Date.now() - a
-      if (fadeStep(e, hold) === null) return done()
-      bump((x) => x + 1)
-      timers.current[slot] = setTimeout(tick, e < hold ? hold - e : GHOST_STEP)
-    }
-    timers.current[slot] = setTimeout(tick, hold)
-  }
+  const ctx = makeNav(makeCore({ ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer, fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome }))
+  const { runFade, flash, persist, setTop, scrollBy, stopRolling, here, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch } = ctx
 
-  /** Toast on the ghost line's right; an error still holding is not replaced by ok / info. */
-  const flash = (msg: string, kind: ToastKind = "info") => {
-    const now = Date.now()
-    // toasts carry names, paths and OS messages: never let one reach the terminal raw
-    const next = nextToast(ui.current.toast, { msg: safeLine(msg), kind, at: now }, now)
-    if (next === ui.current.toast) return
-    set({ toast: next })
-    runFade("toast", () => ui.current.toast?.at ?? null, TOAST_HOLD[kind], () => set({ toast: null }))
-  }
+  // ---------------------------------------------------- actions
 
   /** one redraw per AI_FRAME while text streams in */
   const aiRedraw = () => {
@@ -322,19 +293,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     })
   }
 
-  const setTop = (n: number) => {
-    zenBack.current = null // an explicit move (keys, find, jump, teleprompter tick) drops the exact restore
-    const d = derive()
-    scrolls.current.set(d.scrollKey, { top: Math.max(0, Math.min(n, d.maxTop)), geo: d.geo })
-    bump((x) => x + 1)
-  }
-  const scrollBy = (n: number) => setTop(derive().top + n)
-
-  // teleprompter: one line per tick at the configured wpm; any manual scroll pauses it
-  const stopRolling = () => {
-    clearTimeout(timers.current.roll)
-    if (ui.current.rolling) set({ rolling: false })
-  }
   // the rate is read afresh every line, so wpm changes, resizes and reloads apply at once
   const startRolling = () => {
     clearTimeout(timers.current.roll)
@@ -352,95 +310,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     timers.current.roll = setTimeout(tick, 1000 / prompterRate(d0.view.plain, d0.s.zenCfg.wpm))
   }
 
-  /** The open note's scroll entry, as history keeps it. */
-  const here = (): Spot | null => {
-    if (!ui.current.openPath) return null
-    const d = derive()
-    return { key: d.scrollKey, top: d.top, geo: d.geo }
-  }
-
-  /** Open `path`; it goes into history (`peek`: a Files preview, replaced by the next open unless it gets focus). */
-  const openFile = (path: string, how: "open" | "peek" | "history" = "open") => {
-    clearTimeout(timers.current.open)
-    const s = ui.current
-    if (path === s.openPath) return
-    const history = how === "history" ? s.history : visit(s.history, path, here(), how === "peek")
-    // reveal it: every folder above the note opens (they are never closed automatically)
-    const expanded = new Set(s.expanded)
-    for (const a of ancestorsOf(s.tree, path)) expanded.add(a)
-    set({ openPath: path, history, outlineCur: 0, infoCur: 0, matchLine: null, expanded, listTop: { ...s.listTop, outline: 0, info: 0 } })
-    // the Files cursor jumps to the ● row and scrolls it into view
-    const { rows, LH } = derive()
-    const i = rows.findIndex((r) => r.node.path === path)
-    if (i >= 0) {
-      sidebarSeen.current.cursorPath = path
-      set({ cursor: i, listTop: { ...ui.current.listTop, files: keepVisible(ui.current.listTop.files, i, LH, rows.length) } })
-    }
-  }
-
-  /** Move the Files cursor; notes open once the cursor rests (`now` opens at once). */
-  const selectRow = (i: number, open: "later" | "now" | "no" = "later") => {
-    const { rows, LH } = derive()
-    const s = ui.current
-    const n = clamp(i, 0, rows.length - 1)
-    const node = rows[n]?.node
-    sidebarSeen.current.cursorPath = node?.path ?? null
-    set({ cursor: n, listTop: { ...s.listTop, files: keepVisible(s.listTop.files, n, LH, rows.length) } })
-    clearTimeout(timers.current.open)
-    if (!node || node.dir || open === "no") return
-    if (open === "now") openFile(node.path, "peek")
-    else timers.current.open = setTimeout(() => openFile(node.path, "peek"), OPEN_DELAY)
-  }
-
-  const toggleDir = (node: FileNode, open?: boolean) => {
-    const next = new Set(ui.current.expanded)
-    if (open ?? !next.has(node.path)) next.add(node.path)
-    else next.delete(node.path)
-    set({ expanded: next })
-  }
-
-  /** `saveConfig`, or an error toast when it refuses (a file that doesn't parse, a failed write). */
-  const persist = (patch: Config) => {
-    const ok = saveConfig(patch)
-    if (!ok) flash("config.json not saved · it doesn't parse or can't be written", "error")
-    return ok
-  }
-  /** Save the panel layout field that changed (`view` on change, `hidden` only by ^b inline); saveConfig merges it per field. */
-  const saveSidebar = (patch: Partial<SidebarConfig>) => persist({ sidebar: patch, folds: undefined })
-
-  /** Switch the panel view (saved). The Outline cursor starts on the heading being read. */
-  const selectView = (v: View) => {
-    if (v === ui.current.view) return
-    if (v === "files" && ui.current.piped) v = "outline" // a piped session has no Files tab
-    set({ view: v, filterTyping: false, outlineFilter: "", ...(v === "outline" ? { outlineCur: Math.max(0, derive().oRows.findIndex((r) => r.current)) } : {}) })
-    if (!ui.current.piped) saveSidebar({ view: v })
-  }
-
-  /** The tabs, in `1 2 3` order: a piped session has no Files, also on a note followed from it. */
-  const panelViews = (): readonly View[] => (ui.current.piped ? VIEWS.filter((v) => v !== "files") : VIEWS)
-
-  /** Show the panel (unhide it inline, open the drawer) and focus it; Files lands on the open note. */
-  const focusPanel = (v?: View) => {
-    const was = derive().sideFocus
-    if (v) selectView(v)
-    const { L, rows, s, oRows } = derive()
-    set({
-      focus: "panel",
-      ...(L.mode === "drawer" ? { drawerOpen: true } : { hidden: false }),
-      ...(!was && s.view === "outline" ? { outlineCur: Math.max(0, oRows.findIndex((r) => r.current)) } : {}),
-    })
-    if (!was && s.view === "files") {
-      const i = rows.findIndex((r) => r.node.path === s.openPath)
-      if (i >= 0) selectRow(i, "no")
-    }
-  }
-
-  /** Focus the document; the drawer closes with it. */
-  const focusDoc = () => {
-    clearTimeout(timers.current.open)
-    const s = ui.current
-    set({ focus: "doc", drawerOpen: false, filterTyping: false, recent: remember(s.recent, s.openPath), history: keep(s.history) })
-  }
   /** Open a resolved Info link and read it; an unresolved one only says so, and Info keeps focus. */
   /** A piped document scans the working folder for links the first time one is used. */
   const ensureLinks = () => {
@@ -541,14 +410,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const filterStop = (clear: boolean) => {
     clearTimeout(timers.current.open)
     set({ filterTyping: false, ...(clear ? (ui.current.view === "outline" ? { outlineFilter: "" } : { filter: "" }) : {}) })
-  }
-
-  /** Scroll so match line `m` sits a third of the way down (on the reading line in typewriter), and make it current. */
-  const showMatch = (m: number) => {
-    stopRolling()
-    ui.current.matchLine = m
-    const d = derive()
-    setTop(d.tw || d.pg ? m : m - Math.floor(d.L.CH / 3))
   }
 
   const jumpMatch = (dir: 1 | -1) => {
