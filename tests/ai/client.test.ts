@@ -490,6 +490,17 @@ describe("chat · transport (through summarize)", () => {
     expect(await summarize(T, "n", { fetch: f, signal: ac.signal })).toEqual({ ok: false, cancelled: true })
     expect(called).toBe(false)
   })
+  test("the connection stays open while the reply is read and is closed once it settles", async () => {
+    let sig: AbortSignal | undefined
+    const f = (async (_url: string, init: RequestInit) => {
+      sig = init.signal ?? undefined
+      return new Response(stream([delta("hi"), "data: [DONE]\n\n"]), { headers: { "content-type": "text/event-stream" } })
+    }) as unknown as typeof fetch
+    const open: boolean[] = []
+    expect(await summarize(T, "n", { fetch: f, onDelta: () => open.push(!sig!.aborted) })).toEqual({ ok: true, text: "hi" })
+    expect(open).toEqual([true])
+    expect(sig!.aborted).toBe(true)
+  })
 })
 
 test("PROMPT_V is the TL;DR version and stays 1: cached summaries don't turn outdated", () => {
