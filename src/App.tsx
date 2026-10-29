@@ -61,8 +61,6 @@ export interface AppProps {
   motion?: boolean
 }
 
-// ------------------------------------------------------------- helpers
-
 // ------------------------------------------------------------- app
 
 export function App({ root: startRoot, initialFile, themeName, transparent, fetch: fetchImpl = globalThis.fetch, edit: editImpl, stdin, linkScanDelay = 0, motion }: AppProps) {
@@ -135,20 +133,29 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     return v ? `panel:${v}` : "doc"
   }
 
-  const ctx = makeNav(makeCore({ ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer, fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome }))
-  const { runFade, flash, persist, setTop, scrollBy, stopRolling, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch } = ctx
+  // the app context in layers (core, then nav) and the feature factories over it, rebuilt every render: handlers close
+  // over this render's size and props, and read the store at call time
+  const ctx = makeNav(
+    makeCore({
+      ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer,
+      fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome,
+    }),
+  )
+  const { runFade, flash, persist, setTop, scrollBy, stopRolling, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch } =
+    ctx
   const aiJobs = makeAIJobs(ctx)
   const { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss } = aiJobs
   const links = makeLinks(ctx)
   const { ensureLinks, openLink, liveLabels, startLabels, histMove, labelType } = links
-  const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = makeZen(ctx, aiJobs)
+  const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } =
+    makeZen(ctx, aiJobs)
   const switcher = makeSwitcher(ctx, links)
   const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane } = switcher
   const workspaceControl = makeWorkspace(ctx, switcher, aiJobs)
-  const { recordProject, leave, opType, opGo, openOpener, opComplete, opOpen, welcomeRows, welcomeOpen, welcomeKey, stopWelcome, animateWelcome } = workspaceControl
+  const { recordProject, leave, opType, opGo, openOpener, opComplete, opOpen, welcomeRows, welcomeOpen, welcomeKey, stopWelcome, animateWelcome } =
+    workspaceControl
 
   // ---------------------------------------------------- actions
-
   const startFilter = () => set({ filterTyping: true })
   /** The filter text of the shown view (Files or Outline). */
   const filterText = () => (ui.current.view === "outline" ? ui.current.outlineFilter : ui.current.filter)

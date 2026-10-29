@@ -2,11 +2,11 @@
 // TL;DR, gloss and reload-explain requests and their keys (`a`, `D`, zen `a`). Not pure: it closes over the app context.
 import { basename } from "node:path"
 import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, shortModel, stripThink, summarize, type Failure } from "../ai"
-import { resolveAI, type AITarget } from "../ai-config"
+import { resolveAI, type AITarget, type GlossStyle } from "../ai-config"
 import { loadConfig } from "../config"
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, hhmm, parseDelta, type Change } from "../delta"
 import { stem } from "../files"
-import { GLOSS_MAX, glossKey, glossRequest, type GlossStyle, type GlossTarget } from "../gloss"
+import { GLOSS_MAX, glossKey, glossRequest, type GlossTarget } from "../gloss"
 import { safeLine } from "../spans"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../summaries"
 import { STDIN } from "../workspace"

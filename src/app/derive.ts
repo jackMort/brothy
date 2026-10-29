@@ -80,7 +80,6 @@ export function makeMemo(stdin: string | undefined) {
     }),
     matches: cached((view: Rendered, q: string) => findLines(view.lines.map(lineText), q)),
     geo: cached((view: Rendered): Geometry => ({ heads: view.headings.map((h) => h.line), total: view.lines.length })),
-    // Source rows open with the line-number gutter (`gutter` columns), which draws no dots
     /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
     themeRows: cached((q: string) => filterFamilies(q)),
     themeSample: cached((t: Theme, w: number, _hl: number, headings: HeadingStyle) => sampleView(t, w, headings)),
@@ -96,6 +95,7 @@ export function makeMemo(stdin: string | undefined) {
     peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode, headings: HeadingStyle) =>
       render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
     ),
+    // Source rows open with the line-number gutter (`gutter` columns), which draws no dots
     mini: cached((view: Rendered, w: number, rows: number, gutter: number) =>
       miniInk(gutter ? view.plain.map((p) => p.slice(gutter)) : view.plain, view.lines.map((l) => l.fill !== undefined), w - gutter, rows),
     ),
