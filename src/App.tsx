@@ -6,8 +6,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { SCAN_LIMIT, ancestorsOf, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
 import { drop, go, keep, startHistory, stepTo, visit } from "./history"
-import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
-import { safeLine } from "./spans"
+import { HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Stats, type FrontMatter } from "./markdown"
+import { A, lineText, safeLine, type Span } from "./spans"
+import { clamp, fmtNum, plural, spanWidth, truncate, truncateLeft, width } from "./text"
+import { headingKey } from "./sections"
 import { Row } from "./app/Row"
 import { AI_FRAME, MAX_JOBS, jobKey, type JobKind } from "./app/ai-jobs"
 import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
@@ -17,7 +19,8 @@ import { readDoc, type DocFile } from "./doc"
 import { STDIN, projectRoot, workspace } from "./workspace"
 import { DRAWER_BELOW, layout } from "./layout"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
-import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, fitHits, hitSpans as markHits, usePointer, type PickerItem } from "./overlay"
+import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, usePointer } from "./overlay"
+import { fitHits, hitSpans as markHits, type PickerItem } from "./rows"
 import { helpLayout } from "./help"
 import { STEAM_MS, STILL_TICK, WELCOME_RECENTS, welcomeFit } from "./welcome"
 import { INK_MS, INK_STEPS } from "./chrome"
@@ -30,14 +33,15 @@ import { VIEWS, loadConfig, saveConfig, type Config, type SidebarConfig, type Vi
 import { cached, copiedCount, findLines, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry } from "./nav"
 import { watchPath } from "./watch"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
-import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, resolveAI, shortModel, stripThink, summarize, type AIConfig, type AITarget, type Failure } from "./ai"
+import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, shortModel, stripThink, summarize, type Failure } from "./ai"
+import { resolveAI, type AIConfig, type AITarget } from "./ai-config"
 import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askCandidates, askLocate, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, type AskState, type Candidate } from "./ask"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
 import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, glossTarget, parseGlossStyle, type GlossState, type GlossStyle, type GlossTarget } from "./gloss"
-import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type ToastKind } from "./status"
-import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type SummaryState, type SummaryView } from "./panel"
+import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, type HintItem, type ToastKind } from "./status"
+import { extractLinks, findHeading, fmtSize, infoItems, linkDest, outlineRows, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type SummaryState, type SummaryView } from "./panel"
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, diffSections, hhmm, parseDelta, quoteNeedle, reloadToast, type Change, type DeltaNote } from "./delta"
-import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
+import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
 export const VERSION = "0.2.0"
 
@@ -61,12 +65,9 @@ export interface AppProps {
 
 // ------------------------------------------------------------- helpers
 
-const clampIdx = (i: number, len: number) => Math.max(0, Math.min(i, len - 1))
 /** What the label spots depend on: a highlight re-render keeps it, a reload, the mode, the width or the scroll changes it. */
 const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, rows: number, top: number) =>
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
-const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
-const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
 
 // ------------------------------------------------------------- app
 
@@ -393,7 +394,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       askCands,
       opRows,
       opHl,
-      infoCur: clampIdx(s.infoCur, linkRows.length),
+      infoCur: clamp(s.infoCur, 0, linkRows.length - 1),
       LH,
       note,
       scrollKey,
@@ -420,7 +421,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       sheet,
       sideFocus,
       oRows,
-      outlineCur: clampIdx(s.outlineCur, oRows.length),
+      outlineCur: clamp(s.outlineCur, 0, oRows.length - 1),
     }
   }
   /** Context id outside popups and zen: the focused panel view, else the document. */
@@ -662,7 +663,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const selectRow = (i: number, open: "later" | "now" | "no" = "later") => {
     const { rows, LH } = derive()
     const s = ui.current
-    const n = clampIdx(i, rows.length)
+    const n = clamp(i, 0, rows.length - 1)
     const node = rows[n]?.node
     sidebarSeen.current.cursorPath = node?.path ?? null
     set({ cursor: n, listTop: { ...s.listTop, files: keepVisible(s.listTop.files, n, LH, rows.length) } })
@@ -943,7 +944,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   /** Pages flow: show page `i` (clamped) from its start. */
   const goPage = (i: number) => {
     const { ranges } = derive()
-    setTop(ranges[clampIdx(i, ranges.length)]![0])
+    setTop(ranges[clamp(i, 0, ranges.length - 1)]![0])
   }
   /** Manual scroll inside zen; a page only scrolls within its own section. */
   const zenScroll = (n: number) => {
@@ -983,7 +984,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const pr = ui.current.prompt
     if (!pr) return
     const { L } = derive()
-    const n = clampIdx(hl, promptCount())
+    const n = clamp(hl, 0, promptCount() - 1)
     const top = keepVisible(pr.hl >= 0 ? pr.top : keepVisible(0, promptDefault(), L.PH, promptCount()), n, L.PH, promptCount())
     set({ prompt: { ...pr, hl: n, top } })
   }
@@ -1732,7 +1733,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       const { outlineCur, oRows } = derive()
       const n = oRows.length
       const next = k.name === "g" ? (k.shift ? n - 1 : 0) : outlineCur + (isDown(k) ? 1 : -1)
-      set({ outlineCur: clampIdx(next, n) })
+      set({ outlineCur: clamp(next, 0, n - 1) })
     },
     outlineJump: () => {
       const { oRows, outlineCur } = derive()
@@ -1755,7 +1756,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       // at the first/last link the keys scroll the rest of the list into view
       const last = linkRows.length - 1
       if (k.name === "g" ? infoCur === (k.shift ? last : 0) : infoCur === (dir > 0 ? last : 0)) return scroll(toEdge ?? s.listTop.info + dir)
-      set({ infoCur: clampIdx(k.name === "g" ? (k.shift ? last : 0) : infoCur + dir, linkRows.length) })
+      set({ infoCur: clamp(k.name === "g" ? (k.shift ? last : 0) : infoCur + dir, 0, linkRows.length - 1) })
     },
     infoOpen: () => {
       const { infoRows, linkRows, infoCur } = derive()
@@ -1805,7 +1806,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       const dn = k.name === "down" || k.name === "n"
       if (ui.current.view === "outline") {
         const { oRows, outlineCur } = derive()
-        return set({ outlineCur: clampIdx(outlineCur + (dn ? 1 : -1), oRows.length) })
+        return set({ outlineCur: clamp(outlineCur + (dn ? 1 : -1), 0, oRows.length - 1) })
       }
       selectRow(ui.current.cursor + (dn ? 1 : -1))
     },
@@ -1896,7 +1897,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       themeSet(pickQuery(p, [...p.q].slice(0, -1).join("")))
     },
 
-    zsMove: (k) => set({ zenRow: clampIdx(ui.current.zenRow + (isDown(k) ? 1 : -1), ZEN_ROWS.length) }),
+    zsMove: (k) => set({ zenRow: clamp(ui.current.zenRow + (isDown(k) ? 1 : -1), 0, ZEN_ROWS.length - 1) }),
     zsToggle: () => zenEdit(ui.current.zenRow, 0),
     zsAdjust: (k) => zenEdit(ui.current.zenRow, k.name === "right" || k.name === "l" ? 1 : -1),
     zsSave: applyZen,
@@ -1992,7 +1993,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     o: { sel?: boolean; lead?: boolean; thumb?: boolean; onDown?: (e: MouseEvent) => void } = {},
   ) => {
     const body: Span[] = o.lead === false ? [...spans] : [{ text: " " }, ...spans]
-    body.push({ text: " ".repeat(Math.max(0, PNW - 1 - spansWidth(body))) })
+    body.push({ text: " ".repeat(Math.max(0, PNW - 1 - spanWidth(body))) })
     const cells = o.sel ? body.map((sp) => ({ ...sp, fg: selFg, bg: t.primary })) : body
     cells.push({ text: o.thumb ? "▐" : " ", fg: thumbFg })
     return (
@@ -2011,7 +2012,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const strip = stripLayout(L.SW, panelViews())
   const stripSpans: Span[] = []
   for (const lb of strip.labels) {
-    const at = 1 + spansWidth(stripSpans) // panelRow adds col 0
+    const at = 1 + spanWidth(stripSpans) // panelRow adds col 0
     if (lb.x0 > at) stripSpans.push({ text: " ".repeat(lb.x0 - at) })
     stripSpans.push({ text: lb.digit, fg: t.textMuted })
     const active = lb.view === s.view
@@ -2035,9 +2036,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const hitSpans = (text: string, hits: number[], fg: string, bold: boolean): Span[] => markHits(text, hits, fg, t.primary, bold)
   /** The filter row: `/ query▏` (caret while typing), with `right` aligned to the text edge. */
   const filterRowEl = (value: string, typing: boolean, right: string) => {
-    const left: Span[] = [{ text: "/ ", fg: t.primary, attr: 1 }, { text: truncate(value, Math.max(1, AW - 4 - sw(right))), fg: t.text }]
+    const left: Span[] = [{ text: "/ ", fg: t.primary, attr: 1 }, { text: truncate(value, Math.max(1, AW - 4 - width(right))), fg: t.text }]
     if (typing) left.push({ text: "▏", fg: t.primary })
-    return panelRow("filter", [...left, { text: " ".repeat(Math.max(1, AW - spansWidth(left) - sw(right))) }, { text: right, fg: t.textMuted }])
+    return panelRow("filter", [...left, { text: " ".repeat(Math.max(1, AW - spanWidth(left) - width(right))) }, { text: right, fg: t.textMuted }])
   }
   /** Last folder of a note's relative path ("" at the root). */
   const folderOf = (n: FileNode) => (n.rel.includes(sep) ? basename(dirname(n.rel)) : "")
@@ -2056,7 +2057,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       const indent = "  ".repeat(Math.min(r.depth, MAX_DEPTH))
       // a symlink that leaves the folder is marked after its name
       const mark: Span[] = n.outside ? [{ text: " ↗", fg: t.textMuted }] : []
-      const room = AW - sw(indent) - 2 - spansWidth(mark)
+      const room = AW - width(indent) - 2 - spanWidth(mark)
       const spans: Span[] = [{ text: indent }]
       if (n.dir) {
         const open = s.expanded.has(n.path)
@@ -2065,18 +2066,18 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
         const count = open ? "" : String(counts.get(n.path) ?? 0)
         const name = truncate(n.name, room)
         spans.push({ text: name, fg: t.textMuted }, ...mark)
-        if (count && sw(n.name) + 1 + sw(count) <= room)
-          spans.push({ text: " ".repeat(room - sw(name) - sw(count)) }, { text: count, fg: t.textMuted })
+        if (count && width(n.name) + 1 + width(count) <= room)
+          spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
       } else if (r.hits) {
         const isOpen = n.path === openPath
-        const shown = truncate(stem(n.name), AW - 2 - spansWidth(mark))
-        const left = AW - 2 - sw(shown) - spansWidth(mark) - 1
+        const shown = truncate(stem(n.name), AW - 2 - spanWidth(mark))
+        const left = AW - 2 - width(shown) - spanWidth(mark) - 1
         // a note's name is never cut for its folder; the folder shows only with 6+ columns to spare
         const seg = folderOf(n)
         const folder = seg && left >= 6 ? truncateLeft(seg, left) : ""
         spans.length = 0
         spans.push({ text: isOpen ? "● " : "  ", fg: t.primary }, ...hitSpans(shown, r.hits, isOpen ? t.primary : t.text, isOpen), ...mark)
-        if (folder) spans.push({ text: " ".repeat(AW - 2 - sw(shown) - spansWidth(mark) - sw(folder)) }, { text: folder, fg: t.textMuted })
+        if (folder) spans.push({ text: " ".repeat(AW - 2 - width(shown) - spanWidth(mark) - width(folder)) }, { text: folder, fg: t.textMuted })
       } else {
         const isOpen = n.path === openPath
         spans.push({ text: isOpen ? "● " : "  ", fg: t.primary })
@@ -2120,7 +2121,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       )
     })
   } else {
-    const pad = (k: string, w: number) => k + " ".repeat(Math.max(0, w - sw(k)))
+    const pad = (k: string, w: number) => k + " ".repeat(Math.max(0, w - width(k)))
     const infoSpans = (it: InfoItem): Span[] => {
       switch (it.kind) {
         case "prop":
@@ -2352,7 +2353,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const at = (col: number, spans: Span[]) => {
       if (col > x) out.push({ text: " ".repeat(col - x) })
       out.push(...spans)
-      x = Math.max(x, col) + spansWidth(spans)
+      x = Math.max(x, col) + spanWidth(spans)
     }
     const logo = logoState({ gone: !!file?.error, reloadedAt: s.reloadedAt, now: Date.now() })
     at(0, [logo === "gone" ? { text: " " } : { text: LOGO, fg: logo === "live" ? t.primary : t.textMuted, attr: logo === "live" ? 1 : 0 }])
@@ -2437,7 +2438,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const label: Span[] = pl
     ? [{ text: pl.pre, fg: t.textMuted }, { text: pl.main, fg: t.text }, { text: pl.rest, fg: t.textMuted }].filter((x) => x.text)
     : []
-  const lineW = Math.max(0, PW - (label.length ? spansWidth(label) + 1 : 0))
+  const lineW = Math.max(0, PW - (label.length ? spanWidth(label) + 1 : 0))
   const fill = pl ? fillWidth(top, maxTop, lineW) : 0
   const progressLine = (
     <box style={{ height: 1, paddingLeft: 1, paddingRight: 1 }}>
@@ -2509,7 +2510,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       ...(h.word ? [{ text: " " + h.word, fg: t.textMuted }] : []),
     ])
   }
-  const hintSpans = hintK === null ? [] : fade(hintRow(ctxNow, W - 2 - (toastSpans.length ? spansWidth(toastSpans) + 3 : 0)), hintK)
+  const hintSpans = hintK === null ? [] : fade(hintRow(ctxNow, W - 2 - (toastSpans.length ? spanWidth(toastSpans) + 3 : 0)), hintK)
   const ghostLine = (
     <box style={{ height: 1, flexDirection: "row", justifyContent: "space-between", paddingLeft: 1, paddingRight: 1 }}>
       <Row spans={hintSpans} />

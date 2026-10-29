@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { render, renderSource } from "../src/markdown"
-import { safe, safeLine } from "../src/spans"
+import { lineText, safe, safeLine } from "../src/spans"
 import { width } from "../src/text"
 import { themes } from "../src/theme"
 
@@ -87,5 +87,13 @@ describe("through the renderers", () => {
       expect(r.headings.map((h) => h.text)).toEqual(["Title"])
       expect(text(r)).not.toContain("�")
     }
+  })
+})
+
+describe("lineText", () => {
+  test("joins a line's span texts, and a missing line is empty", () => {
+    expect(lineText({ spans: [{ text: "a", fg: "#fff" }, { text: "" }, { text: "b c" }] })).toBe("ab c")
+    expect(lineText({ spans: [] })).toBe("")
+    expect(lineText(undefined)).toBe("")
   })
 })
