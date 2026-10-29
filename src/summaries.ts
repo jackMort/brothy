@@ -10,6 +10,17 @@ export interface Stamped {
 /** What a cache keeps from its file. */
 export type IsEntry<T> = (e: unknown) => e is T
 
+/** A cached model reply: `hash` is of the text sent, `v` the prompt version, `model` the configured name; the reply sits under `K`. */
+export type Cached<K extends string> = Stamped & { hash: string; v: number; model: string } & Record<K, string>
+
+/** The guard for `Cached<K>`: the fields are checked, `at` must be a finite number. */
+export const isCached =
+  <K extends string>(field: K): IsEntry<Cached<K>> =>
+  (e): e is Cached<K> => {
+    if (!isRecord(e)) return false
+    return typeof e.hash === "string" && typeof e.v === "number" && typeof e[field] === "string" && typeof e.model === "string" && Number.isFinite(e.at)
+  }
+
 /** `$XDG_CACHE_HOME/brothy/<name>.json`, resolved on every call (tests point XDG_CACHE_HOME at a temp dir); a relative XDG path is ignored. */
 export function cacheFile(name: string): string {
   return join(cacheHome(), "brothy", `${name}.json`)
@@ -47,13 +58,7 @@ export function saveCache<T extends Stamped>(name: string, add: Record<string, T
 }
 
 /** One cached TL;DR; `model` is the configured name, `at` epoch ms. */
-export interface Summary {
-  hash: string
-  v: number
-  summary: string
-  model: string
-  at: number
-}
+export type Summary = Cached<"summary">
 /** Keyed by absolute note path. */
 export type Summaries = Record<string, Summary>
 export const CACHE_CAP = 500
@@ -61,10 +66,7 @@ export const CACHE_CAP = 500
 /** The summaries file. */
 export const cachePath = () => cacheFile("summaries")
 
-const isSummary = (e: unknown): e is Summary => {
-  if (!isRecord(e)) return false
-  return typeof e.hash === "string" && typeof e.v === "number" && typeof e.summary === "string" && typeof e.model === "string" && Number.isFinite(e.at)
-}
+const isSummary = isCached("summary")
 
 export const loadSummaries = (): Summaries => loadCache("summaries", isSummary)
 export const pruneSummaries = (all: Summaries, cap = CACHE_CAP): Summaries => pruneCache(all, cap)
@@ -77,21 +79,12 @@ export const textHash = (text: string) => Bun.hash(text).toString(16)
 export const isFresh = (e: { hash: string; v: number }, hash: string, v: number = PROMPT_V) => e.hash === hash && e.v === v
 
 /** One cached zen gloss; `hash` is of the exact section text sent (before clipping), `v` is `PROMPTS.gloss`. */
-export interface Gloss {
-  hash: string
-  v: number
-  gloss: string
-  model: string
-  at: number
-}
+export type Gloss = Cached<"gloss">
 /** Keyed by `glossKey(sectionId, style)`: absolute path + `#key#ord#style`. */
 export type Glosses = Record<string, Gloss>
 export const GLOSS_CAP = 2000
 
-const isGloss = (e: unknown): e is Gloss => {
-  if (!isRecord(e)) return false
-  return typeof e.hash === "string" && typeof e.v === "number" && typeof e.gloss === "string" && typeof e.model === "string" && Number.isFinite(e.at)
-}
+const isGloss = isCached("gloss")
 
 /** glosses.json's valid entries; read on the first zen entry with an `ai` block. */
 export const loadGlosses = (): Glosses => loadCache("glosses", isGloss)
