@@ -12,7 +12,7 @@ import { isMarkdown } from "./files"
 import { WORDMARK } from "./status"
 import { FAMILIES, onlyMode } from "./themepick"
 
-const die = (msg: string): never => {
+const die: (msg: string) => never = (msg) => {
   console.error(`brothy: ${msg}`)
   process.exit(1)
 }
@@ -20,7 +20,7 @@ const reason = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 const parsed = parseArgs(process.argv.slice(2))
 if ("error" in parsed) die(`${parsed.error}\ntry 'brothy --help'`)
-const args = parsed as Exclude<typeof parsed, { error: string }>
+const args = parsed
 
 /** The family names, wrapped at 80 columns under the option column; a single-mode family says which. */
 function familyLines(): string {
