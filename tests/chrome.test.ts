@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { HELP_GROUP_TITLES, INK_STEPS, STEAM_FLOOR, chip, fade, groupColor, inkAt, keycap, keycaps, steamColors } from "../src/chrome"
+import { HELP_GROUP_TITLES, INK_STEPS, STEAM_FLOOR, chip, fade, fadeSpans, groupColor, inkAt, keycap, keycaps, steamColors } from "../src/chrome"
 import { contrast, themes } from "../src/theme"
 
 const brothy = themes[0]!
@@ -41,4 +41,14 @@ test("steamColors: textMuted by the bowl, faded 1/5 and 2/5 going up, borderSubt
   const gruv = themes.find((t) => t.name === "gruvbox")!
   expect(steamColors(gruv)[0]).toBe(fade(gruv, gruv.textMuted, 3 / 5))
   for (const t of themes) for (const c of steamColors(t)) expect(contrast(c, t.background), t.name).toBeGreaterThanOrEqual(STEAM_FLOOR)
+})
+
+test("fadeSpans fades every span's colour toward the background, text where none is set", () => {
+  const spans = [{ text: "a", fg: brothy.primary, attr: 1 }, { text: "b" }]
+  expect(fadeSpans(brothy, spans, 2 / 5)).toEqual([
+    { text: "a", fg: fade(brothy, brothy.primary, 2 / 5), attr: 1 },
+    { text: "b", fg: fade(brothy, brothy.text, 2 / 5) },
+  ])
+  expect(fadeSpans(brothy, spans, 1).map((s) => s.fg)).toEqual([brothy.background, brothy.background])
+  expect(spans[1]).toEqual({ text: "b" }) // the input is left as it was
 })

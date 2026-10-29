@@ -6,6 +6,9 @@ import { contrast, mix, type Theme } from "./theme"
 /** The app's fade: `c` pulled `k` of the way to the background (k = step / 5, as the ghost line and toasts do). */
 export const fade = (t: Theme, c: string, k: number) => mix(c, t.background, k)
 
+/** Zen chrome, the ghost line's hints and toasts: every span's colour (text when unset) faded `k` toward the background (0 = full colour). */
+export const fadeSpans = (t: Theme, spans: Span[], k: number): Span[] => spans.map((sp) => ({ ...sp, fg: fade(t, sp.fg ?? t.text, k) }))
+
 /** Help groups in their one-column order. */
 export const HELP_GROUP_TITLES = ["Global", "Document", "Zen", "Panel", "AI"] as const
 const GROUP_ROLE: Record<string, "primary" | "secondary" | "info" | "success" | "accent"> = {

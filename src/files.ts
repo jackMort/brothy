@@ -159,6 +159,9 @@ export function countFiles(root: FileNode): number {
 /** A note's display name: the file name without its Markdown extension. */
 export const stem = (name: string) => name.replace(MD_EXT, "")
 
+/** Last folder of a note's relative path ("" at the root). */
+export const folderOf = (n: Pick<FileNode, "rel">) => (n.rel.includes(sep) ? basename(dirname(n.rel)) : "")
+
 /** Tree rows to show: every folder starts closed; `expanded` holds the open ones (absolute paths). */
 export function visibleRows(root: FileNode, expanded: ReadonlySet<string>): TreeRow[] {
   const rows: TreeRow[] = []

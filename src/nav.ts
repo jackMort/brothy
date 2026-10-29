@@ -1,5 +1,6 @@
-// Pure navigation helpers for App: search, scroll anchoring, sidebar cursor, key specs.
-import type { Span } from "./spans"
+// Pure navigation helpers for App: search and the Find picker's rows, scroll anchoring, sidebar cursor, key specs.
+import { fitHits, hitSpans, type PickerItem } from "./rows"
+import { lineText, type Span } from "./spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "./text"
 import type { Theme } from "./theme"
 
@@ -20,6 +21,29 @@ export function matchRanges(text: string, q: string): [number, number][] {
 export function findLines(lines: string[], q: string): number[] {
   if (!q) return []
   return lines.flatMap((l, i) => (matchRanges(l, q).length ? [i] : []))
+}
+
+/** The code point indexes of `q`'s matches in `text`, so a cut can keep the first one in view. */
+export function matchHits(text: string, q: string): number[] {
+  const hits: number[] = []
+  for (const [a, b] of matchRanges(text, q)) {
+    const from = [...text.slice(0, a)].length
+    for (let i = from; i < from + [...text.slice(a, b)].length; i++) hits.push(i)
+  }
+  return hits
+}
+
+/**
+ * The Find picker's rows: per match line its trimmed text with the hits of `q` in primary, cut to `room` columns
+ * around them, after the line number (Preview only: Source rows carry their own).
+ */
+export function findItems(lines: readonly { spans: Span[] }[], matches: readonly number[], q: string, source: boolean, room: number, t: Theme): PickerItem[] {
+  return matches.map((m) => {
+    const num = source ? "" : String(m + 1).padStart(4) + "  "
+    const text = lineText(lines[m]).trim()
+    const f = fitHits(text, matchHits(text, q), room - num.length)
+    return { spans: [...(num ? [{ text: num, fg: t.textMuted }] : []), ...hitSpans(f.text, f.hits, t.text, t.primary)] }
+  })
 }
 
 /** Paint search matches inside a rendered line. */

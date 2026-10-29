@@ -1,12 +1,14 @@
-// Panel views (Outline, Info): pure row data. Span styling stays in App; Files rows come from files.ts.
+// Panel views (Files, Outline, Info): pure row data and the spans each row is drawn with; Files rows come from files.ts.
 
 import { dirname, resolve, sep } from "node:path"
 import type { Change, DeltaNote } from "./delta"
-import { fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
+import { folderOf, fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
 import { stripCode, wrap, type LinkTarget, type Property, type Stats } from "./markdown"
+import { hitSpans } from "./rows"
 import { headingKey } from "./sections"
-import { safeLine } from "./spans"
-import { plural, truncate, width } from "./text"
+import { safeLine, type Span } from "./spans"
+import { plural, spanWidth, truncate, truncateLeft, width } from "./text"
+import { mix, type Theme } from "./theme"
 
 export { headingKey } from "./sections"
 export { fmtNum, plural } from "./text"
@@ -231,6 +233,98 @@ export function infoItems(props: Property[], st: Stats, links: LinkRef[], cols: 
   if (counts.length) out.push({ kind: "stat", text: counts.join(" · ") })
   if (file) out.push({ kind: "stat", text: `${fmtSize(file.size)} · edited ${fmtAge(file.mtime, now)}` })
   return out
+}
+
+// ------------------------------------------------------------- spans
+
+/** Files row `r` in `t`, `cols` text columns wide: a folder with its arrow (and its note count while closed), a ranked hit with its folder, or a note; `open` is marked `●`. */
+export function fileRowSpans(
+  r: { node: FileNode; depth: number; hits?: number[] },
+  o: { t: Theme; cols: number; open: string | null; expanded: ReadonlySet<string>; counts: Map<string, number>; maxDepth: number },
+): Span[] {
+  const { t, cols: AW } = o
+  const n = r.node
+  const indent = "  ".repeat(Math.min(r.depth, o.maxDepth))
+  // a symlink that leaves the folder is marked after its name
+  const mark: Span[] = n.outside ? [{ text: " ↗", fg: t.textMuted }] : []
+  const room = AW - width(indent) - 2 - spanWidth(mark)
+  const isOpen = n.path === o.open
+  if (n.dir) {
+    const open = o.expanded.has(n.path)
+    const spans: Span[] = [{ text: indent }, { text: open ? "▾ " : "▸ ", fg: t.borderSubtle }]
+    // a closed folder shows its note count at the right edge; the count goes before the name is cut
+    const count = open ? "" : String(o.counts.get(n.path) ?? 0)
+    const name = truncate(n.name, room)
+    spans.push({ text: name, fg: t.textMuted }, ...mark)
+    if (count && width(n.name) + 1 + width(count) <= room)
+      spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
+    return spans
+  }
+  if (r.hits) {
+    const shown = truncate(stem(n.name), AW - 2 - spanWidth(mark))
+    const left = AW - 2 - width(shown) - spanWidth(mark) - 1
+    // a note's name is never cut for its folder; the folder shows only with 6+ columns to spare
+    const seg = folderOf(n)
+    const folder = seg && left >= 6 ? truncateLeft(seg, left) : ""
+    const spans: Span[] = [{ text: isOpen ? "● " : "  ", fg: t.primary }, ...hitSpans(shown, r.hits, isOpen ? t.primary : t.text, t.primary, isOpen), ...mark]
+    if (folder) spans.push({ text: " ".repeat(AW - 2 - width(shown) - spanWidth(mark) - width(folder)) }, { text: folder, fg: t.textMuted })
+    return spans
+  }
+  return [
+    { text: indent },
+    { text: isOpen ? "● " : "  ", fg: t.primary },
+    { text: truncate(stem(n.name), room), fg: isOpen ? t.primary : t.text, attr: isOpen ? 1 : 0 },
+    ...mark,
+  ]
+}
+
+/** Outline row `r` in `t`, `cols` text columns wide: the reading heading in primary behind `▸`, headings above it faded. */
+export function outlineRowSpans(r: OutlineRow, t: Theme, cols: number): Span[] {
+  const base = r.current ? t.primary : r.level === 2 ? t.textMuted : t.text
+  const fg = r.read ? mix(base, t.background, 0.35) : base
+  const text = truncate(r.text, cols - 2 - r.indent)
+  return [{ text: r.current ? "▸ " : "  ", fg: t.primary }, { text: " ".repeat(r.indent) }, ...hitSpans(text, r.hits, fg, t.primary, r.current || r.level === 0)]
+}
+
+/** Info row `it` in `t`, `cols` text columns wide: tags and link targets are cut to fit. */
+export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
+  const pad = (k: string, w: number) => k + " ".repeat(Math.max(0, w - width(k)))
+  switch (it.kind) {
+    case "prop":
+      return [{ text: pad(it.key, it.keyW), fg: t.textMuted }, { text: it.text, fg: t.text }]
+    case "chips":
+      return [
+        { text: pad(it.key, it.keyW), fg: t.textMuted },
+        ...it.tags.flatMap((tg, i): Span[] => [...(i ? [{ text: " " }] : []), { text: truncate("#" + tg, cols - it.keyW), fg: t.secondary }]),
+        ...(it.more ? [{ text: " …", fg: t.textMuted }] : []),
+      ]
+    case "label":
+      return [{ text: it.text, fg: t.textMuted, attr: 1 }]
+    case "tldr":
+      return [{ text: "TL;DR", fg: t.textMuted, attr: 1 }, { text: it.status, fg: t.textMuted }]
+    case "summary":
+      return [{ text: it.text, fg: it.muted ? t.textMuted : t.text }]
+    case "changes":
+      return [{ text: "Changed", fg: t.textMuted, attr: 1 }, { text: it.status, fg: t.textMuted }]
+    case "change":
+      return [
+        { text: it.mark + " ", fg: it.mark === "~" ? t.warning : it.mark === "+" ? t.success : t.textMuted },
+        { text: it.text, fg: it.stop ? t.text : t.textMuted },
+        { text: it.counts, fg: t.textMuted },
+      ]
+    case "link":
+      return [
+        { text: "→ ", fg: t.textMuted },
+        { text: truncate(it.target, cols - 3 - (it.path ? 0 : 1)), fg: it.path ? t.info : t.textMuted },
+        ...(it.path ? [] : [{ text: "?", fg: t.textMuted }]),
+      ]
+    case "more":
+      return [{ text: `+${it.n} more`, fg: t.textMuted }]
+    case "stat":
+      return [{ text: truncate(it.text, cols), fg: t.textMuted }]
+    case "blank":
+      return []
+  }
 }
 
 // ------------------------------------------------------------- links
