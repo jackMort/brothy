@@ -7,6 +7,7 @@ import { A } from "../src/spans"
 import { stats } from "../src/stats"
 import { width } from "../src/text"
 import { brothy } from "./helpers/theme"
+import { SCALE, expectLinear } from "./perf"
 
 const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
@@ -268,18 +269,7 @@ describe("user text never hits Object.prototype", () => {
 })
 
 describe("pathological inline input stays fast", () => {
-  const time = (f: () => unknown) => {
-    const s = performance.now()
-    f()
-    return performance.now() - s
-  }
-  /**
-   * Each input is timed at full size and at 1/8 of it, alternately in the same run (best of 3), so a
-   * busy machine slows both. Linear work grows ~8× (≤ 15× measured under 24 busy cores), quadratic
-   * ~64× (48–68× with the inline cap removed); a full-size run under 20 ms is fast whatever its ratio.
-   */
-  const SCALE = 8
-  const MAX_RATIO = 30
+  // timed at full size and 1/8 of it by `expectLinear` (see perf.ts); a full-size run under 20 ms is fast whatever its ratio
   const inputs: Record<string, [unit: string, reps: number]> = {
     "unclosed [": ["[", 100_000],
     "unclosed [[": ["[[", 50_000],
@@ -297,16 +287,7 @@ describe("pathological inline input stays fast", () => {
     test(name, () => {
       const big = unit.repeat(reps)
       const small = unit.repeat(reps / SCALE)
-      for (const [view, f] of Object.entries(views)) {
-        f(small) // warm up
-        let a = Infinity
-        let b = Infinity
-        for (let i = 0; i < 3; i++) {
-          a = Math.min(a, time(() => f(small)))
-          b = Math.min(b, time(() => f(big)))
-        }
-        if (b > 20) expect(b / Math.max(a, 1), `${view}: ${b.toFixed(0)} ms vs ${a.toFixed(1)} ms at 1/${SCALE}`).toBeLessThan(MAX_RATIO)
-      }
+      for (const [view, f] of Object.entries(views)) expectLinear(view, (isBig) => f(isBig ? big : small))
     }, 60_000)
 
   test("a paragraph past the inline cap keeps its text, the rest as plain text", () => {
