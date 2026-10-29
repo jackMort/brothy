@@ -1,6 +1,6 @@
 // The demo player: a small canvas terminal that plays the recorded tour (site/public/casts/tour-{dark,light}.cast,
 // asciicast v2 from the recording tool in brothy-studio), replayed into the screen model of ./ansi.ts (exactly the sequences the casts
-// use; tests/casts.test.ts keeps it that way). Box-drawing and block glyphs are drawn as rectangles, never from a font, so the cells line up in every
+// use; tests/site/casts.test.ts keeps it that way). Box-drawing and block glyphs are drawn as rectangles, never from a font, so the cells line up in every
 // browser. Cells in the theme's own background stay clear: the frosted window behind the canvas shows through.
 
 import { BLOCK, BOX, Screen } from "./ansi"

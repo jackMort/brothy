@@ -18,8 +18,6 @@ import { switchSplit } from "../notes/peek"
 import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "../theme/themepick"
 import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
 
-// App and the tests import the row builders from here
-
 function Line({ spans }: { spans: Span[] }) {
   return (
     <text wrapMode="none" style={{ height: 1, flexShrink: 0 }}>

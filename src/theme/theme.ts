@@ -10,7 +10,7 @@
 // (raunofreiberg/vesper, © 2023 Rauno Freiberg), all MIT, are adapted from their upstream palettes;
 // Slots are tuned so text, textMuted, primary, secondary and accent reach
 // 4.5:1 and error, warning, success and info 3:1 on both background and backgroundPanel, and every content
-// slot keeps 3:1 (text 4.5:1) on backgroundElement, the code-block fill (tests/theme.test.ts). The house theme is held to
+// slot keeps 3:1 (text 4.5:1) on backgroundElement, the code-block fill (tests/theme/theme.test.ts). The house theme is held to
 // more: text about 14:1, every content slot 4.5:1 on all three surfaces, borders 1.5:1, no two accents alike
 // (scripts/contrast.ts prints the table).
 // Dark themes come first, then their '-light' twins; the theme picker shows them in this order. A family

@@ -1,4 +1,4 @@
-// Shared harness for the tests/app-*.test.tsx files: temp XDG dirs, mounting <App> headless, key and frame helpers, fixtures.
+// Shared harness for the tests/app/app-*.test.tsx files: temp XDG dirs, mounting <App> headless, key and frame helpers, fixtures.
 // Nothing here runs at import: a test file calls `useAppHarness()` at its top level, which registers the hooks and
 // returns the helpers bound to that file's temp dirs (bun runs every test file in one process, so import-time env would leak).
 import { afterAll, afterEach, beforeAll, setSystemTime } from "bun:test"

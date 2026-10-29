@@ -48,7 +48,7 @@ export default defineConfig({
       expressiveCode: {
         themes: [ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("dark"))), ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("light")))],
         plugins: [followPalette],
-        // the stand-in colors are not contrast-checked against the stand-in background: the palettes are (tests/theme.test.ts)
+        // the stand-in colors are not contrast-checked against the stand-in background: the palettes are (tests/theme/theme.test.ts)
         minSyntaxHighlightingColorContrast: 0,
         useStarlightUiThemeColors: true,
         // code blocks as brothy draws them: a flat fill, no frame, the language at the top right (brothy.css)
