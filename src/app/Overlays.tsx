@@ -171,9 +171,8 @@ export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, 
   const { pick, rows, geo, hl, top, cand, sample } = view
   /** row `i` becomes the highlight (hover, click); the list stays where it is under the pointer */
   const pickAt = (i: number) => {
-    const p = ui.current.themePick
     const r = rows[i]
-    if (p && r && r.family.name !== p.family) themeSet({ ...p, family: r.family.name, top })
+    if (r && r.family.name !== ui.current.themePick?.family) themeSet((p) => ({ ...p, family: r.family.name, top }))
   }
   return (
     <ThemePicker
@@ -191,7 +190,7 @@ export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, 
       geo={geo}
       pane={sample ? { theme: cand, lines: memo.themePane(cand, sample, geo.peekW, geo.rows) } : undefined}
       onClose={closeTheme}
-      onScroll={(dir) => themeSet(pickMove(ui.current.themePick!, dir))}
+      onScroll={(dir) => themeSet((p) => pickMove(p, dir))}
       onHover={pickAt}
       onActivate={(i) => {
         pickAt(i)
@@ -199,10 +198,10 @@ export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, 
       }}
       onPick={(i, m) => {
         pickAt(i)
-        themeSet(pickMode(ui.current.themePick!, m))
+        themeSet((p) => pickMode(p, m))
         applyTheme()
       }}
-      onMode={(m) => themeSet(pickMode(ui.current.themePick!, m))}
+      onMode={(m) => themeSet((p) => pickMode(p, m))}
     />
   )
 }

@@ -184,7 +184,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
   // two results with the same name and folder: show the cursor row's full folder instead of the count
   const dup =
     filtered && cur && rows.some((r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node))
-  const filesRight = dup ? truncateLeft(dirname(cur!.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
+  const filesRight = dup ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
   const panelRows = [
     panelRow("strip", stripSpans, { onDown: onStrip }),
     panelRow("rule", stripRule, { lead: false }),

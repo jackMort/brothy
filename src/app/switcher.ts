@@ -121,7 +121,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
           return flash("AI: no usable ranking")
         }
         const order = picked.map((p) => ids[p.i]!)
-        const why = Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why]))
+        const why = Object.fromEntries(picked.map((p) => [ids[p.i], p.why]))
         putNewest(rerankMemo.current, memoKey, { order, why, model: ai.model }, RERANK_MEMO)
         setAsk({ ...now.ask, phase: "reranked", order, why })
       },
@@ -238,7 +238,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const peekDoc = peekPath ? vault.current.ix.docs.get(peekPath) : undefined
     const peekW = switchSplit(W).peekW
     const peekNote = peekPath && peekDoc ? memo.peekFile(peekPath, peekDoc.mtime) : null
-    const peekWin = peekNote && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc!, peekRow) : null
+    const peekWin = peekNote && peekDoc && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc, peekRow) : null
     const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headingStyle) : undefined
     const peekSaved = peekPath ? s.summaries[peekPath] : undefined
     return s.switcher && W >= PEEK_MIN_W

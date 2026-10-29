@@ -41,7 +41,7 @@ export function makePopups(c: AppCtx) {
     const top = keepVisible(pr.hl >= 0 ? pr.top : keepVisible(0, promptDefault(), L.PH, promptCount()), n, L.PH, promptCount())
     set({ prompt: { ...pr, hl: n, top } })
   }
-  const promptType = (v: string) => set({ prompt: { ...ui.current.prompt!, value: v, hl: -1, top: 0 }, query: v, matchLine: null })
+  const promptType = (v: string) => set({ prompt: { value: v, hl: -1, top: 0 }, query: v, matchLine: null })
   const promptSubmit = (hl = ui.current.prompt?.hl ?? -1) => {
     if (!ui.current.prompt) return
     set({ prompt: null })
@@ -60,7 +60,11 @@ export function makePopups(c: AppCtx) {
   // `t` picker: the app stays in its theme while you move (only the pane shows the candidate); ⏎ applies and saves, esc changes nothing
   const openTheme = () => set({ themePick: pickStart(themes[ui.current.themeIdx]!) })
   const closeTheme = () => set({ themePick: null })
-  const themeSet = (p: ThemePick) => set({ themePick: p })
+  /** The open picker's next state from `f` (nothing while it is closed). */
+  const themeSet = (f: (p: ThemePick) => ThemePick) => {
+    const p = ui.current.themePick
+    if (p) set({ themePick: f(p) })
+  }
   /** ⏎ or a click: the candidate becomes the theme; with no row listed nothing happens */
   const applyTheme = () => {
     const p = ui.current.themePick

@@ -39,7 +39,10 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
     stopRolling()
     clearTimeout(timers.current.ghost)
     const s = ui.current
-    if (on && !s.zen && !s.source) { const d = derive(); zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo } }
+    if (on && !s.zen && !s.source) {
+      const d = derive()
+      zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo }
+    }
     if (!on && zenBack.current) scrolls.current.set(zenBack.current.key, { ...zenBack.current })
     if (!on) zenBack.current = null
     if (on) ensureGlosses()
