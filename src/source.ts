@@ -101,6 +101,9 @@ export function sourceStructureLines(lines: string[], from: number, t: Theme, hi
   return { headings, fenceLines, codeLines }
 }
 
+/** Deepest list indent (spaces) the line-based reader follows; past it a marker may be code, so the lexer decides. */
+const MAX_LIST_INDENT = 8
+
 /**
  * Whether `live` (the lines Preview lexes) has anything the line-based reader cannot follow, so
  * the lexer must read the note. The line-based path (several times faster on big notes, which
@@ -124,7 +127,7 @@ export function needsLexer(live: string[]): boolean {
     const item = /^( *)(?:[-*+]|\d{1,9}[.)])[ \t]+(.?)/.exec(line)
     const quote = /^ {0,3}>[ \t]?(.?)/.exec(line)
     if (item) {
-      if (item[1]!.length > 8 || !/^[\p{L}]$/u.test(item[2]!)) return true
+      if (item[1]!.length > MAX_LIST_INDENT || !/^[\p{L}]$/u.test(item[2]!)) return true
       lists = true
       prevQuote = false
     } else if (quote) {
