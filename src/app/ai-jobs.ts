@@ -5,7 +5,7 @@ import { basename } from "node:path"
 import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai/client"
 import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai/config"
 import { loadConfig } from "../system/config"
-import { deltaRequest, hhmm, parseDelta, type Change } from "../ai/delta"
+import { deltaRequest, hhmm, parseDelta, type Change, type DeltaParse } from "../ai/delta"
 import { stem } from "../notes/files"
 import { glossKey, glossRequest, type GlossTarget } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
@@ -203,15 +203,13 @@ export function makeAIJobs(c: AppCtx) {
       done: (r, job) => {
         const s = ui.current
         if (s.delta?.path !== path) return bump((x) => x + 1)
-        const fail = (f: Failure) => {
+        const out = deltaOutcome(r, job.raw, changes)
+        if (!out) return set({ delta: null })
+        if ("failure" in out) {
           set({ delta: null })
-          flash(failText(target, f, "explanation"), "error")
+          return flash(failText(target, out.failure, "explanation"), "error")
         }
-        // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
-        const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(job.raw, changes, true) : null
-        if (!r.ok && !cut) return "failure" in r ? fail(r.failure) : set({ delta: null })
-        const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
-        if (!parsed) return fail({ kind: "invalid" })
+        const { parsed } = out
         // edits made during the request now differ from the moved baseline and list as a new idle
         // change set; the reply is kept only when it still describes the note as it is
         const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
@@ -285,5 +283,14 @@ export function makeAIJobs(c: AppCtx) {
 
   return { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss }
 }
+/** What a finished `D` request leaves: the explanation, a failure to toast, or null when it was cancelled. */
+export function deltaOutcome(r: ChatResult, raw: string, changes: Change[]): { parsed: DeltaParse } | { failure: Failure } | null {
+  // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
+  const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(raw, changes, true) : null
+  if (!r.ok && !cut) return "failure" in r ? { failure: r.failure } : null
+  const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
+  return parsed ? { parsed } : { failure: { kind: "invalid" } }
+}
+
 /** What `makeAIJobs` gives App and the other factories. */
 export type AIJobs = ReturnType<typeof makeAIJobs>
