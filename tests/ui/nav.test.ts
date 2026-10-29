@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { cached, copiedCount, findItems, findQuote, matchHits, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../../src/ui/nav"
+import { cached, copiedCount, findItems, findQuote, matchHits, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepHitVisible, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../../src/ui/nav"
 import { brothy } from "../helpers/theme"
 
 const t = brothy
@@ -112,6 +112,15 @@ test("keepVisible scrolls a list window only as far as needed", () => {
   expect(keepVisible(10, 4, 5, 20)).toBe(4)
   expect(keepVisible(30, 19, 5, 20)).toBe(15)
   expect(keepVisible(3, 0, 5, 2)).toBe(0)
+})
+
+test("keepHitVisible shows the hit and the section header right above it; the hit wins when both don't fit", () => {
+  const rows = ["header", "note", "note", "header", "note", "note", "note", "note"].map((kind) => ({ kind }))
+  expect(keepHitVisible(0, rows, 4, 3)).toBe(2)
+  expect(keepHitVisible(5, rows, 1, 3)).toBe(0)
+  expect(keepHitVisible(0, rows, 6, 3)).toBe(keepVisible(0, 6, 3, rows.length))
+  expect(keepHitVisible(2, rows, 2, 3)).toBe(2)
+  expect(keepHitVisible(0, rows, 4, 1)).toBe(4)
 })
 
 test("thumb is null when the rows fit, and spans the track from end to end", () => {
