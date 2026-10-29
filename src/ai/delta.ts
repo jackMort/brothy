@@ -30,7 +30,7 @@ function common(a: string[], b: string[]): [head: number, tail: number] {
 }
 
 /** The LCS cells `lineDiff(a, b)` needs: changed old lines × changed new lines. */
-export function diffCells(a: string[], b: string[]): number {
+function diffCells(a: string[], b: string[]): number {
   const [head, tail] = common(a, b)
   return (a.length - head - tail) * (b.length - head - tail)
 }
@@ -81,7 +81,7 @@ export function hunks(ops: Op[], context = 1): Hunk[] {
   return spans.map((s) => ({ ops: ops.slice(s.from, s.to) }))
 }
 
-export type ChangeStatus = "edited" | "added" | "removed"
+type ChangeStatus = "edited" | "added" | "removed"
 /** One section that differs between the baseline and the note on disk. */
 export interface Change {
   status: ChangeStatus
@@ -197,7 +197,7 @@ export const DELTA_PROMPT =
 /** The user message stays within this many code points (or the target's `maxChars`, if lower), unless the `Note:` line alone is longer. */
 export const DELTA_MAX = 16_000
 /** Lines of a removed section that are sent. */
-export const REMOVED_LINES = 20
+const REMOVED_LINES = 20
 /** `chat`'s `maxOut`: a summary and the prompt's 10 section lines fit; past it App keeps the finished part. */
 export const MAX_DELTA = 2000
 

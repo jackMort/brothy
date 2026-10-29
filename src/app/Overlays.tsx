@@ -27,6 +27,7 @@ import type { Zen } from "./zen"
 export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { version: string } & Pick<Popups, "helpGo">): ReactNode {
   const { set, W, H } = c
   const { s, t } = d
+  if (!s.help) return null
   const layout = helpLayout(HELP_GROUPS, W, H)
   const helpTopC = Math.max(0, Math.min(s.helpTop, layout.rows - layout.vis))
   const helpNote = layout.rows > layout.vis ? `j/k scroll ${helpTopC + layout.vis}/${layout.rows}` : undefined
@@ -34,9 +35,7 @@ export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { versio
   const titleRoom = Math.min(layout.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
   const helpFull = `Keybindings · brothy v${version} · ${t.name}`
   const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`, Math.max(1, titleRoom))
-  return s.help ? (
-    <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * WHEEL_ROWS)} />
-  ) : null
+  return <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * WHEEL_ROWS)} />
 }
 
 /** Hover: row `i` becomes popup `key`'s highlight (with `top`, for Find), unless it already is or the popup has closed. */

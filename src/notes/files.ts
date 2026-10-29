@@ -24,9 +24,7 @@ export const SCAN_LIMIT = 20_000
 /** Dot-entries are hidden, except `.github` (it holds docs worth reading). */
 const skipped = (name: string) => SKIP.has(name) || (name.startsWith(".") && name !== ".github")
 
-export function isMarkdown(path: string): boolean {
-  return MD_EXT.test(path)
-}
+export const isMarkdown = (path: string) => MD_EXT.test(path)
 
 /** The nearest folder at or above `dir` that holds an Obsidian `.obsidian/` folder, else null. */
 export function findVault(dir: string): string | null {
@@ -141,22 +139,12 @@ export interface TreeRow {
 
 /** The first note, top level before folders, else the first in the first folder that has one; null for an empty tree. */
 export function firstFile(root: FileNode): FileNode | null {
+  for (const c of root.children) if (!c.dir) return c
   for (const c of root.children) {
-    if (!c.dir) return c
-  }
-  for (const c of root.children) {
-    if (c.dir) {
-      const f = firstFile(c)
-      if (f) return f
-    }
+    const f = c.dir ? firstFile(c) : null
+    if (f) return f
   }
   return null
-}
-
-export function countFiles(root: FileNode): number {
-  let n = 0
-  for (const c of root.children) n += c.dir ? countFiles(c) : 1
-  return n
 }
 
 /** A note's display name: the file name without its Markdown extension. */
@@ -250,7 +238,7 @@ function indexOfSeq(h: string[], n: string[]): number {
 }
 
 /** Score tiers of `scoreName`: a substring always beats a subsequence, which beats a match only in the path or an alias. */
-export const SCORE_SUBSTRING = 3e6
+const SCORE_SUBSTRING = 3e6
 export const SCORE_SUBSEQUENCE = 2e6
 export const SCORE_PATH = 1e6
 /** a subsequence loses this much per code point of span */

@@ -16,7 +16,7 @@ export type IsEntry<T> = (e: unknown) => e is T
 export type Cached<K extends string> = Stamped & { hash: string; v: number; model: string } & Record<K, string>
 
 /** The guard for `Cached<K>`: the fields are checked, `at` must be a finite number. */
-export const isCached =
+const isCached =
   <K extends string>(field: K): IsEntry<Cached<K>> =>
   (e): e is Cached<K> => {
     if (!isRecord(e)) return false
@@ -38,7 +38,7 @@ export function loadCache<T extends Stamped>(name: string, isEntry: IsEntry<T>):
 }
 
 /** The newest `cap` entries by `at`. */
-export function pruneCache<T extends Stamped>(all: Record<string, T>, cap: number): Record<string, T> {
+function pruneCache<T extends Stamped>(all: Record<string, T>, cap: number): Record<string, T> {
   return Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, cap))
 }
 

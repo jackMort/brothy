@@ -10,7 +10,7 @@ import type { Theme } from "../theme/theme"
 import type { NoteDoc, SwitchRow } from "./vault"
 
 /** outline rows shown around the hit's heading */
-export const PEEK_OUTLINE = 5
+const PEEK_OUTLINE = 5
 /** TL;DR rows, the last cut with `…` */
 export const PEEK_TLDR = 3
 /** source the pane renders from where it starts, cut at a line: far more than its rows ever show */

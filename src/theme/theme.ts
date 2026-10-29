@@ -7,7 +7,7 @@
 // oxocarbon (nyoom-engineering/oxocarbon.nvim, © 2022 Riccardo Mazzarini), cyberdream
 // (scottmckendry/cyberdream.nvim, © 2023 Scott McKendry), melange (savq/melange-nvim, © 2021 Sergio
 // Alejandro Vargas), synthwave84 (robb0wen/synthwave-vscode, © 2019 Robb Owen) and vesper
-// (raunofreiberg/vesper, © 2023 Rauno Freiberg), all MIT, are adapted from their upstream palettes;
+// (raunofreiberg/vesper, © 2023 Rauno Freiberg), all MIT, are adapted from their upstream palettes.
 // Slots are tuned so text, textMuted, primary, secondary and accent reach
 // 4.5:1 and error, warning, success and info 3:1 on both background and backgroundPanel, and every content
 // slot keeps 3:1 (text 4.5:1) on backgroundElement, the code-block fill (tests/theme/theme.test.ts). The house theme is held to

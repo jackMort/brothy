@@ -1,5 +1,5 @@
-// The app's store: the one mutable UI object every handler reads at call time, its parts and the app's tunables.
-// No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
+// The app's store: the one mutable UI object every handler reads at call time, its parts, the AI jobs the `jobs` ref
+// holds and the app's tunables. No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
 import type { AIConfig } from "../ai/config"
 import type { AskState, Candidate } from "../ai/ask"
 import { loadConfig, type View } from "../system/config"
@@ -7,7 +7,8 @@ import type { Change, DeltaNote } from "../ai/delta"
 import type { FileNode, TreeRow } from "../notes/files"
 import { startHistory, type History } from "../notes/history"
 import type { HeadingStyle } from "../markdown/heading-style"
-import type { Geometry, LinkSpot } from "../ui/nav"
+import type { Geometry } from "../markdown/render"
+import type { LinkSpot } from "../ui/nav"
 import type { ProjectEntry } from "../notes/projects"
 import type { Toast } from "../ui/status"
 import { loadSummaries, type Glosses, type Summaries } from "../ai/cache"
@@ -36,16 +37,26 @@ export const MIN_H = 14
 /** Where keys go: the panel (when shown) or the document. */
 export type Focus = "doc" | "panel"
 /** Find popup: `hl` is the highlighted row; -1 means "not moved yet". */
-export type Prompt = { value: string; hl: number; top: number } | null
+type Prompt = { value: string; hl: number; top: number } | null
 /** A Files list row; filter results carry the matched code points of the note's name. */
 export type FileRow = TreeRow & { hits?: number[] }
 
 /** Where a note was left: its scroll entry (Preview or Source key) at that moment. */
 export type Spot = { key: string; top: number; geo: Geometry }
 /** The open note's body (`noteText`) and properties when it was opened or last explained; memory only. */
-export type Baseline = { path: string; text: string; props: string; at: number }
+type Baseline = { path: string; text: string; props: string; at: number }
 /** `D` for `path`: the changes sent, the text and properties they lead to, and the reply once it is in. */
-export type DeltaState = { path: string; changes: Change[]; text: string; props: string; result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null }
+type DeltaState = { path: string; changes: Change[]; text: string; props: string; result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null }
+/** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
+export type JobKind = "tldr" | "gloss" | "delta" | "ask"
+/** The `jobs` key of a job: `<kind>:<id>`, or the bare kind without an id. */
+export const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
+/** A request in flight: its kind, the raw text streamed so far and how to cancel it. */
+export interface Job {
+  kind: JobKind
+  raw: string
+  abort: AbortController
+}
 /** No changes or notes: shared empty lists, so the Info memo holds */
 export const NO_CHANGES: Change[] = []
 export const NO_NOTES: (DeltaNote | undefined)[] = []

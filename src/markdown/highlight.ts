@@ -105,7 +105,7 @@ export function canonicalLang(info: string): string {
   return Object.hasOwn(PARSER_LANGS, word) ? PARSER_LANGS[word]! : word
 }
 
-export const hasParser = (lang: string) => PARSER_FILETYPES.includes(lang)
+const hasParser = (lang: string) => PARSER_FILETYPES.includes(lang)
 
 // ------------------------------------------------------------ capture names
 

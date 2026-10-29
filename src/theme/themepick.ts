@@ -121,7 +121,7 @@ export const NAME_W = Math.max(...FAMILIES.map((f) => width(f.name))) + 2
 /** List width with the pane: board text 33 = name 12 + a 10-cell slot + a gap + a slot (`boardLayout`). */
 export const THEME_LIST_W = 41
 /** Popup width without the pane. */
-export const THEME_NARROW_W = 48
+const THEME_NARROW_W = 48
 
 /**
  * Picker geometry for a W×H terminal; `ph` is App's popup list height (L.PH). From PEEK_MIN_W the

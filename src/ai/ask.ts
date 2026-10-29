@@ -105,13 +105,13 @@ const TEXT = 1
 const NAME = 1
 
 /** `scoreName`'s substring tier only: its subsequence tier would find a short query in most long headings. */
-export const sub = (name: string, q: string) => {
+const sub = (name: string, q: string) => {
   const m = scoreName(name, q)
   return m && m.score > SCORE_SUBSEQUENCE ? m : null
 }
 
 /** Each heading's identity: its key and how many equal keys come before it; the lead-in counts as key "", as in `noteSections`. */
-export function keysOf(doc: NoteDoc): { key: string; ord: number }[] {
+function keysOf(doc: NoteDoc): { key: string; ord: number }[] {
   const seen = new Map<string, number>([["", 1]])
   return doc.headings.map((h) => {
     const key = headingKey(h.text)
@@ -122,7 +122,7 @@ export function keysOf(doc: NoteDoc): { key: string; ord: number }[] {
 }
 
 /** Source lines [from, to) of section `i` (-1: the lead-in): up to the next heading of any depth. */
-export function sectionLines(doc: NoteDoc, i: number): [number, number] {
+function sectionLines(doc: NoteDoc, i: number): [number, number] {
   const from = i < 0 ? 0 : doc.headings[i]!.line + 1
   return [from, doc.headings[i + 1]?.line ?? doc.starts.length]
 }
@@ -206,7 +206,7 @@ export function askLocate(doc: NoteDoc, a: { heading: number; key: string; ord: 
 // ------------------------------------------------------------- tier 1
 
 /** Section `heading`'s searchable text (front matter, comments and heading lines already blank) on one line, cut to EXCERPT code points. */
-export function excerpt(doc: NoteDoc, heading: number): string {
+function excerpt(doc: NoteDoc, heading: number): string {
   if (!doc.starts.length) return ""
   const [from, to] = sectionLines(doc, heading)
   const a = doc.starts[from] ?? doc.text.length
@@ -252,11 +252,10 @@ export function parseRerank(raw: string, n: number): { i: number; why: string }[
 
 // ------------------------------------------------------------- rows
 
-export type AskPhase = "asking" | "result" | "reranking" | "reranked" | "error"
 /** `ui.switcher.ask`: absent while idle; any edit of the query drops it. */
 export interface AskState {
   question: string
-  phase: AskPhase
+  phase: "asking" | "result" | "reranking" | "reranked" | "error"
   /** tier 0's queries (memoized per question) */
   queries?: string[]
   /** the model that answered (full id; shown through shortModel) */

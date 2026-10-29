@@ -1,6 +1,5 @@
 // Environment variables for unit tests. Nothing runs at import: `useXdgDir` and `useEnvRestore` register hooks when a test file calls them.
 import { afterEach, beforeEach } from "bun:test"
-import { join } from "node:path"
 import { useTmp } from "./tmp"
 
 type XdgKey = "XDG_CONFIG_HOME" | "XDG_CACHE_HOME"

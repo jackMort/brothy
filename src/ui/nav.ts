@@ -2,6 +2,7 @@
 import { fitHits, hitSpans, type PickerItem } from "./rows"
 import { lineText, type Span } from "../lib/spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "../lib/text"
+import type { Geometry } from "../markdown/render"
 import type { Theme } from "../theme/theme"
 
 // ------------------------------------------------------------- search
@@ -96,12 +97,6 @@ export function matchIndex(matches: number[], matchLine: number | null): number 
 
 // ------------------------------------------------------------- scroll anchoring
 
-/** What a scroll offset was measured against: heading lines and total line count. */
-export interface Geometry {
-  heads: number[]
-  total: number
-}
-
 /**
  * Carry a scroll offset across a re-layout (resize, reload): keep the same relative
  * position inside the same heading's section, or the same document fraction when
@@ -166,7 +161,7 @@ const STRIP = [
   ["info", "Info"],
 ] as const
 /** Panels narrower than this get the compact strip: two-space gaps instead of three. */
-export const STRIP_COMPACT_BELOW = 30
+const STRIP_COMPACT_BELOW = 30
 
 export interface StripLabel {
   view: (typeof STRIP)[number][0]
@@ -237,7 +232,7 @@ export interface LinkSpot {
 }
 
 /** Home-row-first keys for link labels. */
-export const LABEL_KEYS = "asdjklghreui"
+const LABEL_KEYS = "asdjklghreui"
 
 /** Links on rows `first`..`first+h`, each once (a wrapped link at its first visible row), in reading order. */
 export function visibleLinks(lines: { spans: Span[] }[], first: number, h: number): LinkSpot[] {

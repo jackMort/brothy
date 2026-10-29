@@ -12,9 +12,10 @@ import { plural } from "../lib/text"
 import { resolveTheme } from "../theme/themepick"
 import { watchPath } from "../notes/watch"
 import { STDIN } from "../notes/workspace"
-import { jobKey, type AIJobs } from "./ai-jobs"
+import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Links } from "./links"
+import { jobKey } from "./store"
 import type { WorkspaceControl } from "./workspace"
 
 /** What the effects call from the feature factories. */
@@ -82,15 +83,7 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
   // a build still running after unmount must not touch the store
   useEffect(() => () => void (vault.current = { ...vault.current }), [])
   useEffect(() => () => {
-    clearTimeout(timers.current.toast)
-    clearTimeout(timers.current.hints)
-    clearTimeout(timers.current.open)
-    clearTimeout(timers.current.roll)
-    clearTimeout(timers.current.ghost)
-    clearTimeout(timers.current.logo)
-    clearTimeout(timers.current.ai)
-    clearTimeout(timers.current.gloss)
-    clearTimeout(timers.current.steam)
+    for (const id of Object.values(timers.current)) clearTimeout(id)
     for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
   }, [])
   useEffect(() => () => void (alive.current = false), [])
