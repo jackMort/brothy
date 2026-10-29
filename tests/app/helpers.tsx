@@ -16,7 +16,7 @@ import { brothy, hex } from "../helpers/theme"
 import { makeTmp } from "../helpers/tmp"
 
 export type Setup = Awaited<ReturnType<typeof testRender>>
-export interface Size {
+interface Size {
   width: number
   height: number
 }
