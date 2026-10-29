@@ -46,16 +46,22 @@ export async function mount(o: {
   return s
 }
 
+/** The keys `press` knows by name alone. */
+const NAMED_KEYS = new Map<string, (input: Session["mockInput"]) => void>([
+  ["tab", (m) => m.pressTab()],
+  ["enter", (m) => m.pressEnter()],
+  ["esc", (m) => m.pressEscape()],
+  ["space", (m) => m.pressKey(" ")],
+])
+
 /**
  * One key: `tab`, `enter`, `esc`, `up`/`down`/`left`/`right`, `space`, `type:<text>` (`\s` is a space), `C-<key>` (ctrl) or any single key
  * (`wait:<ms>` sleeps). Does not render.
  */
 export async function press(s: Session, k: string) {
-  if (k === "tab") s.mockInput.pressTab()
-  else if (k === "enter") s.mockInput.pressEnter()
-  else if (k === "esc") s.mockInput.pressEscape()
+  const named = NAMED_KEYS.get(k)
+  if (named) named(s.mockInput)
   else if (["down", "up", "left", "right"].includes(k)) s.mockInput.pressArrow(k as "down" | "up" | "left" | "right")
-  else if (k === "space") s.mockInput.pressKey(" ")
   else if (k.startsWith("wait:"))
     await sleep(Number(k.slice(5))) // e.g. let code highlighting land
   else if (k.startsWith("type:"))
