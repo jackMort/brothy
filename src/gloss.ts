@@ -3,7 +3,7 @@
 import { clip, cleanSummary, type ChatReq } from "./ai"
 import * as aiConfig from "./ai-config"
 import type { GlossStyle } from "./ai-config"
-import { width, wrap } from "./markdown"
+import { width, wrap } from "./text"
 import { cached } from "./nav"
 import { noteSections, sectionId, sectionSource } from "./sections"
 import { safeLine } from "./spans"

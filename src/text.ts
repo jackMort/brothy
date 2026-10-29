@@ -1,5 +1,5 @@
 // Text helpers every module shares: display width, graphemes, span width and merging, cutting to a width,
-// number words, `clamp` and superscript digits. Pure, and a leaf: it imports nothing but the `Span` type.
+// word wrapping (`wrap`), number words, `clamp` and superscript digits. Pure, and a leaf: it imports nothing but the `Span` type.
 
 import type { Span } from "./spans"
 
@@ -104,6 +104,78 @@ export function truncateLeft(s: string, max: number): string {
     w += gw
   }
   return "…" + s
+}
+
+// ------------------------------------------------------------- wrapping
+
+/**
+ * Word-wrap styled spans to `max` columns. `first`/`rest` are prefixes drawn
+ * on the first and following rows (indentation, bullets, quote bars).
+ * A "\n" inside a span forces a hard break. With `preserve`, whitespace is
+ * kept verbatim and rows break only at "\n" or by hard-chopping (code).
+ * Text is cut on grapheme boundaries and measured per grapheme.
+ */
+export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[] = first, preserve = false): Span[][] {
+  const rows: Span[][] = []
+  let row: Span[] = first.map((s) => ({ ...s }))
+  let w = spanWidth(first)
+  let base = w
+  let pendingSpace: Span | null = null
+  const newRow = () => {
+    rows.push(row)
+    row = rest.map((s) => ({ ...s }))
+    w = spanWidth(rest)
+    base = w
+    pendingSpace = null
+  }
+  /** Place text grapheme by grapheme, starting a new row when one would overflow. */
+  const place = (s: Span, text: string) => {
+    for (const g of graphemes(text)) {
+      const gw = width(g)
+      if (w + gw > max && w > base) newRow()
+      pushSpan(row, { ...s, text: g })
+      w += gw
+    }
+  }
+  if (preserve) {
+    for (const s of spans) {
+      s.text.split("\n").forEach((seg, i) => {
+        if (i > 0) newRow()
+        place(s, seg)
+      })
+    }
+    rows.push(row)
+    return rows
+  }
+  for (const s of spans) {
+    const parts = s.text.split(/(\n|[ \t]+)/)
+    for (const part of parts) {
+      if (!part) continue
+      if (part === "\n") {
+        newRow()
+        continue
+      }
+      if (/^[ \t]+$/.test(part)) {
+        if (w > base) pendingSpace = { ...s, text: " " }
+        continue
+      }
+      const pw = width(part)
+      const sp = pendingSpace ? 1 : 0
+      if (w > base && w + sp + pw > max) newRow()
+      else if (pendingSpace) {
+        pushSpan(row, pendingSpace)
+        w += 1
+      }
+      pendingSpace = null
+      if (pw > max - base) place(s, part)
+      else {
+        pushSpan(row, { ...s, text: part })
+        w += pw
+      }
+    }
+  }
+  rows.push(row)
+  return rows
 }
 
 // ------------------------------------------------------------- numbers

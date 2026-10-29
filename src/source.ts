@@ -7,8 +7,9 @@ import { themes, type Theme } from "./theme"
 
 import { parseFrontMatter } from "./frontmatter"
 import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf } from "./lexer"
-import { CALLOUT_KINDS, calloutKind, calloutOf, inline, pad, plainOf, wrap, type Heading, type Line, type RenderOpts, type Rendered } from "./markdown"
+import { CALLOUT_KINDS, calloutKind, calloutOf, inline, pad, plainOf, type Heading, type Line, type RenderOpts, type Rendered } from "./markdown"
 import { A, type Span } from "./spans"
+import { wrap } from "./text"
 
 /** A heading found on source lines, keyed by its first line. */
 interface SourceHeading {

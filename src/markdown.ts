@@ -1,6 +1,6 @@
 // The Preview renderer: Markdown in, pre-wrapped styled lines out (`Span[]` per `Line`) at a given width, with each
 // heading's line and the link targets. Pure apart from reading the code-highlight cache. Scrolling, heading jumps and
-// search work on these exact line indexes, so a rendering change must keep the line↔heading mapping. Holds `wrap`,
+// search work on these exact line indexes, so a rendering change must keep the line↔heading mapping. Holds the
 // inline spans, callouts, blocks and tables; the lexer, front matter, Source view and stats have their own modules.
 
 import type { Token, Tokens } from "marked"
@@ -11,7 +11,7 @@ import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
 import { isWikilink, lexBlocks, lexInline, normalize, stripComments, tokenOf, wikiLabel } from "./lexer"
 import { A, safe, type Span } from "./spans"
-import { graphemes, pushSpan, spanWidth, width } from "./text"
+import { graphemes, pushSpan, spanWidth, width, wrap } from "./text"
 
 export { A, width }
 export type { Span }
@@ -70,78 +70,6 @@ export interface RenderOpts {
 }
 
 const maxOf = (xs: number[], init = 0) => xs.reduce((m, x) => (x > m ? x : m), init)
-
-// ---------------------------------------------------------------- wrapping
-
-/**
- * Word-wrap styled spans to `max` columns. `first`/`rest` are prefixes drawn
- * on the first and following rows (indentation, bullets, quote bars).
- * A "\n" inside a span forces a hard break. With `preserve`, whitespace is
- * kept verbatim and rows break only at "\n" or by hard-chopping (code).
- * Text is cut on grapheme boundaries and measured per grapheme.
- */
-export function wrap(spans: Span[], max: number, first: Span[] = [], rest: Span[] = first, preserve = false): Span[][] {
-  const rows: Span[][] = []
-  let row: Span[] = first.map((s) => ({ ...s }))
-  let w = spanWidth(first)
-  let base = w
-  let pendingSpace: Span | null = null
-  const newRow = () => {
-    rows.push(row)
-    row = rest.map((s) => ({ ...s }))
-    w = spanWidth(rest)
-    base = w
-    pendingSpace = null
-  }
-  /** Place text grapheme by grapheme, starting a new row when one would overflow. */
-  const place = (s: Span, text: string) => {
-    for (const g of graphemes(text)) {
-      const gw = width(g)
-      if (w + gw > max && w > base) newRow()
-      pushSpan(row, { ...s, text: g })
-      w += gw
-    }
-  }
-  if (preserve) {
-    for (const s of spans) {
-      s.text.split("\n").forEach((seg, i) => {
-        if (i > 0) newRow()
-        place(s, seg)
-      })
-    }
-    rows.push(row)
-    return rows
-  }
-  for (const s of spans) {
-    const parts = s.text.split(/(\n|[ \t]+)/)
-    for (const part of parts) {
-      if (!part) continue
-      if (part === "\n") {
-        newRow()
-        continue
-      }
-      if (/^[ \t]+$/.test(part)) {
-        if (w > base) pendingSpace = { ...s, text: " " }
-        continue
-      }
-      const pw = width(part)
-      const sp = pendingSpace ? 1 : 0
-      if (w > base && w + sp + pw > max) newRow()
-      else if (pendingSpace) {
-        pushSpan(row, pendingSpace)
-        w += 1
-      }
-      pendingSpace = null
-      if (pw > max - base) place(s, part)
-      else {
-        pushSpan(row, { ...s, text: part })
-        w += pw
-      }
-    }
-  }
-  rows.push(row)
-  return rows
-}
 
 // ---------------------------------------------------------------- inline
 

@@ -3,11 +3,11 @@
 import { dirname, resolve, sep } from "node:path"
 import type { Change, DeltaNote } from "./delta"
 import { folderOf, fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
-import { stripCode, wrap, type LinkTarget, type Property, type Stats } from "./markdown"
+import { stripCode, type LinkTarget, type Property, type Stats } from "./markdown"
 import { hitSpans } from "./rows"
 import { headingKey } from "./sections"
 import { A, safeLine, type Span } from "./spans"
-import { plural, spanWidth, truncate, truncateLeft, width } from "./text"
+import { plural, spanWidth, truncate, truncateLeft, width, wrap } from "./text"
 import { mix, type Theme } from "./theme"
 
 export { headingKey } from "./sections"
