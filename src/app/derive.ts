@@ -1,7 +1,8 @@
 // The app's derived data: the memoized builders (`makeMemo`) and `derive()`, everything computed from the store.
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
+// Its steps, one per area, live in derive/steps.ts.
 import { existsSync } from "node:fs"
-import { rankNotes, SCAN_LIMIT, visibleRows, type FileNode } from "../notes/files"
+import { rankNotes, visibleRows, type FileNode } from "../notes/files"
 import { render, type Geometry, type Rendered } from "../markdown/render"
 import { normalize } from "../markdown/lexer"
 import { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "../markdown/frontmatter"
@@ -9,23 +10,22 @@ import { stats, wordStats, type Stats } from "../markdown/stats"
 import type { HeadingStyle } from "../markdown/heading-style"
 import { renderSource } from "../markdown/source"
 import { lineText } from "../lib/spans"
-import { clamp, wrap } from "../lib/text"
+import { clamp } from "../lib/text"
 import { readDoc, type DocFile } from "../notes/doc"
-import { STDIN, projectRoot } from "../notes/workspace"
+import { STDIN } from "../notes/workspace"
 import { layout } from "../ui/layout"
 import { themes, type Theme } from "../theme/theme"
 import { MAX_BYTES } from "../notes/stdin"
-import { fsDirIO, loadProjects, openRows, type OpenRow, type ProjectEntry } from "../notes/projects"
-import { firstHit, isStop, recentSection, searchVault, switchRows, type SwitchRow, type VaultIndex } from "../notes/vault"
+import { fsDirIO, loadProjects, openRows, type ProjectEntry } from "../notes/projects"
+import { recentSection, searchVault, switchRows, type VaultIndex } from "../notes/vault"
 import { miniInk } from "../ui/minimap"
 import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
-import { cached, findLines, matchIndex, relocate, remapTop } from "../ui/nav"
-import { cleanSummary, noteText, shortModel } from "../ai/client"
-import { PROMPTS, resolveAI, type AIConfig, type GlossStyle } from "../ai/config"
-import { askCandidates, askRows, questionOf, rerankCost, type AskState, type Candidate } from "../ai/ask"
-import { isFresh, textHash } from "../ai/cache"
-import { glossTarget, parseGlossStyle, type GlossState, type GlossTarget } from "../ai/gloss"
-import { noteTitle } from "../ui/status"
+import { cached, findLines, matchIndex } from "../ui/nav"
+import { cleanSummary, noteText } from "../ai/client"
+import { resolveAI, type AIConfig } from "../ai/config"
+import { askCandidates, askRows, rerankCost, type AskState, type Candidate } from "../ai/ask"
+import { textHash } from "../ai/cache"
+import { glossTarget } from "../ai/gloss"
 import {
   extractLinks,
   fmtSize,
@@ -33,18 +33,29 @@ import {
   outlineRows,
   resolveLink,
   type ChangeState,
-  type ChangeView,
   type FileMeta,
   type InfoItem,
   type LinkRef,
   type SummaryState,
-  type SummaryView,
 } from "../ui/panel"
-import { diffSections, hhmm, parseDelta, type Change, type DeltaNote } from "../ai/delta"
-import { pageSlice, sectionAt, sectionRanges, typewriterTop, wordSuffix } from "../ui/zen"
+import { diffSections, parseDelta, type Change, type DeltaNote } from "../ai/delta"
+import { sectionRanges, wordSuffix } from "../ui/zen"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import type { View } from "../system/config"
-import { NO_CANDS, NO_CHANGES, NO_NOTES, jobKey, type FileRow, type Job, type UI } from "./store"
+import type { FileRow, Job, UI } from "./store"
+import {
+  filesCursor,
+  filesList,
+  glossSheet,
+  infoPanel,
+  matchState,
+  noteView,
+  openerList,
+  readingWindow,
+  scrollState,
+  switcherList,
+  truncationNote,
+} from "./derive/steps"
 
 /** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
 export function makeMemo(stdin: string | undefined) {
@@ -178,10 +189,10 @@ export function makeMemo(stdin: string | undefined) {
   }
 }
 /** The memo table: one `cached` builder per derived value. */
-type Memo = ReturnType<typeof makeMemo>
+export type Memo = ReturnType<typeof makeMemo>
 
 /** A scroll entry: the top line and the geometry it was taken at, so a re-layout can remap it. */
-interface ScrollEntry {
+export interface ScrollEntry {
   top: number
   geo: Geometry
 }
@@ -203,164 +214,29 @@ export interface DeriveRefs {
 
 /** `derive()` over these refs. */
 export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen }: DeriveRefs) {
-  /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. */
+  /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. The steps run in this order. */
   return () => {
     const s = ui.current
     const L = layout(dims.current.W, dims.current.H, s)
     const t = themes[s.themeIdx]!
-    const file = s.openPath ? memo.read(s.openPath, s.reload) : null
-    const src = file?.src ?? ""
-    const fm = memo.fm(src)
-    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headingStyle)
-    const view = s.source ? memo.source(src, L.CW, t, s.linkTree) : doc
-    const st = memo.stats(fm.body)
-    const filtered = s.filter.trim() !== ""
-    const ranked = filtered ? memo.rank(s.tree, s.filter) : null
-    const rows: FileRow[] = ranked ? ranked.rows : memo.rows(s.tree, s.expanded)
-    const total = ranked?.total ?? 0
-
-    // panel: strip and rule rows, then the view's list; Files pins the truncation note under it
-    const note =
-      s.view === "files" && s.tree.truncated
-        ? wrap([{ text: `scan stopped at ${SCAN_LIMIT / 1000}k entries — some notes missing` }], L.PNW - 2).map((r) => r.map((x) => x.text).join(""))
-        : []
-    const props = memo.props(src)
-    const links = memo.links(memo.linkTargets(fm.body), s.linkTree, s.openPath)
-    const saved = s.openPath ? s.summaries[s.openPath] : undefined
-    const job = s.openPath ? jobs.current.get(jobKey("tldr", s.openPath)) : undefined
-    // primitives into memo.info, never a fresh object, so the single-entry memo holds
-    const sv: SummaryView | null =
-      !s.ai || !s.openPath || !file || file.error
-        ? null
-        : job
-          ? { text: memo.clean(job.raw), state: "streaming", model: "" }
-          : saved
-            ? { text: saved.summary, state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated", model: shortModel(saved.model) }
-            : { text: "", state: "none", model: "" }
-    const title = noteTitle(props, s.openPath ?? "")
-    // a live reload's changes: the open note against the text it had when it opened (memory only)
-    const base = s.baseline && s.baseline.path === s.openPath && file && !file.error ? s.baseline : null
-    const after = memo.note(src)
-    const propsKey = memo.propsKey(fm)
-    const changes = base ? memo.diff(base.text, after) : NO_CHANGES
-    const propsChanged = !!base && propsKey !== base.props
-    const dl = s.delta && s.delta.path === s.openPath ? s.delta : null
-    const dJob = dl ? jobs.current.get(jobKey("delta", dl.path)) : undefined
-    const live = dl && dJob ? memo.partial(dJob.raw, dl.changes) : null
-    // loading, else the reply while nothing changed since the explained text, else the idle list
-    const cv: ChangeView | null =
-      dl && dJob
-        ? { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
-        : dl?.result && changes !== null && !changes.length // null: too large to compare, not unchanged
-          ? { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
-          : base && changes?.length
-            ? { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
-            : null
-    const infoRows = memo.info(
-      props,
-      st,
-      links,
-      L.PNW - 2,
-      file?.info ?? null,
-      sv?.text ?? "",
-      sv?.state ?? "",
-      sv?.model ?? "",
-      cv?.state ?? "",
-      cv?.label ?? "",
-      cv?.changes ?? NO_CHANGES,
-      cv?.summary ?? "",
-      cv?.notes ?? NO_NOTES,
-      title,
-    )
-    const linkRows = memo.linkIdx(infoRows)
-    const question = s.switcher ? questionOf(s.switcher.q) : null
-    const askState = s.switcher?.ask
-    // ranking waits for a complete index, then re-runs whenever it changes (ixVer)
-    const askCands = question && askState?.queries && !s.indexing ? memo.cands(vault.current.ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
-    const askCost = question && askCands.length ? memo.cost(question.text, askCands, vault.current.ix, s.ixVer) : ""
-    const swRows: SwitchRow[] = !s.switcher
-      ? []
-      : question
-        ? memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null)
-        : memo.switch(vault.current.ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
-    // the highlight always sits on a stop (results change under it while typing or indexing)
-    const swAt = s.switcher ? swRows[s.switcher.hl] : undefined
-    const swHl = s.switcher && swAt && isStop(swAt) ? s.switcher.hl : firstHit(swRows)
-    const opRows: OpenRow[] = s.opener ? memo.open(s.opener.list, s.opener.q, s.root, projectRoot(s)) : []
-    const opAt = s.opener ? opRows[s.opener.hl] : undefined
-    const opHl = s.opener && opAt && opAt.kind !== "header" ? s.opener.hl : firstHit(opRows)
-    const filterRow = (s.view === "files" && (s.filterTyping || s.filter !== "")) || (s.view === "outline" && (s.filterTyping || s.outlineFilter !== ""))
-    const LH = Math.max(1, L.bodyH - 2 - (filterRow ? 1 : 0) - note.length)
-
-    // when the Files list changes, put the cursor back on the same note
-    const seen = sidebarSeen.current
-    if (rows !== seen.rows) {
-      const paths = rows.map((r) => r.node.path)
-      // filter results keep the cursor's note when it is still listed, else start on the top result
-      const r = filtered ? relocate(paths, [seen.cursorPath], 0, 0, LH) : relocate(paths, [seen.cursorPath, s.openPath], s.cursor, s.listTop.files, LH)
-      s.cursor = r.cursor
-      s.listTop.files = r.sideTop
-      seen.rows = rows
-      seen.cursorPath = paths[s.cursor] ?? null
-    }
-
-    const scrollKey = `${s.openPath}:${s.source ? "source" : "preview"}`
-    const geo = memo.geo(view)
-    // typewriter: the scroll top *is* the reading line, so it may go down to the last line
-    const tw = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.typewriter
-    // pages: the scroll top is the page anchor (its section is the page), so it may be any line too
-    const pages = L.zen && s.zenCfg.flow === "pages"
-    const maxTop = tw || pages ? Math.max(0, view.lines.length - 1) : Math.max(0, view.lines.length - L.CH)
-    const entry = scrolls.current.get(scrollKey)
-    if (entry && entry.geo !== geo) {
-      // re-laid out (resize, reload): keep the reading position
-      entry.top = remapTop(entry.top, entry.geo, geo)
-      entry.geo = geo
-    }
-    const top = Math.max(0, Math.min(entry?.top ?? 0, maxTop))
-    const matches = memo.matches(view, s.query)
-    // a re-wrap (w, resize, live reload) moves every match line: keep the same match index
-    const prev = matchSeen.current
-    if (prev.query === s.query && prev.matches !== matches && s.matchLine !== null) {
-      const i = prev.matches.indexOf(s.matchLine)
-      s.matchLine = matches[i] ?? null
-    }
-    matchSeen.current = { matches, query: s.query }
+    const opened = noteView(s, L, t, memo)
+    const { file, fm, doc, view, st } = opened
+    const files = filesList(s, memo)
+    const { filtered, rows, total } = files
+    const note = truncationNote(s, L)
+    const { props, title, changes, propsChanged, after, propsKey, cv, infoRows, linkRows } = infoPanel(s, L, opened, memo, jobs.current)
+    const { question, askCands, swRows, swHl } = switcherList(s, memo, vault.current.ix)
+    const { opRows, opHl } = openerList(s, memo)
+    const { filterRow, LH } = filesCursor(s, L, files, note.length, sidebarSeen.current)
+    const scroll = scrollState(s, L, view, memo, scrolls.current)
+    const { scrollKey, geo, maxTop, top, tw } = scroll
+    const matches = matchState(s, view, memo, matchSeen)
     // the heading the reader is in: last one at (or just above) the top line
     const currentHeading = view.headings.findLastIndex((h) => h.line <= top + 1)
     const oRows = memo.outline(view.headings, currentHeading, s.outlineFilter)
-    // zen gloss: the section under the reading line (currentHeading is sectionOf(view.headings, top)) and the sheet on screen
-    // only with an ai block, or a gloss still running (`a` cancels it after the block goes)
-    const glossing = !!s.ai || [...jobs.current.keys()].some((k) => k.startsWith("gloss:"))
-    const gHere: GlossTarget | null = L.zen && glossing && s.openPath && file && !file.error ? memo.gloss(src, currentHeading, s.openPath, title) : null
-    const gHash = memo.glossHash(gHere?.text ?? "")
-    const gStyle: GlossStyle = parseGlossStyle(s.ai?.gloss)
-    let sheet: { state: GlossState; heading: string; text: string; fadeAt: number | null } | null = null
-    const g = L.zen && s.ai ? s.gloss : null
-    if (g) {
-      const job = jobs.current.get(jobKey("gloss", g.id))
-      const e = s.glosses?.[g.key]
-      // the sheet's own section: the live hash while it is the reading section, else the one taken when it was shown
-      const hash = gHere?.id === g.id ? gHash : g.hash
-      if (job) sheet = { state: "loading", heading: g.heading, text: memo.glossClean(job.raw), fadeAt: g.fadeAt }
-      else if (e) sheet = { state: isFresh(e, hash, PROMPTS.gloss) ? "result" : "outdated", heading: g.heading, text: e.gloss, fadeAt: g.fadeAt }
-    }
+    const { gHere, gHash, gStyle, sheet } = glossSheet(s, L, opened, currentHeading, title, memo, jobs.current)
     const sideFocus: View | null = L.shown && s.focus === "panel" ? s.view : null
-    const ranges = memo.ranges(view)
-    /** Spotlight: the section kept bright (the one holding the reading / top line) */
-    const spot = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.spotlight ? (ranges[sectionAt(ranges, top)] ?? null) : null
-    /** Rows on screen: row `i` shows line `first + i` when it lies in `lo..hi` (blank otherwise). */
-    let win = { first: tw ? typewriterTop(top, L.CH) : top, lo: 0, hi: view.lines.length }
-    let pg: { index: number; count: number; start: number; end: number; top: number; maxTop: number } | null = null
-    if (pages) {
-      const index = sectionAt(ranges, top)
-      const [start, end] = ranges[index]!
-      const slice = pageSlice([start, end], L.CH, top - start)
-      pg = { index, count: ranges.length, start, end, top: slice.top, maxTop: start + Math.max(0, end - start - L.CH) }
-      win = { first: slice.top - slice.pad, lo: slice.top, hi: end }
-    }
-    /** Teleprompter option in effect (scroll flow only) */
-    const prompter = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.prompter
+    const { ranges, spot, win, pg, prompter } = readingWindow(s, L, view, scroll, memo)
     return {
       s,
       L,
