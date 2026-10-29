@@ -72,9 +72,9 @@ export interface Base extends DeriveRefs {
   welcome: { current: WelcomeState }
 }
 
-/** The app context: `base` plus fades, toasts and config saves, then scrolling, opening a note, the Files cursor and focus. */
-export function makeCtx(base: Base) {
-  const { ui, set, bump, derive, timers, scrolls, sidebarSeen, zenBack } = base
+/** Fades, toasts and config saves. */
+function makeFeedback(base: Base) {
+  const { ui, set, bump, timers } = base
   /** Re-render through a fade: wait out `hold` after `at()`, then step every GHOST_STEP until hidden, then `done()`. */
   const runFade = (slot: "ghost" | "hints" | "toast" | "gloss", at: () => number | null, hold: number, done: () => void) => {
     clearTimeout(timers.current[slot])
@@ -111,7 +111,12 @@ export function makeCtx(base: Base) {
     return ok
   }
 
-  // navigation: scroll, open a note, move the Files cursor, focus the panel or the document
+  return { runFade, flash, persist }
+}
+
+/** Scrolling the document: an explicit move, the teleprompter's stop, a find match. */
+function makeScroll(base: Base) {
+  const { ui, set, bump, derive, timers, scrolls, zenBack } = base
   const setTop = (n: number) => {
     zenBack.current = null // an explicit move (keys, find, jump, teleprompter tick) drops the exact restore
     const d = derive()
@@ -127,6 +132,20 @@ export function makeCtx(base: Base) {
     if (ui.current.rolling) set({ rolling: false })
   }
 
+  /** Scroll so match line `m` sits a third of the way down (on the reading line in typewriter), and make it current. */
+  const showMatch = (m: number) => {
+    stopRolling()
+    ui.current.matchLine = m
+    const d = derive()
+    setTop(d.tw || d.pg ? m : m - Math.floor(d.L.CH / 3))
+  }
+
+  return { setTop, scrollBy, stopRolling, showMatch }
+}
+
+/** Opening a note (history, the folders above it) and the Files cursor. */
+function makeOpening(base: Base) {
+  const { ui, set, derive, timers, sidebarSeen } = base
   /** The open note's scroll entry, as history keeps it. */
   const currentSpot = (): Spot | null => {
     if (!ui.current.openPath) return null
@@ -174,6 +193,12 @@ export function makeCtx(base: Base) {
     set({ expanded: next })
   }
 
+  return { currentSpot, openFile, selectRow, toggleDir }
+}
+
+/** The panel: its saved layout, the shown view, focus on the panel or the document. */
+function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof makeOpening>) {
+  const { ui, set, derive, timers, persist, selectRow } = c
   /** Save the panel layout field that changed (`view` on change, `hidden` only by ^b inline); saveConfig merges it per field. */
   const saveSidebar = (patch: Partial<SidebarConfig>) => persist({ sidebar: patch, folds: undefined })
 
@@ -230,33 +255,13 @@ export function makeCtx(base: Base) {
     set({ focus: "doc", drawerOpen: false, filterTyping: false, recent: remember(s.recent, s.openPath), history: keep(s.history) })
   }
 
-  /** Scroll so match line `m` sits a third of the way down (on the reading line in typewriter), and make it current. */
-  const showMatch = (m: number) => {
-    stopRolling()
-    ui.current.matchLine = m
-    const d = derive()
-    setTop(d.tw || d.pg ? m : m - Math.floor(d.L.CH / 3))
-  }
+  return { saveSidebar, selectView, panelViews, focusPanel, focusDoc }
+}
 
-  return {
-    ...base,
-    runFade,
-    flash,
-    persist,
-    setTop,
-    scrollBy,
-    stopRolling,
-    currentSpot,
-    openFile,
-    selectRow,
-    toggleDir,
-    saveSidebar,
-    selectView,
-    panelViews,
-    focusPanel,
-    focusDoc,
-    showMatch,
-  }
+/** The app context: `base` plus fades, toasts and config saves, then scrolling, opening a note, the Files cursor and focus. */
+export function makeCtx(base: Base) {
+  const core = { ...base, ...makeFeedback(base), ...makeScroll(base), ...makeOpening(base) }
+  return { ...core, ...makeFocus(core) }
 }
 /** What every `src/app/*` factory takes. */
 export type AppCtx = ReturnType<typeof makeCtx>
