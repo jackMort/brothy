@@ -10,8 +10,8 @@ import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProper
 import { safeLine } from "./spans"
 import { Row } from "./app/Row"
 import { AI_FRAME, MAX_JOBS, jobKey, type JobKind } from "./app/ai-jobs"
-import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, type FileRow, type Focus, type Spot, type UI, initUI } from "./app/store"
-import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, type Ctx, type KeyId, type Mode } from "./app/keymap"
+import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
+import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { MAX_BYTES } from "./stdin"
 import { readDoc, type DocFile } from "./doc"
 import { STDIN, projectRoot, workspace } from "./workspace"
@@ -214,6 +214,15 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const ctxSeen = useRef<Ctx | null>(null)
   /** the note and section the gloss auto-show last ran for (null: outside zen) */
   const glossSeen = useRef<string | null>(null)
+  /** false once unmounted: late timers and AI or highlight results drop their update */
+  const alive = useRef(true)
+  /** the document and the theme sample whose code highlighting was last asked for */
+  const hlSeen = useRef<Rendered | null>(null)
+  const hlSample = useRef<Rendered | null>(null)
+  /** `leave` has run: the last project record is written once */
+  const left = useRef(false)
+  /** the welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size */
+  const welcome = useRef({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle" as "idle" | "live" | "done", at: 0, W, H })
 
   /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. */
   const derive = () => {
@@ -413,6 +422,12 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       oRows,
       outlineCur: clampIdx(s.outlineCur, oRows.length),
     }
+  }
+  /** Context id outside popups and zen: the focused panel view, else the document. */
+  const docMode = (): Ctx => {
+    const v = derive().sideFocus
+    if (v && ui.current.filterTyping) return "filter"
+    return v ? `panel:${v}` : "doc"
   }
 
   // ---------------------------------------------------- actions
@@ -1216,7 +1231,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     saveProjects(rememberProject(loadProjects(), { root: projectRoot(s), lastNote: s.openPath, ...pos, at: Date.now() }))
   }
   /** The last record, on the way out: `q`, C-c and the renderer's end (OpenTUI's exit signals) all come here, once. */
-  const left = useRef(false)
   const leave = () => {
     if (left.current) return
     left.current = true
@@ -1426,16 +1440,10 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     clearTimeout(timers.current.steam)
     for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
   }, [])
-
-  // code blocks render plain first; once their parser results land, re-render the document
-  const alive = useRef(true)
-  const hlSeen = useRef<Rendered | null>(null)
-  const hlSample = useRef<Rendered | null>(null)
   useEffect(() => () => void (alive.current = false), [])
 
   // welcome: the wordmark and bowl ink in once (INK_MS frames) and the steam rises every STEAM_MS, until a key,
   // a resize or a note opening stops it for good (`stopWelcome`); with motion off it is drawn still and inked
-  const welcome = useRef({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle" as "idle" | "live" | "done", at: 0, W, H })
   const stopWelcome = () => {
     const w = welcome.current
     if (w.run !== "live") return
@@ -1462,6 +1470,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     }
     timers.current.steam = setTimeout(step, INK_MS)
   })
+  // code blocks render plain first; once their parser results land, re-render the document
   useEffect(() => {
     const doc = derive().doc
     if (doc === hlSeen.current) return
@@ -1907,15 +1916,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       }
     return false
   }
-
-  /** Context id outside popups and zen: the focused panel view, else the document. */
-  const docMode = (): Ctx => {
-    const v = derive().sideFocus
-    if (v && ui.current.filterTyping) return "filter"
-    return v ? `panel:${v}` : "doc"
-  }
-  /** KEYMAP mode of a context id (`panel:files` → `files`). */
-  const modeOf = (c: Ctx): Mode => (c.startsWith("panel:") ? (c.slice(6) as Mode) : (c as Mode))
 
   useKeyboard((key: KeyEvent) => {
     // C-c quits the same way from every popup and mode (OpenTUI would only end the renderer)

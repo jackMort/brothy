@@ -180,6 +180,9 @@ export const HELP_GROUPS: HelpGroup[] = HELP_SECTIONS.map(([modes, title]) => ({
     .map((d) => ({ keys: d.label, desc: d.desc! })),
 }))
 
+/** KEYMAP mode of a context id (`panel:files` → `files`). */
+export const modeOf = (c: Ctx): Mode => (c.startsWith("panel:") ? (c.slice(6) as Mode) : (c as Mode))
+
 /** Direction of a paired binding (j/k, d/u, space/b, …): true for the "forward" key. */
 export const isDown = (k: KeyEvent) => ["j", "down", "d", "space", "pagedown"].includes(k.name) || (k.ctrl && k.name === "f")
 
