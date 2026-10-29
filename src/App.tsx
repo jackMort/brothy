@@ -1,45 +1,45 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
-import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs"
+import { closeSync, existsSync, openSync, statSync } from "node:fs"
 import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode, type TreeRow } from "./files"
+import { SCAN_LIMIT, ancestorsOf, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
-import { drop, go, keep, startHistory, stepTo, visit, type History } from "./history"
+import { drop, go, keep, startHistory, stepTo, visit } from "./history"
 import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
-import { safe, safeLine } from "./spans"
+import { safeLine } from "./spans"
+import { Row } from "./app/Row"
+import { AI_FRAME, MAX_JOBS, jobKey, type JobKind } from "./app/ai-jobs"
+import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
+import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { MAX_BYTES } from "./stdin"
+import { readDoc, type DocFile } from "./doc"
+import { STDIN, projectRoot, workspace } from "./workspace"
+import { DRAWER_BELOW, layout } from "./layout"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
 import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, fitHits, hitSpans as markHits, usePointer, type PickerItem } from "./overlay"
-import { helpLayout, type HelpGroup } from "./help"
+import { helpLayout } from "./help"
 import { STEAM_MS, STILL_TICK, WELCOME_RECENTS, welcomeFit } from "./welcome"
 import { INK_MS, INK_STEPS } from "./chrome"
 import { fsDirIO, loadProjects, openRows, projectName, remember as rememberProject, saveProjects, tildify, type OpenRow, type ProjectEntry } from "./projects"
 import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, isStop, refreshIndex, nextSection, recentSection, remember, searchVault, stepRow, switchRows, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit, type VaultIndex } from "./vault"
-import { MINI_COLS, MINI_MIN_W, MINI_W, miniCells, miniColors, miniInk, miniJump } from "./minimap"
+import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniInk, miniJump } from "./minimap"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "./peek"
 import { filterFamilies, onlyMode, paneLines, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, sampleView, themeSplit, type ThemePick } from "./themepick"
 import { VIEWS, loadConfig, saveConfig, type Config, type SidebarConfig, type View } from "./config"
-import { cached, copiedCount, findLines, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry, type LinkSpot } from "./nav"
+import { cached, copiedCount, findLines, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchIndex, matchKey, narrowLabels, overlayAt, relocate, remapTop, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry } from "./nav"
 import { watchPath } from "./watch"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
 import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, resolveAI, shortModel, stripThink, summarize, type AIConfig, type AITarget, type Failure } from "./ai"
 import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askCandidates, askLocate, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, type AskState, type Candidate } from "./ask"
-import { isFresh, loadGlosses, loadSummaries, saveGlosses, saveSummaries, textHash, type Gloss, type Glosses, type Summaries } from "./summaries"
+import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "./summaries"
 import { GLOSS_MAX, GLOSS_ROWS, glossKey, glossRequest, glossRows, glossRule, glossTarget, parseGlossStyle, type GlossState, type GlossStyle, type GlossTarget } from "./gloss"
-import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type Toast, type ToastKind } from "./status"
-import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type OutlineRow, type SummaryState, type SummaryView } from "./panel"
+import { LOGO, LOGO_HOLD, errText, tooSmall, TOAST_HOLD, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, nextToast, noteTitle, progressLabel, toastIcon, toastStep, truncate, truncateLeft, type HintItem, type ToastKind } from "./status"
+import { extractLinks, findHeading, fmtNum, headingKey, fmtSize, infoItems, linkDest, outlineRows, plural, resolveLink, type ChangeState, type ChangeView, type FileMeta, type InfoItem, type LinkRef, type SummaryState, type SummaryView } from "./panel"
 import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, diffSections, hhmm, parseDelta, quoteNeedle, reloadToast, type Change, type DeltaNote } from "./delta"
 import { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, prompterRate, sectionAt, stepMeasure, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
 export const VERSION = "0.2.0"
-
-/** Where keys go: the panel (when shown) or the document. */
-type Focus = "doc" | "panel"
-/** Find popup: `hl` is the highlighted row; -1 means "not moved yet". */
-type Prompt = { value: string; hl: number; top: number } | null
-/** A Files list row; filter results carry the matched code points of the note's name. */
-type FileRow = TreeRow & { hits?: number[] }
 
 export interface AppProps {
   root: string
@@ -59,30 +59,6 @@ export interface AppProps {
   motion?: boolean
 }
 
-/** The open path of the piped document: relative, so it can never be a file on disk. */
-export const STDIN = "stdin"
-
-/** Sidebar j/k opens the file under the cursor once it rests this long. */
-const OPEN_DELAY = 100
-/** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
-const MAX_JOBS = 3
-/** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
-type JobKind = "tldr" | "gloss" | "delta" | "ask"
-const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
-/** streamed summary text re-renders at most this often (ms) */
-const AI_FRAME = 100
-/** No candidates: one shared empty list, so the ask memos hold */
-const NO_CANDS: readonly Candidate[] = []
-/** Reading measure: the document never wraps wider than this. */
-const MEASURE = 80
-/** Below this width the panel is a drawer over the text instead of a column beside it. */
-const DRAWER_BELOW = 100
-
-/** Zen chrome without Ghost: the top line stays, mixed this far toward the background. */
-const ZEN_DIM = 0.5
-/** Scrim: the document under an open drawer is mixed this far toward the background. */
-const SCRIM_DIM = 0.62
-
 // ------------------------------------------------------------- helpers
 
 const clampIdx = (i: number, len: number) => Math.max(0, Math.min(i, len - 1))
@@ -91,488 +67,6 @@ const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, row
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
-
-interface DocFile {
-  src: string
-  info: { size: number; mtime: Date } | null
-  error: string | null
-}
-
-/** `_nonce` only busts the cache: live reload and `r` bump it to force a re-read. */
-function readDoc(path: string, _nonce: number): DocFile {
-  try {
-    const st = statSync(path)
-    const info = { size: st.size, mtime: st.mtime }
-    if (!st.isFile()) return { src: "", info: null, error: "not a regular file" }
-    if (st.size > MAX_BYTES) return { src: "", info, error: `file too large (${fmtSize(st.size)}, limit 5 MB)` }
-    return { src: readFileSync(path, "utf8"), info, error: null }
-  } catch (e) {
-    return { src: "", info: null, error: errText(e) }
-  }
-}
-
-function Row({ spans, bg }: { spans: Span[]; bg?: string }) {
-  return (
-    <text bg={bg} wrapMode="none" style={{ height: 1, flexShrink: 0 }}>
-      {spans.map((s, i) => (
-        <span key={i} fg={s.fg} bg={s.bg} attributes={s.attr ?? 0}>
-          {safe(s.text)}
-        </span>
-      ))}
-    </text>
-  )
-}
-
-// ------------------------------------------------------------- keymap
-//
-// One table drives key dispatch, the `?` help popup and the footer hints, so they
-// cannot drift apart. Specs are matched by `matchKey` (`S-g` is G, `C-d` is ^d).
-
-type Mode = "global" | "files" | "doc" | "outline" | "info" | "filter" | "help" | "prompt" | "theme" | "zen" | "zenSettings" | "label" | "switch" | "open"
-/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus). */
-type Ctx = "doc" | `panel:${View}` | "filter" | "zen" | "help" | "prompt" | "theme" | "zenSettings" | "label" | "switch" | "open"
-interface KeyDef {
-  modes: readonly Mode[]
-  keys: readonly string[]
-  /** keys as shown in the help popup */
-  label: string
-  /** help popup description; bindings without one stay out of the popup */
-  desc?: string
-  /** compact keys for the footer (defaults to `label`) */
-  short?: string
-  /** footer word */
-  hint?: string
-  /** help group, when not the one its first mode puts it in (`HELP_SECTIONS`) */
-  group?: string
-}
-
-/** Tree indent stops growing here; deeper rows keep this indent and cut the name. */
-const MAX_DEPTH = 6
-
-const KEYMAP = {
-  views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", short: "1 2 3", desc: "Files · Outline · Info (piped: 1 2 only)", hint: "files/outline/info" },
-  source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview", hint: "source" },
-  width: { modes: ["global"], keys: ["w"], label: "w", desc: "full width / measure", hint: "width" },
-  minimap: { modes: ["global"], keys: ["m"], label: "m", desc: "minimap on / off (saved)", group: "Global" },
-  headings: { modes: ["global"], keys: ["#"], label: "#", desc: "heading style: classic · bars · ladder · rules (saved)", group: "Document" },
-  transparent: { modes: ["global"], keys: ["S-t"], label: "T", desc: "transparent background (saved)" },
-  zen: { modes: ["global"], keys: ["z"], label: "z", desc: "zen mode: only the text (esc leaves)", hint: "zen" },
-  zenSettings: { modes: ["global"], keys: ["S-z"], label: "Z", desc: "zen settings (live preview)", hint: "settings" },
-  sidebar: { modes: ["global"], keys: ["C-b"], label: "^b", desc: "hide / show the panel (drawer below 100 columns)", hint: "panel" },
-  slash: { modes: ["global"], keys: ["/"], label: "/", desc: "find in document · filter the panel list (panel focused)", hint: "find" },
-  switcher: { modes: ["global"], keys: ["C-p"], label: "^p", desc: "go to a note, heading or text (the whole vault)", hint: "go to" },
-  open: { modes: ["global"], keys: ["o"], label: "o", desc: "open a recent project or any path (folder or note)", hint: "open" },
-  focus: { modes: ["global"], keys: ["tab"], label: "tab", desc: "panel ⇄ document", hint: "focus" },
-  theme: { modes: ["global"], keys: ["t"], label: "t", desc: "pick theme · ←→ dark / light", hint: "theme" },
-  reload: { modes: ["global"], keys: ["r"], label: "r", desc: "reload files and AI config" },
-  clear: { modes: ["global"], keys: ["escape"], label: "esc", desc: "clear find · hide gloss · leave zen · panel: clear filter, else back to the document" },
-  help: { modes: ["global"], keys: ["?"], label: "?", desc: "key hints · twice: all keys", hint: "keys" },
-  quit: { modes: ["global"], keys: ["q", "C-c"], label: "q", desc: "quit", hint: "quit" },
-  histBack: { modes: ["global"], keys: ["S-h"], label: "H", short: "H L", desc: "back to the previous note", hint: "history" },
-  histForward: { modes: ["global"], keys: ["S-l"], label: "L", desc: "forward to the next note" },
-  summarize: { modes: ["global"], keys: ["a"], label: "a", desc: "summarize the note (Info tab)", hint: "summarize", group: "AI" },
-  explainChange: { modes: ["global"], keys: ["S-d"], label: "D", desc: "explain what changed on disk", hint: "changes", group: "AI" },
-  edit: { modes: ["global"], keys: ["e"], label: "e", desc: "edit the note in $EDITOR at the top line", hint: "edit" },
-
-  docLine: { modes: ["doc"], keys: ["j", "down", "k", "up"], label: "j k ↑ ↓", short: "j k", desc: "scroll a line", hint: "scroll" },
-  docHalf: { modes: ["doc"], keys: ["d", "C-d", "u", "C-u"], label: "d u", short: "d/u", desc: "half page down / up", hint: "half page" },
-  docPage: { modes: ["doc"], keys: ["space", "pagedown", "C-f", "b", "pageup"], label: "space b", short: "␣ b", desc: "page down / up", hint: "page" },
-  docEnds: { modes: ["doc"], keys: ["g", "home", "S-g", "end"], label: "g G", desc: "top / bottom" },
-  docHeading: { modes: ["doc"], keys: ["]", "}", "[", "{"], label: "[ ]", desc: "previous / next heading", hint: "section" },
-  docMatch: { modes: ["doc"], keys: ["n", "S-n"], label: "n N", short: "n N", desc: "next / previous match", hint: "match" },
-  back: { modes: ["doc"], keys: ["h", "left"], label: "h", desc: "focus the panel" },
-  links: { modes: ["doc"], keys: ["f"], label: "f", desc: "label the links on screen to follow one", hint: "links" },
-
-  zenLine: { modes: ["zen"], keys: ["j", "down", "k", "up"], label: "j k ↑ ↓", short: "j k", desc: "scroll a line", hint: "scroll" },
-  zenHalf: { modes: ["zen"], keys: ["d", "C-d", "u", "C-u"], label: "d u", desc: "half page down / up" },
-  zenPage: { modes: ["zen"], keys: ["space", "pagedown", "C-f", "b", "pageup"], label: "space b", desc: "page down / up" },
-  zenEnds: { modes: ["zen"], keys: ["g", "home", "S-g", "end"], label: "g G", desc: "top / bottom" },
-  zenSection: { modes: ["zen"], keys: ["]", "}", "[", "{"], label: "[ ]", desc: "previous / next section", hint: "section" },
-  zenMeasure: { modes: ["zen"], keys: ["<", ">"], label: "< >", desc: "narrower / wider text (saved)" },
-  zenSpeed: { modes: ["zen"], keys: ["+", "-"], label: "+ -", desc: "teleprompter faster / slower (saved)" },
-  zenGloss: { modes: ["zen"], keys: ["a"], label: "a", desc: "gloss: explain the section you're reading (AI)", hint: "gloss" },
-
-  outlineMove: { modes: ["outline"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Outline: move", hint: "move" },
-  outlineJump: { modes: ["outline"], keys: ["return", "enter"], label: "⏎", desc: "Outline: jump to heading and read", hint: "jump" },
-  outlinePeek: { modes: ["outline"], keys: ["l", "right"], label: "l", desc: "Outline: jump, keep the panel focused", hint: "peek" },
-
-  infoMove: { modes: ["info"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Info: move between links and changes (scroll without them)", hint: "links" },
-  infoOpen: { modes: ["info"], keys: ["return", "enter"], label: "⏎", desc: "Info: open the link · jump to the change", hint: "open" },
-
-  filesMove: {
-    modes: ["files"],
-    keys: ["j", "down", "k", "up", "g", "S-g", "pagedown", "C-d", "pageup", "C-u"],
-    label: "j k g G",
-    short: "↑↓",
-    desc: "Files: move",
-    hint: "move",
-  },
-  filesOpen: { modes: ["files"], keys: ["return", "enter"], label: "⏎", short: "⏎", desc: "Files: read note · toggle folder", hint: "open" },
-  filesPeek: { modes: ["files"], keys: ["l", "right"], label: "l", desc: "Files: open note, keep focus · expand folder" },
-  filesUp: { modes: ["files"], keys: ["h", "left"], label: "h", short: "h l", desc: "Files: collapse folder · go to parent", hint: "fold" },
-  filesTidy: { modes: ["files"], keys: ["-"], label: "-", desc: "Files: fold all but the open note's path", hint: "tidy" },
-
-  filterType: { modes: ["filter"], keys: [], label: "type", desc: "Filter: type to narrow the list (⌫ erases)", hint: "" },
-  filterMove: { modes: ["filter"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", desc: "Filter: move", hint: "" },
-  filterOpen: { modes: ["filter"], keys: ["return", "enter"], label: "⏎", desc: "Filter: open the result", hint: "open" },
-  filterClear: { modes: ["filter"], keys: ["escape"], label: "esc", desc: "Filter: clear and stop typing", hint: "clear" },
-  filterLeave: { modes: ["filter"], keys: ["tab"], label: "tab", desc: "Filter: keep it, back to the document" },
-  filterErase: { modes: ["filter"], keys: ["backspace"], label: "⌫" },
-
-  helpScroll: {
-    modes: ["help"],
-    keys: ["j", "down", "k", "up", "space", "pagedown", "C-d", "b", "pageup", "C-u", "g", "home", "S-g", "end"],
-    label: "j/k",
-    hint: "scroll",
-  },
-  helpClose: { modes: ["help"], keys: ["escape"], label: "esc", hint: "close" },
-
-  promptMove: { modes: ["prompt"], keys: ["down", "up"], label: "↑↓", hint: "select" },
-  promptApply: { modes: ["prompt"], keys: ["return", "enter"], label: "⏎", hint: "apply" },
-  promptClear: { modes: ["prompt"], keys: ["escape"], label: "esc", hint: "clear" },
-  promptErase: { modes: ["prompt"], keys: ["backspace"], label: "⌫" },
-  swType: { modes: ["switch"], keys: [], label: "type", hint: "search" },
-  swMove: { modes: ["switch"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
-  swSection: { modes: ["switch"], keys: ["tab"], label: "tab", hint: "section" },
-  swOpen: { modes: ["switch"], keys: ["return", "enter"], label: "⏎", hint: "open" },
-  swClose: { modes: ["switch"], keys: ["escape"], label: "esc", hint: "close" },
-  swErase: { modes: ["switch"], keys: ["backspace"], label: "⌫" },
-  swAsk: { modes: ["switch"], keys: [], label: "^p ?", desc: "ask: a ? query finds the section that answers", group: "AI" },
-  opType: { modes: ["open"], keys: [], label: "type", hint: "filter · path" },
-  opMove: { modes: ["open"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
-  opComplete: { modes: ["open"], keys: ["tab"], label: "tab", hint: "complete" },
-  opOpen: { modes: ["open"], keys: ["return", "enter"], label: "⏎", hint: "open" },
-  opClose: { modes: ["open"], keys: ["escape"], label: "esc", hint: "close" },
-  opErase: { modes: ["open"], keys: ["backspace"], label: "⌫" },
-  labelType: { modes: ["label"], keys: [], label: "a–z", desc: "Links: type a label", hint: "follow" },
-  labelErase: { modes: ["label"], keys: ["backspace"], label: "⌫", hint: "erase" },
-  labelCancel: { modes: ["label"], keys: ["escape"], label: "esc", hint: "cancel" },
-
-  themeType: { modes: ["theme"], keys: [], label: "type", hint: "filter" },
-  themeMove: { modes: ["theme"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
-  themeMode: { modes: ["theme"], keys: ["tab", "left", "right"], label: "←→", hint: "dark/light" },
-  themeApply: { modes: ["theme"], keys: ["return", "enter"], label: "⏎", hint: "apply" },
-  themeClose: { modes: ["theme"], keys: ["escape"], label: "esc", hint: "close" },
-  themeErase: { modes: ["theme"], keys: ["backspace"], label: "⌫" },
-
-  zsMove: { modes: ["zenSettings"], keys: ["down", "j", "up", "k"], label: "↑↓", hint: "move" },
-  zsToggle: { modes: ["zenSettings"], keys: ["space"], label: "space", hint: "toggle" },
-  zsAdjust: { modes: ["zenSettings"], keys: ["left", "h", "right", "l"], label: "←→", hint: "adjust" },
-  zsSave: { modes: ["zenSettings"], keys: ["return", "enter"], label: "⏎", hint: "save" },
-  zsRevert: { modes: ["zenSettings"], keys: ["escape"], label: "esc", hint: "revert" },
-} as const satisfies Record<string, KeyDef>
-type KeyId = keyof typeof KEYMAP
-const KEY_IDS = Object.keys(KEYMAP) as KeyId[]
-const keyDef = (id: KeyId): KeyDef => KEYMAP[id]
-/** The welcome page's keycaps: [binding, word]. */
-const WELCOME_KEYS: [KeyId, string][] = [["open", "open a project"], ["theme", "theme"], ["help", "keys"], ["quit", "quit"]]
-
-/** Footer hints per context: a binding, optionally with a context-specific word. */
-type Hint = KeyId | [KeyId, string]
-const FOOTERS: Record<Ctx, Hint[]> = {
-  doc: ["docLine", "docPage", "docHeading", ["slash", "find"], "docMatch", "links", "histBack", "edit", ["focus", "panel"], "help"],
-  "panel:files": ["filesMove", "filesOpen", "filesUp", ["slash", "filter"], ["views", "view"], ["focus", "document"], "help"],
-  "panel:outline": ["outlineMove", "outlineJump", "outlinePeek", ["slash", "filter"], ["focus", "document"], "help"],
-  "panel:info": ["infoMove", "infoOpen", "summarize", "explainChange", ["focus", "document"], "help"],
-  filter: ["filterType", "filterMove", "filterOpen", "filterClear"],
-  zen: ["zenLine", "zenSection", "zenGloss", "zenSettings", ["zen", "leave"], "help"],
-  help: ["helpScroll", "helpClose"],
-  prompt: ["promptMove", "promptApply", "promptClear"],
-  theme: ["themeType", "themeMove", "themeMode", "themeApply", "themeClose"],
-  zenSettings: ["zsMove", "zsToggle", "zsAdjust", "zsSave", "zsRevert"],
-  label: ["labelType", "labelErase", "labelCancel"],
-  switch: ["swType", "swMove", "swSection", "swOpen", "swClose"],
-  open: ["opType", "opMove", "opComplete", "opOpen", "opClose"],
-}
-
-const HELP_SECTIONS: [readonly Mode[], string][] = [
-  [["global"], "Global"],
-  [["doc"], "Document"],
-  [["zen"], "Zen"],
-  [["files", "outline", "info", "filter"], "Panel"],
-  [[], "AI"],
-]
-/** The `? ?` sheet's groups: a binding with a description goes to its `group`, else to its first mode's section. */
-const HELP_GROUPS: HelpGroup[] = HELP_SECTIONS.map(([modes, title]) => ({
-  title,
-  entries: KEY_IDS.map(keyDef)
-    .filter((d) => d.desc && (d.group ? d.group === title : modes.includes(d.modes[0]!)))
-    .map((d) => ({ keys: d.label, desc: d.desc! })),
-}))
-
-/** Direction of a paired binding (j/k, d/u, space/b, …): true for the "forward" key. */
-const isDown = (k: KeyEvent) => ["j", "down", "d", "space", "pagedown"].includes(k.name) || (k.ctrl && k.name === "f")
-
-/** Bindings that only make sense with the panel; zen skips them. */
-const ZEN_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "links", "summarize", "explainChange", "edit", "minimap"]
-/** The welcome page has no panel and no note: these would only change the panel, the view or the measure out of sight. */
-const WELCOME_OFF: readonly KeyId[] = ["views", "sidebar", "focus", "back", "summarize", "zen", "zenSettings", "source", "width", "headings"]
-
-// ------------------------------------------------------------- store
-
-/** Where a note was left: its scroll entry (Preview or Source key) at that moment. */
-type Spot = { key: string; top: number; geo: Geometry }
-/** The open note's body (`noteText`) and properties when it was opened or last explained; memory only. */
-type Baseline = { path: string; text: string; props: string; at: number }
-/** `D` for `path`: the changes sent, the text and properties they lead to, and the reply once it is in. */
-type DeltaState = { path: string; changes: Change[]; text: string; props: string; result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null }
-const NO_CHANGES: Change[] = []
-const NO_NOTES: (DeltaNote | undefined)[] = []
-
-/**
- * All UI state lives in one mutable store read at call time, so key handlers never act
- * on a stale render (keys arriving faster than frames used to be dropped).
- */
-interface UI {
-  themeIdx: number
-  /** the `t` picker while open; the app keeps `themeIdx` until ⏎ */
-  themePick: ThemePick | null
-  /** the workspace folder (Files lists it; `o` replaces it) */
-  root: string
-  tree: FileNode
-  /** where wikilinks resolve: the enclosing vault when a single note was opened inside one, else `tree` */
-  linkTree: FileNode
-  /** a piped document's `linkTree` is a placeholder until the first link use scans the folder */
-  linkLazy: boolean
-  /** the session started on stdin and no `o` has replaced it, whichever note is open: no Files tab, no saved view, no project record */
-  piped: boolean
-  /** that vault's root when it differs from `root` (rescanned on reload) */
-  linkRoot: string | null
-  /** open folders (session only; the open note's path is always added) */
-  expanded: Set<string>
-  filter: string
-  /** typing into the panel's filter row */
-  filterTyping: boolean
-  cursor: number
-  /** first visible row of each panel view */
-  listTop: Record<View, number>
-  /** Info cursor the list was last scrolled to: wheel and edge scrolling stick until the cursor moves */
-  infoSeen: string
-  openPath: string | null
-  /** bumped to re-read the open file */
-  reload: number
-  /** bumped to re-arm the file watcher */
-  watchGen: number
-  /** when the last live reload landed (the logo stays bright for `LOGO_HOLD`) */
-  reloadedAt: number | null
-  /** Source instead of Preview */
-  source: boolean
-  focus: Focus
-  /** inline panel hidden (saved by ^b) */
-  hidden: boolean
-  /** full pane width instead of the fixed measure */
-  wide: boolean
-  /** braille minimap on (saved by m; drawn from MINI_MIN_W columns, never in zen) */
-  minimap: boolean
-  /** heading style (saved by #) */
-  headings: HeadingStyle
-  /** main surfaces unpainted: the terminal background shows through (saved by T) */
-  transparent: boolean
-  /** animations on (prop, else config `motion`; always off under `bun test` unless the prop is given) */
-  motion: boolean
-  /** drawer open (below DRAWER_BELOW; never saved) */
-  drawerOpen: boolean
-  /** panel view shown */
-  view: View
-  /** bumped when code-block highlighting lands, to re-render the document */
-  hl: number
-  prompt: Prompt
-  /** link labels on screen (`f`); dropped when the note, the mode, the width or the scroll position changes (`labelGeo`) */
-  labels: { spots: LinkSpot[]; labels: string[]; typed: string; geo: string } | null
-  query: string
-  /** line of the match `n`/`N` last landed on */
-  matchLine: number | null
-  help: boolean
-  helpTop: number
-  /** Outline heading filter */
-  outlineFilter: string
-  outlineCur: number
-  /** Info cursor: index into the link rows */
-  infoCur: number
-  /** zen layout requested (runtime only; never saved) */
-  zen: boolean
-  /** zen settings in effect */
-  zenCfg: ZenConfig
-  /** zen settings popup open: what to restore on esc */
-  zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
-  /** `C-p` popup: query, highlighted row, first visible row */
-  /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
-  switcher: { q: string; hl: number; top: number; ask?: AskState } | null
-  /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */
-  opener: { q: string; hl: number; top: number; list: ProjectEntry[] } | null
-  /** notes the document had focus with, newest first (this run only) */
-  recent: readonly string[]
-  /** back / forward (`H` / `L`) through the notes opened this run, each with where it was left */
-  history: History<Spot>
-  /** vault index build in progress: [done, total] */
-  indexing: [number, number] | null
-  /** bumped when the vault index changes, to re-run the search */
-  ixVer: number
-  /** highlighted popup row (index into ZEN_ROWS) */
-  zenRow: number
-  /** teleprompter auto-scroll running */
-  rolling: boolean
-  /** last zen keypress (ms) for Ghost chrome; null = chrome hidden */
-  ghostAt: number | null
-  toast: Toast | null
-  /** when the hints were last shown (context change or ?) */
-  hintAt: number | null
-  /** the context those hints are for */
-  hintCtx: Ctx
-  /** the config's `ai` block, re-read on every `a` (null: AI off) */
-  ai: AIConfig | null
-  /** summaries.json, loaded once at start, keyed by absolute note path */
-  summaries: Summaries
-  /** glosses.json, read on the first zen entry (or zen `a`) with an `ai` block; null: not read yet */
-  glosses: Glosses | null
-  /** the zen gloss sheet: its section id, cache key, label, the section's text hash when shown, and when it began fading */
-  gloss: { id: string; key: string; heading: string; hash: string; fadeAt: number | null } | null
-  /** what the open note's change list compares against (dropped on leaving the note) */
-  baseline: Baseline | null
-  /** the explanation running or shown for `baseline.path` */
-  delta: DeltaState | null
-}
-
-type Workspace = Pick<UI, "root" | "tree" | "linkTree" | "linkLazy" | "piped" | "linkRoot" | "openPath" | "expanded">
-
-/**
- * What a folder (and optionally a note in it) opens as, by the CLI's rules: a `single` note inside a
- * vault resolves links against the vault; without a note, the README or the first note opens.
- */
-function workspace(root: string, note?: string | null, single = false): Workspace {
-  const tree = scanTree(root)
-  const vault = note && single ? findVault(root) : null
-  const linkRoot = vault && vault !== root ? vault : null
-  let openPath = note ?? null
-  if (!openPath) {
-    const top = tree.children.filter((c) => !c.dir)
-    openPath = (top.find((c) => /^readme\./i.test(c.name)) ?? top[0] ?? firstFile(tree))?.path ?? null
-  }
-  return { root, tree, linkTree: linkRoot ? scanTree(linkRoot) : tree, linkLazy: false, piped: false, linkRoot, openPath, expanded: new Set(openPath ? ancestorsOf(tree, openPath) : []) }
-}
-
-/** The piped document: an empty Files tree; links resolve against the notes under `root`, scanned on first use (`ensureLinks`). */
-function stdinWorkspace(root: string): Workspace {
-  const tree: FileNode = { name: basename(root) || root, path: root, rel: "", dir: true, children: [] }
-  return { root, tree, linkTree: tree, linkLazy: true, piped: true, linkRoot: null, openPath: STDIN, expanded: new Set() }
-}
-
-/** The folder a workspace is recorded under: the vault a single note was opened in, else the root. */
-const projectRoot = (s: Pick<UI, "root" | "linkRoot">) => s.linkRoot ?? s.root
-
-function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined): UI {
-  const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
-  const openPath = w.openPath
-  const cfg = loadConfig()
-  return {
-    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
-    themePick: null,
-    ...w,
-    filter: "",
-    filterTyping: false,
-    cursor: 0,
-    listTop: { files: 0, outline: 0, info: 0 },
-    infoSeen: "",
-    reload: 0,
-    watchGen: 0,
-    source: false,
-    focus: "doc",
-    hidden: cfg.sidebar?.hidden ?? false,
-    wide: cfg.wide ?? false,
-    minimap: cfg.minimap ?? true,
-    headings: cfg.headings ?? "classic",
-    transparent: transparent ?? cfg.transparent ?? false,
-    motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
-    drawerOpen: false,
-    view: piped ? "outline" : (cfg.sidebar?.view ?? "files"),
-    hl: 0,
-    prompt: null,
-    labels: null,
-    query: "",
-    matchLine: null,
-    help: false,
-    helpTop: 0,
-    outlineFilter: "",
-    outlineCur: 0,
-    infoCur: 0,
-    zen: false,
-    zenCfg: normalizeZen(cfg.zen),
-    zenOrig: null,
-    zenRow: 0,
-    switcher: null,
-    opener: null,
-    recent: openPath ? [openPath] : [],
-    history: startHistory(openPath),
-    indexing: null,
-    ixVer: 0,
-    rolling: false,
-    ghostAt: null,
-    reloadedAt: null,
-    toast: null,
-    hintAt: null,
-    hintCtx: "doc",
-    ai: cfg.ai ?? null,
-    summaries: loadSummaries(),
-    glosses: null,
-    gloss: null,
-    baseline: null,
-    delta: null,
-  }
-}
-
-/**
- * Screen rows: top line, gap (H ≥ 28), body (panel + document), ghost line, progress line.
- * At DRAWER_BELOW columns and wider the panel is a column left of the document (unless hidden);
- * below that it is a drawer over the document, and the document lays out as if it were not there.
- * The document wraps at `CW` = min(available, MEASURE), centered (`wide` / zen "full": the
- * area minus a 2-column margin each side). Zen (unless Source is shown) drops the panel.
- */
-function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen" | "source" | "zenCfg" | "wide" | "minimap" | "openPath">) {
-  const zen = s.zen && !s.source
-  const mode: "inline" | "drawer" = W < DRAWER_BELOW ? "drawer" : "inline"
-  // the welcome page (no note open) has the whole width: no panel, drawer or minimap; the saved sidebar is left alone
-  const welcome = !s.openPath
-  const shown = !zen && !welcome && (mode === "drawer" ? s.drawerOpen : !s.hidden)
-  const SW = Math.min(40, Math.max(24, Math.round(W * 0.27)))
-  /** drawer width; its `▏` edge is one more column */
-  const DW = Math.min(W - 8, Math.max(28, Math.min(40, Math.round(W * 0.45))))
-  const inline = shown && mode === "inline"
-  const gap = H >= 28 ? 1 : 0
-  const bodyH = Math.max(4, H - 3 - gap)
-  const areaW = W - 2 - (inline ? SW + 1 : 0)
-  const want = zen ? s.zenCfg.measure : s.wide ? "full" : MEASURE
-  let CW = Math.max(20, want === "full" ? areaW - 4 : Math.min(want, areaW - 4))
-  let padL = Math.max(0, Math.floor((areaW - CW) / 2))
-  // the minimap takes the last MINI_W columns (the right margin and padding): the text keeps its
-  // column while it fits left of the minimap's gap, then the measure shrinks (left margin kept)
-  const mini = s.minimap && !zen && !welcome && W >= MINI_MIN_W
-  if (mini) {
-    const room = W - MINI_W - 1 - (inline ? SW + 1 : 0)
-    CW = Math.max(20, Math.min(CW, room - 2))
-    padL = Math.max(0, Math.min(padL, room - CW))
-  }
-  return {
-    zen,
-    mode,
-    shown,
-    inline,
-    SW,
-    DW,
-    /** panel width on screen */
-    PNW: mode === "drawer" ? DW : SW,
-    gap,
-    bodyH,
-    areaW,
-    CW,
-    CH: bodyH,
-    /** document left margin inside its area */
-    padL,
-    /** the braille minimap is drawn at the right edge */
-    mini,
-    /** visible rows of the `/` popup list: panel padding 2, title, input, two gaps */
-    PH: Math.max(1, Math.min(16, H - 2 - 6)),
-  }
-}
 
 // ------------------------------------------------------------- app
 
@@ -583,8 +77,8 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const dims = useRef({ W, H })
   dims.current = { W, H }
 
-  const ui = useRef<UI>(null as unknown as UI)
-  if (!ui.current) ui.current = initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion)
+  // a ref-like box built once, on the first render: handlers read `ui.current` at call time
+  const [ui] = useState(() => ({ current: initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion) }))
   const [, bump] = useState(0)
   const set = (patch: Partial<UI>) => {
     Object.assign(ui.current, patch)
@@ -720,6 +214,15 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const ctxSeen = useRef<Ctx | null>(null)
   /** the note and section the gloss auto-show last ran for (null: outside zen) */
   const glossSeen = useRef<string | null>(null)
+  /** false once unmounted: late timers and AI or highlight results drop their update */
+  const alive = useRef(true)
+  /** the document and the theme sample whose code highlighting was last asked for */
+  const hlSeen = useRef<Rendered | null>(null)
+  const hlSample = useRef<Rendered | null>(null)
+  /** `leave` has run: the last project record is written once */
+  const left = useRef(false)
+  /** the welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size */
+  const welcome = useRef({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle" as "idle" | "live" | "done", at: 0, W, H })
 
   /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. */
   const derive = () => {
@@ -919,6 +422,12 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       oRows,
       outlineCur: clampIdx(s.outlineCur, oRows.length),
     }
+  }
+  /** Context id outside popups and zen: the focused panel view, else the document. */
+  const docMode = (): Ctx => {
+    const v = derive().sideFocus
+    if (v && ui.current.filterTyping) return "filter"
+    return v ? `panel:${v}` : "doc"
   }
 
   // ---------------------------------------------------- actions
@@ -1722,7 +1231,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     saveProjects(rememberProject(loadProjects(), { root: projectRoot(s), lastNote: s.openPath, ...pos, at: Date.now() }))
   }
   /** The last record, on the way out: `q`, C-c and the renderer's end (OpenTUI's exit signals) all come here, once. */
-  const left = useRef(false)
   const leave = () => {
     if (left.current) return
     left.current = true
@@ -1932,16 +1440,10 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     clearTimeout(timers.current.steam)
     for (const job of jobs.current.values()) job.abort.abort() // nothing would show or cache the result
   }, [])
-
-  // code blocks render plain first; once their parser results land, re-render the document
-  const alive = useRef(true)
-  const hlSeen = useRef<Rendered | null>(null)
-  const hlSample = useRef<Rendered | null>(null)
   useEffect(() => () => void (alive.current = false), [])
 
   // welcome: the wordmark and bowl ink in once (INK_MS frames) and the steam rises every STEAM_MS, until a key,
   // a resize or a note opening stops it for good (`stopWelcome`); with motion off it is drawn still and inked
-  const welcome = useRef({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle" as "idle" | "live" | "done", at: 0, W, H })
   const stopWelcome = () => {
     const w = welcome.current
     if (w.run !== "live") return
@@ -1968,6 +1470,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     }
     timers.current.steam = setTimeout(step, INK_MS)
   })
+  // code blocks render plain first; once their parser results land, re-render the document
   useEffect(() => {
     const doc = derive().doc
     if (doc === hlSeen.current) return
@@ -2414,15 +1917,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     return false
   }
 
-  /** Context id outside popups and zen: the focused panel view, else the document. */
-  const docMode = (): Ctx => {
-    const v = derive().sideFocus
-    if (v && ui.current.filterTyping) return "filter"
-    return v ? `panel:${v}` : "doc"
-  }
-  /** KEYMAP mode of a context id (`panel:files` → `files`). */
-  const modeOf = (c: Ctx): Mode => (c.startsWith("panel:") ? (c.slice(6) as Mode) : (c as Mode))
-
   useKeyboard((key: KeyEvent) => {
     // C-c quits the same way from every popup and mode (OpenTUI would only end the renderer)
     if (matchKey("C-c", key)) return actions.quit(key)
@@ -2476,7 +1970,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
 
   // ---------------------------------------------------- render
   const d = derive()
-  const { s, L, t, file, doc, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, question, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win, sheet } = d
+  const { s, L, t, file, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, question, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win, sheet } = d
   const { SW, bodyH, CW, CH, padL } = L
   const { filter, cursor, query, prompt, help } = s
 
