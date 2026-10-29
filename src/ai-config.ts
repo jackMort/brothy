@@ -1,8 +1,13 @@
-// The `ai` block of config.json: providers and their presets, validation (`normalizeAI`) and the request
-// target (`resolveAI`). Pure, and it imports nothing of the renderer, so config.ts can load it cheaply;
+// The `ai` block of config.json: providers and their presets, validation (`normalizeAI`), the request
+// target (`resolveAI`) and the prompt versions (`PROMPTS`). Pure, and it imports nothing of the renderer, so config.ts can load it cheaply;
 // ai.ts re-exports everything here.
 
 import { isRecord } from "./json"
+
+/** Prompt versions per feature: bump one whenever its prompt changes, and its cached results show as outdated. */
+export const PROMPTS = { tldr: 1, gloss: 1, delta: 2, ask: 1, rerank: 1 } as const
+/** The TL;DR's version (`SYSTEM_PROMPT`); what `summaries.json` entries carry as `v`. */
+export const PROMPT_V = PROMPTS.tldr
 
 export type Provider = "openai" | "openrouter" | "anthropic" | "gemini" | "ollama" | "lmstudio" | "custom"
 export interface Preset {
