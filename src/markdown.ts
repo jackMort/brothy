@@ -2,12 +2,14 @@ import { Marked, type Token, type Tokens, type TokenizerExtension } from "marked
 import type { Theme } from "./theme"
 
 import { isMarkdown } from "./files"
+import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
 import { A, safe, safeLine, type Span } from "./spans"
 import { graphemes, pushSpan, spanWidth, width } from "./text"
 
 export { A, width }
 export type { Span }
+export { HEADING_STYLES, type HeadingStyle } from "./heading-style"
 
 export interface Line {
   spans: Span[]
@@ -115,9 +117,6 @@ interface LinkSink {
   links: LinkTarget[]
   exists?: (target: string) => boolean
 }
-
-export const HEADING_STYLES = ["classic", "bars", "ladder", "rules"] as const
-export type HeadingStyle = (typeof HEADING_STYLES)[number]
 
 export interface RenderOpts {
   /** how headings are drawn (default "classic") */

@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import { normalizeAI, type AIConfig } from "./ai-config"
 import { configHome, isRecord, readJSON, writeFileAtomic } from "./json"
-import { HEADING_STYLES, type HeadingStyle } from "./markdown"
+import { HEADING_STYLES, type HeadingStyle } from "./heading-style"
 import { pickZen, type ZenConfig } from "./zen"
 
 /** Panel views, in tab-strip (and `1 2 3`) order. */
