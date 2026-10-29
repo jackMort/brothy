@@ -3,7 +3,7 @@ import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
 import { closeSync, existsSync, openSync, statSync } from "node:fs"
 import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode } from "./files"
+import { SCAN_LIMIT, ancestorsOf, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
 import { drop, go, keep, startHistory, stepTo, visit } from "./history"
 import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
@@ -14,6 +14,7 @@ import { MAX_DEPTH, NO_CANDS, NO_CHANGES, NO_NOTES, OPEN_DELAY, SCRIM_DIM, ZEN_D
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { MAX_BYTES } from "./stdin"
 import { readDoc, type DocFile } from "./doc"
+import { STDIN, projectRoot, stdinWorkspace, workspace } from "./workspace"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
 import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, fitHits, hitSpans as markHits, usePointer, type PickerItem } from "./overlay"
 import { helpLayout } from "./help"
@@ -57,9 +58,6 @@ export interface AppProps {
   motion?: boolean
 }
 
-/** The open path of the piped document: relative, so it can never be a file on disk. */
-export const STDIN = "stdin"
-
 /** Reading measure: the document never wraps wider than this. */
 const MEASURE = 80
 /** Below this width the panel is a drawer over the text instead of a column beside it. */
@@ -73,33 +71,6 @@ const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, row
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
-
-type Workspace = Pick<UI, "root" | "tree" | "linkTree" | "linkLazy" | "piped" | "linkRoot" | "openPath" | "expanded">
-
-/**
- * What a folder (and optionally a note in it) opens as, by the CLI's rules: a `single` note inside a
- * vault resolves links against the vault; without a note, the README or the first note opens.
- */
-function workspace(root: string, note?: string | null, single = false): Workspace {
-  const tree = scanTree(root)
-  const vault = note && single ? findVault(root) : null
-  const linkRoot = vault && vault !== root ? vault : null
-  let openPath = note ?? null
-  if (!openPath) {
-    const top = tree.children.filter((c) => !c.dir)
-    openPath = (top.find((c) => /^readme\./i.test(c.name)) ?? top[0] ?? firstFile(tree))?.path ?? null
-  }
-  return { root, tree, linkTree: linkRoot ? scanTree(linkRoot) : tree, linkLazy: false, piped: false, linkRoot, openPath, expanded: new Set(openPath ? ancestorsOf(tree, openPath) : []) }
-}
-
-/** The piped document: an empty Files tree; links resolve against the notes under `root`, scanned on first use (`ensureLinks`). */
-function stdinWorkspace(root: string): Workspace {
-  const tree: FileNode = { name: basename(root) || root, path: root, rel: "", dir: true, children: [] }
-  return { root, tree, linkTree: tree, linkLazy: true, piped: true, linkRoot: null, openPath: STDIN, expanded: new Set() }
-}
-
-/** The folder a workspace is recorded under: the vault a single note was opened in, else the root. */
-const projectRoot = (s: Pick<UI, "root" | "linkRoot">) => s.linkRoot ?? s.root
 
 function initUI(root: string, initialFile: string | undefined, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined): UI {
   const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
