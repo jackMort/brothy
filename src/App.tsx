@@ -1,6 +1,6 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
-import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs"
+import { closeSync, existsSync, openSync, statSync } from "node:fs"
 import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes, scanTree, stem, visibleRows, type FileNode, type TreeRow } from "./files"
@@ -9,6 +9,7 @@ import { drop, go, keep, startHistory, stepTo, visit, type History } from "./his
 import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
 import { safe, safeLine } from "./spans"
 import { MAX_BYTES } from "./stdin"
+import { readDoc, type DocFile } from "./doc"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
 import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, fitHits, hitSpans as markHits, usePointer, type PickerItem } from "./overlay"
 import { helpLayout, type HelpGroup } from "./help"
@@ -91,25 +92,6 @@ const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, row
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
-
-interface DocFile {
-  src: string
-  info: { size: number; mtime: Date } | null
-  error: string | null
-}
-
-/** `_nonce` only busts the cache: live reload and `r` bump it to force a re-read. */
-function readDoc(path: string, _nonce: number): DocFile {
-  try {
-    const st = statSync(path)
-    const info = { size: st.size, mtime: st.mtime }
-    if (!st.isFile()) return { src: "", info: null, error: "not a regular file" }
-    if (st.size > MAX_BYTES) return { src: "", info, error: `file too large (${fmtSize(st.size)}, limit 5 MB)` }
-    return { src: readFileSync(path, "utf8"), info, error: null }
-  } catch (e) {
-    return { src: "", info: null, error: errText(e) }
-  }
-}
 
 function Row({ spans, bg }: { spans: Span[]; bg?: string }) {
   return (
