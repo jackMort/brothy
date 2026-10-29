@@ -29,7 +29,10 @@
     "snapshot": "bun scripts/snapshot.tsx",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
-    "build": "bun build --compile src/cli.tsx --outfile brothy"
+    "build": "bun build --compile src/cli.tsx --outfile brothy",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "knip": "knip"
   },
   "dependencies": {
     "@opentui/core": "0.5.17",
