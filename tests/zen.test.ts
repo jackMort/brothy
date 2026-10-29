@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { mix, themes } from "../src/theme"
-import { GHOST_HOLD, HINT_HOLD, ZEN_DEFAULTS, ZEN_ROWS, dimSpans, fadeStep, headingPath, minutesLeft, normalizeZen, pageSlice, pickZen, prompterRate, sectionAt, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows } from "../src/zen"
+import { GHOST_HOLD, HINT_HOLD, fadeStep } from "../src/status"
+import { ZEN_DEFAULTS, ZEN_ROWS, dimSpans, headingPath, minutesLeft, normalizeZen, pageSlice, pickZen, prompterRate, sectionAt, sectionRanges, typewriterTop, wordSuffix, zenAdjust, zenRows } from "../src/zen"
 
 describe("normalizeZen", () => {
   test("no config gives the defaults", () => {

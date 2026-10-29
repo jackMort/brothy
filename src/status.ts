@@ -1,9 +1,8 @@
-// Status rows (top line, ghost line, progress line): pure string helpers. Span styling stays in App.
+// Status rows (top line, ghost line, progress line) and toasts: pure string helpers and the fade timing. Span styling stays in App.
 
 import { basename } from "node:path"
 import { stem } from "./files"
 import { truncate, width } from "./text"
-import { fadeStep } from "./zen"
 
 export { truncate, truncateLeft } from "./text"
 
@@ -238,6 +237,20 @@ export function progressLabel(o: {
 }
 
 // ------------------------------------------------------------- ghost line
+
+/** Fade timing: full for a hold, then `GHOST_STEPS` steps of `GHOST_STEP` ms, then hidden. Zen's top line holds `GHOST_HOLD`. */
+export const GHOST_HOLD = 1500
+export const GHOST_STEP = 120
+export const GHOST_STEPS = 4
+/** Key hints hold this long after a context change before they fade. */
+export const HINT_HOLD = 2000
+
+/** 0 = full, 4 = faintest, null = hidden: full for `hold` ms after the trigger, then the fade steps. */
+export function fadeStep(elapsed: number, hold = GHOST_HOLD): 0 | 1 | 2 | 3 | 4 | null {
+  if (elapsed < hold) return 0
+  const k = 1 + Math.floor((elapsed - hold) / GHOST_STEP)
+  return k <= GHOST_STEPS ? (k as 1 | 2 | 3 | 4) : null
+}
 
 export interface HintItem {
   key: string
