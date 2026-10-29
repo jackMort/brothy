@@ -149,7 +149,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     const file = s.openPath ? memo.read(s.openPath, s.reload) : null
     const src = file?.src ?? ""
     const fm = memo.fm(src)
-    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headings)
+    const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headingStyle)
     const view = s.source ? memo.source(src, L.CW, t, s.linkTree) : doc
     const st = memo.stats(fm.body)
     const filtered = s.filter.trim() !== ""

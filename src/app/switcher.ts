@@ -239,7 +239,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const peekW = switchSplit(W).peekW
     const peekNote = peekPath && peekDoc ? memo.peekFile(peekPath, peekDoc.mtime) : null
     const peekWin = peekNote && peekRow ? peekWindow(peekNote.lines, peekNote.fm, peekDoc!, peekRow) : null
-    const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headings) : undefined
+    const peekView = peekNote && peekWin ? memo.peek(peekNote.lines, peekWin.from, peekWin.to, peekW, t, s.linkTree, s.headingStyle) : undefined
     const peekSaved = peekPath ? s.summaries[peekPath] : undefined
     return s.switcher && W >= PEEK_MIN_W
       ? peekLines(

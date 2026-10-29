@@ -167,9 +167,9 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (persist({ minimap })) flash(minimap ? "minimap on" : "minimap off")
     },
     headings: () => {
-      const headings = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headings) + 1) % HEADING_STYLES.length]!
-      set({ headings })
-      if (persist({ headings })) flash(`headings · ${headings}`)
+      const headingStyle = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headingStyle) + 1) % HEADING_STYLES.length]!
+      set({ headingStyle })
+      if (persist({ headings: headingStyle })) flash(`headings · ${headingStyle}`)
     },
     transparent: () => {
       const transparent = !ui.current.transparent

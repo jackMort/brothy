@@ -90,8 +90,8 @@ export interface UI {
   wide: boolean
   /** braille minimap on (saved by m; drawn from MINI_MIN_W columns, never in zen) */
   minimap: boolean
-  /** heading style (saved by #) */
-  headings: HeadingStyle
+  /** heading style (saved by #, as config `headings`) */
+  headingStyle: HeadingStyle
   /** main surfaces unpainted: the terminal background shows through (saved by T) */
   transparent: boolean
   /** animations on (prop, else config `motion`; always off under `bun test` unless the prop is given) */
@@ -180,7 +180,7 @@ export function initUI(root: string, initialFile: string | undefined, themeName:
     hidden: cfg.sidebar?.hidden ?? false,
     wide: cfg.wide ?? false,
     minimap: cfg.minimap ?? true,
-    headings: cfg.headings ?? "classic",
+    headingStyle: cfg.headings ?? "classic",
     transparent: transparent ?? cfg.transparent ?? false,
     motion: motion ?? (process.env.NODE_ENV !== "test" && (cfg.motion ?? true)),
     drawerOpen: false,

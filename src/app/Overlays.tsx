@@ -160,7 +160,7 @@ export function themePickView(c: AppCtx, d: Derived): ThemePickView | null {
   // the board's rows under the header; hover holds the window where it is, keys and the wheel centre it again
   const top = pickTop(pick, hl, Math.max(1, geo.rows - 1), rows.length)
   const cand = pickTheme(pick)
-  const sample = geo.split && hl >= 0 ? memo.themeSample(cand, geo.peekW, s.hl, s.headings) : null
+  const sample = geo.split && hl >= 0 ? memo.themeSample(cand, geo.peekW, s.hl, s.headingStyle) : null
   return { pick, rows, geo, hl, top, cand, sample }
 }
 
