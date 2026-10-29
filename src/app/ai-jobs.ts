@@ -12,7 +12,7 @@ import { safeLine } from "../lib/spans"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../ai/cache"
 import { STDIN } from "../notes/workspace"
 import type { AppCtx } from "./ctx"
-import { jobKey, type Job, type JobKind } from "./store"
+import { jobKey, type Job, type JobKind, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
 const MAX_JOBS = 3
@@ -138,9 +138,8 @@ export function makeAIJobs(c: AppCtx) {
     if (g && g.id !== gHere?.id) fadeGloss()
     if (!gHere || !s.ai || !s.glosses || (g?.id === gHere.id && g.fadeAt === null)) return
     const key = glossKey(gHere.id, gStyle)
-    const e = s.glosses[key]
     // outdated or missing glosses never appear by themselves: they need `a`
-    if (jobs.current.has(jobKey("gloss", gHere.id)) || (e && isFresh(e, gHash, PROMPTS.gloss)))
+    if (jobs.current.has(jobKey("gloss", gHere.id)) || freshGloss(s, key, gHash))
       set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
   }
 
@@ -257,25 +256,28 @@ export function makeAIJobs(c: AppCtx) {
     startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
   }
 
+  /** Cancel the gloss running for section `id` and close its sheet; false when none runs. */
+  const cancelGloss = (id: string) => {
+    if (!cancelJob(jobKey("gloss", id))) return false
+    if (ui.current.gloss?.id === id) set({ gloss: null })
+    bump((x) => x + 1)
+    return true
+  }
+
   /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
   const zenGloss = () => {
     const ai = reloadAI()
     const section = derive().gHere
     // cancel first: a request stays cancellable after its `ai` block goes
-    if (section && cancelJob(jobKey("gloss", section.id))) {
-      if (ui.current.gloss?.id === section.id) set({ gloss: null })
-      bump((x) => x + 1)
-      return flash("gloss cancelled")
-    }
+    if (section && cancelGloss(section.id)) return flash("gloss cancelled")
     if (!ai) return flash(AI_OFF)
     ensureGlosses()
     const { s, gHere, gHash, gStyle, title } = derive()
     if (!gHere) return flash("nothing to gloss here")
     const key = glossKey(gHere.id, gStyle)
-    const e = s.glosses?.[key]
     const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
     // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
-    if (e && !shown && isFresh(e, gHash, PROMPTS.gloss)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+    if (!shown && freshGloss(s, key, gHash)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
     // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
     const target = aiGate(ai)
     if (target) startGloss(gHere, gStyle, title, target, ai.model)
@@ -283,6 +285,12 @@ export function makeAIJobs(c: AppCtx) {
 
   return { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss }
 }
+/** Whether the cache holds a gloss under `key` that is fresh for section text hashed `hash`. */
+function freshGloss(s: UI, key: string, hash: string) {
+  const e = s.glosses?.[key]
+  return !!e && isFresh(e, hash, PROMPTS.gloss)
+}
+
 /** What a finished `D` request leaves: the explanation, a failure to toast, or null when it was cancelled. */
 export function deltaOutcome(r: ChatResult, raw: string, changes: Change[]): { parsed: DeltaParse } | { failure: Failure } | null {
   // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
