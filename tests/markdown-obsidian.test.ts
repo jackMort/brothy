@@ -5,9 +5,9 @@ import { contrast, themes } from "../src/theme"
 const t = themes[0]!
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
 /** [depth, text] outlines of Preview (front matter cut, as App renders it) and Source; they must be equal (outline parity). */
-const outlines = (src: string) => [
-  render(parseFrontMatter(src).body, 60, t).headings.map((h) => [h.depth, h.text]),
-  renderSource(src, 60, t).headings.map((h) => [h.depth, h.text]),
+const outlines = (src: string): [[number, string][], [number, string][]] => [
+  render(parseFrontMatter(src).body, 60, t).headings.map((h): [number, string] => [h.depth, h.text]),
+  renderSource(src, 60, t).headings.map((h): [number, string] => [h.depth, h.text]),
 ]
 const RULE = /^[\s─━│┌┐└┘├┤┬┴┼═]*$/
 /** Every non-rule glyph reaches 3:1 on its own background, in both views and every theme. */
