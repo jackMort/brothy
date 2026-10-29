@@ -142,6 +142,35 @@ function change(status: ChangeStatus, x: Sec, rest: Pick<Change, "plus" | "minus
   return { status, index: x.s.index, path: x.path, key: x.s.key, ord: x.s.ord, ...rest }
 }
 
+/** Where each old section that `newIds` lacks is listed: after the nearest earlier section both texts share (null: before them all). */
+function removedAnchors(olds: Sec[], newIds: Set<string>): Map<string | null, Sec[]> {
+  const removedAfter = new Map<string | null, Sec[]>()
+  let anchor: string | null = null
+  for (const o of olds) {
+    if (newIds.has(idOf(o))) anchor = idOf(o)
+    else {
+      const list = removedAfter.get(anchor)
+      if (list) list.push(o)
+      else removedAfter.set(anchor, [o])
+    }
+  }
+  return removedAfter
+}
+
+/** A matched section whose lines differ: its line diff, or (`cells` over DIFF_CELLS) the whole section as rewritten. */
+function editedChange(o: Sec, n: Sec, newText: string, cells: number): Change {
+  const ops = cells <= DIFF_CELLS ? lineDiff(o.lines, n.lines) : null
+  return ops
+    ? change("edited", n, {
+        plus: ops.filter((x) => x.op === "+").length,
+        minus: ops.filter((x) => x.op === "-").length,
+        hunks: hunks(ops),
+        rewritten: false,
+        newText,
+      })
+    : change("edited", n, { plus: n.lines.length, minus: o.lines.length, hunks: [], rewritten: true, newText })
+}
+
 /**
  * The sections of `after` that differ from `before` (both `noteText`): matched by `(key, ord)`;
  * unmatched old → removed, unmatched new → added, matched with other lines → edited. A renamed
@@ -155,17 +184,7 @@ export function diffSections(before: string, after: string): Change[] | null {
   const news = sectionsOf(after)
   const oldById = new Map(olds.map((x) => [idOf(x), x]))
   const newIds = new Set(news.map(idOf))
-  // a removed section is listed after the nearest earlier section both texts share
-  const removedAfter = new Map<string | null, Sec[]>()
-  let anchor: string | null = null
-  for (const o of olds) {
-    if (newIds.has(idOf(o))) anchor = idOf(o)
-    else {
-      const list = removedAfter.get(anchor)
-      if (list) list.push(o)
-      else removedAfter.set(anchor, [o])
-    }
-  }
+  const removedAfter = removedAnchors(olds, newIds)
   const out: Change[] = []
   let budget = DIFF_BUDGET
   const pushRemoved = (list: Sec[] | undefined) => {
@@ -180,18 +199,7 @@ export function diffSections(before: string, after: string): Change[] | null {
     else if (!sameLines(o.lines, n.lines)) {
       const cells = diffCells(o.lines, n.lines)
       if (cells <= DIFF_CELLS && (budget -= cells) < 0) return null
-      const ops = cells <= DIFF_CELLS ? lineDiff(o.lines, n.lines) : null
-      out.push(
-        ops
-          ? change("edited", n, {
-              plus: ops.filter((x) => x.op === "+").length,
-              minus: ops.filter((x) => x.op === "-").length,
-              hunks: hunks(ops),
-              rewritten: false,
-              newText,
-            })
-          : change("edited", n, { plus: n.lines.length, minus: o.lines.length, hunks: [], rewritten: true, newText }),
-      )
+      out.push(editedChange(o, n, newText, cells))
     }
     pushRemoved(removedAfter.get(idOf(n)))
   }
