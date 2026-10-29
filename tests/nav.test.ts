@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { cached, copiedCount, findQuote, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../src/nav"
+import { cached, copiedCount, findItems, findQuote, matchHits, selectedText, linkLabels, narrowLabels, overlayAt, visibleLinks, findLines, keepVisible, markMatches, matchIndex, matchKey, matchRanges, relocate, remapTop, stepMatch, stripLayout, thumb } from "../src/nav"
 import { themes } from "../src/theme"
 
 const t = themes[0]!
@@ -228,4 +228,25 @@ test("findQuote: a miss or an empty needle is null", () => {
 
 test("findQuote ignores leading indentation of list rows", () => {
   expect(findQuote(["  • find in the vault"], 0, 1, "• Find in the vault")).toBe(0)
+})
+
+test("matchHits gives the code point indexes of every match", () => {
+  expect(matchHits("Fish and fISH", "fish")).toEqual([0, 1, 2, 3, 9, 10, 11, 12])
+  expect(matchHits("🐟 fish", "fish")).toEqual([2, 3, 4, 5]) // the emoji is one code point, two UTF-16 units
+  expect(matchHits("nothing", "fish")).toEqual([])
+})
+
+test("findItems: a numbered row per match in Preview, the hits in primary, cut to the room", () => {
+  const lines = [{ spans: [{ text: "  first line  " }] }, { spans: [{ text: "second " }, { text: "LINE here" }] }]
+  const [a, b] = findItems(lines, [0, 1], "line", false, 40, t)
+  const text = (it: { spans: { text: string }[] } | undefined) => it!.spans.map((s) => s.text).join("")
+  expect(text(a)).toBe("   1  first line")
+  expect(text(b)).toBe("   2  second LINE here")
+  expect(a!.spans[0]).toEqual({ text: "   1  ", fg: t.textMuted })
+  expect(b!.spans.filter((s) => s.fg === t.primary).map((s) => s.text)).toEqual(["LINE"])
+  // Source rows carry no number, and a narrow room keeps the hit in view
+  const [c] = findItems([{ spans: [{ text: "a long line of words before the word needle" }] }], [0], "needle", true, 16, t)
+  expect(text(c)).toContain("needle")
+  expect(text(c).startsWith("…")).toBe(true)
+  expect(findItems(lines, [], "x", false, 40, t)).toEqual([])
 })

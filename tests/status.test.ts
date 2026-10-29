@@ -4,22 +4,33 @@ import {
   errText,
   fillWidth,
   fitHints,
+  gapSpans,
   headerLayout,
+  hintSpans,
   LOGO_HOLD,
   logoState,
   mainHeadingVisible,
   shrinkFolder,
   locationParts,
   nextToast,
+  notePath,
   noteTitle,
   progressLabel,
+  progressSpans,
   stateCluster,
   toastIcon,
+  toastSpans,
   toastStep,
   tooSmall,
+  topLineSpans,
+  LOGO,
+  TOAST_HOLD,
+  GHOST_STEP,
   type Toast,
 } from "../src/status"
 import { truncate, truncateLeft, width as sw } from "../src/text"
+import { themeByName } from "../src/theme"
+import { fade } from "../src/chrome"
 
 describe("truncate", () => {
   test("cuts at either end with …, by columns", () => {
@@ -324,5 +335,71 @@ describe("errText", () => {
     expect(errText(e)).toBe("ENOENT: no such file or directory")
     expect(errText(new Error("not a folder, stat 'x'"))).toBe("not a folder, stat 'x'")
     expect(errText("plain")).toBe("plain")
+  })
+})
+
+describe("row spans", () => {
+  const t = themeByName("brothy")
+  const text = (spans: { text: string }[]) => spans.map((s) => s.text).join("")
+
+  test("notePath: relative to the workspace, or to the vault for a note outside it", () => {
+    expect(notePath("/w", null, "/w/a/b.md")).toBe("a/b.md")
+    expect(notePath("/w", "/v", "/w/a.md")).toBe("a.md")
+    expect(notePath("/w", "/v", "/v/x/c.md")).toBe("x/c.md")
+    expect(notePath("/w", "/v", null)).toBe("")
+  })
+
+  test("topLineSpans: the logo, then no note open at column 2", () => {
+    const spans = topLineSpans(t, "live", null, false)
+    expect(spans[0]).toEqual({ text: LOGO, fg: t.primary, attr: 1 })
+    expect(text(spans)).toBe(LOGO + " no note open")
+    expect(topLineSpans(t, "watching", null, false)[0]).toEqual({ text: LOGO, fg: t.textMuted, attr: 0 })
+    expect(topLineSpans(t, "gone", null, false)[0]).toEqual({ text: " " })
+  })
+
+  test("topLineSpans: the folder over the panel, the title at the text's edge, the cluster at its right edge", () => {
+    const o = { inline: true, SW: 20, textLeft: 25, textWidth: 50, zen: false, gap: true, vault: "vault", folder: "notes", title: "Title", trail: ["Part"], query: "x", matchIdx: 1, count: 3, source: true, wide: false }
+    const h = headerLayout(o)
+    const line = text(topLineSpans(t, "watching", h, false))
+    const col = (s: string) => sw(line.slice(0, line.indexOf(s)))
+    expect(col("notes")).toBe(2)
+    expect(col("Title")).toBe(25)
+    expect(col("/x ")).toBe(h.clusterCol)
+    expect(line).toContain("Title › Part")
+    expect(line.endsWith("/x 1/3   source")).toBe(true)
+    expect(topLineSpans(t, "watching", h, false).find((s) => s.text === "Title")).toEqual({ text: "Title", fg: t.text, attr: 1 })
+    expect(topLineSpans(t, "watching", h, true).find((s) => s.text === "Title")).toEqual({ text: "Title", fg: t.textMuted })
+    const none = topLineSpans(t, "watching", headerLayout({ ...o, count: 0 }), false)
+    expect(none.find((s) => s.text === "no match")).toEqual({ text: "no match", fg: t.error, attr: 1 })
+  })
+
+  test("gapSpans: a border rule over the text column", () => {
+    expect(gapSpans(t, 3, 4)).toEqual([{ text: "   " }, { text: "────", fg: t.border }])
+  })
+
+  test("progressSpans: the read part in primary, then the label, `cols` wide in all", () => {
+    const spans = progressSpans(t, { pre: "", main: "50%", rest: " · 3 min left" }, 5, 10, 40)
+    expect(sw(text(spans))).toBe(40)
+    expect(text(spans).endsWith(" 50% · 3 min left")).toBe(true)
+    expect(spans[0]!.fg).toBe(t.primary)
+    expect(spans[0]!.text.length).toBe(fillWidth(5, 10, 40 - 17))
+    expect(progressSpans(t, null, 0, 0, 6)).toEqual([{ text: "", fg: t.primary }, { text: "──────", fg: t.border }])
+  })
+
+  test("hintSpans: keys in text, words muted, 3-space gaps, spare hints dropped first", () => {
+    const items = [{ key: "j", word: "down" }, { key: "f", word: "links", spare: true }, { key: "q", word: "" }]
+    expect(text(hintSpans(t, items, 40))).toBe("j down   f links   q")
+    expect(text(hintSpans(t, items, 12))).toBe("j down   q")
+    expect(hintSpans(t, items, 40).slice(0, 2)).toEqual([{ text: "j", fg: t.text }, { text: " down", fg: t.textMuted }])
+  })
+
+  test("toastSpans: icon and message in the kind's colour, faded once the hold is over, gone after", () => {
+    const err: Toast = { msg: "nope", kind: "error", at: 0 }
+    expect(toastSpans(t, err, 0, 40)).toEqual([{ text: "✗ nope", fg: fade(t, t.error, 0), attr: 1 }])
+    expect(toastSpans(t, { msg: "saved", kind: "ok", at: 0 }, 0, 40)[0]!.fg).toBe(fade(t, t.success, 0))
+    expect(toastSpans(t, err, TOAST_HOLD.error + 1, 40)[0]!.fg).toBe(fade(t, t.error, 1 / 5))
+    expect(toastSpans(t, err, TOAST_HOLD.error + 10 * GHOST_STEP, 40)).toEqual([])
+    expect(toastSpans(t, null, 0, 40)).toEqual([])
+    expect(text(toastSpans(t, { msg: "a long message", kind: "info", at: 0 }, 0, 6))).toBe("· a l…")
   })
 })

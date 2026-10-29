@@ -1,45 +1,45 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
+import type { KeyEvent } from "@opentui/core"
 import { closeSync, openSync } from "node:fs"
-import { basename, dirname, relative, resolve, sep } from "node:path"
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ancestorsOf, folderCounts, scanTree, stem, type FileNode } from "./files"
+import { basename, dirname } from "node:path"
+import { useEffect, useRef, useState } from "react"
+import { ancestorsOf, folderCounts, scanTree } from "./files"
 import { ensureHighlights } from "./highlight"
-import { HEADING_STYLES, parseFrontMatter, sourceScan, pendingHighlights, wrap, type Line, type Rendered } from "./markdown"
-import { A, lineText, type Span } from "./spans"
-import { clamp, fmtNum, plural, spanWidth, truncate, truncateLeft, width } from "./text"
+import { HEADING_STYLES, parseFrontMatter, sourceScan, pendingHighlights, type Rendered } from "./markdown"
+import { clamp } from "./text"
 import { headingKey } from "./sections"
-import { Row } from "./app/Row"
 import { makeAIJobs, type Job } from "./app/ai-jobs"
 import { makeDerive, makeMemo } from "./app/derive"
 import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
-import { labelGeo, makeLinks } from "./app/links"
+import { makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
 import { useAppEffects } from "./app/effects"
-import { MAX_DEPTH, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
-import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
+import { panelBox } from "./app/Panel"
+import { docBox, miniBox } from "./app/Document"
+import { gapRow, ghostLine, progressLine, topRow } from "./app/Chrome"
+import { findOverlay, helpOverlay, openOverlay, switchOverlay, themeOverlay, themePickView, zenOverlay } from "./app/Overlays"
+import { ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
+import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { STDIN } from "./workspace"
 import { DRAWER_BELOW } from "./layout"
-import { contrastOn, mix, surface, themes } from "./theme"
-import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, usePointer } from "./overlay"
-import { fitHits, hitSpans as markHits, type PickerItem } from "./rows"
+import { surface, themes } from "./theme"
+import { usePointer } from "./overlay"
 import { helpLayout } from "./help"
 import { STILL_TICK } from "./welcome"
 import { INK_STEPS } from "./chrome"
 import { emptyIndex, nextSection, stepRow, type VaultIndex } from "./vault"
-import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniJump } from "./minimap"
-import { filterFamilies, onlyMode, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, themeSplit, type ThemePick } from "./themepick"
-import { loadConfig, type View } from "./config"
-import { findQuote, keepVisible, markMatches, matchRanges, matchKey, overlayAt, stepMatch, stripLayout, thumb, type Geometry } from "./nav"
+import { MINI_MIN_W } from "./minimap"
+import { filterFamilies, pickIndex, pickMode, pickMove, pickQuery, pickStart, pickTheme, type ThemePick } from "./themepick"
+import { loadConfig } from "./config"
+import { findQuote, keepVisible, matchKey, stepMatch, type Geometry } from "./nav"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
-import { askSection, askTitleNote } from "./ask"
-import { GLOSS_ROWS, glossRows, glossRule } from "./gloss"
-import { GHOST_STEPS, HINT_HOLD, LOGO, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
-import { findHeading, type InfoItem } from "./panel"
+import { askSection } from "./ask"
+import { GHOST_STEPS, HINT_HOLD, errText, fadeStep, tooSmall, type HintItem } from "./status"
+import { findHeading } from "./panel"
 import { quoteNeedle } from "./delta"
-import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, stepMeasure, zenRows } from "./zen"
+import { ZEN_ROWS, ZEN_WPM, stepMeasure } from "./zen"
 
 export const VERSION = "0.2.0"
 
@@ -150,7 +150,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } =
     makeZen(ctx, aiJobs)
   const switcher = makeSwitcher(ctx, links)
-  const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane } = switcher
+  const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate } = switcher
   const workspaceControl = makeWorkspace(ctx, switcher, aiJobs)
   const { recordProject, leave, opType, opGo, openOpener, opComplete, opOpen, welcomeRows, welcomeOpen, welcomeKey, stopWelcome, animateWelcome } =
     workspaceControl
@@ -703,486 +703,15 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
 
   // ---------------------------------------------------- render
   const d = derive()
-  const { s, L, t, file, view, rows, filtered, total, filterRow, infoRows, linkRows, swRows, swHl, question, LH, note, top, maxTop, matches, currentHeading, sideFocus, outlineCur, tw, pg, spot, win, sheet } = d
-  const { SW, bodyH, CW, CH, padL } = L
-  const { filter, cursor, query, prompt, help } = s
-
-  // a note reached through a link outside the opened folder is named from its vault's root
-  const outside = openPath !== null && s.linkRoot !== null && relative(s.root, openPath).startsWith("..")
-  const rel = openPath ? relative(outside ? s.linkRoot! : s.root, openPath) : ""
+  const { s, L, t } = d
   const paint = surface(t, s.transparent)
-  const selFg = contrastOn(t.primary)
 
-  // panel: tab strip, rule, then the current view's list; one cursor, drawn only while focused
-  const PNW = L.PNW
-  /** text columns: col 0 is padding, the last column is kept for the scroll thumb */
-  const AW = PNW - 2
-  const thumbFg = mix(t.borderSubtle, t.textMuted, 0.25)
-  /** One panel row, `PNW` wide: col 0 padding (`lead`), text, then the thumb column. `sel` fills the row as the cursor. */
-  const panelRow = (
-    key: string,
-    spans: Span[],
-    o: { sel?: boolean; lead?: boolean; thumb?: boolean; onDown?: (e: MouseEvent) => void } = {},
-  ) => {
-    const body: Span[] = o.lead === false ? [...spans] : [{ text: " " }, ...spans]
-    body.push({ text: " ".repeat(Math.max(0, PNW - 1 - spanWidth(body))) })
-    const cells = o.sel ? body.map((sp) => ({ ...sp, fg: selFg, bg: t.primary })) : body
-    cells.push({ text: o.thumb ? "▐" : " ", fg: thumbFg })
-    return (
-      <box key={key} style={{ height: 1, flexShrink: 0 }} onMouseDown={o.onDown}>
-        <Row spans={cells} />
-      </box>
-    )
-  }
-  /** Which visible list rows (0 = first) carry the scroll thumb. */
-  const thumbRows = (top: number, n: number) => {
-    const th = thumb(top, LH, n)
-    return (i: number) => !!th && i >= th.start && i < th.start + th.size
-  }
-
-  // the strip's compact/full choice follows the inline panel width (SW), also in the wider drawer
-  const strip = stripLayout(L.SW, panelViews())
-  const stripSpans: Span[] = []
-  for (const lb of strip.labels) {
-    const at = 1 + spanWidth(stripSpans) // panelRow adds col 0
-    if (lb.x0 > at) stripSpans.push({ text: " ".repeat(lb.x0 - at) })
-    stripSpans.push({ text: lb.digit, fg: t.textMuted })
-    const active = lb.view === s.view
-    stripSpans.push({ text: lb.text, fg: active ? (sideFocus ? t.primary : t.text) : t.textMuted, attr: active ? 1 : 0 })
-  }
-  const activeLabel = strip.labels.find((lb) => lb.view === s.view) ?? strip.labels[0]!
-  const rule: Span[] = [
-    { text: "─".repeat(activeLabel.lx), fg: t.border },
-    { text: "━".repeat(activeLabel.x1 - activeLabel.lx), fg: sideFocus ? t.accent : t.textMuted },
-    { text: "─".repeat(Math.max(0, PNW - 1 - activeLabel.x1)), fg: t.border },
-  ]
-  const panelX = L.inline ? 1 : 0
-  const onStrip = (e: MouseEvent) => {
-    if (e.button !== MouseButton.LEFT) return
-    const x = e.x - panelX
-    const lb = strip.labels.find((l) => x >= l.x0 && x < l.x1)
-    if (lb) focusPanel(lb.view)
-  }
-
-  /** `text` with the code points at `hits` drawn as matches (primary, bold). */
-  const hitSpans = (text: string, hits: number[], fg: string, bold: boolean): Span[] => markHits(text, hits, fg, t.primary, bold)
-  /** The filter row: `/ query▏` (caret while typing), with `right` aligned to the text edge. */
-  const filterRowEl = (value: string, typing: boolean, right: string) => {
-    const left: Span[] = [{ text: "/ ", fg: t.primary, attr: 1 }, { text: truncate(value, Math.max(1, AW - 4 - width(right))), fg: t.text }]
-    if (typing) left.push({ text: "▏", fg: t.primary })
-    return panelRow("filter", [...left, { text: " ".repeat(Math.max(1, AW - spanWidth(left) - width(right))) }, { text: right, fg: t.textMuted }])
-  }
-  /** Last folder of a note's relative path ("" at the root). */
-  const folderOf = (n: FileNode) => (n.rel.includes(sep) ? basename(dirname(n.rel)) : "")
-
-  const topOf = (v: View, n: number) => Math.max(0, Math.min(s.listTop[v], n - LH))
-  const listEls: ReactNode[] = []
-  if (s.view === "files") {
-    const fTop = topOf("files", rows.length)
-    if (rows.length === 0)
-      listEls.push(panelRow("files-empty", [{ text: filter ? "no matching notes" : "no Markdown files here", fg: t.textMuted }]))
-    const counts = folderCounts(s.tree)
-    const on = thumbRows(fTop, rows.length)
-    rows.slice(fTop, fTop + LH).forEach((r, i) => {
-      const idx = fTop + i
-      const n = r.node
-      const indent = "  ".repeat(Math.min(r.depth, MAX_DEPTH))
-      // a symlink that leaves the folder is marked after its name
-      const mark: Span[] = n.outside ? [{ text: " ↗", fg: t.textMuted }] : []
-      const room = AW - width(indent) - 2 - spanWidth(mark)
-      const spans: Span[] = [{ text: indent }]
-      if (n.dir) {
-        const open = s.expanded.has(n.path)
-        spans.push({ text: open ? "▾ " : "▸ ", fg: t.borderSubtle })
-        // a closed folder shows its note count at the right edge; the count goes before the name is cut
-        const count = open ? "" : String(counts.get(n.path) ?? 0)
-        const name = truncate(n.name, room)
-        spans.push({ text: name, fg: t.textMuted }, ...mark)
-        if (count && width(n.name) + 1 + width(count) <= room)
-          spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
-      } else if (r.hits) {
-        const isOpen = n.path === openPath
-        const shown = truncate(stem(n.name), AW - 2 - spanWidth(mark))
-        const left = AW - 2 - width(shown) - spanWidth(mark) - 1
-        // a note's name is never cut for its folder; the folder shows only with 6+ columns to spare
-        const seg = folderOf(n)
-        const folder = seg && left >= 6 ? truncateLeft(seg, left) : ""
-        spans.length = 0
-        spans.push({ text: isOpen ? "● " : "  ", fg: t.primary }, ...hitSpans(shown, r.hits, isOpen ? t.primary : t.text, isOpen), ...mark)
-        if (folder) spans.push({ text: " ".repeat(AW - 2 - width(shown) - spanWidth(mark) - width(folder)) }, { text: folder, fg: t.textMuted })
-      } else {
-        const isOpen = n.path === openPath
-        spans.push({ text: isOpen ? "● " : "  ", fg: t.primary })
-        spans.push({ text: truncate(stem(n.name), room), fg: isOpen ? t.primary : t.text, attr: isOpen ? 1 : 0 }, ...mark)
-      }
-      listEls.push(
-        panelRow(n.path, spans, {
-          sel: sideFocus === "files" && idx === cursor,
-          thumb: on(i),
-          onDown: (e) => {
-            if (e.button !== MouseButton.LEFT) return
-            focusPanel()
-            if (n.dir) toggleDir(n)
-            selectRow(idx, "now")
-          },
-        }),
-      )
-    })
-    note.forEach((text, i) => listEls.push(panelRow(`files-truncated-${i}`, [{ text: truncate(text, AW), fg: t.warning }])))
-  } else if (s.view === "outline") {
-    const n = d.oRows.length
-    if (!openPath) listEls.push(panelRow("outline-empty", [{ text: "no note open", fg: t.textMuted }]))
-    else if (!n) listEls.push(panelRow("outline-empty", [{ text: s.outlineFilter ? "no matching headings" : "no headings", fg: t.textMuted }]))
-    // unfocused, the list keeps the reading heading in view; focused, the cursor
-    const reading = Math.max(0, d.oRows.findIndex((r) => r.current))
-    const oTop = keepVisible(s.listTop.outline, sideFocus === "outline" ? outlineCur : reading, LH, n)
-    s.listTop.outline = oTop
-    const on = thumbRows(oTop, n)
-    d.oRows.slice(oTop, oTop + LH).forEach((r, i) => {
-      const base = r.current ? t.primary : r.level === 2 ? t.textMuted : t.text
-      const fg = r.read ? mix(base, t.background, 0.35) : base
-      const text = truncate(r.text, AW - 2 - r.indent)
-      listEls.push(
-        panelRow(`o-${r.index}`, [{ text: r.current ? "▸ " : "  ", fg: t.primary }, { text: " ".repeat(r.indent) }, ...hitSpans(text, r.hits, fg, r.current || r.level === 0)], {
-          sel: sideFocus === "outline" && oTop + i === outlineCur,
-          thumb: on(i),
-          onDown: (e) => {
-            if (e.button === MouseButton.LEFT) outlineGo(r.index)
-          },
-        }),
-      )
-    })
-  } else {
-    const pad = (k: string, w: number) => k + " ".repeat(Math.max(0, w - width(k)))
-    const infoSpans = (it: InfoItem): Span[] => {
-      switch (it.kind) {
-        case "prop":
-          return [{ text: pad(it.key, it.keyW), fg: t.textMuted }, { text: it.text, fg: t.text }]
-        case "chips":
-          return [
-            { text: pad(it.key, it.keyW), fg: t.textMuted },
-            ...it.tags.flatMap((tg, i): Span[] => [...(i ? [{ text: " " }] : []), { text: truncate("#" + tg, AW - it.keyW), fg: t.secondary }]),
-            ...(it.more ? [{ text: " …", fg: t.textMuted }] : []),
-          ]
-        case "label":
-          return [{ text: it.text, fg: t.textMuted, attr: 1 }]
-        case "tldr":
-          return [{ text: "TL;DR", fg: t.textMuted, attr: 1 }, { text: it.status, fg: t.textMuted }]
-        case "summary":
-          return [{ text: it.text, fg: it.muted ? t.textMuted : t.text }]
-        case "changes":
-          return [{ text: "Changed", fg: t.textMuted, attr: 1 }, { text: it.status, fg: t.textMuted }]
-        case "change":
-          return [
-            { text: it.mark + " ", fg: it.mark === "~" ? t.warning : it.mark === "+" ? t.success : t.textMuted },
-            { text: it.text, fg: it.stop ? t.text : t.textMuted },
-            { text: it.counts, fg: t.textMuted },
-          ]
-        case "link":
-          return [
-            { text: "→ ", fg: t.textMuted },
-            { text: truncate(it.target, AW - 3 - (it.path ? 0 : 1)), fg: it.path ? t.info : t.textMuted },
-            ...(it.path ? [] : [{ text: "?", fg: t.textMuted }]),
-          ]
-        case "more":
-          return [{ text: `+${it.n} more`, fg: t.textMuted }]
-        case "stat":
-          return [{ text: truncate(it.text, AW), fg: t.textMuted }]
-        case "blank":
-          return []
-      }
-    }
-    if (!openPath) listEls.push(panelRow("info-empty", [{ text: "no note open", fg: t.textMuted }]))
-    else if (file?.error)
-      wrap([{ text: file.error }], AW).forEach((r, i) => listEls.push(panelRow(`info-err-${i}`, [{ text: r.map((x) => x.text).join(""), fg: t.error }])))
-    else {
-      const items = infoRows
-      const curItem = linkRows[d.infoCur] ?? -1
-      // follow the cursor only when it moved; wheel and edge scrolling must stick
-      const seen = `${sideFocus === "info"}:${openPath}:${d.infoCur}`
-      const follow = sideFocus === "info" && curItem >= 0 && s.infoSeen !== seen
-      const iTop = follow ? keepVisible(s.listTop.info, curItem, LH, items.length) : topOf("info", items.length)
-      s.listTop.info = iTop
-      s.infoSeen = seen
-      const on = thumbRows(iTop, items.length)
-      items.slice(iTop, iTop + LH).forEach((it, i) => {
-        const idx = iTop + i
-        listEls.push(
-          panelRow(`info-${idx}`, infoSpans(it), {
-            sel: sideFocus === "info" && idx === curItem,
-            thumb: on(i),
-            onDown:
-              it.kind === "link" || (it.kind === "change" && it.stop)
-                ? (e) => {
-                    if (e.button !== MouseButton.LEFT) return
-                    focusPanel()
-                    set({ infoCur: linkRows.indexOf(idx) })
-                    if (it.kind === "link") openLink(it)
-                    else jumpChange(it.at)
-                  }
-                : undefined,
-          }),
-        )
-      })
-    }
-  }
-
-  const scrollList = (e: MouseEvent) => {
-    const n = s.view === "files" ? rows.length : s.view === "outline" ? d.oRows.length : infoRows.length
-    const dlt = e.scroll?.direction === "up" ? -3 : 3
-    set({ listTop: { ...s.listTop, [s.view]: Math.max(0, Math.min(n - LH, topOf(s.view, n) + dlt)) } })
-  }
-  const cur = rows[cursor]
-  // two results with the same name and folder: show the cursor row's full folder instead of the count
-  const dup =
-    filtered && cur && rows.some((r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node))
-  const filesRight = dup ? truncateLeft(dirname(cur!.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
-  const panelRows = [
-    panelRow("strip", stripSpans, { onDown: onStrip }),
-    panelRow("rule", rule, { lead: false }),
-    ...(filterRow ? [filterRowEl(s.view === "outline" ? s.outlineFilter : filter, s.filterTyping && !!sideFocus, s.view === "outline" ? String(d.oRows.length) : filesRight)] : []),
-    ...listEls,
-  ]
-  // distinct keys: the reconciler does not clear style props between the two boxes
-  const panelBox = L.inline ? (
-    <box key="side-inline" style={{ width: SW, height: bodyH, flexShrink: 0, flexDirection: "column", backgroundColor: paint.side }} onMouseScroll={scrollList}>
-      {panelRows}
-    </box>
-  ) : (
-    <box
-      key="side-drawer"
-      style={{ position: "absolute", left: 0, top: 1 + L.gap, zIndex: 5, width: PNW + 1, height: bodyH, flexDirection: "row" }}
-    >
-      <box
-        style={{ width: PNW, height: bodyH, flexDirection: "column", backgroundColor: t.backgroundElement }}
-        onMouseScroll={scrollList}
-      >
-        {panelRows}
-      </box>
-      <box style={{ width: 1, height: bodyH, flexDirection: "column", backgroundColor: t.background }}>
-        {Array.from({ length: bodyH }, (_, i) => (
-          <Row key={i} spans={[{ text: "▏", fg: t.border }]} />
-        ))}
-      </box>
-    </box>
-  )
-
-  // document: borderless, wrapped at the reading measure and centered
-  const scrim = L.mode === "drawer" && L.shown
-  let content: ReactNode
-  if (!openPath) {
-    const { rows: recents, shown } = welcomeRows()
-    const w = welcome.current
-    w.hl = Math.max(1, Math.min(shown, w.hl))
-    content = (
-      <Welcome
-        t={t}
-        CW={L.CW}
-        CH={L.CH}
-        root={s.root}
-        recents={recents}
-        hl={w.hl}
-        tick={w.tick}
-        ink={w.ink}
-        keys={WELCOME_KEYS.map(([id, word]) => [keyDef(id).label, word])}
-        onHover={(i) => {
-          w.hl = i
-          bump((x) => x + 1)
-        }}
-        onActivate={welcomeOpen}
-      />
-    )
-  } else if (file?.error) {
-    content = (
-      <box key="error" style={{ flexDirection: "column", paddingLeft: L.zen ? 2 : 0 }}>
-        <Row spans={[{ text: "Could not open ", fg: t.error, attr: 1 }, { text: rel, fg: t.text }]} />
-        <Row spans={[]} />
-        <Row spans={[{ text: truncate(file.error, CW), fg: t.textMuted }]} />
-      </box>
-    )
-  } else if (L.zen) {
-    // a 2-column gutter left of the text carries the typewriter marker
-    const gutter = mix(t.textMuted, t.background, 0.4)
-    // the gloss sheet: a rule and GLOSS_ROWS muted rows over the bottom body rows, faded toward the background
-    const sheetK = !sheet || sheet.fadeAt === null ? 0 : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
-    const ink = (c: typeof t.text) => mix(c, t.background, sheetK)
-    const sheetAt = sheet ? CH - 1 - GLOSS_ROWS : CH
-    const rule = sheet ? glossRule(sheet.state, sheet.heading, CW) : null
-    const glossed = sheet ? glossRows(sheet.text, CW) : []
-    content = (
-      <box key="zen-lines" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
-        {Array.from({ length: CH }, (_, i) => {
-          if (rule && i >= sheetAt) {
-            const r = i - sheetAt
-            const spans: Span[] = r
-              ? [{ text: glossed[r - 1] ?? "", fg: ink(t.textMuted) }]
-              : [{ text: rule[0], fg: ink(t.border) }, { text: rule[1], fg: ink(t.textMuted) }, { text: rule[2], fg: ink(t.border) }]
-            return <Row key={"gloss" + r} spans={[{ text: "  " }, ...spans]} />
-          }
-          const n = win.first + i
-          const l = n >= win.lo && n < win.hi ? view.lines[n] : undefined
-          let spans = l?.spans ?? []
-          const dim = !!l && !!spot && (n < spot[0] || n >= spot[1])
-          if (dim) spans = dimSpans(spans, t, SPOT_DIM)
-          return <Row key={n} spans={[{ text: tw && n === top ? "▸ " : "  ", fg: gutter }, ...markMatches(spans, query, t)]} />
-        })}
-      </box>
-    )
-  } else {
-    content = (
-      <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
-        {view.lines.slice(top, top + CH).map((l: Line, i) => {
-          let spans = markMatches(l.spans, query, t)
-          const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
-          if (lb)
-            lb.spots.forEach((sp, k) => {
-              const label = lb.labels[k]!
-              if (sp.row === top + i && label.startsWith(lb.typed))
-                spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
-            })
-          return <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
-        })}
-      </box>
-    )
-  }
-  const docEl = (
-    <box
-      key="doc"
-      style={{ flexDirection: "column", flexGrow: 1, height: bodyH, paddingLeft: L.zen ? padL - 2 : padL }}
-      onMouseDown={() => focusDoc()}
-      onMouseScroll={(e: MouseEvent) => (L.zen ? zenScroll : scrollBy)(e.scroll?.direction === "up" ? -3 : 3)}
-    >
-      {content}
-    </box>
-  )
-  // the minimap: a gap column, two braille cells and the find lane, over the body rows
-  const miniInkData = L.mini && openPath && !file?.error ? memo.mini(view, CW, bodyH, view.srcRow ? String(view.srcRow.length).length + 2 : 0) : null
-  const mc = miniColors(t)
-  const miniEl = L.mini ? (
-    <box
-      key="mini"
-      style={{ width: MINI_W - 1, height: bodyH, flexDirection: "column", flexShrink: 0 }}
-      onMouseDown={(e: MouseEvent) => {
-        if (e.button !== MouseButton.LEFT || !miniInkData) return
-        setTop(miniJump(e.y - 1 - L.gap, miniInkData, CH, maxTop))
-      }}
-    >
-      {miniInkData
-        ? miniCells(miniInkData, { top, h: CH, heads: memo.geo(view).heads, hits: matches, total: view.lines.length, lane: !!query }).map((row, i) => (
-            <Row key={i} spans={row.map((c) => ({ text: c.ch, fg: mc[c.kind], bg: c.band ? t.backgroundElement : undefined }))} />
-          ))
-        : null}
-    </box>
-  ) : null
-
-  // zen chrome: faded toward the background (`k` 0 = full color)
-  const fade = (spans: Span[], k: number): Span[] => spans.map((sp) => ({ ...sp, fg: mix(sp.fg ?? t.text, t.background, k) }))
-
-  // top line (row 0): the logo at column 0, the folder over the panel, `Title › section` from the text's left edge, the state cluster at its right edge
-  const topLine = (): Span[] => {
-    const out: Span[] = []
-    let x = 0
-    const at = (col: number, spans: Span[]) => {
-      if (col > x) out.push({ text: " ".repeat(col - x) })
-      out.push(...spans)
-      x = Math.max(x, col) + spanWidth(spans)
-    }
-    const logo = logoState({ gone: !!file?.error, reloadedAt: s.reloadedAt, now: Date.now() })
-    at(0, [logo === "gone" ? { text: " " } : { text: LOGO, fg: logo === "live" ? t.primary : t.textMuted, attr: logo === "live" ? 1 : 0 }])
-    if (!openPath) {
-      at(2, [{ text: "no note open", fg: t.textMuted }])
-      return out
-    }
-    const textLeft = 1 + (L.inline ? SW + 1 : 0) + padL
-    const h = headerLayout({
-      inline: L.inline,
-      SW,
-      textLeft,
-      textWidth: CW,
-      zen: L.zen,
-      gap: !!L.gap,
-      vault: basename(resolve(s.root)) || s.root,
-      folder: dirname(rel),
-      title: d.title,
-      trail: headingPath(view.headings, currentHeading),
-      query: prompt ? "" : query,
-      matchIdx: d.matchIdx,
-      count: matches.length,
-      source: s.source,
-      wide: s.wide,
-    })
-    if (h.panel) {
-      const parts = h.panel.text.split(" / ")
-      at(h.panel.col, parts.flatMap((p, i) => (i ? [{ text: " / ", fg: t.borderSubtle }] : []).concat({ text: p, fg: t.textMuted })))
-    }
-    const loc = h.head
-    const titleDim = mainHeadingVisible(view.headings, d.title, top, bodyH)
-    const left: Span[] = []
-    if (loc.folder) left.push({ text: loc.folder, fg: t.textMuted }, { text: " / ", fg: t.borderSubtle })
-    left.push(titleDim ? { text: loc.title, fg: t.textMuted } : { text: loc.title, fg: t.text, attr: 1 })
-    for (const a of loc.ancestors) left.push({ text: " › ", fg: t.borderSubtle }, { text: a, fg: t.textMuted })
-    if (loc.section) left.push({ text: " › ", fg: t.borderSubtle }, { text: loc.section, fg: t.secondary })
-    at(loc.col, left)
-    const right: Span[] = []
-    h.cluster.forEach((it, i) => {
-      if (i) right.push({ text: "   " })
-      if (it.kind !== "search") return void right.push({ text: it.kind, fg: it.kind === "source" ? t.info : t.textMuted })
-      right.push({ text: `/${it.query} `, fg: t.accent })
-      if (!it.count) right.push({ text: "no match", fg: t.error, attr: 1 })
-      else
-        right.push(
-          it.idx === null ? { text: "–", fg: t.textMuted } : { text: String(it.idx), fg: t.text, attr: 1 },
-          { text: `/${it.count}`, fg: t.text, attr: 1 },
-        )
-    })
-    at(h.clusterCol, right)
-    return out
-  }
-  /** Row 0, faded `k` toward the background (0 = full); null draws nothing (ghosted away). */
-  const topRow = (k: number | null) => (
-    <box style={{ height: 1, flexDirection: "row" }}>
-      <Row spans={fade(k === null ? [] : topLine(), k ?? 0)} />
-    </box>
-  )
-  /** The gap row (H ≥ 28): a faint rule over the text column; blank in zen. */
-  const gapRow = () => {
-    if (!L.gap) return null
-    const textLeft = 1 + (L.inline ? SW + 1 : 0) + padL
-    return (
-      <box key="gap" style={{ height: 1, flexDirection: "row" }}>
-        {L.zen ? null : <Row spans={[{ text: " ".repeat(textLeft) }, { text: "─".repeat(CW), fg: t.border }]} />}
-      </box>
-    )
-  }
-
-  // progress line (row H-1): read part in primary, then `34% · 3 min left`; the one permanent zen row
-  const PW = W - 2
-  const pl =
-    openPath && !file?.error
-      ? progressLabel({
-          top,
-          maxTop,
-          minutes: minutesLeft(memo.words(view), top),
-          page: pg ? { index: pg.index, count: pg.count } : undefined,
-          wpm: s.rolling ? s.zenCfg.wpm : undefined,
-        })
-      : null
-  const label: Span[] = pl
-    ? [{ text: pl.pre, fg: t.textMuted }, { text: pl.main, fg: t.text }, { text: pl.rest, fg: t.textMuted }].filter((x) => x.text)
-    : []
-  const lineW = Math.max(0, PW - (label.length ? spanWidth(label) + 1 : 0))
-  const fill = pl ? fillWidth(top, maxTop, lineW) : 0
-  const progressLine = (
-    <box style={{ height: 1, paddingLeft: 1, paddingRight: 1 }}>
-      <Row
-        spans={[
-          { text: "─".repeat(fill), fg: t.primary },
-          { text: "─".repeat(lineW - fill), fg: t.border },
-          ...(label.length ? [{ text: " " }, ...label] : []),
-        ]}
-      />
-    </box>
-  )
+  // the panel and the document write the list tops and the welcome row back to the store as they draw: always built,
+  // even when zen or a too-small terminal leaves them off screen
+  const panelEl = panelBox(ctx, d, { outlineGo, jumpChange, openLink })
+  const docEl = docBox(ctx, d, { welcomeRows, welcomeOpen, zenScroll })
+  const miniEl = miniBox(ctx, d)
+  const progressEl = progressLine(ctx, d)
 
   // any context change (focus, view, zen, popup closed, typing ended) shows the new context's hints
   const ctxNow = currentCtx()
@@ -1193,7 +722,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   })
 
   // zen gloss: runs when the reading line changes section (not on every scroll tick)
-  const glossAt = L.zen && openPath ? `${openPath}\0${currentHeading}` : null
+  const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
   useEffect(() => {
     if (glossAt === glossSeen.current) return
     glossSeen.current = glossAt
@@ -1202,33 +731,12 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
   const pinned = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"].includes(ctxNow)
-  let hintK: number | null = null
-  if (pinned) hintK = 0
-  // the welcome page has its own keycaps: no hint row under it (popups opened from it keep theirs)
-  else if (s.openPath && s.hintAt !== null && s.hintCtx === ctxNow) {
-    const st = fadeStep(Date.now() - s.hintAt, HINT_HOLD)
-    hintK = st === null ? null : st / (GHOST_STEPS + 1)
-  }
-  const tStep = s.toast ? toastStep(s.toast, Date.now()) : null
-  const toastSpans: Span[] =
-    s.toast && tStep !== null
-      ? fade(
-          [
-            {
-              text: truncate(`${toastIcon(s.toast)} ${s.toast.msg}`, W - 2),
-              fg: s.toast.kind === "ok" ? t.success : s.toast.kind === "error" ? t.error : t.info,
-              attr: s.toast.kind === "error" ? 1 : 0,
-            },
-          ],
-          tStep / (GHOST_STEPS + 1),
-        )
-      : []
-  /** Key hints for context `c`, as many as fit in `room` columns. */
-  const hintRow = (c: Ctx, room: number): Span[] => {
+  /** Key hints for context `c`, before fitting. */
+  const hintRow = (c: Ctx): HintItem[] => {
     const items: HintItem[] = []
     for (const h of FOOTERS[c]) {
       const [id, word] = Array.isArray(h) ? h : [h, undefined]
-      if (id === "docMatch" && !query) continue
+      if (id === "docMatch" && !s.query) continue
       if (id === "links" && s.source) continue // labels are Preview only
       if (id === "edit" && s.openPath === STDIN) continue // nothing on disk to edit
       if ((id === "summarize" || id === "zenGloss") && !s.ai) continue // AI is off until an `ai` block is configured
@@ -1236,187 +744,28 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       const def = keyDef(id)
       items.push({ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: id === "links" || id === "histBack" || id === "summarize" || id === "zenGloss" || id === "explainChange" || id === "edit" || id === "themeType" })
     }
-    return fitHints(items, room).flatMap((h, i): Span[] => [
-      ...(i ? [{ text: "   " }] : []),
-      { text: h.key, fg: t.text },
-      ...(h.word ? [{ text: " " + h.word, fg: t.textMuted }] : []),
-    ])
+    return items
   }
-  const hintSpans = hintK === null ? [] : fade(hintRow(ctxNow, W - 2 - (toastSpans.length ? spanWidth(toastSpans) + 3 : 0)), hintK)
-  const ghostLine = (
-    <box style={{ height: 1, flexDirection: "row", justifyContent: "space-between", paddingLeft: 1, paddingRight: 1 }}>
-      <Row spans={hintSpans} />
-      <Row spans={toastSpans} />
-    </box>
-  )
+  const ghostEl = ghostLine(ctx, d, { ctx: ctxNow, pinned, hints: hintRow })
 
-  const popupW = Math.min(70, W - 2)
-  const hl = helpLayout(HELP_GROUPS, W, H)
-  const helpTopC = Math.max(0, Math.min(s.helpTop, hl.rows - hl.vis))
-  const helpNote = hl.rows > hl.vis ? `j/k scroll ${helpTopC + hl.vis}/${hl.rows}` : undefined
-  // title row: padding 4 each side, then the note and `esc`; the theme name goes first, then the title is cut
-  const titleRoom = Math.min(hl.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
-  const helpFull = `Keybindings · brothy v${VERSION} · ${t.name}`
-  const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${VERSION}`, Math.max(1, titleRoom))
-  const helpOverlay = help ? (
-    <HelpSheet t={t} W={W} H={H} layout={hl} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * 3)} />
-  ) : null
-
-  const notesLabel = s.indexing ? `indexing ${s.indexing[0]}/${s.indexing[1]}` : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")
-  const peek = peekPane(d)
-  const switchOverlay = s.switcher ? (
-    <Switcher
-      t={t}
-      W={W}
-      H={H}
-      title={question ? "Ask" : "Go to"}
-      q={s.switcher.q}
-      rows={swRows}
-      hl={swHl}
-      top={keepVisible(s.switcher.top, Math.max(0, swHl), L.PH, swRows.length)}
-      height={L.PH}
-      note={question ? askTitleNote({ off: !s.ai, state: s.switcher.ask, indexing: s.indexing ? notesLabel : null, notes: notesLabel }) : notesLabel}
-      peek={peek}
-      onClose={closeSwitcher}
-      onScroll={(dir) => swGo(stepRow(swRows, swHl, dir))}
-      onHover={(i) => i !== swHl && ui.current.switcher && set({ switcher: { ...ui.current.switcher, hl: i } })}
-      onActivate={swActivate}
-    />
-  ) : null
-
-  const openOverlay = s.opener ? (
-    <OpenPicker
-      t={t}
-      W={W}
-      H={H}
-      q={s.opener.q}
-      rows={d.opRows}
-      hl={d.opHl}
-      top={keepVisible(s.opener.top, Math.max(0, d.opHl), L.PH, d.opRows.length)}
-      height={L.PH}
-      onClose={() => set({ opener: null })}
-      onScroll={(dir) => opGo(stepRow(d.opRows, d.opHl, dir))}
-      onHover={(i) => i !== d.opHl && ui.current.opener && set({ opener: { ...ui.current.opener, hl: i } })}
-      onActivate={(i) => opOpen(d.opRows[i])}
-    />
-  ) : null
-
-  // `/` picker: find in the document
-  let promptOverlay: ReactNode = null
-  if (prompt) {
-    const height = L.PH
-    const items: PickerItem[] = matches.map((m) => {
-      const num = s.source ? "" : String(m + 1).padStart(4) + "  "
-      const text = lineText(view.lines[m]).trim()
-      // code point indexes of the hits, so the cut can keep the first one in view
-      const hits: number[] = []
-      for (const [a, b] of matchRanges(text, prompt.value)) {
-        const from = [...text.slice(0, a)].length
-        for (let i = from; i < from + [...text.slice(a, b)].length; i++) hits.push(i)
-      }
-      const f = fitHits(text, hits, popupW - 2 - 8 - num.length)
-      return { spans: [...(num ? [{ text: num, fg: t.textMuted }] : []), ...markHits(f.text, f.hits, t.text, t.primary)] }
-    })
-    const hl = Math.min(items.length - 1, prompt.hl >= 0 ? prompt.hl : promptDefault())
-    const ptop = keepVisible(prompt.hl >= 0 ? prompt.top : 0, Math.max(0, hl), height, items.length)
-    const note = prompt.value ? `${matches.length} match${matches.length === 1 ? "" : "es"}` : undefined
-    promptOverlay = (
-      <Overlay
-        t={t}
-        W={W}
-        H={H}
-        width={popupW}
-        title="Find in Document"
-        onClose={promptClose}
-        onScroll={(dir) => items.length && promptHighlight(hl + dir)}
-      >
-        <PickerInput t={t} value={prompt.value} placeholder="Find in document..." note={note} width={popupW} />
-        <PickerList
-          t={t}
-          items={items}
-          hl={hl}
-          top={ptop}
-          height={height}
-          innerW={popupW - 2}
-          empty={!prompt.value ? "Type to search" : "No results found"}
-          onHover={(i) => i !== hl && ui.current.prompt && set({ prompt: { ...ui.current.prompt, hl: i, top: ptop } })}
-          onActivate={(i) => promptSubmit(i)}
-        />
-      </Overlay>
-    )
-  }
-
-  // `t` picker: the chrome stays in `t`; from PEEK_MIN_W the pane draws the candidate's sample on its own background
-  const pick = s.themePick
-  const pickRows = pick ? memo.themeRows(pick.q) : []
-  const pickGeo = themeSplit(W, H, L.PH)
-  const pickHl = pick ? pickIndex(pick, pickRows) : -1
-  // the board's rows under the header; hover holds the window where it is, keys and the wheel centre it again
-  const pickTopShown = pick ? pickTop(pick, pickHl, Math.max(1, pickGeo.rows - 1), pickRows.length) : 0
-  const pickT = pick ? pickTheme(pick) : null
-  const pickView = pickT && pickGeo.split && pickHl >= 0 ? memo.themeSample(pickT, pickGeo.peekW, s.hl, s.headings) : null
+  const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo })
+  const switchEl = switchOverlay(ctx, d, switcher)
+  const openEl = openOverlay(ctx, d, workspaceControl)
+  const findEl = findOverlay(ctx, d, { promptDefault, promptHighlight, promptSubmit, promptClose })
+  const pickView = themePickView(ctx, d)
+  const pickSample = pickView?.sample ?? null
   // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
   useEffect(() => {
-    if (!pickView || pickView === hlSample.current) return
-    hlSample.current = pickView
-    const reqs = pendingHighlights(pickView)
+    if (!pickSample || pickSample === hlSample.current) return
+    hlSample.current = pickSample
+    const reqs = pendingHighlights(pickSample)
     if (reqs.length)
       ensureHighlights(reqs).then((changed) => {
         if (changed && alive.current) set({ hl: ui.current.hl + 1 })
       })
   })
-  /** row `i` becomes the highlight (hover, click); the list stays where it is under the pointer */
-  const pickAt = (i: number) => {
-    const p = ui.current.themePick
-    const r = pickRows[i]
-    if (p && r && r.family.name !== p.family) themeSet({ ...p, family: r.family.name, top: pickTopShown })
-  }
-  const themeOverlay = pick ? (
-    <ThemePicker
-      t={t}
-      W={W}
-      H={H}
-      q={pick.q}
-      rows={pickRows}
-      hl={pickHl}
-      top={pickTopShown}
-      mode={pick.mode}
-      shown={pickShown(pick)}
-      only={pickHl >= 0 ? onlyMode(pickRows[pickHl]!.family) : undefined}
-      orig={pick.orig}
-      geo={pickGeo}
-      pane={pickT && pickView ? { theme: pickT, lines: memo.themePane(pickT, pickView, pickGeo.peekW, pickGeo.rows) } : undefined}
-      onClose={closeTheme}
-      onScroll={(dir) => themeSet(pickMove(ui.current.themePick!, dir))}
-      onHover={pickAt}
-      onActivate={(i) => {
-        pickAt(i)
-        applyTheme()
-      }}
-      onPick={(i, m) => {
-        pickAt(i)
-        themeSet(pickMode(ui.current.themePick!, m))
-        applyTheme()
-      }}
-      onMode={(m) => themeSet(pickMode(ui.current.themePick!, m))}
-    />
-  ) : null
-  const zenOverlay =
-    s.zenOrig !== null ? (
-      <ZenSettings
-        t={t}
-        W={W}
-        H={H}
-        rows={zenRows(s.zenCfg)}
-        cursor={s.zenRow}
-        onClose={revertZen}
-        onHover={(i) => i !== ui.current.zenRow && set({ zenRow: i })}
-        onActivate={(i) => {
-          set({ zenRow: i })
-          zenEdit(i, 0)
-        }}
-      />
-    ) : null
+  const themeEl = themeOverlay(ctx, d, pickView, { closeTheme, themeSet, applyTheme })
+  const zenEl = zenOverlay(ctx, d, { revertZen, zenEdit })
 
   if (W < 60 || H < 14)
     return (
@@ -1435,39 +784,39 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     const topK = step === undefined ? ZEN_DIM : step === null ? null : step / (GHOST_STEPS + 1)
     return (
       <box key="zen" onMouse={pointer.note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
-        {topRow(topK)}
-        {gapRow()}
-        <box style={{ flexDirection: "row", height: bodyH, paddingLeft: 1, paddingRight: 1 }}>{docEl}</box>
-        {ghostLine}
-        {progressLine}
-        {helpOverlay}
-        {promptOverlay}
-        {switchOverlay}
-        {openOverlay}
-        {themeOverlay}
-        {zenOverlay}
+        {topRow(d, topK)}
+        {gapRow(d)}
+        <box style={{ flexDirection: "row", height: L.bodyH, paddingLeft: 1, paddingRight: 1 }}>{docEl}</box>
+        {ghostEl}
+        {progressEl}
+        {helpEl}
+        {findEl}
+        {switchEl}
+        {openEl}
+        {themeEl}
+        {zenEl}
       </box>
     )
   }
 
   return (
     <box key="main" onMouse={pointer.note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
-      {topRow(0)}
-      {gapRow()}
-      <box style={{ flexDirection: "row", height: bodyH, paddingLeft: 1, paddingRight: L.mini ? 0 : 1, gap: 1 }}>
-        {L.inline ? panelBox : null}
+      {topRow(d, 0)}
+      {gapRow(d)}
+      <box style={{ flexDirection: "row", height: L.bodyH, paddingLeft: 1, paddingRight: L.mini ? 0 : 1, gap: 1 }}>
+        {L.inline ? panelEl : null}
         {docEl}
         {miniEl}
       </box>
-      {ghostLine}
-      {progressLine}
-      {L.shown && !L.inline ? panelBox : null}
-      {helpOverlay}
-      {promptOverlay}
-      {switchOverlay}
-      {openOverlay}
-      {themeOverlay}
-      {zenOverlay}
+      {ghostEl}
+      {progressEl}
+      {L.shown && !L.inline ? panelEl : null}
+      {helpEl}
+      {findEl}
+      {switchEl}
+      {openEl}
+      {themeEl}
+      {zenEl}
     </box>
   )
 }

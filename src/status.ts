@@ -1,8 +1,12 @@
-// Status rows (top line, ghost line, progress line) and toasts: pure string helpers and the fade timing. Span styling stays in App.
+// Status rows (top line, gap row, ghost line, progress line) and toasts: pure string helpers, the fade timing and the
+// spans each row is drawn with.
 
-import { basename } from "node:path"
+import { basename, relative } from "node:path"
+import { fadeSpans } from "./chrome"
 import { stem } from "./files"
-import { truncate, width } from "./text"
+import type { Span } from "./spans"
+import { spanWidth, truncate, width } from "./text"
+import type { Theme } from "./theme"
 
 export { truncate, truncateLeft } from "./text"
 
@@ -214,6 +218,60 @@ export function headerLayout(o: {
   }
 }
 
+/** The open note's path for the header: relative to the workspace, or to the vault's root (`linkRoot`) for a note reached through a link outside it. */
+export function notePath(root: string, linkRoot: string | null, openPath: string | null): string {
+  if (!openPath) return ""
+  const outside = linkRoot !== null && relative(root, openPath).startsWith("..")
+  return relative(outside ? linkRoot : root, openPath)
+}
+
+/**
+ * Row 0 in `t`: the logo at column 0, then with a note open (`h`) the folder over the panel, `Title › section` (the
+ * title muted while the note's main heading is on screen, `titleDim`) and the state cluster; else `no note open`.
+ */
+export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, titleDim: boolean): Span[] {
+  const out: Span[] = []
+  let x = 0
+  const at = (col: number, spans: Span[]) => {
+    if (col > x) out.push({ text: " ".repeat(col - x) })
+    out.push(...spans)
+    x = Math.max(x, col) + spanWidth(spans)
+  }
+  at(0, [logo === "gone" ? { text: " " } : { text: LOGO, fg: logo === "live" ? t.primary : t.textMuted, attr: logo === "live" ? 1 : 0 }])
+  if (!h) {
+    at(2, [{ text: "no note open", fg: t.textMuted }])
+    return out
+  }
+  if (h.panel) {
+    const parts = h.panel.text.split(" / ")
+    at(h.panel.col, parts.flatMap((p, i) => (i ? [{ text: " / ", fg: t.borderSubtle }] : []).concat({ text: p, fg: t.textMuted })))
+  }
+  const loc = h.head
+  const left: Span[] = []
+  if (loc.folder) left.push({ text: loc.folder, fg: t.textMuted }, { text: " / ", fg: t.borderSubtle })
+  left.push(titleDim ? { text: loc.title, fg: t.textMuted } : { text: loc.title, fg: t.text, attr: 1 })
+  for (const a of loc.ancestors) left.push({ text: " › ", fg: t.borderSubtle }, { text: a, fg: t.textMuted })
+  if (loc.section) left.push({ text: " › ", fg: t.borderSubtle }, { text: loc.section, fg: t.secondary })
+  at(loc.col, left)
+  const right: Span[] = []
+  h.cluster.forEach((it, i) => {
+    if (i) right.push({ text: "   " })
+    if (it.kind !== "search") return void right.push({ text: it.kind, fg: it.kind === "source" ? t.info : t.textMuted })
+    right.push({ text: `/${it.query} `, fg: t.accent })
+    if (!it.count) right.push({ text: "no match", fg: t.error, attr: 1 })
+    else
+      right.push(
+        it.idx === null ? { text: "–", fg: t.textMuted } : { text: String(it.idx), fg: t.text, attr: 1 },
+        { text: `/${it.count}`, fg: t.text, attr: 1 },
+      )
+  })
+  at(h.clusterCol, right)
+  return out
+}
+
+/** The gap row's faint rule: `cols` columns of `─` in border, from column `col`. */
+export const gapSpans = (t: Theme, col: number, cols: number): Span[] => [{ text: " ".repeat(col) }, { text: "─".repeat(cols), fg: t.border }]
+
 // ------------------------------------------------------------- progress line
 
 const fraction = (top: number, maxTop: number) => (maxTop === 0 ? 1 : Math.max(0, Math.min(1, top / maxTop)))
@@ -235,6 +293,16 @@ export function progressLabel(o: {
   if (o.minutes === 0) return { pre, main: "100%", rest: "" }
   const atEnd = o.maxTop > 0 && o.top >= o.maxTop
   return { pre, main: `${Math.round(fraction(o.top, o.maxTop) * 100)}%`, rest: atEnd ? "" : rest }
+}
+
+/** The progress line, `cols` wide: the read part in primary, the rest in border, then label `pl` (none: the line alone). */
+export function progressSpans(t: Theme, pl: { pre: string; main: string; rest: string } | null, top: number, maxTop: number, cols: number): Span[] {
+  const label: Span[] = pl
+    ? [{ text: pl.pre, fg: t.textMuted }, { text: pl.main, fg: t.text }, { text: pl.rest, fg: t.textMuted }].filter((x) => x.text)
+    : []
+  const lineW = Math.max(0, cols - (label.length ? spanWidth(label) + 1 : 0))
+  const fill = pl ? fillWidth(top, maxTop, lineW) : 0
+  return [{ text: "─".repeat(fill), fg: t.primary }, { text: "─".repeat(lineW - fill), fg: t.border }, ...(label.length ? [{ text: " " }, ...label] : [])]
 }
 
 // ------------------------------------------------------------- ghost line
@@ -276,6 +344,10 @@ export function fitHints(items: HintItem[], room: number): HintItem[] {
   return out
 }
 
+/** The hints of `items` that fit in `room` columns (`fitHints`), keys in text and words in textMuted. */
+export const hintSpans = (t: Theme, items: HintItem[], room: number): Span[] =>
+  fitHints(items, room).flatMap((h, i): Span[] => [...(i ? [{ text: "   " }] : []), { text: h.key, fg: t.text }, ...(h.word ? [{ text: " " + h.word, fg: t.textMuted }] : [])])
+
 export type ToastKind = "ok" | "info" | "error"
 export interface Toast {
   msg: string
@@ -303,6 +375,14 @@ export function errText(e: unknown): string {
 }
 
 export const toastIcon = (t: Toast) => (t.kind === "ok" ? "✓" : t.kind === "error" ? "✗" : /reload/.test(t.msg) ? "↻" : "·")
+
+/** The toast at `now` in `t`, cut to `cols`: its icon and message in its kind's colour (an error bold), faded as it goes; [] once gone. */
+export function toastSpans(t: Theme, toast: Toast | null, now: number, cols: number): Span[] {
+  const step = toast ? toastStep(toast, now) : null
+  if (!toast || step === null) return []
+  const fg = toast.kind === "ok" ? t.success : toast.kind === "error" ? t.error : t.info
+  return fadeSpans(t, [{ text: truncate(`${toastIcon(toast)} ${toast.msg}`, cols), fg, attr: toast.kind === "error" ? 1 : 0 }], step / (GHOST_STEPS + 1))
+}
 
 /** The too-small-terminal message as lines that each fit `W` columns, whole words only; the longest form that fits wins. */
 export function tooSmall(W: number, H: number, need = "60×14"): string[] {

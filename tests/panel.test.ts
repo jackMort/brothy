@@ -6,7 +6,10 @@ import { scanTree } from "../src/files"
 import { headingKey } from "../src/sections"
 import type { Stats } from "../src/markdown"
 import type { Change } from "../src/delta"
-import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, findHeading, fmtAge, infoItems, linkDest, noteIndex, outlineRows, resolveLink, tldrItems, wrapProperty, type ChangeView, type InfoItem } from "../src/panel"
+import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, fileRowSpans, findHeading, fmtAge, infoItems, infoSpans, linkDest, noteIndex, outlineRowSpans, outlineRows, resolveLink, tldrItems, wrapProperty, type ChangeView, type InfoItem } from "../src/panel"
+import { mix, themeByName } from "../src/theme"
+import { width } from "../src/text"
+import type { FileNode } from "../src/files"
 
 const made: string[] = []
 afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
@@ -310,4 +313,60 @@ test("infoItems puts the Changed block under the TL;DR and above the properties"
   const kinds = items.map((i) => i.kind)
   expect(kinds.indexOf("tldr")).toBeLessThan(kinds.indexOf("changes"))
   expect(kinds.indexOf("changes")).toBeLessThan(kinds.indexOf("prop"))
+})
+
+describe("row spans", () => {
+  const t = themeByName("brothy")
+  const text = (spans: { text: string }[]) => spans.map((s) => s.text).join("")
+  const node = (rel: string, o: Partial<FileNode> = {}): FileNode => ({ name: rel.split("/").at(-1)!, path: "/r/" + rel, rel, dir: false, children: [], ...o })
+  const opts = { t, cols: 24, open: "/r/notes/open.md", expanded: new Set(["/r/open"]), counts: new Map([["/r/shut", 12]]), maxDepth: 2 }
+
+  test("fileRowSpans: a closed folder shows its note count at the right edge, an open one none", () => {
+    const shut = fileRowSpans({ node: node("shut", { dir: true }), depth: 0 }, opts)
+    expect(text(shut)).toBe("▸ shut" + " ".repeat(16) + "12")
+    expect(width(text(shut))).toBe(24)
+    expect(text(fileRowSpans({ node: node("open", { dir: true }), depth: 1 }, opts))).toBe("  ▾ open")
+  })
+
+  test("fileRowSpans: the open note is marked and bold, indentation stops at maxDepth, a symlink out is marked", () => {
+    const open = fileRowSpans({ node: node("notes/open.md"), depth: 5 }, opts)
+    expect(text(open)).toBe("    ● open")
+    expect(open.at(-1)).toEqual({ text: "open", fg: t.primary, attr: 1 })
+    const out = fileRowSpans({ node: node("x.md", { outside: true }), depth: 0 }, opts)
+    expect(text(out)).toBe("  x ↗")
+    expect(out.at(-1)).toEqual({ text: " ↗", fg: t.textMuted })
+  })
+
+  test("fileRowSpans: a ranked hit has no indent, its hits in primary and its folder at the right edge", () => {
+    const hit = fileRowSpans({ node: node("deep/notes/alpha.md"), depth: 3, hits: [0, 1] }, opts)
+    expect(text(hit)).toBe("  alpha" + " ".repeat(12) + "notes")
+    expect(hit.filter((s) => s.fg === t.primary && s.attr).map((s) => s.text)).toEqual(["al"])
+    // no folder with fewer than 6 columns to spare
+    expect(text(fileRowSpans({ node: node("notes/alpha.md"), depth: 0, hits: [] }, { ...opts, cols: 12 }))).toBe("  alpha")
+  })
+
+  test("outlineRowSpans: the reading heading behind ▸ in primary, read ones faded, indented", () => {
+    const row = { index: 0, text: "Intro", indent: 2, level: 1 as const, read: false, current: true, hits: [] }
+    expect(outlineRowSpans(row, t, 20)).toEqual([{ text: "▸ ", fg: t.primary }, { text: "  " }, { text: "Intro", fg: t.primary, attr: 1 }])
+    const read = outlineRowSpans({ ...row, current: false, read: true, level: 2 }, t, 20)
+    expect(read.at(-1)).toEqual({ text: "Intro", fg: mix(t.textMuted, t.background, 0.35), attr: 0 })
+    expect(text(outlineRowSpans({ ...row, text: "a long heading text" }, t, 10))).toBe("▸   a lon…")
+  })
+
+  test("infoSpans: keys padded, unresolved links marked ?, tags cut to the room", () => {
+    expect(infoSpans({ kind: "prop", key: "tags", keyW: 6, text: "x" }, t, 20)).toEqual([{ text: "tags  ", fg: t.textMuted }, { text: "x", fg: t.text }])
+    expect(infoSpans({ kind: "link", target: "Gone", path: null }, t, 20)).toEqual([
+      { text: "→ ", fg: t.textMuted },
+      { text: "Gone", fg: t.textMuted },
+      { text: "?", fg: t.textMuted },
+    ])
+    expect(infoSpans({ kind: "link", target: "Here", path: "/r/here.md" }, t, 20)[1]).toEqual({ text: "Here", fg: t.info })
+    expect(text(infoSpans({ kind: "chips", key: "tags", keyW: 5, tags: ["one", "averyverylongtag"], more: true }, t, 12))).toBe("tags #one #avery… …")
+    expect(infoSpans({ kind: "change", mark: "+", text: "New", counts: " +3", at: 0, stop: true }, t, 20)).toEqual([
+      { text: "+ ", fg: t.success },
+      { text: "New", fg: t.text },
+      { text: " +3", fg: t.textMuted },
+    ])
+    expect(infoSpans({ kind: "blank" }, t, 20)).toEqual([])
+  })
 })

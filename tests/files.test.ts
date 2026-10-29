@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ancestorsOf, findVault, folderCounts, fuzzyHits, rankNotes, scanTree, scoreName, stem, visibleRows, type FileNode } from "../src/files"
+import { ancestorsOf, findVault, folderCounts, folderOf, fuzzyHits, rankNotes, scanTree, scoreName, stem, visibleRows, type FileNode } from "../src/files"
 
 const made: string[] = []
 afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
@@ -228,4 +228,10 @@ describe("non-UTF-8 names", () => {
     }
     expect(names(root)).toEqual(["ok.md", "\uFFFDreal.md"])
   })
+})
+
+test("folderOf is the last folder of a note's relative path, empty at the root", () => {
+  expect(folderOf({ rel: join("notes", "deep", "a.md") })).toBe("deep")
+  expect(folderOf({ rel: join("notes", "a.md") })).toBe("notes")
+  expect(folderOf({ rel: "a.md" })).toBe("")
 })
