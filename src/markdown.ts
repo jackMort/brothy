@@ -739,11 +739,14 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
 }
 
+/** Narrowest measure `render` lays out for, however small the terminal. */
+const MIN_MEASURE = 10
+
 /** Lay out a Markdown document into styled, wrapped terminal lines. */
 export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}): Rendered {
   const tokens = lexBlocks(stripComments(normalize(src)))
   const ctx: Ctx = { t, lines: [], headings: [], pending: [], sink: { links: [], exists: opts.exists }, headingStyle: opts.headings ?? "classic" }
-  blocks(ctx, tokens, Math.max(10, max), [], [])
+  blocks(ctx, tokens, Math.max(MIN_MEASURE, max), [], [])
   while (ctx.lines.length && plainOf(ctx.lines[ctx.lines.length - 1]!.spans).trim() === "" && ctx.lines[ctx.lines.length - 1]!.fill === undefined)
     ctx.lines.pop()
   while (ctx.lines.length && plainOf(ctx.lines[0]!.spans).trim() === "" && ctx.lines[0]!.heading === undefined && ctx.lines[0]!.fill === undefined) {
