@@ -60,13 +60,7 @@ export function stripThink(raw: string): string {
 }
 
 function cleanStep(s: string): string {
-  s = s.trimStart()
-  if (s && "<think>".startsWith(s)) return "" // the tag is still arriving
-  if (s.startsWith("<think>")) {
-    const end = s.indexOf("</think>")
-    if (end < 0) return "" // still thinking: show nothing yet
-    s = s.slice(end + "</think>".length)
-  }
+  s = stripThink(s.trimStart()) // "" while the tag arrives or the model is still thinking: show nothing yet
   s = s
     .replace(/\*\*(.+?)\*\*/gs, "$1")
     .replace(/__(.+?)__/gs, (m, x: string) => (/^\w+$/.test(x) ? m : x)) // `__init__` is a name, not emphasis
@@ -98,12 +92,7 @@ export const shortModel = (model: string) => model.slice(model.lastIndexOf("/") 
  * around the JSON is expected.
  */
 export function extractJSON(raw: string): unknown {
-  let s = raw.trim()
-  if (s.startsWith("<think>")) {
-    const end = s.indexOf("</think>")
-    if (end < 0) return undefined
-    s = s.slice(end + "</think>".length)
-  }
+  let s = stripThink(raw.trim())
   const fence = /```(?:json)?[ \t]*\r?\n([\s\S]*?)```/i.exec(s)
   if (fence) s = fence[1]!
   const open = s.search(/[{[]/)

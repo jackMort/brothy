@@ -255,6 +255,15 @@ describe("parseDelta", () => {
     expect(p.notes[0]).toBeUndefined()
     expect(parseDelta("<think>still", cs(), true)).toBeNull()
   })
+  test("a leading <think> block is dropped, also while streaming; a partial tag or a second block keeps nothing", () => {
+    for (const partial of [false, true]) {
+      expect(parseDelta("<think>hm</think>\nSum.", cs(), partial)!.summary).toBe("Sum.")
+      expect(parseDelta("  <think>hm</think>Sum.\n§1: vault search\n", cs(), partial)!.notes[0]!.what).toBe("vault search")
+      expect(parseDelta("<think", cs(), partial)).toBeNull()
+      expect(parseDelta("<think>a</think><think>b</think>Sum.\n§1: x", cs(), partial)).toBeNull()
+    }
+    expect(parseDelta("Sum <think>b</think> x", cs())!.summary).toBe("Sum <think>b</think> x") // only a leading block is thinking
+  })
 })
 
 describe("reloadToast", () => {
