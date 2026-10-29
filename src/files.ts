@@ -24,7 +24,6 @@ export const SCAN_LIMIT = 20_000
 /** Dot-entries are hidden, except `.github` (it holds docs worth reading). */
 const skipped = (name: string) => SKIP.has(name) || (name.startsWith(".") && name !== ".github")
 
-/** Whether `path` has a Markdown extension. */
 export function isMarkdown(path: string): boolean {
   return MD_EXT.test(path)
 }
@@ -135,7 +134,6 @@ export function scanTree(root: string, maxDepth = 8, maxEntries = SCAN_LIMIT): F
   return tree
 }
 
-/** One Files row: a node and its indent level. */
 export interface TreeRow {
   node: FileNode
   depth: number
@@ -155,7 +153,6 @@ export function firstFile(root: FileNode): FileNode | null {
   return null
 }
 
-/** Notes in the whole tree. */
 export function countFiles(root: FileNode): number {
   let n = 0
   for (const c of root.children) n += c.dir ? countFiles(c) : 1

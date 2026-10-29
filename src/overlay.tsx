@@ -591,7 +591,6 @@ export function ThemePicker({
   )
 }
 
-/** Columns of the zen settings' label column. */
 const ZEN_LABEL_W = 16
 
 /** `Z` popup: one row per zen setting, label left and value right of it; controlled by App. */

@@ -22,7 +22,6 @@ export const RERANK_PROMPT =
 export const QUESTION_MAX = 300
 /** Fewest code points a question needs before it can be asked. */
 export const ASK_MIN = 3
-/** Queries kept from tier 0's reply. */
 export const MAX_QUERIES = 8
 /** Code points a query must have, at least and at most, to be kept. */
 const QUERY_MIN = 2

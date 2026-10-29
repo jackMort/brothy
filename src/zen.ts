@@ -32,9 +32,7 @@ export const ZEN_DEFAULTS: ZenConfig = {
   measure: 72,
 }
 
-/** Teleprompter speed range and step of the settings popup, words per minute. */
 export const ZEN_WPM = { min: 120, max: 400, step: 20 } as const
-/** Measure range and step of the settings popup, columns. */
 export const ZEN_MEASURE = { min: 60, max: 100, step: 4 } as const
 
 const BOOLS = ["spotlight", "typewriter", "ghost", "prompter"] as const
