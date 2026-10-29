@@ -191,7 +191,7 @@ export function diffSections(before: string, after: string): Change[] | null {
   return out
 }
 
-/** `PROMPTS.delta` (ai.ts) is its version; nothing is cached, so a change needs no bump to be safe, but bump it anyway. */
+/** `PROMPTS.delta` (ai-config.ts) is its version; nothing is cached, so a change needs no bump to be safe, but bump it anyway. */
 export const DELTA_PROMPT =
   'You are shown the sections of a note that changed, as line diffs (`-` removed, `+` added, two spaces = unchanged context), each with an id like §2. First write 1–2 sentences, at most 40 words, on what changed overall and why it matters to a reader. Then one line per section id you can describe, at most 10 of them, the changes that matter most: `§<id>: <at most 12 words>`, optionally followed by ` | "<a short phrase copied exactly from a + line>"`. Plain text, no markdown. Same language as the note.'
 /** The user message stays within this many code points (or the target's `maxChars`, if lower), unless the `Note:` line alone is longer. */
@@ -271,9 +271,12 @@ export interface DeltaParse {
   notes: (DeltaNote | undefined)[]
 }
 
+/** Caps on the kept summary (a cut one ends in `…`) and a note's `what`, and the fewest characters in a quote worth jumping to. */
 const SUMMARY_MAX = 300
 const WHAT_MAX = 80
 const QUOTE_MIN = 8
+/** Splits a `§n` line's note from its quote. */
+const BAR = " | "
 const isIdLine = (l: string) => /^[\s>*_\-•]*§/.test(l)
 const ID_LINE = /^[\s>*_\-•]*§\s*(\d+)\s*(?:\*\*)?\s*[:.)–—-]?\s*(?:\*\*)?\s*(.*)$/
 const collapse = (s: string) => s.replace(/\s+/g, " ").trim()
@@ -307,10 +310,11 @@ export function parseDelta(raw: string, changes: Change[], partial = false): Del
     const i = Number(m[1]) - 1
     const c = changes[i]
     if (!c || notes[i]) continue
-    const bar = m[2]!.lastIndexOf(" | ")
-    const what = truncate(cleanSummary(bar < 0 ? m[2]! : m[2]!.slice(0, bar)), WHAT_MAX)
+    const rest = m[2]!
+    const bar = rest.lastIndexOf(BAR)
+    const what = truncate(cleanSummary(bar < 0 ? rest : rest.slice(0, bar)), WHAT_MAX)
     if (!what) continue
-    const quote = bar < 0 || c.status === "removed" ? "" : unquote(m[2]!.slice(bar + 3))
+    const quote = bar < 0 || c.status === "removed" ? "" : unquote(rest.slice(bar + BAR.length))
     notes[i] = quote.length >= QUOTE_MIN && plusText(c).includes(quote) ? { what, quote } : { what }
     any = true
   }

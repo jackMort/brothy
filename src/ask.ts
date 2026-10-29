@@ -2,7 +2,7 @@
 // or orders excerpts brothy picked (tier 1); every answer is a place the local index found. Pure.
 
 import { cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens, type ChatReq } from "./ai"
-import { scoreName, stem, type FileNode } from "./files"
+import { SCORE_SUBSEQUENCE, scoreName, stem, type FileNode } from "./files"
 import { isRecord } from "./json"
 import { headingKey } from "./panel"
 import { sectionId } from "./sections"
@@ -11,10 +11,10 @@ import { truncate } from "./status"
 import { SWITCH_CAP, foldSame, headingAt, lineOf, nextSection, notesOf, type AnswerRow, type NoteDoc, type SwitchRow, type VaultIndex } from "./vault"
 import { headingPath } from "./zen"
 
-/** PROMPTS.ask: bump it with any change. */
+/** `PROMPTS.ask` (ai-config.ts): bump it with any change. */
 export const ASK_PROMPT =
   'Turn the user\'s question about their own notes into 3–8 short search queries (1–3 words each) that are likely to appear verbatim in the notes or their headings: key terms, synonyms, likely heading words. Use the question\'s language, and add English variants if it is not English. Reply with JSON only: {"queries": ["…"]}.'
-/** PROMPTS.rerank: bump it with any change. */
+/** `PROMPTS.rerank` (ai-config.ts): bump it with any change. */
 export const RERANK_PROMPT =
   'Given a question and numbered excerpts from the user\'s notes, pick the excerpts that help answer it, best first. Reply with JSON only: {"answers": [{"id": "c3", "why": "at most 8 words"}]}. Use only ids from the list; leave out excerpts that don\'t help.'
 
@@ -22,7 +22,11 @@ export const RERANK_PROMPT =
 export const QUESTION_MAX = 300
 /** Fewest code points a question needs before it can be asked. */
 export const ASK_MIN = 3
+/** Queries kept from tier 0's reply. */
 export const MAX_QUERIES = 8
+/** Code points a query must have, at least and at most, to be kept. */
+const QUERY_MIN = 2
+const QUERY_MAX = 40
 /** Sections ranked locally and offered to the rerank. */
 export const MAX_CANDIDATES = 12
 /** Code points of a section's text sent per candidate (tier 1). */
@@ -49,7 +53,7 @@ export function askRequest(question: string): ChatReq {
   return { system: ASK_PROMPT, user: question, maxOut: MAX_ASK, clean: cleanReply }
 }
 
-/** Tier 0's reply: 2–40 code points each, deduped by `foldSame`, at most MAX_QUERIES; null when none is usable. */
+/** Tier 0's reply: QUERY_MIN–QUERY_MAX code points each, deduped by `foldSame`, at most MAX_QUERIES; null when none is usable. */
 export function parseQueries(raw: string): string[] | null {
   const j = extractJSON(raw)
   if (!isRecord(j) || !Array.isArray(j.queries)) return null
@@ -59,7 +63,7 @@ export function parseQueries(raw: string): string[] | null {
     if (typeof q !== "string") continue
     const s = safeLine(q).trim()
     const n = [...s].length
-    if (n < 2 || n > 40) continue
+    if (n < QUERY_MIN || n > QUERY_MAX) continue
     const k = foldSame(s)
     if (seen.has(k)) continue
     seen.add(k)
@@ -105,7 +109,7 @@ const NAME = 1
 /** `scoreName`'s substring tier only: its subsequence tier would find a short query in most long headings. */
 export const sub = (name: string, q: string) => {
   const m = scoreName(name, q)
-  return m && m.score > 2e6 ? m : null
+  return m && m.score > SCORE_SUBSEQUENCE ? m : null
 }
 
 /** Each heading's identity: its key and how many equal keys come before it; the lead-in counts as key "", as in `noteSections`. */
