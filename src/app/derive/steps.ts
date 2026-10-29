@@ -60,15 +60,12 @@ export function truncationNote(s: UI, L: Layout) {
 
 /** The TL;DR block: streaming, the cached summary (fresh or outdated) or none; null without an `ai` block or a readable note. */
 function summaryView(s: UI, { file, src }: NoteView, memo: Memo, jobs: Map<string, Job>): SummaryView | null {
-  const saved = s.openPath ? s.summaries[s.openPath] : undefined
-  const job = s.openPath ? jobs.get(jobKey("tldr", s.openPath)) : undefined
-  return !s.ai || !s.openPath || !file || file.error
-    ? null
-    : job
-      ? { text: memo.clean(job.raw), state: "streaming", model: "" }
-      : saved
-        ? { text: saved.summary, state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated", model: shortModel(saved.model) }
-        : { text: "", state: "none", model: "" }
+  if (!s.ai || !s.openPath || !file || file.error) return null
+  const job = jobs.get(jobKey("tldr", s.openPath))
+  if (job) return { text: memo.clean(job.raw), state: "streaming", model: "" }
+  const saved = s.summaries[s.openPath]
+  if (saved) return { text: saved.summary, state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated", model: shortModel(saved.model) }
+  return { text: "", state: "none", model: "" }
 }
 
 /** The Changed block in Info, null while there is nothing to list or explain. */
