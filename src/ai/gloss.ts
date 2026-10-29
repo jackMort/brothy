@@ -16,7 +16,7 @@ export const GLOSS_MAX = 400
 /** code points sent at most, below the preset's `maxChars` */
 export const GLOSS_CHARS = 12_000
 /** a section with fewer words of its own sends its subtree */
-export const GLOSS_MIN_WORDS = 20
+const GLOSS_MIN_WORDS = 20
 
 /** `ai.gloss` in config.json (validated by ai/config.ts); anything unrecognised is `explain`. */
 export const parseGlossStyle = (raw: unknown): GlossStyle => aiConfig.parseGlossStyle(raw, "explain")
