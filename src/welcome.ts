@@ -30,14 +30,17 @@ const BRAILLE = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]] as cons
 /** quadrant blocks by bits: 1 top-left, 2 top-right, 4 bottom-left, 8 bottom-right */
 const QUAD = [" ", "▘", "▝", "▀", "▖", "▌", "▞", "▛", "▗", "▚", "▐", "▜", "▄", "▙", "▟", "█"]
 
-/** Steam at `tick`: 26 particles on a `w`×`h` braille field, born on the bottom row (the broth), drifting up and out. */
+/** Particles in the steam. */
+const STEAM_PARTICLES = 26
+
+/** Steam at `tick`: STEAM_PARTICLES particles on a `w`×`h` braille field, born on the bottom row (the broth), drifting up and out. */
 export function steamRows(tick: number, w: number, h: number): string[] {
   const W = w * 2
   const H = h * 4
   const dots = new Uint8Array(W * H)
   const per = H + 8
-  for (let i = 0; i < 26; i++) {
-    const life = (tick * 0.55 + (i * per) / 26) % per
+  for (let i = 0; i < STEAM_PARTICLES; i++) {
+    const life = (tick * 0.55 + (i * per) / STEAM_PARTICLES) % per
     const py = Math.round(H - 1 - life)
     if (py < 0 || py >= H) continue
     const px = Math.round(W / 2 + Math.sin(tick * 0.11 + i * 1.9 + life * 0.2) * (1.5 + life * 0.3) + (((i * 7) % 11) - 5) * 1.1)

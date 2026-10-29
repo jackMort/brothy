@@ -23,14 +23,18 @@ const parsed = parseArgs(process.argv.slice(2))
 if ("error" in parsed) die(`${parsed.error}\ntry 'brothy --help'`)
 const args = parsed
 
-/** The family names, wrapped at 80 columns under the option column; a single-mode family says which. */
+/** Width `--help` wraps at, and the indent of its option descriptions. */
+const HELP_WRAP_W = 80
+const HELP_INDENT = 17
+
+/** The family names, wrapped at HELP_WRAP_W columns under the option column; a single-mode family says which. */
 function familyLines(): string {
-  const pad = " ".repeat(17)
+  const pad = " ".repeat(HELP_INDENT)
   const lines: string[] = []
   let line = pad
   FAMILIES.forEach((f, i) => {
     const word = f.name + (onlyMode(f) ? ` (${onlyMode(f)} only)` : "") + (i < FAMILIES.length - 1 ? "," : "")
-    if (line.trimEnd().length + 1 + word.length > 80) {
+    if (line.trimEnd().length + 1 + word.length > HELP_WRAP_W) {
       lines.push(line.trimEnd())
       line = pad
     }

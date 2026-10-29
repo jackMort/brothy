@@ -19,6 +19,10 @@ export const PEEK_TLDR = 3
 export const PEEK_BYTES = 32 * 1024
 /** lines kept past a text hit, so a hit deep in a long section still shows */
 const PEEK_AFTER = 64
+/** characters of a text hit's line used to find it again in the rendered rows */
+const NEEDLE_CHARS = 40
+/** the path needs this many cells before the word count and minutes sit on its row */
+const MIN_PATH_W = 12
 
 /**
  * Switcher geometry. From PEEK_MIN_W the popup is `min(W − 12, 116)` wide and splits: the list
@@ -114,7 +118,7 @@ function anchorRow(r: SwitchRow, doc: NoteDoc, view: Rendered, base: number): nu
   const from = (heads[k]?.line ?? -1) + 1
   if (r.kind !== "text") return from
   const end = heads[k + 1]?.line ?? view.lines.length
-  const needle = doc.text.slice(doc.starts[r.line] ?? 0, (doc.starts[r.line + 1] ?? doc.text.length + 1) - 1).trim().slice(0, 40)
+  const needle = doc.text.slice(doc.starts[r.line] ?? 0, (doc.starts[r.line + 1] ?? doc.text.length + 1) - 1).trim().slice(0, NEEDLE_CHARS)
   return findQuote(view.plain, from, end, needle) ?? from
 }
 
@@ -126,7 +130,7 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
 
   // path · length
   const right = p.words !== undefined && p.minutes !== undefined ? `${plural(p.words, "word")} · ${p.minutes} min` : ""
-  const fits = right && w - width(right) - 1 >= 12
+  const fits = right && w - width(right) - 1 >= MIN_PATH_W
   const path = truncateLeft(p.rel, fits ? w - width(right) - 1 : w)
   out.push(fits ? [muted(path), { text: " ".repeat(w - width(path) - width(right)) }, muted(right)] : [muted(path)])
   out.push([])
