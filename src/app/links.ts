@@ -15,9 +15,9 @@ import type { UI } from "./store"
 export const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, rows: number, top: number) =>
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 
-/** Links, labels and history over the app context. */
-export function makeLinks(c: AppCtx) {
-  const { ui, set, derive, flash, scrolls, currentSpot, openFile, focusDoc, setTop } = c
+/** Following links over the app context. */
+function makeFollow(c: AppCtx) {
+  const { ui, set, derive, flash, openFile, focusDoc, setTop } = c
 
   /** A piped document scans the working folder for links the first time one is used. */
   const ensureLinks = () => {
@@ -33,24 +33,6 @@ export function makeLinks(c: AppCtx) {
     set({ history: keep(ui.current.history) }) // a note followed from stays in history
     openFile(path)
     focusDoc()
-  }
-
-  /** Labels still match what is drawn: same note, mode, width, length and scroll position. */
-  const liveLabels = () => {
-    const lb = ui.current.labels
-    if (!lb) return null
-    const d = derive()
-    return lb.geo === labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) ? lb : null
-  }
-
-  const startLabels = () => {
-    ensureLinks()
-    const d = derive()
-    if (d.s.source) return flash("links: preview only (s)")
-    const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
-    if (!spots.length) return flash("no links on screen")
-    const labels = linkLabels(spots.length)
-    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) } })
   }
 
   /** Open where `l` leads: the note, then its heading; a URL or a missing target only says so. */
@@ -70,6 +52,53 @@ export function makeLinks(c: AppCtx) {
     if (i === null) flash(`no heading “${dest.heading}”`)
     else setTop(d.view.headings[i]!.line)
   }
+
+  return { ensureLinks, openLink, followLink }
+}
+
+/** The `f` labels over the links on screen. */
+function makeLabels(c: AppCtx, { ensureLinks, followLink }: Pick<ReturnType<typeof makeFollow>, "ensureLinks" | "followLink">) {
+  const { ui, set, derive, flash } = c
+
+  /** Labels still match what is drawn: same note, mode, width, length and scroll position. */
+  const liveLabels = () => {
+    const lb = ui.current.labels
+    if (!lb) return null
+    const d = derive()
+    return lb.geo === labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) ? lb : null
+  }
+
+  const startLabels = () => {
+    ensureLinks()
+    const d = derive()
+    if (d.s.source) return flash("links: preview only (s)")
+    const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
+    if (!spots.length) return flash("no links on screen")
+    const labels = linkLabels(spots.length)
+    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) } })
+  }
+
+  const labelType = (ch: string) => {
+    const lb = liveLabels()
+    if (!lb) return set({ labels: null })
+    const typed = lb.typed + ch
+    const left = narrowLabels(lb.labels, typed)
+    if (!left.length) return set({ labels: null })
+    if (left.length === 1 && lb.labels[left[0]!] === typed) {
+      const link = derive().view.links?.[lb.spots[left[0]!]!.link]
+      set({ labels: null })
+      if (link) followLink(link)
+      return
+    }
+    set({ labels: { ...lb, typed } })
+  }
+
+  return { liveLabels, startLabels, labelType }
+}
+
+/** `H` / `L` back and forward. */
+function makeHistory(c: AppCtx) {
+  const { ui, set, derive, flash, scrolls, currentSpot, openFile } = c
 
   /** `H` / `L`: the note one step back / forward, where it was left; notes gone from disk are dropped. */
   const histMove = (dir: -1 | 1) => {
@@ -94,22 +123,13 @@ export function makeLinks(c: AppCtx) {
     flash(gone.length ? gone.join(" · ") : dir < 0 ? "no earlier note" : "no later note")
   }
 
-  const labelType = (ch: string) => {
-    const lb = liveLabels()
-    if (!lb) return set({ labels: null })
-    const typed = lb.typed + ch
-    const left = narrowLabels(lb.labels, typed)
-    if (!left.length) return set({ labels: null })
-    if (left.length === 1 && lb.labels[left[0]!] === typed) {
-      const link = derive().view.links?.[lb.spots[left[0]!]!.link]
-      set({ labels: null })
-      if (link) followLink(link)
-      return
-    }
-    set({ labels: { ...lb, typed } })
-  }
+  return { histMove }
+}
 
-  return { ensureLinks, openLink, liveLabels, startLabels, histMove, labelType }
+/** Links, labels and history over the app context. */
+export function makeLinks(c: AppCtx) {
+  const { ensureLinks, openLink, followLink } = makeFollow(c)
+  return { ensureLinks, openLink, ...makeLabels(c, { ensureLinks, followLink }), ...makeHistory(c) }
 }
 /** What `makeLinks` gives App and the other factories. */
 export type Links = ReturnType<typeof makeLinks>

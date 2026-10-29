@@ -36,39 +36,21 @@ import {
   type SwitchRow,
   type TextHit,
 } from "../notes/vault"
-import { AI_OFF, makeJobs } from "./ai-jobs"
+import { AI_OFF, makeJobs, type Jobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
 import { jobKey } from "./store"
 
-/** The switcher over the app context; opening it scans a piped document's folder first (`ensureLinks`). */
-export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
-  const { ui, set, derive, memo, W, vault, askMemo, rerankMemo, flash, openFile, focusDoc, setTop, showMatch } = c
-  const { reloadAI, cancelJob, aiGate, failText, startJob } = makeJobs(c)
+/** What the ask requests share: dropping a running ask and setting the open switcher's ask state. */
+interface AskDeps {
+  dropAsk: () => void
+  setAsk: (ask: AskState | undefined) => void
+}
 
-  /** Abort a running ask (tier 0 or 1): nobody would see its result. */
-  const dropAsk = () => void cancelJob(jobKey("ask"))
-
-  const closeSwitcher = () => {
-    dropAsk()
-    set({ switcher: null })
-  }
-
-  /** New query: the highlight goes back to the first hit; a changed query drops the answers and aborts their request. */
-  const swType = (q: string) => {
-    if (ui.current.switcher?.q !== q) dropAsk()
-    ui.current.switcher = { q, hl: 0, top: 0 } // unbumped: only for `derive` below
-    set({ switcher: { q, hl: Math.max(0, firstHit(derive().swRows)), top: 0 } })
-  }
-
-  /** New ask state for the open switcher; the highlight goes to its first stop. */
-  const setAsk = (ask: AskState | undefined) => {
-    const sw = ui.current.switcher
-    if (!sw) return
-    const next = (ui.current.switcher = { ...sw, ask, hl: 0, top: 0 }) // unbumped: only for `derive` below
-    set({ switcher: { ...next, hl: Math.max(0, firstHit(derive().swRows)) } })
-  }
+/** `⏎` on the ask row (tier 0). */
+function makeAskStart(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs, { dropAsk, setAsk }: AskDeps) {
+  const { ui, askMemo, flash } = c
 
   /**
    * `⏎` on the ask row (tier 0): only the question goes out; the model's queries come back and
@@ -107,6 +89,13 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
       },
     })
   }
+
+  return askStart
+}
+
+/** `⏎` on the rerank row (tier 1). */
+function makeAskRerank(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs, { dropAsk, setAsk }: AskDeps) {
+  const { ui, derive, vault, rerankMemo, flash } = c
 
   /**
    * `⏎` on the rerank row (tier 1): the question and the candidates' excerpts go out; the model
@@ -160,13 +149,28 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     })
   }
 
-  /** Highlight row `hl`, scrolling so it (and its section title, when it is the first hit) stays in view. */
-  const swGo = (hl: number) => {
+  return askRerank
+}
+
+/** Ask (`?` questions, tier 0) and rerank (tier 1) over the open switcher. */
+function makeAsk(c: AppCtx, jobs: Jobs, dropAsk: () => void) {
+  const { ui, set, derive } = c
+
+  /** New ask state for the open switcher; the highlight goes to its first stop. */
+  const setAsk = (ask: AskState | undefined) => {
     const sw = ui.current.switcher
     if (!sw) return
-    const { swRows, L } = derive()
-    set({ switcher: { ...sw, hl, top: keepHitVisible(sw.top, swRows, hl, L.PH) } })
+    const next = (ui.current.switcher = { ...sw, ask, hl: 0, top: 0 }) // unbumped: only for `derive` below
+    set({ switcher: { ...next, hl: Math.max(0, firstHit(derive().swRows)) } })
   }
+
+  const deps = { dropAsk, setAsk }
+  return { askStart: makeAskStart(c, jobs, deps), askRerank: makeAskRerank(c, jobs, deps) }
+}
+
+/** The vault index the switcher searches. */
+function makeVaultIndex(c: AppCtx) {
+  const { ui, set, vault, flash } = c
 
   /** Bring the vault index up to date (one build at a time); progress re-runs the search. */
   const indexVault = () => {
@@ -190,12 +194,12 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     set({ indexing: null, ixVer: ui.current.ixVer + 1 })
   }
 
-  const openSwitcher = () => {
-    ensureLinks()
-    set({ labels: null })
-    swType("")
-    indexVault()
-  }
+  return { indexVault, dropIndex }
+}
+
+/** Opening what a row points at in a note: the note itself, a heading or a text hit. */
+function makeOpening(c: AppCtx, closeSwitcher: () => void) {
+  const { ui, set, derive, vault, flash, openFile, focusDoc, setTop, showMatch } = c
 
   /**
    * Select `q`'s occurrence for text hit `row` in the open note: in Source from its source row; in
@@ -227,6 +231,24 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     }
     jumpToText(row, q, vault.current.ix.docs.get(row.path))
   }
+
+  return { jumpToText, switchTo }
+}
+
+type Opening = ReturnType<typeof makeOpening>
+
+/** `⏎` or a click on a row: ask, rerank, open an answer, or open the hit. */
+function makeActivate(
+  c: AppCtx,
+  {
+    closeSwitcher,
+    askStart,
+    askRerank,
+    jumpToText,
+    switchTo,
+  }: Opening & Pick<ReturnType<typeof makeAsk>, "askStart" | "askRerank"> & { closeSwitcher: () => void },
+) {
+  const { ui, derive, flash, openFile, focusDoc, setTop } = c
 
   /**
    * Open an Ask answer. The note may have changed since it was indexed: its section is found again
@@ -260,6 +282,11 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     if (!ui.current.switcher?.ask) askStart() // AI off or no key: re-read the config and say why
   }
 
+  return { swActivate }
+}
+
+/** The peek pane's data. */
+function makePeek({ memo, vault, W }: AppCtx) {
   /** The highlighted row's note as the peek reads it: its index entry, the note (read once per mtime), its window rendered at `w`. */
   const peekNote = (row: SwitchRow | undefined, { s, t }: Pick<Derived, "s" | "t">, w: number) => {
     const path = row && "path" in row ? row.path : null
@@ -293,7 +320,56 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     )
   }
 
-  return { dropAsk, closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane }
+  return { peekPane }
+}
+
+/** The switcher over the app context; opening it scans a piped document's folder first (`ensureLinks`). */
+export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
+  const { ui, set, derive } = c
+  const jobs = makeJobs(c)
+  const { indexVault, dropIndex } = makeVaultIndex(c)
+
+  /** Abort a running ask (tier 0 or 1): nobody would see its result. */
+  const dropAsk = () => void jobs.cancelJob(jobKey("ask"))
+  const { askStart, askRerank } = makeAsk(c, jobs, dropAsk)
+
+  const closeSwitcher = () => {
+    dropAsk()
+    set({ switcher: null })
+  }
+
+  /** New query: the highlight goes back to the first hit; a changed query drops the answers and aborts their request. */
+  const swType = (q: string) => {
+    if (ui.current.switcher?.q !== q) dropAsk()
+    ui.current.switcher = { q, hl: 0, top: 0 } // unbumped: only for `derive` below
+    set({ switcher: { q, hl: Math.max(0, firstHit(derive().swRows)), top: 0 } })
+  }
+
+  /** Highlight row `hl`, scrolling so it (and its section title, when it is the first hit) stays in view. */
+  const swGo = (hl: number) => {
+    const sw = ui.current.switcher
+    if (!sw) return
+    const { swRows, L } = derive()
+    set({ switcher: { ...sw, hl, top: keepHitVisible(sw.top, swRows, hl, L.PH) } })
+  }
+
+  const openSwitcher = () => {
+    ensureLinks()
+    set({ labels: null })
+    swType("")
+    indexVault()
+  }
+
+  return {
+    dropAsk,
+    closeSwitcher,
+    swType,
+    swGo,
+    dropIndex,
+    openSwitcher,
+    ...makeActivate(c, { closeSwitcher, askStart, askRerank, ...makeOpening(c, closeSwitcher) }),
+    ...makePeek(c),
+  }
 }
 
 /** The rows text hit `row` can match in, `end` exclusive: in Source from its source row on; in Preview its section (the lead-in for none). */

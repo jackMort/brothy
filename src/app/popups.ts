@@ -8,11 +8,10 @@ import { filterFamilies, pickIndex, pickStart, pickTheme, type ThemePick } from 
 import type { AppCtx } from "./ctx"
 import { HELP_GROUPS } from "./keymap"
 
-/** The popups and the filter row over the app context. */
-export function makePopups(c: AppCtx) {
-  const { ui, set, derive, dims, timers, flash, persist, focusDoc, showMatch } = c
+/** The panel filter row's typing. */
+function makeFilter(c: AppCtx) {
+  const { ui, set, timers } = c
 
-  // ---------------------------------------------------- panel filter
   /** The filter text of the shown view (Files or Outline). */
   const filterText = () => (ui.current.view === "outline" ? ui.current.outlineFilter : ui.current.filter)
   const filterType = (v: string) => {
@@ -25,7 +24,13 @@ export function makePopups(c: AppCtx) {
     set({ filterTyping: false, ...(clear ? (ui.current.view === "outline" ? { outlineFilter: "" } : { filter: "" }) : {}) })
   }
 
-  // ---------------------------------------------------- find
+  return { filterText, filterType, filterStop }
+}
+
+/** Find in Document's popup. */
+function makeFind(c: AppCtx) {
+  const { ui, set, derive, flash, focusDoc, showMatch } = c
+
   /** The popup row Enter acts on when the highlight hasn't been moved. */
   const promptDefault = () => {
     const { matches, top } = derive()
@@ -58,7 +63,13 @@ export function makePopups(c: AppCtx) {
     if (ui.current.prompt) set({ prompt: null, query: "", matchLine: null })
   }
 
-  // ---------------------------------------------------- theme picker
+  return { promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose }
+}
+
+/** The `t` theme picker. */
+function makeThemePicker(c: AppCtx) {
+  const { ui, set, flash, persist } = c
+
   // `t` picker: the app stays in its theme while you move (only the pane shows the candidate); ⏎ applies and saves, esc changes nothing
   const openTheme = () => set({ themePick: pickStart(themes[ui.current.themeIdx]!) })
   const closeTheme = () => set({ themePick: null })
@@ -76,29 +87,20 @@ export function makePopups(c: AppCtx) {
     if (persist({ theme: name })) flash(`theme · ${name}`, "ok")
   }
 
-  // ---------------------------------------------------- help
+  return { openTheme, closeTheme, themeSet, applyTheme }
+}
+
+/** The popups and the filter row over the app context. */
+export function makePopups(c: AppCtx) {
+  const { set, dims } = c
+
   /** Scroll the `? ?` sheet so row `n` is its first, within its rows. */
   const helpGo = (n: number) => {
     const l = helpLayout(HELP_GROUPS, dims.current.W, dims.current.H)
     set({ helpTop: Math.max(0, Math.min(l.rows - l.vis, n)) })
   }
 
-  return {
-    filterText,
-    filterType,
-    filterStop,
-    promptDefault,
-    promptCount,
-    promptHighlight,
-    promptType,
-    promptSubmit,
-    promptClose,
-    openTheme,
-    closeTheme,
-    themeSet,
-    applyTheme,
-    helpGo,
-  }
+  return { ...makeFilter(c), ...makeFind(c), ...makeThemePicker(c), helpGo }
 }
 /** What `makePopups` gives App and the actions. */
 export type Popups = ReturnType<typeof makePopups>
