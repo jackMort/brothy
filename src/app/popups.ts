@@ -83,4 +83,5 @@ export function makePopups(c: AppCtx) {
     openTheme, closeTheme, themeSet, applyTheme, helpGo,
   }
 }
+/** What `makePopups` gives App and the actions. */
 export type Popups = ReturnType<typeof makePopups>

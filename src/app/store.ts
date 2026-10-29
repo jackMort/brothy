@@ -121,7 +121,6 @@ export interface UI {
   zenCfg: ZenConfig
   /** zen settings popup open: what to restore on esc */
   zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
-  /** `C-p` popup: query, highlighted row, first visible row */
   /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
   switcher: { q: string; hl: number; top: number; ask?: AskState } | null
   /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */

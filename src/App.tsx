@@ -1,3 +1,5 @@
+// The app's root: the store and refs, the context and feature factories rebuilt every render, the effects that need
+// this render's values, and the screen (zen or main) laid out from the parts in src/app/. Not pure.
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { useEffect, useRef, useState } from "react"
 import { ensureHighlights } from "./highlight"
@@ -82,35 +84,27 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     modeSeen.current = modeNow
   }
 
-  // derived data, memoized so handlers and render can both pull it on demand
-  /** the switcher's index of `linkTree`; replaced (never mutated) when dropped, so a stale build sees it and stops */
+  // the refs the context carries are documented on `Base` and `DeriveRefs`
   const vault = useRef<{ ix: VaultIndex; running: boolean }>({ ix: emptyIndex(), running: false })
+  // derived data, memoized so handlers and render can both pull it on demand
   const memo = useRef(makeMemo(stdin)).current
-  /** The match list last derived, to remap `matchLine` when the lines are re-wrapped. */
   const matchSeen = useRef<{ matches: number[]; query: string }>({ matches: [], query: "" })
   const scrolls = useRef(new Map<string, { top: number; geo: Geometry }>())
-  /** Normal-view position on entering zen; restored verbatim on exit unless the reader moved. */
   const zenBack = useRef<Spot | null>(null)
   const sidebarSeen = useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null })
   const timers = useRef<Timers>({})
-  /** AI requests in flight by `jobKey`: the raw streamed text and how to cancel it */
   const jobs = useRef(new Map<string, Job>())
-  /** tier 0 queries per question (foldSame), this session only: asking again sends nothing */
   const askMemo = useRef(new Map<string, { queries: string[]; model: string }>())
-  /** tier 1 orders per question + candidate list, this session only */
   const rerankMemo = useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>())
   /** the context the hints were last poked for */
   const ctxSeen = useRef<Ctx | null>(null)
   /** the note and section the gloss auto-show last ran for (null: outside zen) */
   const glossSeen = useRef<string | null>(null)
-  /** false once unmounted: late timers and AI or highlight results drop their update */
   const alive = useRef(true)
-  /** the document and the theme sample whose code highlighting was last asked for */
   const hlSeen = useRef<Rendered | null>(null)
+  /** the theme sample whose code highlighting was last asked for */
   const hlSample = useRef<Rendered | null>(null)
-  /** `leave` has run: the last project record is written once */
   const left = useRef(false)
-  /** the welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size */
   const welcome = useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H })
 
   const derive = makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen })

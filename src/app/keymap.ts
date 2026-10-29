@@ -4,9 +4,6 @@ import type { View } from "../config"
 import type { HelpGroup } from "../help"
 import type { HintItem } from "../status"
 
-// One table drives key dispatch, the `?` help popup and the footer hints, so they
-// cannot drift apart. Specs are matched by `matchKey` (`S-g` is G, `C-d` is ^d).
-
 /** A group of bindings: global, the document, a panel view or a popup; dispatch tries them in order. */
 export type Mode = "global" | "files" | "doc" | "outline" | "info" | "filter" | "help" | "prompt" | "theme" | "zen" | "zenSettings" | "label" | "switch" | "open"
 /** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus). */
@@ -45,6 +42,10 @@ export interface FooterState {
   changes: boolean
 }
 
+/**
+ * Every binding: dispatch, the `? ?` sheet and the footer words all read it, so they cannot drift apart (`FOOTERS` picks
+ * which hints a context shows). Specs are matched by `matchKey` (`S-g` is G, `C-d` is ^d).
+ */
 export const KEYMAP = {
   views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", desc: "Files · Outline · Info (piped: 1 2 only)" },
   source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview" },
@@ -159,14 +160,16 @@ export const KEYMAP = {
 } as const satisfies Record<string, KeyDef>
 /** A binding's id, also its action's name. */
 export type KeyId = keyof typeof KEYMAP
+/** Every binding id, in KEYMAP order: `dispatch` tries them in it. */
 export const KEY_IDS = Object.keys(KEYMAP) as KeyId[]
 /** The binding `id`, typed as the general `KeyDef`. */
 export const keyDef = (id: KeyId): KeyDef => KEYMAP[id]
 /** The welcome page's keycaps: [binding, word]. */
 export const WELCOME_KEYS: [KeyId, string][] = [["open", "open a project"], ["theme", "theme"], ["help", "keys"], ["quit", "quit"]]
 
-/** Footer hints per context: a binding, optionally with a context-specific word. */
+/** A footer hint: a binding, optionally with a context-specific word. */
 export type Hint = KeyId | [KeyId, string]
+/** Footer hints per context, in order (`fitHints` drops the spare ones first). */
 export const FOOTERS: Record<Ctx, Hint[]> = {
   doc: ["docLine", "docPage", "docHeading", "slash", "docMatch", "links", "histBack", "edit", ["focus", "panel"], "help"],
   "panel:files": ["filesMove", "filesOpen", "filesUp", ["slash", "filter"], ["views", "view"], ["focus", "document"], "help"],

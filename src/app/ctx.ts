@@ -56,7 +56,7 @@ export interface Base extends DeriveRefs {
   /** the `themeName` prop (from `--theme` or the config) */
   themeName: string | undefined
   linkScanDelay: number
-  /** Normal-view position on entering zen; restored verbatim on exit unless the reader moved. */
+  /** normal-view position on entering zen; restored verbatim on exit unless the reader moved */
   zenBack: { current: Spot | null }
   timers: { current: Timers }
   /** tier 0 queries per question (foldSame), this session only: asking again sends nothing */

@@ -85,8 +85,8 @@ export function makeMemo(stdin: string | undefined) {
     themeSample: cached((t: Theme, w: number, _hl: number, headings: HeadingStyle) => sampleView(t, w, headings)),
     themePane: cached(paneLines),
     /** the switcher's peek: the highlighted note read (one note at a time), then only its `peekWindow` rendered at the pane width */
-    peekFile: cached((path: string, _mtime: number) => {
-      const f = readDoc(path, _mtime)
+    peekFile: cached((path: string, mtime: number) => {
+      const f = readDoc(path, mtime)
       if (f.error) return null
       const fm = parseFrontMatter(f.src)
       const st = wordStats(fm.body) // stats() would lex the whole note
@@ -135,7 +135,7 @@ export interface DeriveRefs {
   jobs: { current: Map<string, Job> }
   sidebarSeen: { current: { rows: FileRow[] | null; cursorPath: string | null } }
   scrolls: { current: Map<string, ScrollEntry> }
-  /** The match list last derived, to remap `matchLine` when the lines are re-wrapped. */
+  /** the match list last derived, to remap `matchLine` when the lines are re-wrapped */
   matchSeen: { current: { matches: number[]; query: string } }
 }
 
