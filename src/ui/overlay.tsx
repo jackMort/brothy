@@ -29,9 +29,10 @@ import {
 } from "../theme/themepick"
 import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
 
-function Line({ spans }: { spans: Span[] }) {
+/** A single unwrapped row of spans (`app/Row.tsx` draws the document and panel through it); every span's text goes through `safe`. */
+export function Line({ spans, bg }: { spans: Span[]; bg?: string }) {
   return (
-    <text wrapMode="none" style={{ height: 1, flexShrink: 0 }}>
+    <text bg={bg} wrapMode="none" style={{ height: 1, flexShrink: 0 }}>
       {spans.map((s, i) => (
         <span key={i} fg={s.fg} bg={s.bg} attributes={s.attr ?? 0}>
           {safe(s.text)}
