@@ -1,142 +1,23 @@
 /**
  * AI: one OpenAI-compatible client over `fetch` (`chat`), used by the TL;DR (`summarize`) and
- * the features built on it. Everything but `chat` is pure; caches live in `summaries.ts`.
+ * the features built on it. Everything but `chat` is pure; caches live in `summaries.ts` and the
+ * `ai` config block in `ai-config.ts`.
  */
 
+import type { AITarget } from "./ai-config"
+import { isRecord } from "./json"
 import { parseFrontMatter, stripComments } from "./markdown"
 import { safeLine } from "./spans"
 import { truncate } from "./status"
 
-export type Provider = "openai" | "openrouter" | "anthropic" | "gemini" | "ollama" | "lmstudio" | "custom"
-export interface Preset {
-  baseURL: string
-  /** env var holding the key; none for local servers */
-  keyEnv?: string
-  /** input limit in code points */
-  maxChars: number
-}
-
-export const PRESETS: Record<Exclude<Provider, "custom">, Preset> = {
-  openai: { baseURL: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY", maxChars: 48_000 },
-  openrouter: { baseURL: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY", maxChars: 48_000 },
-  anthropic: { baseURL: "https://api.anthropic.com/v1", keyEnv: "ANTHROPIC_API_KEY", maxChars: 48_000 },
-  gemini: { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", keyEnv: "GEMINI_API_KEY", maxChars: 48_000 },
-  // the OpenAI API can't set Ollama's context size, and it cuts an over-long prompt from the front
-  ollama: { baseURL: "http://localhost:11434/v1", maxChars: 8_000 },
-  lmstudio: { baseURL: "http://localhost:1234/v1", maxChars: 8_000 },
-}
-const PROVIDERS: readonly Provider[] = [...(Object.keys(PRESETS) as Provider[]), "custom"]
-const CUSTOM_MAX = 48_000
+/** The `ai` block's types, presets and validation live in ai-config.ts; re-exported for importers. */
+export { PRESETS, normalizeAI, parseGlossStyle, resolveAI } from "./ai-config"
+export type { AIConfig, AITarget, GlossStyle, Preset, Provider } from "./ai-config"
 
 /** Prompt versions per feature: bump one whenever its prompt changes, and its cached results show as outdated. */
 export const PROMPTS = { tldr: 1, gloss: 1, delta: 2, ask: 1, rerank: 1 } as const
 /** The TL;DR's version (`SYSTEM_PROMPT`); what `summaries.json` entries carry as `v`. */
 export const PROMPT_V = PROMPTS.tldr
-
-/** The validated `ai` block of config.json. */
-export interface AIConfig {
-  provider: Provider
-  model: string
-  baseURL?: string
-  keyEnv?: string
-  maxChars?: number
-  headers?: Record<string, string>
-  /** zen gloss style; absent means "explain" */
-  gloss?: GlossStyle
-}
-
-type Raw = Record<string, unknown>
-const isObj = (v: unknown): v is Raw => !!v && typeof v === "object" && !Array.isArray(v)
-const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
-const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
-
-/** `ai.gloss`: how zen explains a section. Lives here, not in gloss.ts, so ai.ts never imports gloss.ts (gloss.ts imports chat from here). */
-export type GlossStyle = "explain" | "simplify" | `translate:${string}`
-/** a BCP 47-ish language tag: `pl`, `pt-BR`, `zh-Hant-TW` */
-const LANG_TAG = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
-
-export function parseGlossStyle(v: unknown): GlossStyle | undefined {
-  if (v === "explain" || v === "simplify") return v
-  if (typeof v === "string" && v.startsWith("translate:") && LANG_TAG.test(v.slice("translate:".length))) return v as GlossStyle
-  return undefined
-}
-
-/** An http(s) base without userinfo (fetch refuses credentials in URLs). */
-function baseURL(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined
-  try {
-    const u = new URL(v)
-    return (u.protocol === "http:" || u.protocol === "https:") && !u.username && !u.password ? v : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * `provider`, `model` and (for custom) `baseURL` are required: one bad and the block is dropped
- * (AI off). Every other field that is invalid is dropped alone.
- */
-export function normalizeAI(raw: unknown): AIConfig | undefined {
-  if (!isObj(raw)) return undefined
-  const provider = raw.provider as Provider
-  if (!PROVIDERS.includes(provider)) return undefined
-  if (typeof raw.model !== "string" || !raw.model.trim()) return undefined
-  const base = baseURL(raw.baseURL)
-  if (provider === "custom" && !base) return undefined
-  const out: AIConfig = { provider, model: raw.model }
-  if (base) out.baseURL = base
-  if (typeof raw.keyEnv === "string" && ENV_NAME.test(raw.keyEnv)) out.keyEnv = raw.keyEnv
-  if (typeof raw.maxChars === "number" && Number.isInteger(raw.maxChars) && raw.maxChars >= 1000) out.maxChars = raw.maxChars
-  if (isObj(raw.headers)) {
-    const h: Record<string, string> = {}
-    for (const [k, v] of Object.entries(raw.headers))
-      if (HEADER_NAME.test(k) && k.toLowerCase() !== "authorization" && typeof v === "string" && !/[\r\n\0]/.test(v)) h[k] = v
-    if (Object.keys(h).length) out.headers = h
-  }
-  const gloss = parseGlossStyle(raw.gloss)
-  if (gloss) out.gloss = gloss
-  return out
-}
-
-/** Where a request goes and what it carries; `key` is kept only to redact it from messages. */
-export interface AITarget {
-  url: string
-  /** `URL.host`: never userinfo */
-  host: string
-  headers: Record<string, string>
-  model: string
-  maxChars: number
-  keyEnv?: string
-  key?: string
-}
-
-const loopback = (h: string) => h === "localhost" || h === "[::1]" || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
-
-/** The request target, or the toast for why there is none (missing key, key or custom headers over plain http). */
-export function resolveAI(cfg: AIConfig, env: Record<string, string | undefined> = process.env): AITarget | { error: string } {
-  const preset = cfg.provider === "custom" ? undefined : PRESETS[cfg.provider]
-  const base = cfg.baseURL ?? preset!.baseURL
-  const u = new URL(base)
-  const keyEnv = cfg.keyEnv ?? preset?.keyEnv
-  const key = keyEnv ? env[keyEnv]?.trim() || undefined : undefined
-  if (keyEnv && !key) return { error: `AI: set ${keyEnv}` }
-  if (key && u.protocol === "http:" && !loopback(u.hostname)) return { error: `AI: won't send the key over http to ${u.host}` }
-  if (cfg.headers && u.protocol === "http:" && !loopback(u.hostname)) return { error: `AI: won't send headers over http to ${u.host}` }
-  const headers: Record<string, string> = { "Content-Type": "application/json", ...cfg.headers }
-  if (key) headers.Authorization = `Bearer ${key}`
-  // the path goes before a query (`?api-version=…`); a fragment is never sent
-  u.pathname = u.pathname.replace(/\/+$/, "") + "/chat/completions"
-  u.hash = ""
-  return {
-    url: u.href,
-    host: u.host,
-    headers,
-    model: cfg.model,
-    maxChars: cfg.maxChars ?? preset?.maxChars ?? CUSTOM_MAX,
-    keyEnv,
-    key,
-  }
-}
 
 /** What is summarized and hashed: the body without front matter and `%%comments%%`. */
 export function noteText(src: string): string {
@@ -179,13 +60,7 @@ export function stripThink(raw: string): string {
 }
 
 function cleanStep(s: string): string {
-  s = s.trimStart()
-  if (s && "<think>".startsWith(s)) return "" // the tag is still arriving
-  if (s.startsWith("<think>")) {
-    const end = s.indexOf("</think>")
-    if (end < 0) return "" // still thinking: show nothing yet
-    s = s.slice(end + "</think>".length)
-  }
+  s = stripThink(s.trimStart()) // "" while the tag arrives or the model is still thinking: show nothing yet
   s = s
     .replace(/\*\*(.+?)\*\*/gs, "$1")
     .replace(/__(.+?)__/gs, (m, x: string) => (/^\w+$/.test(x) ? m : x)) // `__init__` is a name, not emphasis
@@ -217,12 +92,7 @@ export const shortModel = (model: string) => model.slice(model.lastIndexOf("/") 
  * around the JSON is expected.
  */
 export function extractJSON(raw: string): unknown {
-  let s = raw.trim()
-  if (s.startsWith("<think>")) {
-    const end = s.indexOf("</think>")
-    if (end < 0) return undefined
-    s = s.slice(end + "</think>".length)
-  }
+  let s = stripThink(raw.trim())
   const fence = /```(?:json)?[ \t]*\r?\n([\s\S]*?)```/i.exec(s)
   if (fence) s = fence[1]!
   const open = s.search(/[{[]/)
@@ -251,23 +121,23 @@ export type AIEvent = { kind: "text"; text: string } | { kind: "error"; message:
 /** `error.message`, `error` as a string, or `message`; Gemini wraps errors in an array. */
 export function errMessage(body: unknown): string | undefined {
   const b = Array.isArray(body) ? body[0] : body
-  if (!isObj(b)) return undefined
+  if (!isRecord(b)) return undefined
   const e = b.error
-  if (isObj(e) && typeof e.message === "string" && e.message) return e.message
+  if (isRecord(e) && typeof e.message === "string" && e.message) return e.message
   if (typeof e === "string" && e) return e
   if (typeof b.message === "string" && b.message) return b.message
   return undefined
 }
 
-const firstChoice = (o: Raw): Raw | undefined => (Array.isArray(o.choices) && isObj(o.choices[0]) ? o.choices[0] : undefined)
+const firstChoice = (o: Record<string, unknown>): Record<string, unknown> | undefined => (Array.isArray(o.choices) && isRecord(o.choices[0]) ? o.choices[0] : undefined)
 
 function chunkEvents(obj: unknown): AIEvent[] {
-  if (!isObj(obj)) return []
+  if (!isRecord(obj)) return []
   if (obj.error !== undefined) return [{ kind: "error", message: errMessage(obj) ?? "stream error" }]
   const ch = firstChoice(obj)
   if (!ch) return []
   const out: AIEvent[] = []
-  const content = isObj(ch.delta) ? ch.delta.content : undefined
+  const content = isRecord(ch.delta) ? ch.delta.content : undefined
   if (typeof content === "string" && content) out.push({ kind: "text", text: content })
   // reasoning / reasoning_content deltas yield nothing; the idle timer counts their bytes
   if (typeof ch.finish_reason === "string") out.push({ kind: "finish", reason: ch.finish_reason })
@@ -315,8 +185,8 @@ export type Failure =
 export function jsonReply(body: unknown): { text: string } | { failure: Failure } {
   const m = errMessage(body)
   if (m) return { failure: { kind: "message", message: m } }
-  const ch = isObj(body) ? firstChoice(body) : undefined
-  const content = ch && isObj(ch.message) ? ch.message.content : undefined
+  const ch = isRecord(body) ? firstChoice(body) : undefined
+  const content = ch && isRecord(ch.message) ? ch.message.content : undefined
   return typeof content === "string" ? { text: content } : { failure: { kind: "unexpected" } }
 }
 
@@ -356,9 +226,9 @@ export function aiError(f: Failure, ctx: ErrCtx): string {
       case "redirect":
         return `${ctx.host} redirects · set baseURL to the final URL`
       case "idle":
-        return "no answer for 60 s"
+        return `no answer for ${IDLE_MS / 1000} s`
       case "total":
-        return `no ${noun} after 180 s`
+        return `no ${noun} after ${TOTAL_MS / 1000} s`
       case "empty":
         return `empty ${noun}`
       case "invalid":
@@ -381,8 +251,6 @@ export interface ChatOpts {
   idleMs?: number
   totalMs?: number
 }
-/** The TL;DR's name for `ChatOpts`. */
-export type SummarizeOpts = ChatOpts
 
 /** One request. The caller builds (and clips) `user`; `clean` turns the reply into what is shown, `maxOut` caps that. */
 export interface ChatReq {

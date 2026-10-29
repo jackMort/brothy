@@ -168,3 +168,27 @@ test("glosses: file 0600, folder 0700", () => {
   expect(statSync(join(process.env.XDG_CACHE_HOME!, "brothy")).mode & 0o777).toBe(0o700)
   expect(statSync(join(process.env.XDG_CACHE_HOME!, "brothy", "glosses.json")).mode & 0o777).toBe(0o600)
 })
+
+test("summaries.json and glosses.json: compact JSON with a newline, the fields as stored, and a stored file reads back", () => {
+  const sum = { hash: "h", v: 1, summary: "s", model: "m", at: 1 }
+  saveSummaries({ "/a.md": sum })
+  expect(readFileSync(cachePath(), "utf8")).toBe(JSON.stringify({ "/a.md": sum }) + "\n")
+  const g = { hash: "h", v: 1, gloss: "g", model: "m", at: 2 }
+  saveGlosses({ [K]: g })
+  const file = join(process.env.XDG_CACHE_HOME!, "brothy", "glosses.json")
+  expect(readFileSync(file, "utf8")).toBe(JSON.stringify({ [K]: g }) + "\n")
+  writeFileSync(cachePath(), JSON.stringify({ "/b.md": sum }))
+  expect(loadSummaries()).toEqual({ "/b.md": sum })
+  expect(loadGlosses()).toEqual({ [K]: g })
+})
+
+test("a summary and a gloss are told apart by their own text field", () => {
+  mkdirSync(join(process.env.XDG_CACHE_HOME!, "brothy"), { recursive: true })
+  const both = { "/a.md": { hash: "h", v: 1, summary: "s", gloss: "g", model: "m", at: 1 }, "/b.md": { hash: "h", v: 1, summary: "s", model: "m", at: 1, extra: true } }
+  writeFileSync(cachePath(), JSON.stringify(both))
+  expect(Object.keys(loadSummaries())).toEqual(["/a.md", "/b.md"])
+  writeFileSync(join(process.env.XDG_CACHE_HOME!, "brothy", "glosses.json"), JSON.stringify(both))
+  expect(Object.keys(loadGlosses())).toEqual(["/a.md"])
+  writeFileSync(cachePath(), JSON.stringify({ "/c.md": { hash: "h", v: 1, summary: "s", model: "m", at: "1" }, "/d.md": { hash: "h", v: 1, summary: "s", model: "m", at: null } }))
+  expect(loadSummaries()).toEqual({})
+})

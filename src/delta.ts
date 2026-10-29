@@ -3,7 +3,7 @@
  * baseline, the hunks sent to the model, and what of its reply is kept.
  */
 
-import { cleanSummary } from "./ai"
+import { cleanSummary, stripThink } from "./ai"
 import { noteSections, type NoteSection } from "./sections"
 import { truncate } from "./status"
 import { plainLine } from "./vault"
@@ -286,8 +286,8 @@ function plusText(c: Change): string {
  * unfinished last `§` line is ignored. Null when there is neither a summary nor a valid note.
  */
 export function parseDelta(raw: string, changes: Change[], partial = false): DeltaParse | null {
-  let text = raw.replace(/^\s*<think>[\s\S]*?<\/think>/, "")
-  if (/^\s*<think>/.test(text)) text = "" // still thinking
+  let text = stripThink(raw)
+  if (/^\s*<think>/.test(text)) text = "" // only the first block is dropped: a second one means nothing usable
   const lines = text.split("\n")
   const first = lines.findIndex(isIdLine)
   const ids = first < 0 ? [] : lines.slice(first).filter(isIdLine)

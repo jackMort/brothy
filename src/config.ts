@@ -1,7 +1,6 @@
-import { chmodSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
-import { dirname, isAbsolute, join } from "node:path"
-import { normalizeAI, type AIConfig } from "./ai"
+import { join } from "node:path"
+import { normalizeAI, type AIConfig } from "./ai-config"
+import { configHome, isRecord, readJSON, writeFileAtomic } from "./json"
 import { HEADING_STYLES, type HeadingStyle } from "./markdown"
 import { pickZen, type ZenConfig } from "./zen"
 
@@ -39,38 +38,24 @@ export interface Config {
 
 /** Resolved on every call so env changes apply; relative XDG paths are ignored per the spec. */
 export function configPath(): string {
-  const xdg = process.env.XDG_CONFIG_HOME
-  const base = xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".config")
-  return join(base, "brothy", "config.json")
+  return join(configHome(), "brothy", "config.json")
 }
 
 type Raw = Record<string, unknown>
 
 /** `null` means the file exists but is unreadable or not a JSON object. */
 function readRaw(): Raw | null {
-  let text: string
-  try {
-    text = readFileSync(configPath(), "utf8")
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "ENOENT" ? {} : null
-  }
-  text = text.replace(/^\uFEFF/, "")
-  if (!text.trim()) return {}
-  try {
-    const v: unknown = JSON.parse(text)
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as Raw) : null
-  } catch {
-    return null
-  }
+  const f = readJSON(configPath(), { lenient: true })
+  if (f.kind === "missing") return {}
+  return f.kind === "ok" && isRecord(f.value) ? f.value : null
 }
 
 /** The valid fields of a raw `sidebar` value. */
 export function pickSidebar(raw: unknown): Partial<SidebarConfig> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
-  const r = raw as Raw
+  if (!isRecord(raw)) return {}
   const out: Partial<SidebarConfig> = {}
-  if (VIEWS.includes(r.view as View)) out.view = r.view as View
-  if (typeof r.hidden === "boolean") out.hidden = r.hidden
+  if (VIEWS.includes(raw.view as View)) out.view = raw.view as View
+  if (typeof raw.hidden === "boolean") out.hidden = raw.hidden
   return out
 }
 
@@ -93,9 +78,9 @@ export function loadConfig(): Config {
   if (typeof raw.headings === "string" && (HEADING_STYLES as readonly string[]).includes(raw.headings)) out.headings = raw.headings as HeadingStyle
   let folds: Partial<Record<View, boolean>> | undefined
   const f = raw.folds
-  if (f && typeof f === "object" && !Array.isArray(f)) {
+  if (isRecord(f)) {
     const ok: Partial<Record<View, boolean>> = {}
-    for (const k of VIEWS) if (typeof (f as Raw)[k] === "boolean") ok[k] = (f as Raw)[k] as boolean
+    for (const k of VIEWS) if (typeof f[k] === "boolean") ok[k] = f[k] as boolean
     if (Object.keys(ok).length) folds = ok
   }
   if (raw.sidebar !== undefined) {
@@ -109,29 +94,8 @@ export function loadConfig(): Config {
   return out
 }
 
-/**
- * Write via a temp file in the target's own folder and rename over it. A symlinked file is
- * followed (the link survives, its target is replaced) and the old mode is kept; `newMode`
- * applies only when the file is new. Throws on failure.
- */
-export function writeFileAtomic(file: string, text: string, newMode?: number) {
-  let target = file
-  let mode: number | undefined
-  try {
-    target = realpathSync(file)
-    mode = statSync(target).mode & 0o7777
-  } catch {
-    // new file (or a dangling link): plain write
-  }
-  mkdirSync(dirname(target), { recursive: true })
-  const tmp = `${target}.${process.pid}.tmp`
-  const keep = mode ?? newMode
-  writeFileSync(tmp, text, keep === undefined ? undefined : { mode: keep })
-  if (keep !== undefined) chmodSync(tmp, keep)
-  renameSync(tmp, target)
-}
-
-const isObject = (v: unknown): v is Raw => !!v && typeof v === "object" && !Array.isArray(v)
+/** Moved to json.ts; kept here for importers. */
+export { writeFileAtomic }
 
 /**
  * Merge `patch` into the file: top-level keys replace, except object-valued ones (`sidebar`,
@@ -143,7 +107,7 @@ export function saveConfig(patch: Config): boolean {
   const current = readRaw()
   if (!current) return false // exists but invalid: leave the user's file alone
   const next: Raw = { ...current }
-  for (const [k, v] of Object.entries(patch)) next[k] = isObject(v) && isObject(current[k]) ? { ...current[k], ...v } : v
+  for (const [k, v] of Object.entries(patch)) next[k] = isRecord(v) && isRecord(current[k]) ? { ...current[k], ...v } : v
   try {
     writeFileAtomic(configPath(), JSON.stringify(next, null, 2) + "\n")
     return true

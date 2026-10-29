@@ -1,4 +1,6 @@
-import { clip, parseGlossStyle as parseStyle, type GlossStyle } from "./ai"
+import { clip } from "./ai"
+import * as aiConfig from "./ai-config"
+import type { GlossStyle } from "./ai-config"
 import { width, wrap } from "./markdown"
 import { cached } from "./nav"
 import { noteSections, sectionId, sectionSource } from "./sections"
@@ -18,8 +20,8 @@ export const GLOSS_CHARS = 12_000
 /** a section with fewer words of its own sends its subtree */
 export const GLOSS_MIN_WORDS = 20
 
-/** `ai.gloss` in config.json (validated by ai.ts); anything unrecognised is `explain`. */
-export const parseGlossStyle = (raw: unknown): GlossStyle => parseStyle(raw) ?? "explain"
+/** `ai.gloss` in config.json (validated by ai-config.ts); anything unrecognised is `explain`. */
+export const parseGlossStyle = (raw: unknown): GlossStyle => aiConfig.parseGlossStyle(raw, "explain")
 
 const PLAIN = "Plain text only: no markdown, no lists, no preamble."
 const SAME = "Write in the same language as the section."
