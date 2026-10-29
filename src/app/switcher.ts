@@ -19,6 +19,7 @@ import {
 import { folderCounts } from "../notes/files"
 import { keepHitVisible } from "../ui/nav"
 import { peekLines, peekWindow, switchSplit } from "../notes/peek"
+import type { Rendered } from "../markdown/render"
 import { PEEK_MIN_W } from "../ui/geometry"
 import { errText } from "../ui/status"
 import { isFresh, textHash, type Summary } from "../ai/cache"
@@ -203,8 +204,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   const jumpToText = (row: TextHit, q: string, doc: NoteDoc | undefined) => {
     set({ query: q, matchLine: null })
     const { view, matches, s } = derive()
-    const from = s.source ? (view.srcRow?.[row.line] ?? 0) : row.heading === null ? 0 : (view.headings[row.heading]?.line ?? 0)
-    const end = s.source ? Infinity : (view.headings[row.heading === null ? 0 : row.heading + 1]?.line ?? Infinity)
+    const { from, end } = hitRows(view, s.source, row)
     const inSection = matches.filter((x) => x >= from && x < end)
     const k = s.source || !doc ? 0 : hitOrdinal(doc, row, q)
     const m = inSection[Math.min(k, inSection.length - 1)] ?? matches.find((x) => x >= from)
@@ -294,6 +294,13 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   }
 
   return { dropAsk, closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane }
+}
+
+/** The rows text hit `row` can match in, `end` exclusive: in Source from its source row on; in Preview its section (the lead-in for none). */
+export function hitRows(view: Rendered, source: boolean, row: TextHit) {
+  if (source) return { from: view.srcRow?.[row.line] ?? 0, end: Infinity }
+  if (row.heading === null) return { from: 0, end: view.headings[0]?.line ?? Infinity }
+  return { from: view.headings[row.heading]?.line ?? 0, end: view.headings[row.heading + 1]?.line ?? Infinity }
 }
 
 /** A cached TL;DR for the peek, only while fresh for the note as read. */
