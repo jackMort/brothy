@@ -31,7 +31,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   /** New query: the highlight goes back to the first hit; a changed query drops the answers and aborts their request. */
   const swType = (q: string) => {
     if (ui.current.switcher?.q !== q) dropAsk()
-    set({ switcher: { q, hl: 0, top: 0 } })
+    ui.current.switcher = { q, hl: 0, top: 0 } // unbumped: only for `derive` below
     set({ switcher: { q, hl: Math.max(0, firstHit(derive().swRows)), top: 0 } })
   }
 
@@ -39,8 +39,8 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   const setAsk = (ask: AskState | undefined) => {
     const sw = ui.current.switcher
     if (!sw) return
-    set({ switcher: { ...sw, ask, hl: 0, top: 0 } })
-    set({ switcher: { ...ui.current.switcher!, hl: Math.max(0, firstHit(derive().swRows)) } })
+    const next = (ui.current.switcher = { ...sw, ask, hl: 0, top: 0 }) // unbumped: only for `derive` below
+    set({ switcher: { ...next, hl: Math.max(0, firstHit(derive().swRows)) } })
   }
 
   /**

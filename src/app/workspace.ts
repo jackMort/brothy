@@ -100,8 +100,8 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
   const opType = (q: string) => {
     const op = ui.current.opener
     if (!op) return
-    set({ opener: { ...op, q, hl: 0, top: 0 } })
-    set({ opener: { ...ui.current.opener!, hl: Math.max(0, firstHit(derive().opRows)) } })
+    const next = (ui.current.opener = { ...op, q, hl: 0, top: 0 }) // unbumped: only for `derive` below
+    set({ opener: { ...next, hl: Math.max(0, firstHit(derive().opRows)) } })
   }
 
   /** Highlight row `hl`, scrolling so it (and its section title, when it is the first row) stays in view. */
