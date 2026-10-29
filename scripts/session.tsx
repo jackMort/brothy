@@ -1,4 +1,4 @@
-// Headless <App> session shared by scripts/snapshot.tsx (one frame) and scripts/demo.ts (a recorded walkthrough).
+// Headless <App> session shared by scripts/snapshot.tsx (one frame) and the private brothy-studio tooling (screenshots, casts, demo videos).
 import { testRender } from "@opentui/react/test-utils"
 import { App } from "../src/App"
 

@@ -25,6 +25,8 @@ bun run build               # compile a single binary ./brothy (delete it after 
 
 New themes must pass the contrast tests in `tests/theme.test.ts`.
 
+The screenshots, videos and casts in `docs/` and `site/public/casts/` are rendered by the maintainer with private tooling: leave them out of a PR and say in the description if a change needs them re-rendered.
+
 ## Releasing (maintainers)
 
 Move the `[Unreleased]` entries under a new version heading in `CHANGELOG.md`, bump `version`
