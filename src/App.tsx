@@ -7,7 +7,8 @@ import { SCAN_LIMIT, ancestorsOf, findVault, firstFile, folderCounts, rankNotes,
 import { ensureHighlights } from "./highlight"
 import { drop, go, keep, startHistory, stepTo, visit, type History } from "./history"
 import { A, HEADING_STYLES, normalize, parseFrontMatter, sourceScan, parseProperties, pendingHighlights, render, renderSource, stats, wordStats, width as sw, wrap, type HeadingStyle, type Line, type LinkTarget, type Property, type Rendered, type Span, type Stats, type FrontMatter } from "./markdown"
-import { safe, safeLine } from "./spans"
+import { safeLine } from "./spans"
+import { Row } from "./app/Row"
 import { MAX_BYTES } from "./stdin"
 import { readDoc, type DocFile } from "./doc"
 import { contrastOn, mix, surface, themes, type Theme } from "./theme"
@@ -92,18 +93,6 @@ const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, row
   [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 const lineText = (l: Line | undefined) => (l?.spans ?? []).map((s) => s.text).join("")
 const spansWidth = (spans: Span[]) => spans.reduce((a, sp) => a + sw(sp.text), 0)
-
-function Row({ spans, bg }: { spans: Span[]; bg?: string }) {
-  return (
-    <text bg={bg} wrapMode="none" style={{ height: 1, flexShrink: 0 }}>
-      {spans.map((s, i) => (
-        <span key={i} fg={s.fg} bg={s.bg} attributes={s.attr ?? 0}>
-          {safe(s.text)}
-        </span>
-      ))}
-    </text>
-  )
-}
 
 // ------------------------------------------------------------- keymap
 //
