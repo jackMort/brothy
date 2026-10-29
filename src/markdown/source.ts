@@ -23,6 +23,82 @@ interface SourceHeading {
 /** A heading's outline title from its inline tokens: Preview's text (NBSP read as a space), which no theme changes. */
 const titleOf = (tokens: Token[] | undefined, t: Theme) => plainOf(inline(tokens, t)).replace(/\u00a0/g, " ")
 
+/** The line-based reader's state: what it found so far, the open fence and the open paragraph's lines. */
+interface LineScan {
+  headings: Map<number, SourceHeading>
+  fenceLines: Set<number>
+  codeLines: Set<number>
+  // fences and paragraphs remember their quote depth: a quote ending closes a fence, and an
+  // underline only makes a setext heading at its paragraph's depth
+  fence: { ch: string; len: number; depth: number } | null
+  para: number[]
+  paraDepth: number
+  /** each line read so far without its quote markers */
+  bodies: string[]
+  title: (raw: string) => string
+}
+
+/** A line inside a fence: the closing fence (same char, at least as long, same quote depth), else a code line. */
+function fenceLine(s: LineScan, i: number, body: string, depth: number) {
+  const fence = s.fence!
+  const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(body)
+  if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
+    s.fence = null
+    s.fenceLines.add(i)
+  } else s.codeLines.add(i)
+}
+
+/** Whether line `i` opens a fence (an info string with a backtick does not), recording it. */
+function openFence(s: LineScan, i: number, body: string, depth: number): boolean {
+  const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(body)
+  if (!open || (open[1]![0] === "`" && open[2]!.includes("`"))) return false
+  s.fence = { ch: open[1]![0]!, len: open[1]!.length, depth }
+  s.fenceLines.add(i)
+  return true
+}
+
+/** Whether line `i` is an ATX heading, recording it. */
+function atxHeading(s: LineScan, i: number, body: string): boolean {
+  const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(body)
+  if (!atx) return false
+  const text = (atx[2] ?? "").replace(/(?:^|[ \t]+)#+[ \t]*$/, "").trim()
+  s.headings.set(i, { depth: atx[1]!.length, text: s.title(text), end: i, setext: false })
+  return true
+}
+
+/** Whether line `i` underlines the open paragraph (at its quote depth) into a setext heading, recording it. */
+function setextHeading(s: LineScan, i: number, body: string, depth: number): boolean {
+  // one `-` is enough: an empty list item can't interrupt a paragraph, so `Para\n-` is a setext h2
+  const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(body)
+  if (!underline || !s.para.length || depth !== s.paraDepth) return false
+  const text = s.para
+    .map((k) => s.bodies[k]!.trimStart())
+    .join("\n")
+    .trimEnd()
+  s.headings.set(s.para[0]!, { depth: underline[1]![0] === "=" ? 1 : 2, text: s.title(text), end: i, setext: true })
+  return true
+}
+
+/** Whether line `i` ends the open paragraph: a fence, blank line, heading, rule, list item, table row or lazy line. */
+function endsParagraph(s: LineScan, i: number, body: string, depth: number): boolean {
+  if (openFence(s, i, body, depth)) return true
+  if (/^[ \t]*$/.test(body)) return true
+  if (atxHeading(s, i, body)) return true
+  if (setextHeading(s, i, body, depth)) return true
+  if (/^ {0,3}([-*_])([ \t]*\1){2,}[ \t]*$/.test(body) || /^ {0,3}([-*+]|\d{1,9}[.)])([ \t]|$)/.test(body) || /^ {0,3}\|/.test(body)) return true
+  // a lazy line continues a quoted paragraph, which can no longer take an underline
+  return s.para.length > 0 && depth < s.paraDepth
+}
+
+/** A line that may join the open paragraph, or start one at its quote depth. */
+function paragraphLine(s: LineScan, i: number, body: string, depth: number) {
+  // a callout's `[!type]` line is its title, never part of a paragraph
+  if (depth && !s.para.length && /^\[![\w-]+\]/.test(body)) return
+  if (!s.para.length && /^( {4}|\t)/.test(body)) return // indented code
+  if (!s.para.length) s.paraDepth = depth
+  s.para.push(i)
+}
+
 /**
  * Line-based mirror of the Markdown block rules that matter for the outline, for notes whose
  * blocks are only headings, fences, quotes and paragraphs (`needsLexer` says when that does not hold):
@@ -30,79 +106,34 @@ const titleOf = (tokens: Token[] | undefined, t: Theme) => plainOf(inline(tokens
  * `%%comments%%` cut (`scanComments().kept`), so titles and structure match what Preview lexes.
  */
 export function sourceStructureLines(lines: string[], from: number, t: Theme, hidden: boolean[]) {
-  const headings = new Map<number, SourceHeading>()
-  const fenceLines = new Set<number>()
-  const codeLines = new Set<number>()
-  const title = (raw: string) => titleOf(lexInline(raw), t)
-  // fences and paragraphs remember their quote depth: a quote ending closes a fence, and an
-  // underline only makes a setext heading at its paragraph's depth
-  let fence: { ch: string; len: number; depth: number } | null = null
-  let para: number[] = []
-  let paraDepth = 0
-  const bodies: string[] = []
+  const s: LineScan = {
+    headings: new Map(),
+    fenceLines: new Set(),
+    codeLines: new Set(),
+    fence: null,
+    para: [],
+    paraDepth: 0,
+    bodies: [],
+    title: (raw) => titleOf(lexInline(raw), t),
+  }
   for (let i = from; i < lines.length; i++) {
     const line = lines[i]!
     const quote = /^ {0,3}(?:> ?)+/.exec(line)
     const depth = quote ? quote[0].split(">").length - 1 : 0
     const body = quote ? line.slice(quote[0].length) : line
-    bodies[i] = body
-    if (fence && depth < fence.depth) fence = null
-    if (fence) {
-      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(body)
-      if (close && depth === fence.depth && close[1]![0] === fence.ch && close[1]!.length >= fence.len) {
-        fence = null
-        fenceLines.add(i)
-      } else codeLines.add(i)
+    s.bodies[i] = body
+    if (s.fence && depth < s.fence.depth) s.fence = null
+    if (s.fence) {
+      fenceLine(s, i, body, depth)
       continue
     }
     // Preview never sees a comment-only line, so the lines around it meet
     if (hidden[i]) continue
-    if (para.length && depth > paraDepth) para = [] // a quote interrupts the paragraph
-    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(body)
-    if (open && !(open[1]![0] === "`" && open[2]!.includes("`"))) {
-      fence = { ch: open[1]![0]!, len: open[1]!.length, depth }
-      fenceLines.add(i)
-      para = []
-      continue
-    }
-    if (/^[ \t]*$/.test(body)) {
-      para = []
-      continue
-    }
-    const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(body)
-    if (atx) {
-      const text = (atx[2] ?? "").replace(/(?:^|[ \t]+)#+[ \t]*$/, "").trim()
-      headings.set(i, { depth: atx[1]!.length, text: title(text), end: i, setext: false })
-      para = []
-      continue
-    }
-    // one `-` is enough: an empty list item can't interrupt a paragraph, so `Para\n-` is a setext h2
-    const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(body)
-    if (underline && para.length && depth === paraDepth) {
-      const text = para
-        .map((k) => bodies[k]!.trimStart())
-        .join("\n")
-        .trimEnd()
-      headings.set(para[0]!, { depth: underline[1]![0] === "=" ? 1 : 2, text: title(text), end: i, setext: true })
-      para = []
-      continue
-    }
-    if (/^ {0,3}([-*_])([ \t]*\1){2,}[ \t]*$/.test(body) || /^ {0,3}([-*+]|\d{1,9}[.)])([ \t]|$)/.test(body) || /^ {0,3}\|/.test(body)) {
-      para = []
-      continue
-    }
-    // a lazy line continues a quoted paragraph, which can no longer take an underline
-    if (para.length && depth < paraDepth) {
-      para = []
-      continue
-    }
-    // a callout's `[!type]` line is its title, never part of a paragraph
-    if (depth && !para.length && /^\[![\w-]+\]/.test(body)) continue
-    if (!para.length && /^( {4}|\t)/.test(body)) continue // indented code
-    if (!para.length) paraDepth = depth
-    para.push(i)
+    if (s.para.length && depth > s.paraDepth) s.para = [] // a quote interrupts the paragraph
+    if (endsParagraph(s, i, body, depth)) s.para = []
+    else paragraphLine(s, i, body, depth)
   }
-  return { headings, fenceLines, codeLines }
+  return { headings: s.headings, fenceLines: s.fenceLines, codeLines: s.codeLines }
 }
 
 /** Deepest list indent (spaces) the line-based reader follows; past it a marker may be code, so the lexer decides. */

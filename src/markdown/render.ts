@@ -113,91 +113,112 @@ export function stripTags(html: string): string {
   })
 }
 
+/** One `inline()` call's state: `cur` is the style in force, which an inline `<kbd>` or `<mark>` switches until it closes. */
+interface InlineRun {
+  t: Theme
+  base: Omit<Span, "text">
+  cur: Omit<Span, "text">
+  sink?: LinkSink
+  out: Span[]
+}
+
+/** The style each nesting mark (`**`, `*`, `~~`, `==`) gives its children. */
+const MARKS = new Map<string, (cur: Omit<Span, "text">, t: Theme) => Omit<Span, "text">>([
+  ["strong", (cur) => ({ ...cur, attr: (cur.attr ?? 0) | A.BOLD })],
+  ["em", (cur) => ({ ...cur, attr: (cur.attr ?? 0) | A.ITALIC })],
+  ["del", (cur, t) => ({ ...cur, fg: t.textMuted, attr: (cur.attr ?? 0) | A.STRIKE })],
+  ["highlight", (cur, t) => ({ ...cur, fg: t.warning, bg: t.backgroundElement })],
+])
+
+function inlineText(tok: Token, run: InlineRun) {
+  const tt = tokenOf(tok, "text") // an escape is a text token without `tokens`
+  if (tt.tokens?.length) run.out.push(...inline(tt.tokens, run.t, run.cur, run.sink))
+  else run.out.push({ ...run.cur, text: decode(tt.text) })
+}
+
+function inlineCode(tok: Token, run: InlineRun) {
+  const { t } = run
+  run.out.push({ text: safe(tokenOf(tok, "codespan").text).replace(/ /g, "\u00a0"), fg: t.accent, bg: t.backgroundElement })
+}
+
+function inlineLink(tok: Token, run: InlineRun) {
+  const l = tokenOf(tok, "link")
+  const style: Omit<Span, "text"> = { ...run.cur, fg: run.t.info, attr: (run.cur.attr ?? 0) | A.UNDERLINE }
+  if (run.sink) style.link = run.sink.links.push(/^[a-z][\w+.-]*:/i.test(l.href) ? { kind: "url", href: l.href } : { kind: "md", href: l.href }) - 1
+  run.out.push(...inline(l.tokens, run.t, style, run.sink))
+}
+
+/** A wikilink: an embedded non-note file is a muted `▣ name`; a target the sink cannot resolve is muted. */
+function inlineWikilink(tok: Token, run: InlineRun) {
+  if (!isWikilink(tok)) return
+  const { t, cur, sink } = run
+  const w = tok
+  if (w.embed && /\.[^/.]+$/.test(w.target) && !isMarkdown(w.target)) {
+    run.out.push({ text: `▣ ${safe(w.target.split("/").at(-1)!)}`, fg: t.textMuted, attr: A.ITALIC })
+    return
+  }
+  const ok = !w.target || !sink?.exists || sink.exists(w.target)
+  const style: Omit<Span, "text"> = { ...cur, fg: ok ? t.info : t.textMuted, attr: (cur.attr ?? 0) | A.UNDERLINE }
+  if (sink) {
+    const l: LinkTarget = { kind: "wiki", target: w.target, embed: w.embed }
+    if (w.heading) l.heading = w.heading
+    style.link = sink.links.push(l) - 1
+  }
+  if (w.embed) run.out.push({ ...cur, text: "↳ ", fg: t.textMuted })
+  run.out.push({ ...style, text: safe(wikiLabel(w)) })
+}
+
+function inlineImage(tok: Token, run: InlineRun) {
+  run.out.push({ text: `▣\u00a0${safe(tokenOf(tok, "image").text) || "image"}`, fg: run.t.textMuted, attr: A.ITALIC })
+}
+
+function inlineBreak(_tok: Token, run: InlineRun) {
+  run.out.push({ ...run.cur, text: "\n" })
+}
+
+/** One inline HTML tag: comments vanish, unknown tags show as muted text, `<kbd>`/`<mark>` switch the style until closed. */
+function inlineHtml(tok: Token, run: InlineRun) {
+  const { t, base } = run
+  const raw = tokenOf(tok, "html").text
+  if (/^\s*<!--/.test(raw)) return
+  const m = /^\s*<(\/?)([a-zA-Z][\w-]*)\b[^>]*>\s*$/.exec(raw)
+  const name = m?.[2]?.toLowerCase()
+  if (!m || !name || !HTML_TAGS.has(name)) {
+    run.out.push({ text: safe(raw), fg: t.textMuted })
+    return
+  }
+  if (name === "br") run.out.push({ ...run.cur, text: "\n" })
+  else if (name === "kbd") run.cur = m[1] ? base : { ...base, fg: t.accent, bg: t.backgroundElement }
+  else if (name === "mark") run.cur = m[1] ? base : { ...base, fg: t.warning, bg: t.backgroundElement }
+}
+
+/** Any other token with text is drawn as that text in the current style. */
+function inlineOther(tok: Token, run: InlineRun) {
+  if ("text" in tok) run.out.push({ ...run.cur, text: decode(String(tok.text)) })
+}
+
+/** How `inline()` draws each token kind that is not a nesting mark. */
+const INLINE_KINDS = new Map<string, (tok: Token, run: InlineRun) => void>([
+  ["text", inlineText],
+  ["escape", inlineText],
+  ["codespan", inlineCode],
+  ["link", inlineLink],
+  ["wikilink", inlineWikilink],
+  ["image", inlineImage],
+  ["br", inlineBreak],
+  ["html", inlineHtml],
+])
+
 /** Inline tokens as spans, styled from `base` down; with a `sink`, links are numbered into it (`Span.link`). */
 export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> = { fg: t.text }, sink?: LinkSink): Span[] {
-  const out: Span[] = []
-  if (!tokens) return out
-  let cur = base
+  const run: InlineRun = { t, base, cur: base, sink, out: [] }
+  if (!tokens) return run.out
   for (const tok of tokens) {
-    switch (tok.type) {
-      case "text":
-      case "escape": {
-        const tt = tokenOf(tok, "text") // an escape is a text token without `tokens`
-        if (tt.tokens?.length) out.push(...inline(tt.tokens, t, cur, sink))
-        else out.push({ ...cur, text: decode(tt.text) })
-        break
-      }
-      case "strong":
-        out.push(...inline(tokenOf(tok, "strong").tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.BOLD }, sink))
-        break
-      case "em":
-        out.push(...inline(tokenOf(tok, "em").tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.ITALIC }, sink))
-        break
-      case "del":
-        out.push(...inline(tokenOf(tok, "del").tokens, t, { ...cur, fg: t.textMuted, attr: (cur.attr ?? 0) | A.STRIKE }, sink))
-        break
-      case "highlight":
-        out.push(...inline((tok as Tokens.Generic).tokens, t, { ...cur, fg: t.warning, bg: t.backgroundElement }, sink))
-        break
-      case "codespan":
-        out.push({
-          text: safe(tokenOf(tok, "codespan").text).replace(/ /g, "\u00a0"),
-          fg: t.accent,
-          bg: t.backgroundElement,
-        })
-        break
-      case "link": {
-        const l = tokenOf(tok, "link")
-        const style: Omit<Span, "text"> = { ...cur, fg: t.info, attr: (cur.attr ?? 0) | A.UNDERLINE }
-        if (sink) style.link = sink.links.push(/^[a-z][\w+.-]*:/i.test(l.href) ? { kind: "url", href: l.href } : { kind: "md", href: l.href }) - 1
-        out.push(...inline(l.tokens, t, style, sink))
-        break
-      }
-      case "wikilink": {
-        if (!isWikilink(tok)) break
-        const w = tok
-        if (w.embed && /\.[^/.]+$/.test(w.target) && !isMarkdown(w.target)) {
-          out.push({ text: `▣ ${safe(w.target.split("/").at(-1)!)}`, fg: t.textMuted, attr: A.ITALIC })
-          break
-        }
-        const ok = !w.target || !sink?.exists || sink.exists(w.target)
-        const style: Omit<Span, "text"> = { ...cur, fg: ok ? t.info : t.textMuted, attr: (cur.attr ?? 0) | A.UNDERLINE }
-        if (sink) {
-          const l: LinkTarget = { kind: "wiki", target: w.target, embed: w.embed }
-          if (w.heading) l.heading = w.heading
-          style.link = sink.links.push(l) - 1
-        }
-        if (w.embed) out.push({ ...cur, text: "↳ ", fg: t.textMuted })
-        out.push({ ...style, text: safe(wikiLabel(w)) })
-        break
-      }
-      case "image": {
-        const im = tokenOf(tok, "image")
-        out.push({ text: `▣\u00a0${safe(im.text) || "image"}`, fg: t.textMuted, attr: A.ITALIC })
-        break
-      }
-      case "br":
-        out.push({ ...cur, text: "\n" })
-        break
-      case "html": {
-        const raw = tokenOf(tok, "html").text
-        if (/^\s*<!--/.test(raw)) break
-        const m = /^\s*<(\/?)([a-zA-Z][\w-]*)\b[^>]*>\s*$/.exec(raw)
-        const name = m?.[2]?.toLowerCase()
-        if (!m || !name || !HTML_TAGS.has(name)) {
-          out.push({ text: safe(raw), fg: t.textMuted })
-          break
-        }
-        if (name === "br") out.push({ ...cur, text: "\n" })
-        else if (name === "kbd") cur = m[1] ? base : { ...base, fg: t.accent, bg: t.backgroundElement }
-        else if (name === "mark") cur = m[1] ? base : { ...base, fg: t.warning, bg: t.backgroundElement }
-        break
-      }
-      default:
-        if ("text" in tok) out.push({ ...cur, text: decode(String(tok.text)) })
-    }
+    const mark = MARKS.get(tok.type)
+    if (mark) run.out.push(...inline((tok as Tokens.Generic).tokens, t, mark(run.cur, t), sink))
+    else (INLINE_KINDS.get(tok.type) ?? inlineOther)(tok, run)
   }
-  return out
+  return run.out
 }
 
 const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" }
@@ -318,6 +339,11 @@ function emitRows(ctx: Ctx, rows: Span[][], extra: Partial<Line> = {}) {
   rows.forEach((spans, i) => ctx.lines.push(i === 0 ? { spans, ...extra } : { spans }))
 }
 
+/** The blank row in `rest` that ends most blocks. */
+function spacer(ctx: Ctx, rest: Span[]) {
+  ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
+}
+
 /** A blank row in `prefix` (quote bars, list indent) before a heading, unless the last row already is one. */
 function blank(ctx: Ctx, prefix: Span[]) {
   const last = ctx.lines[ctx.lines.length - 1]
@@ -382,11 +408,210 @@ function callout(ctx: Ctx, c: Callout, max: number, first: Span[], rest: Span[],
   if (c.body.trim()) blocks(ctx, lexBlocks(c.body), max, [...rest, bar], [...rest, bar], depth)
   if (k.quote) muteQuote(ctx, bodyStart)
   trimTrailingBlank(ctx, start, [...rest, bar])
-  ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
+  spacer(ctx, rest)
+}
+
+/** Where one `blocks()` call lays out: `max` columns, `pre()` the prefix of the next row (`first` once, then `rest`), the list depth. */
+interface BlockFrame {
+  max: number
+  pre: () => Span[]
+  rest: Span[]
+  depth: number
+}
+
+/** A heading: recorded in the outline at its title row (after the blank row before it), then drawn by `headingRows`. */
+function headingBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  const { t } = ctx
+  const h = tokenOf(tok, "heading")
+  const text = inline(h.tokens, t, undefined, ctx.sink)
+  const colors = [t.primary, t.secondary, t.accent, t.text, t.text, t.textMuted]
+  const fg = colors[h.depth - 1] ?? t.text
+  const styled = text.map((s) => ({ ...s, fg: s.bg ? s.fg : fg, attr: (s.attr ?? 0) | A.BOLD }))
+  const idx = ctx.headings.length
+  ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/\u00a0/g, " "), line: ctx.lines.length })
+  blank(ctx, f.rest)
+  ctx.headings[idx]!.line = ctx.lines.length // after the blank row, so a jump lands on the title
+  headingRows(ctx, h.depth, styled, fg, idx, f.max, f.pre(), f.rest)
+  spacer(ctx, f.rest)
+}
+
+function paragraphBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  // a "text" block is a tight list item's body: no blank row after it
+  const p = tokenOf(tok, "paragraph", "text")
+  emitRows(ctx, wrap(inline(p.tokens, ctx.t, undefined, ctx.sink), f.max, f.pre(), f.rest))
+  if (tok.type === "paragraph") spacer(ctx, f.rest)
+}
+
+/** A blockquote: a callout when it opens with `[!type]`, else its blocks under a primary bar, muted. */
+function quoteBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  const q = tokenOf(tok, "blockquote")
+  const c = calloutOf(q)
+  if (c) return callout(ctx, c, f.max, f.pre(), f.rest, f.depth)
+  const bar = { text: "▎ ", fg: ctx.t.primary }
+  const start = ctx.lines.length
+  blocks(ctx, q.tokens, f.max, [...f.pre(), bar], [...f.rest, bar], f.depth)
+  muteQuote(ctx, start)
+  trimTrailingBlank(ctx, start, [...f.rest, bar])
+  spacer(ctx, f.rest)
+}
+
+/** A list item's task state; marked makes no task of an item that is only `[ ]` or `[x]`, which draws as an empty task (`bare`). */
+function taskOf(item: Tokens.ListItem) {
+  const bare = item.task ? null : /^\[([ xX])\]$/.exec(item.text.trim())
+  return { bare: !!bare, task: item.task || !!bare, checked: item.task ? !!item.checked : !!bare && bare[1] !== " " }
+}
+
+/** The marker before a list item: its number (`num`, ordered lists only), its checkbox, else the depth's bullet. */
+function listMarker(t: Theme, num: string | null, task: boolean, checked: boolean, depth: number): Span[] {
+  const marker: Span[] = []
+  if (num !== null) {
+    marker.push({ text: num, fg: t.primary })
+    if (task) marker.push({ text: " " })
+  }
+  if (task) {
+    marker.push(checked ? { text: "[x]", fg: t.success, attr: A.BOLD } : { text: "[ ]", fg: t.textMuted })
+  } else if (num === null) {
+    marker.push({ text: ["•", "◦", "▪"][depth % 3]!, fg: t.primary })
+  }
+  return marker
+}
+
+/** One list item after its marker, the body indented by the marker's width; a checked task's text is muted. */
+function listItem(ctx: Ctx, item: Tokens.ListItem, num: string | null, first: Span[], f: BlockFrame, loose: boolean) {
+  const { t } = ctx
+  const { bare, task, checked } = taskOf(item)
+  const marker = listMarker(t, num, task, checked, f.depth)
+  const mw = spanWidth(marker) + 1
+  const itemFirst = [...first, ...marker, { text: " " }]
+  const itemRest = [...f.rest, { text: pad(mw) }]
+  const startLine = ctx.lines.length
+  const body = item.tokens.filter((x) => !(task && x.type === "checkbox"))
+  if (bare) ctx.lines.push({ spans: itemFirst.map((s) => ({ ...s })) })
+  else blocks(ctx, body, f.max, itemFirst, itemRest, f.depth + 1)
+  if (checked) {
+    for (let k = startLine; k < ctx.lines.length; k++) for (const s of ctx.lines[k]!.spans) if (s.fg === t.text) s.fg = t.textMuted
+  }
+  if (!loose) trimTrailingBlank(ctx, startLine, f.rest)
+}
+
+/** A list: ordered numbers right-aligned to the widest one; a tight list drops the blank rows between items. */
+function listBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  const l = tokenOf(tok, "list")
+  const start = typeof l.start === "number" ? l.start : 1
+  const numW = l.ordered ? String(start + l.items.length - 1).length + 1 : 1
+  l.items.forEach((item, i) => {
+    const num = l.ordered ? `${start + i}.`.padStart(numW) : null
+    listItem(ctx, item, num, i === 0 ? f.pre() : f.rest, f, l.loose)
+  })
+  spacer(ctx, f.rest)
 }
 
 /** Fences Obsidian runs as queries: shown as one collapsed row; the query is read in Source. */
 const DATAVIEW_LANGS = new Set(["dataview", "dataviewjs", "tasks"])
+
+/** A query fence as one filled row: `⌁ lang · n lines`, and `s: source` at the right when it fits. */
+function queryRow(ctx: Ctx, c: Tokens.Code, lang: string, f: BlockFrame) {
+  const { t } = ctx
+  const fill = t.backgroundElement
+  const n = c.text === "" ? 0 : c.text.split("\n").length
+  const label = `⌁ ${lang} · ${n} ${n === 1 ? "line" : "lines"}`
+  const hint = "s: source"
+  const p0 = f.pre()
+  const avail = f.max - spanWidth(p0) - 2
+  const gap = avail - width(label) - width(hint)
+  const body: Span[] =
+    gap >= 2
+      ? [
+          { text: label, fg: t.textMuted, bg: fill },
+          { text: pad(gap), bg: fill },
+          { text: hint, fg: t.textMuted, bg: fill },
+        ]
+      : truncate([{ text: label, fg: t.textMuted, bg: fill }], Math.max(1, avail))
+  const row: Span[] = [...p0, { text: "  ", bg: fill }, ...body]
+  row.push({ text: pad(f.max - spanWidth(row)), bg: fill })
+  ctx.lines.push({ spans: row, fill })
+  spacer(ctx, f.rest)
+}
+
+/** A filled block: a top row with the language at its right, the code (wrapped rows marked `↪`), a bottom row. */
+function codeFence(ctx: Ctx, c: Tokens.Code, lang: string, f: BlockFrame) {
+  const { t } = ctx
+  const { max, rest } = f
+  const p0 = f.pre()
+  const inner = max - spanWidth(rest)
+  const fill = t.backgroundElement
+  const label = lang ? ` ${lang} ` : ""
+  ctx.lines.push({
+    spans: [...p0, { text: pad(inner - width(label)), bg: fill }, { text: label, fg: t.textMuted, bg: fill }],
+    fill,
+  })
+  const { lines: codeLines, pending } = codeSpans(lang, c.text.replace(/\t/g, "    "), t)
+  if (pending) ctx.pending.push(pending)
+  for (const line of codeLines) {
+    const hl = line.map((s) => ({ ...s, bg: fill }))
+    const rows = wrap(
+      hl.length ? hl : [{ text: "", bg: fill }],
+      max - 2,
+      [...rest, { text: "  ", bg: fill }],
+      [...rest, { text: "↪ ", fg: t.textMuted, bg: fill }],
+      true,
+    )
+    for (const r of rows) {
+      r.push({ text: pad(max - spanWidth(r)), bg: fill })
+      ctx.lines.push({ spans: r, fill })
+    }
+  }
+  ctx.lines.push({ spans: [...rest, { text: pad(inner), bg: fill }], fill })
+  spacer(ctx, rest)
+}
+
+function codeBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  const c = tokenOf(tok, "code")
+  const lang = (c.lang ?? "").split(/\s/)[0] ?? ""
+  if (DATAVIEW_LANGS.has(lang.toLowerCase())) queryRow(ctx, c, lang, f)
+  else codeFence(ctx, c, lang, f)
+}
+
+function ruleBlock(ctx: Ctx, _tok: Token, f: BlockFrame) {
+  const p = f.pre()
+  ctx.lines.push({ spans: [...p, { text: "─".repeat(Math.max(0, f.max - spanWidth(p))), fg: ctx.t.borderSubtle }] })
+  spacer(ctx, f.rest)
+}
+
+/** Block HTML as muted text (`stripTags`), blank lines dropped; nothing at all when no text is left. */
+function htmlBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  const txt = stripTags(tokenOf(tok, "html").text)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join("\n")
+  if (!txt) return
+  emitRows(ctx, wrap([{ text: decode(txt), fg: ctx.t.textMuted }], f.max, f.pre(), f.rest))
+  spacer(ctx, f.rest)
+}
+
+/** Any other block shows its raw Markdown. */
+function otherBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
+  const raw = (tok as { raw?: string }).raw?.trim()
+  if (raw) emitRows(ctx, wrap([{ text: raw, fg: ctx.t.text }], f.max, f.pre(), f.rest))
+}
+
+const skipBlock = () => {}
+
+/** How `blocks()` lays out each block kind; spaces and link definitions draw nothing. */
+const BLOCK_KINDS = new Map<string, (ctx: Ctx, tok: Token, f: BlockFrame) => void>([
+  ["space", skipBlock],
+  ["heading", headingBlock],
+  ["paragraph", paragraphBlock],
+  ["text", paragraphBlock],
+  ["blockquote", quoteBlock],
+  ["list", listBlock],
+  ["code", codeBlock],
+  ["hr", ruleBlock],
+  ["table", (ctx, tok, f) => table(ctx, tokenOf(tok, "table"), f.max, f.pre(), f.rest)],
+  ["html", htmlBlock],
+  ["def", skipBlock],
+])
 
 /**
  * Lay out block tokens into `ctx.lines`, `max` columns wide. `first` prefixes the first row this call emits and
@@ -395,170 +620,14 @@ const DATAVIEW_LANGS = new Set(["dataview", "dataviewjs", "tasks"])
  * containers trim the last one (`trimTrailingBlank`) and `render` trims the document's ends.
  */
 function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Span[], depth = 0) {
-  const { t } = ctx
   let usedFirst = false
   const pre = () => {
     if (usedFirst) return rest
     usedFirst = true
     return first
   }
-  for (const tok of tokens) {
-    switch (tok.type) {
-      case "space":
-        break
-      case "heading": {
-        const h = tokenOf(tok, "heading")
-        const text = inline(h.tokens, t, undefined, ctx.sink)
-        const colors = [t.primary, t.secondary, t.accent, t.text, t.text, t.textMuted]
-        const fg = colors[h.depth - 1] ?? t.text
-        const styled = text.map((s) => ({ ...s, fg: s.bg ? s.fg : fg, attr: (s.attr ?? 0) | A.BOLD }))
-        const idx = ctx.headings.length
-        ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/\u00a0/g, " "), line: ctx.lines.length })
-        blank(ctx, rest)
-        ctx.headings[idx]!.line = ctx.lines.length // after the blank row, so a jump lands on the title
-        headingRows(ctx, h.depth, styled, fg, idx, max, pre(), rest)
-        ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "paragraph":
-      case "text": {
-        // a "text" block is a tight list item's body: no blank row after it
-        const p = tokenOf(tok, "paragraph", "text")
-        emitRows(ctx, wrap(inline(p.tokens, t, undefined, ctx.sink), max, pre(), rest))
-        if (tok.type === "paragraph") ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "blockquote": {
-        const q = tokenOf(tok, "blockquote")
-        const c = calloutOf(q)
-        if (c) {
-          callout(ctx, c, max, pre(), rest, depth)
-          break
-        }
-        const bar = { text: "▎ ", fg: t.primary }
-        const start = ctx.lines.length
-        blocks(ctx, q.tokens, max, [...pre(), bar], [...rest, bar], depth)
-        muteQuote(ctx, start)
-        trimTrailingBlank(ctx, start, [...rest, bar])
-        ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "list": {
-        const l = tokenOf(tok, "list")
-        const start = typeof l.start === "number" ? l.start : 1
-        const numW = l.ordered ? String(start + l.items.length - 1).length + 1 : 1
-        l.items.forEach((item, i) => {
-          // marked makes no task of an item that is only `[ ]` or `[x]`: draw it as an empty task
-          const bare = item.task ? null : /^\[([ xX])\]$/.exec(item.text.trim())
-          const task = item.task || !!bare
-          const checked = item.task ? !!item.checked : !!bare && bare[1] !== " "
-          const marker: Span[] = []
-          if (l.ordered) {
-            marker.push({ text: `${start + i}.`.padStart(numW), fg: t.primary })
-            if (task) marker.push({ text: " " })
-          }
-          if (task) {
-            marker.push(checked ? { text: "[x]", fg: t.success, attr: A.BOLD } : { text: "[ ]", fg: t.textMuted })
-          } else if (!l.ordered) {
-            marker.push({ text: ["•", "◦", "▪"][depth % 3]!, fg: t.primary })
-          }
-          const mw = spanWidth(marker) + 1
-          const itemFirst = [...(i === 0 ? pre() : rest), ...marker, { text: " " }]
-          const itemRest = [...rest, { text: pad(mw) }]
-          const startLine = ctx.lines.length
-          const body = item.tokens.filter((x) => !(task && x.type === "checkbox"))
-          if (bare) ctx.lines.push({ spans: itemFirst.map((s) => ({ ...s })) })
-          else blocks(ctx, body, max, itemFirst, itemRest, depth + 1)
-          if (checked) {
-            for (let k = startLine; k < ctx.lines.length; k++) for (const s of ctx.lines[k]!.spans) if (s.fg === t.text) s.fg = t.textMuted
-          }
-          if (!l.loose) trimTrailingBlank(ctx, startLine, rest)
-        })
-        ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "code": {
-        const c = tokenOf(tok, "code")
-        const lang = (c.lang ?? "").split(/\s/)[0] ?? ""
-        if (DATAVIEW_LANGS.has(lang.toLowerCase())) {
-          const fill = t.backgroundElement
-          const n = c.text === "" ? 0 : c.text.split("\n").length
-          const label = `⌁ ${lang} · ${n} ${n === 1 ? "line" : "lines"}`
-          const hint = "s: source"
-          const p0 = pre()
-          const avail = max - spanWidth(p0) - 2
-          const gap = avail - width(label) - width(hint)
-          const body: Span[] =
-            gap >= 2
-              ? [
-                  { text: label, fg: t.textMuted, bg: fill },
-                  { text: pad(gap), bg: fill },
-                  { text: hint, fg: t.textMuted, bg: fill },
-                ]
-              : truncate([{ text: label, fg: t.textMuted, bg: fill }], Math.max(1, avail))
-          const row: Span[] = [...p0, { text: "  ", bg: fill }, ...body]
-          row.push({ text: pad(max - spanWidth(row)), bg: fill })
-          ctx.lines.push({ spans: row, fill })
-          ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-          break
-        }
-        // a filled block: a top row with the language at its right, the code (wrapped rows marked `↪`), a bottom row
-        const p0 = pre()
-        const inner = max - spanWidth(rest)
-        const fill = t.backgroundElement
-        const label = lang ? ` ${lang} ` : ""
-        ctx.lines.push({
-          spans: [...p0, { text: pad(inner - width(label)), bg: fill }, { text: label, fg: t.textMuted, bg: fill }],
-          fill,
-        })
-        const { lines: codeLines, pending } = codeSpans(lang, c.text.replace(/\t/g, "    "), t)
-        if (pending) ctx.pending.push(pending)
-        for (const line of codeLines) {
-          const hl = line.map((s) => ({ ...s, bg: fill }))
-          const rows = wrap(
-            hl.length ? hl : [{ text: "", bg: fill }],
-            max - 2,
-            [...rest, { text: "  ", bg: fill }],
-            [...rest, { text: "↪ ", fg: t.textMuted, bg: fill }],
-            true,
-          )
-          for (const r of rows) {
-            r.push({ text: pad(max - spanWidth(r)), bg: fill })
-            ctx.lines.push({ spans: r, fill })
-          }
-        }
-        ctx.lines.push({ spans: [...rest, { text: pad(inner), bg: fill }], fill })
-        ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "hr": {
-        const p = pre()
-        ctx.lines.push({ spans: [...p, { text: "─".repeat(Math.max(0, max - spanWidth(p))), fg: t.borderSubtle }] })
-        ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "table":
-        table(ctx, tokenOf(tok, "table"), max, pre(), rest)
-        break
-      case "html": {
-        const txt = stripTags(tokenOf(tok, "html").text)
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean)
-          .join("\n")
-        if (!txt) break
-        emitRows(ctx, wrap([{ text: decode(txt), fg: t.textMuted }], max, pre(), rest))
-        ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
-        break
-      }
-      case "def":
-        break
-      default: {
-        const raw = (tok as { raw?: string }).raw?.trim()
-        if (raw) emitRows(ctx, wrap([{ text: raw, fg: t.text }], max, pre(), rest))
-      }
-    }
-  }
+  const frame: BlockFrame = { max, pre, rest, depth }
+  for (const tok of tokens) (BLOCK_KINDS.get(tok.type) ?? otherBlock)(ctx, tok, frame)
 }
 
 /** Drop the blank rows (in `rest`) a container's last block left, keeping at least the row at `from`. */
@@ -645,7 +714,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   const dropped = tb.header.length > fits
   if (fits < (dropped ? 2 : 1)) {
     emitRows(ctx, wrap([{ text: tb.raw.trim(), fg: t.textMuted }], max, first, rest))
-    ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
+    spacer(ctx, rest)
     return
   }
   const cols = dropped ? fits - 1 : tb.header.length
@@ -686,7 +755,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   ctx.lines.push(rule("├", "┼", "┤", rest))
   rows.forEach((r) => row([...r, ...more], rest))
   ctx.lines.push(rule("└", "┴", "┘", rest))
-  ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
+  spacer(ctx, rest)
 }
 
 /** Narrowest measure `render` lays out for, however small the terminal. */
