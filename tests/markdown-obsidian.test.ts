@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { scanComments, stripComments } from "../src/lexer"
 import { parseFrontMatter } from "../src/frontmatter"
-import { A, CALLOUT_KINDS, render, stripTags, width } from "../src/markdown"
+import { scanComments, stripComments } from "../src/lexer"
+import { CALLOUT_KINDS, render, stripTags } from "../src/markdown"
 import { needsLexer, renderSource, sourceScan, sourceStructureLexed, sourceStructureLines } from "../src/source"
+import { A } from "../src/spans"
 import { stats } from "../src/stats"
+import { width } from "../src/text"
 import { contrast, themes } from "../src/theme"
 
 const t = themes[0]!
