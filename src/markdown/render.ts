@@ -110,13 +110,7 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
         out.push(...inline(tokenOf(tok, "em").tokens, t, { ...cur, attr: (cur.attr ?? 0) | A.ITALIC }, sink))
         break
       case "del":
-        out.push(
-          ...inline(tokenOf(tok, "del").tokens, t, {
-            ...cur,
-            fg: t.textMuted,
-            attr: (cur.attr ?? 0) | A.STRIKE,
-          }, sink),
-        )
+        out.push(...inline(tokenOf(tok, "del").tokens, t, { ...cur, fg: t.textMuted, attr: (cur.attr ?? 0) | A.STRIKE }, sink))
         break
       case "highlight":
         out.push(...inline((tok as Tokens.Generic).tokens, t, { ...cur, fg: t.warning, bg: t.backgroundElement }, sink))
