@@ -1,8 +1,8 @@
 // Front matter: the `---` block at the top of a note, as plain entries (Info) and as Obsidian-style properties.
 // Pure.
 
-import { normalize } from "./lexer"
 import { safeLine } from "../lib/spans"
+import { normalize } from "./lexer"
 
 /** A note split at its front matter. */
 export interface FrontMatter {

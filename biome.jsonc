@@ -24,7 +24,7 @@
     "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
-    "lineWidth": 160,
+    "lineWidth": 120,
     "lineEnding": "lf"
   },
   "javascript": {
@@ -52,7 +52,8 @@
         // indexed reads are guarded by noUncheckedIndexedAccess and checked at the loop or length test beside them (818 sites)
         "noNonNullAssertion": "off",
         // short `a + b` string joins are the house style; the autofix is unsafe and would churn 179 sites
-        "useTemplate": "off"
+        "useTemplate": "off",
+        "noNestedTernary": "error"
       },
       "suspicious": {
         // terminal rows and cells are positional and have no identity beyond their index
@@ -84,5 +85,5 @@
       "linter": { "rules": { "correctness": { "useHookAtTopLevel": "off" } } }
     }
   ],
-  "assist": { "enabled": false }
+  "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } }
 }

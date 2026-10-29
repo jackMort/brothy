@@ -2,17 +2,27 @@
 // lifecycle every AI action shares (the switcher's ask too); then `makeAIJobs`, the TL;DR, gloss and reload-explain
 // requests and their keys (`a`, `D`, zen `a`). Not pure: both close over the app context.
 import { basename } from "node:path"
-import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai/client"
-import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai/config"
-import { loadConfig } from "../system/config"
-import { deltaRequest, hhmm, parseDelta, type Change, type DeltaParse } from "../ai/delta"
-import { stem } from "../notes/files"
-import { glossKey, glossRequest, type GlossTarget } from "../ai/gloss"
+import { type Gloss, isFresh, loadGlosses, saveGlosses, saveSummaries, textHash } from "../ai/cache"
+import {
+  aiError,
+  type ChatReq,
+  type ChatResult,
+  chat,
+  type ErrCtx,
+  type Failure,
+  noteText,
+  shortModel,
+  summaryRequest,
+} from "../ai/client"
+import { type AIConfig, type AITarget, type GlossStyle, PROMPT_V, PROMPTS, resolveAI } from "../ai/config"
+import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta } from "../ai/delta"
+import { type GlossTarget, glossKey, glossRequest } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
-import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../ai/cache"
+import { stem } from "../notes/files"
 import { STDIN } from "../notes/workspace"
+import { loadConfig } from "../system/config"
 import type { AppCtx } from "./ctx"
-import { jobKey, type Job, type JobKind, type UI } from "./store"
+import { type Job, type JobKind, jobKey, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
 const MAX_JOBS = 3
@@ -186,7 +196,11 @@ function makeStartGloss(c: AppCtx, { failText, startJob }: Pick<Jobs, "failText"
 }
 
 /** zen `a`: gloss the section under the reading line. */
-function makeZenGloss(c: AppCtx, jobs: Jobs, { ensureGlosses }: Pick<ReturnType<typeof makeGlossSheet>, "ensureGlosses">) {
+function makeZenGloss(
+  c: AppCtx,
+  jobs: Jobs,
+  { ensureGlosses }: Pick<ReturnType<typeof makeGlossSheet>, "ensureGlosses">,
+) {
   const { ui, set, bump, derive, flash } = c
   const { reloadAI, cancelJob, aiGate } = jobs
   const startGloss = makeStartGloss(c, jobs)
@@ -212,7 +226,8 @@ function makeZenGloss(c: AppCtx, jobs: Jobs, { ensureGlosses }: Pick<ReturnType<
     const key = glossKey(gHere.id, gStyle)
     const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
     // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
-    if (!shown && freshGloss(s, key, gHash)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+    if (!shown && freshGloss(s, key, gHash))
+      return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
     // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
     const target = aiGate(ai)
     if (target) startGloss(gHere, gStyle, title, target, ai.model)
@@ -279,7 +294,15 @@ function makeReloadExplain(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, s
   }
 
   /** Send the changed hunks of `path`; on success the baseline moves to the sent text, so later edits list anew. */
-  const startDelta = (path: string, changes: Change[], text: string, props: string, title: string, target: AITarget, model: string) => {
+  const startDelta = (
+    path: string,
+    changes: Change[],
+    text: string,
+    props: string,
+    title: string,
+    target: AITarget,
+    model: string,
+  ) => {
     startJob("delta", path, target, deltaRequest(title, changes, target.maxChars), {
       stream: true,
       begin: () => set({ delta: { path, changes, text, props, result: null } }),
@@ -296,7 +319,10 @@ function makeReloadExplain(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, s
         // edits made during the request now differ from the moved baseline and list as a new idle
         // change set; the reply is kept only when it still describes the note as it is
         const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
-        set({ baseline, delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null })
+        set({
+          baseline,
+          delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null,
+        })
       },
     })
   }
@@ -328,7 +354,13 @@ function makeReloadExplain(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, s
 export function makeAIJobs(c: AppCtx) {
   const jobs = makeJobs(c)
   const { ensureGlosses, glossEntered } = makeGlossSheet(c)
-  return { ensureGlosses, glossEntered, ...makeReloadExplain(c, jobs), ...makeSummary(c, jobs), ...makeZenGloss(c, jobs, { ensureGlosses }) }
+  return {
+    ensureGlosses,
+    glossEntered,
+    ...makeReloadExplain(c, jobs),
+    ...makeSummary(c, jobs),
+    ...makeZenGloss(c, jobs, { ensureGlosses }),
+  }
 }
 
 /** Whether the cache holds a gloss under `key` that is fresh for section text hashed `hash`. */
@@ -338,7 +370,11 @@ function freshGloss(s: UI, key: string, hash: string) {
 }
 
 /** What a finished `D` request leaves: the explanation, a failure to toast, or null when it was cancelled. */
-export function deltaOutcome(r: ChatResult, raw: string, changes: Change[]): { parsed: DeltaParse } | { failure: Failure } | null {
+export function deltaOutcome(
+  r: ChatResult,
+  raw: string,
+  changes: Change[],
+): { parsed: DeltaParse } | { failure: Failure } | null {
   // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
   const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(raw, changes, true) : null
   if (!r.ok && !cut) return "failure" in r ? { failure: r.failure } : null

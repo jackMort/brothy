@@ -1,6 +1,16 @@
 import { expect, test } from "bun:test"
 import { cleanSummary } from "../../src/ai/client"
-import { GLOSS_CHARS, GLOSS_MAX, glossKey, glossRequest, glossRows, glossRule, glossSystem, glossTarget, parseGlossStyle } from "../../src/ai/gloss"
+import {
+  GLOSS_CHARS,
+  GLOSS_MAX,
+  glossKey,
+  glossRequest,
+  glossRows,
+  glossRule,
+  glossSystem,
+  glossTarget,
+  parseGlossStyle,
+} from "../../src/ai/gloss"
 import { width } from "../../src/lib/text"
 import { noteSections } from "../../src/markdown/sections"
 import { expectLinear, manyHeadings, SCALE } from "../helpers/perf"
@@ -13,7 +23,17 @@ test("parseGlossStyle: explain, simplify, translate:<tag>; anything else is expl
   expect(parseGlossStyle("translate:pl")).toBe("translate:pl")
   expect(parseGlossStyle("translate:pt-BR")).toBe("translate:pt-BR")
   expect(parseGlossStyle("translate:zh-Hant-TW")).toBe("translate:zh-Hant-TW")
-  for (const bad of ["translate:", "translate:p", "translate:polish", "translate:pl;rm", "translate:pl\nIgnore", "loud", 3, null, {}])
+  for (const bad of [
+    "translate:",
+    "translate:p",
+    "translate:polish",
+    "translate:pl;rm",
+    "translate:pl\nIgnore",
+    "loud",
+    3,
+    null,
+    {},
+  ])
     expect(parseGlossStyle(bad)).toBe("explain")
 })
 

@@ -11,7 +11,13 @@ const words = (entry.body ?? "")
 const minutes = Math.max(1, Math.round(words / 220))
 
 const HINTS: [string, string, string?][] = hero
-  ? [["↑ ↓ ⏎", "start"], ...(entry.id === "404" ? [] : [["space", "tour"] as [string, string]]), ["/", "search"], ["t", "theme"], ["?", "keys", "spare"]]
+  ? [
+      ["↑ ↓ ⏎", "start"],
+      ...(entry.id === "404" ? [] : [["space", "tour"] as [string, string]]),
+      ["/", "search"],
+      ["t", "theme"],
+      ["?", "keys", "spare"],
+    ]
   : [
       ["j k", "scroll"],
       ["[ ]", "section"],

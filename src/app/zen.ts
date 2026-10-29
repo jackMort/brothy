@@ -1,8 +1,9 @@
 // Zen mode in the app: on and off, the `Z` settings popup, pages, manual scrolling, the Ghost top line and the
 // teleprompter. Not pure: `makeZen` closes over the app context (the settings model is ../zen.ts).
-import { GHOST_HOLD } from "../ui/status"
+
 import { clamp } from "../lib/text"
-import { ZEN_ROWS, normalizeZen, prompterRate, zenAdjust, type ZenConfig } from "../ui/zen"
+import { GHOST_HOLD } from "../ui/status"
+import { normalizeZen, prompterRate, ZEN_ROWS, type ZenConfig, zenAdjust } from "../ui/zen"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Focus } from "./store"
@@ -46,7 +47,10 @@ function makeZenMotion(c: AppCtx) {
 }
 
 /** The `Z` settings popup. */
-function makeZenSettings(c: AppCtx, { toggleZen, setZen }: { toggleZen: (on?: boolean) => void; setZen: (patch: Partial<ZenConfig>) => boolean }) {
+function makeZenSettings(
+  c: AppCtx,
+  { toggleZen, setZen }: { toggleZen: (on?: boolean) => void; setZen: (patch: Partial<ZenConfig>) => boolean },
+) {
   const { ui, set, persist, flash } = c
 
   // `Z` popup: live preview while editing, ⏎ saves, esc restores what was there before
@@ -108,7 +112,12 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
       zenBack.current = null
       clearTimeout(timers.current.gloss)
     }
-    set({ zen: on, ghostAt: null, filterTyping: false, ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : { gloss: null }) })
+    set({
+      zen: on,
+      ghostAt: null,
+      filterTyping: false,
+      ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : { gloss: null }),
+    })
     if (on && ui.current.zenCfg.ghost) pokeGhost()
   }
 
@@ -117,7 +126,8 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
     const zenCfg = normalizeZen({ ...ui.current.zenCfg, ...patch })
     set({ zenCfg })
     // only the keys changed (as clamped): another instance's other settings stay
-    const ok = !save || persist({ zen: Object.fromEntries(Object.keys(patch).map((k) => [k, zenCfg[k as keyof ZenConfig]])) })
+    const ok =
+      !save || persist({ zen: Object.fromEntries(Object.keys(patch).map((k) => [k, zenCfg[k as keyof ZenConfig]])) })
     if (ui.current.rolling) startRolling() // pick up the new speed now, not after the pending line
     return ok
   }

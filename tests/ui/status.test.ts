@@ -1,36 +1,36 @@
 import { describe, expect, test } from "bun:test"
+import { width as sw, truncate, truncateLeft } from "../../src/lib/text"
+import { themeByName } from "../../src/theme/theme"
+import { fade } from "../../src/ui/chrome"
 import {
   clusterText,
   errText,
   fillWidth,
   fitHints,
+  GHOST_STEP,
   gapSpans,
   headerLayout,
   hintSpans,
+  LOGO,
   LOGO_HOLD,
+  locationParts,
   logoState,
   mainHeadingVisible,
-  shrinkFolder,
-  locationParts,
   nextToast,
   notePath,
   noteTitle,
   progressLabel,
   progressSpans,
+  shrinkFolder,
   stateCluster,
+  TOAST_HOLD,
+  type Toast,
   toastIcon,
   toastSpans,
   toastStep,
   tooSmall,
   topLineSpans,
-  LOGO,
-  TOAST_HOLD,
-  GHOST_STEP,
-  type Toast,
 } from "../../src/ui/status"
-import { truncate, truncateLeft, width as sw } from "../../src/lib/text"
-import { themeByName } from "../../src/theme/theme"
-import { fade } from "../../src/ui/chrome"
 
 describe("truncate", () => {
   test("cuts at either end with …, by columns", () => {
@@ -60,9 +60,15 @@ describe("noteTitle", () => {
 })
 
 describe("locationParts", () => {
-  const at = (room: number, section = "Status") => locationParts("Reading/Calm", "Calm Technology", ["Calm Technology", "The periphery", section], room)
+  const at = (room: number, section = "Status") =>
+    locationParts("Reading/Calm", "Calm Technology", ["Calm Technology", "The periphery", section], room)
   test("everything fits; a first heading equal to the title is dropped", () => {
-    expect(at(200)).toEqual({ folder: "Reading/Calm", title: "Calm Technology", ancestors: ["The periphery"], section: "Status" })
+    expect(at(200)).toEqual({
+      folder: "Reading/Calm",
+      title: "Calm Technology",
+      ancestors: ["The periphery"],
+      section: "Status",
+    })
   })
   test("the folder loses segments from the left, then goes", () => {
     expect(at(50).folder).toBe("…/Calm")
@@ -117,7 +123,9 @@ describe("progressLabel", () => {
     expect(progressLabel({ top: 9, maxTop: 50, minutes: 3, wpm: 220 }).pre).toBe("▶ 220 wpm · ")
   })
   test("fillWidth", () => {
-    expect([fillWidth(0, 100, 61), fillWidth(50, 100, 61), fillWidth(5, 0, 61), fillWidth(200, 100, 61)]).toEqual([0, 31, 61, 61])
+    expect([fillWidth(0, 100, 61), fillWidth(50, 100, 61), fillWidth(5, 0, 61), fillWidth(200, 100, 61)]).toEqual([
+      0, 31, 61, 61,
+    ])
   })
 })
 
@@ -243,7 +251,12 @@ describe("headerLayout", () => {
   }
   const head = (l: ReturnType<typeof headerLayout>) => {
     const h = l.head
-    return (h.folder ? h.folder + " / " : "") + h.title + h.ancestors.map((a) => " › " + a).join("") + (h.section ? " › " + h.section : "")
+    return (
+      (h.folder ? h.folder + " / " : "") +
+      h.title +
+      h.ancestors.map((a) => " › " + a).join("") +
+      (h.section ? " › " + h.section : "")
+    )
   }
 
   test("inline panel (120, 160): folder over the panel, title at the text's left edge", () => {
@@ -292,7 +305,8 @@ describe("headerLayout", () => {
     expect(l.head.folder).toBe("")
   })
   test("60 columns: pressure drops the folder first, then parent headings, then cuts the title", () => {
-    const tight = (o: Partial<Parameters<typeof headerLayout>[0]>) => at(60, { trail: ["Parent", "Flavour base — how flavours build"], ...o })
+    const tight = (o: Partial<Parameters<typeof headerLayout>[0]>) =>
+      at(60, { trail: ["Parent", "Flavour base — how flavours build"], ...o })
     const full = tight({ title: "Short", trail: ["Parent", "Section"] })
     expect(head(full)).toBe("Onion Soups / Short › Parent › Section")
     const noFolder = tight({ title: "A fairly long note title", trail: ["Parent", "Section is long"] })
@@ -349,7 +363,9 @@ describe("tooSmall", () => {
 
 describe("errText", () => {
   test("drops the path an errno error appends, keeps other messages whole", () => {
-    const e = Object.assign(new Error("ENOENT: no such file or directory, stat '/var/folders/n6/x/T/a, b.md'"), { code: "ENOENT" })
+    const e = Object.assign(new Error("ENOENT: no such file or directory, stat '/var/folders/n6/x/T/a, b.md'"), {
+      code: "ENOENT",
+    })
     expect(errText(e)).toBe("ENOENT: no such file or directory")
     expect(errText(new Error("not a folder, stat 'x'"))).toBe("not a folder, stat 'x'")
     expect(errText("plain")).toBe("plain")
@@ -401,8 +417,15 @@ describe("row spans", () => {
     expect(col("/x ")).toBe(h.clusterCol)
     expect(line).toContain("Title › Part")
     expect(line.endsWith("/x 1/3   source")).toBe(true)
-    expect(topLineSpans(t, "watching", h, false).find((s) => s.text === "Title")).toEqual({ text: "Title", fg: t.text, attr: 1 })
-    expect(topLineSpans(t, "watching", h, true).find((s) => s.text === "Title")).toEqual({ text: "Title", fg: t.textMuted })
+    expect(topLineSpans(t, "watching", h, false).find((s) => s.text === "Title")).toEqual({
+      text: "Title",
+      fg: t.text,
+      attr: 1,
+    })
+    expect(topLineSpans(t, "watching", h, true).find((s) => s.text === "Title")).toEqual({
+      text: "Title",
+      fg: t.textMuted,
+    })
     const none = topLineSpans(t, "watching", headerLayout({ ...o, count: 0 }), false)
     expect(none.find((s) => s.text === "no match")).toEqual({ text: "no match", fg: t.error, attr: 1 })
   })

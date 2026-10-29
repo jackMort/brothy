@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ASK_PROMPT, RERANK_PROMPT } from "../../src/ai/ask"
-import { type Setup, aiStub, filler, keys, OLLAMA, W120, waitFor, waitFrame, useAppHarness } from "./helpers"
+import { aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
 
 const { cacheDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 
@@ -17,7 +17,13 @@ const askVault = () =>
   })
 const QUERIES = JSON.stringify({ queries: ["single file", "path", "cli"] })
 /** C-p, `?<question>`, ⏎; call `i` of the stub replies `reply`. Resolves with the frame once Answers show. */
-async function askIt(s: Setup, ai: ReturnType<typeof aiStub>, reply = QUERIES, i = 0, question = "how do I open one file") {
+async function askIt(
+  s: Setup,
+  ai: ReturnType<typeof aiStub>,
+  reply = QUERIES,
+  i = 0,
+  question = "how do I open one file",
+) {
   await keys(s, "C-p", `type:?${question}`)
   await waitFrame(s, (f) => f.includes("⏎ ask"))
   await keys(s, "enter")
@@ -156,7 +162,10 @@ test("excerpts are sent only from the rerank row; the model's order shows with i
   expect(user).toStartWith(
     "Question: how do I open one file\n\nc1 · getting-started › Getting started › Open a single file\nSee below. Give a single file path to brothy.",
   )
-  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }, { id: "c7" }, { id: "c1", why: "dup" }] }))
+  ai.send(
+    1,
+    JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }, { id: "c7" }, { id: "c1", why: "dup" }] }),
+  )
   ai.end(1)
   const f = await waitFrame(s, (fr) => fr.includes("Other matches"))
   expect(f).toContain("pass the file path")
@@ -232,7 +241,10 @@ test("a heading renamed since indexing: the note opens where it was left and toa
   const d = askVault()
   const s = await mount(d, "README.md", { size: W120, fetch: ai.f })
   await askIt(s, ai)
-  writeFileSync(join(d, "getting-started.md"), readFileSync(join(d, "getting-started.md"), "utf8").replace("## Open a single file", "## Open one file"))
+  writeFileSync(
+    join(d, "getting-started.md"),
+    readFileSync(join(d, "getting-started.md"), "utf8").replace("## Open a single file", "## Open one file"),
+  )
   const f = await keys(s, "enter")
   expect(f).toContain("heading gone")
   expect(f).toContain("Getting started")
@@ -265,7 +277,13 @@ test("a rerank is sent again after a candidate note's text changed", async () =>
   await waitFrame(s, (fr) => fr.includes("Other matches"))
   await keys(s, "esc")
   const file = join(d, "getting-started.md")
-  writeFileSync(file, readFileSync(file, "utf8").replace("Give a single file path to brothy.", "Give a single file path to brothy, or a folder, or stdin."))
+  writeFileSync(
+    file,
+    readFileSync(file, "utf8").replace(
+      "Give a single file path to brothy.",
+      "Give a single file path to brothy, or a folder, or stdin.",
+    ),
+  )
   utimesSync(file, new Date(Date.now() + 5000), new Date(Date.now() + 5000))
   await keys(s, "C-p", "type:?how do I open one file")
   await waitFrame(s, (fr) => fr.includes("⏎ ask"))

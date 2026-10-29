@@ -1,18 +1,19 @@
 // The workspace in the app: the recent-projects record, `switchWorkspace` (every rebuild after the start), the `o` opener
 // and the welcome page (its recent rows, keys and ink-in / steam animation). Not pure: `makeWorkspace` closes over the
 // app context.
-import type { KeyEvent } from "@opentui/core"
+
 import { existsSync, statSync } from "node:fs"
 import { dirname } from "node:path"
-import { INK_MS, INK_STEPS } from "../ui/chrome"
-import { startHistory } from "../notes/history"
+import type { KeyEvent } from "@opentui/core"
 import type { Geometry } from "../markdown/render"
-import { keepHitVisible } from "../ui/nav"
-import { loadProjects, projectName, remember, saveProjects, tildify, type OpenRow } from "../notes/projects"
-import { errText } from "../ui/status"
+import { startHistory } from "../notes/history"
+import { loadProjects, type OpenRow, projectName, remember, saveProjects, tildify } from "../notes/projects"
 import { firstHit } from "../notes/vault"
-import { STEAM_MS, welcomeFit } from "../ui/welcome"
 import { projectRoot, workspace } from "../notes/workspace"
+import { INK_MS, INK_STEPS } from "../ui/chrome"
+import { keepHitVisible } from "../ui/nav"
+import { errText } from "../ui/status"
+import { STEAM_MS, welcomeFit } from "../ui/welcome"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { SwitcherControl } from "./switcher"
@@ -30,7 +31,8 @@ function makeRecents(c: AppCtx) {
     const s = ui.current
     if (s.piped) return
     const key = `${s.openPath}:preview`
-    const spot = !s.openPath ? undefined : zenBack.current?.key === key ? zenBack.current : scrolls.current.get(key)
+    const remembered = zenBack.current?.key === key ? zenBack.current : scrolls.current.get(key)
+    const spot = s.openPath ? remembered : undefined
     const pos = spot ? { top: spot.top, geo: spot.geo } : { top: 0 }
     saveProjects(remember(loadProjects(), { root: projectRoot(s), lastNote: s.openPath, ...pos, at: Date.now() }))
   }
@@ -55,7 +57,9 @@ function rootProblem(root: string) {
   return null
 }
 
-type SwitchDeps = Pick<ReturnType<typeof makeRecents>, "recordProject"> & Pick<SwitcherControl, "dropAsk" | "dropIndex"> & Pick<AIJobs, "dropDelta">
+type SwitchDeps = Pick<ReturnType<typeof makeRecents>, "recordProject"> &
+  Pick<SwitcherControl, "dropAsk" | "dropIndex"> &
+  Pick<AIJobs, "dropDelta">
 
 /** Make a folder the workspace: `switchWorkspace`, the one rebuild everything goes through. */
 function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }: SwitchDeps) {
@@ -249,10 +253,20 @@ function makeWelcomeMotion(c: AppCtx) {
 }
 
 /** The workspace over the app context; a switch drops the ask, the vault index and the change baseline first. */
-export function makeWorkspace(c: AppCtx, drops: Pick<SwitcherControl, "dropAsk" | "dropIndex">, delta: Pick<AIJobs, "dropDelta">) {
+export function makeWorkspace(
+  c: AppCtx,
+  drops: Pick<SwitcherControl, "dropAsk" | "dropIndex">,
+  delta: Pick<AIJobs, "dropDelta">,
+) {
   const { recordProject, leave } = makeRecents(c)
   const switchWorkspace = makeSwitch(c, { recordProject, ...drops, ...delta })
-  return { recordProject, leave, ...makeOpener(c, switchWorkspace), ...makeWelcomeRows(c, switchWorkspace), ...makeWelcomeMotion(c) }
+  return {
+    recordProject,
+    leave,
+    ...makeOpener(c, switchWorkspace),
+    ...makeWelcomeRows(c, switchWorkspace),
+    ...makeWelcomeMotion(c),
+  }
 }
 /** What `makeWorkspace` gives App and the effects. */
 export type WorkspaceControl = ReturnType<typeof makeWorkspace>

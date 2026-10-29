@@ -1,9 +1,10 @@
 // Pure navigation helpers for App: search and the Find picker's rows, scroll anchoring, sidebar cursor, key specs.
-import { fitHits, hitSpans, type PickerItem } from "./rows"
+
 import { lineText, type Span } from "../lib/spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "../lib/text"
 import type { Geometry } from "../markdown/render"
 import type { Theme } from "../theme/theme"
+import { fitHits, hitSpans, type PickerItem } from "./rows"
 
 // ------------------------------------------------------------- search
 
@@ -38,7 +39,14 @@ export function matchHits(text: string, q: string): number[] {
  * The Find picker's rows: per match line its trimmed text with the hits of `q` in primary, cut to `room` columns
  * around them, after the line number (Preview only: Source rows carry their own).
  */
-export function findItems(lines: readonly { spans: Span[] }[], matches: readonly number[], q: string, source: boolean, room: number, t: Theme): PickerItem[] {
+export function findItems(
+  lines: readonly { spans: Span[] }[],
+  matches: readonly number[],
+  q: string,
+  source: boolean,
+  room: number,
+  t: Theme,
+): PickerItem[] {
   return matches.map((m) => {
     const num = source ? "" : String(m + 1).padStart(4) + "  "
     const text = lineText(lines[m]).trim()
@@ -78,7 +86,13 @@ export function markMatches(spans: Span[], q: string, t: Theme): Span[] {
  * The match `n` / `N` goes to. Steps from the current match while it is on screen
  * (`top`..`top+h`), otherwise from the viewport top; wraps at both ends.
  */
-export function stepMatch(matches: number[], cur: number | null, top: number, h: number, dir: 1 | -1): number | undefined {
+export function stepMatch(
+  matches: number[],
+  cur: number | null,
+  top: number,
+  h: number,
+  dir: 1 | -1,
+): number | undefined {
   if (!matches.length) return undefined
   const onScreen = cur !== null && matches.includes(cur) && cur >= top && cur < top + h
   const after = (m: number) => (onScreen ? m > cur! : m >= top)
@@ -101,8 +115,10 @@ export function matchIndex(matches: number[], matchLine: number | null): number 
  * the headings no longer line up.
  */
 export function remapTop(top: number, from: Geometry, to: Geometry): number {
-  if (from.total === to.total && from.heads.length === to.heads.length && from.heads.every((h, i) => h === to.heads[i])) return top
-  if (from.heads.length !== to.heads.length || !from.total) return from.total ? Math.round((top / from.total) * to.total) : 0
+  if (from.total === to.total && from.heads.length === to.heads.length && from.heads.every((h, i) => h === to.heads[i]))
+    return top
+  if (from.heads.length !== to.heads.length || !from.total)
+    return from.total ? Math.round((top / from.total) * to.total) : 0
   const bounds = (g: Geometry, i: number) => [i < 0 ? 0 : g.heads[i]!, g.heads[i + 1] ?? g.total] as const
   const i = from.heads.findLastIndex((h) => h <= top)
   const [a, b] = bounds(from, i)
@@ -171,7 +187,10 @@ export interface StripLabel {
 }
 
 /** Tab-strip geometry for a panel `SW` columns wide, shared by the renderer and mouse hit-testing. */
-export function stripLayout(SW: number, views: readonly StripLabel["view"][] = STRIP.map(([v]) => v)): { compact: boolean; labels: StripLabel[] } {
+export function stripLayout(
+  SW: number,
+  views: readonly StripLabel["view"][] = STRIP.map(([v]) => v),
+): { compact: boolean; labels: StripLabel[] } {
   const compact = SW < STRIP_COMPACT_BELOW
   const labels: StripLabel[] = []
   let x = 1

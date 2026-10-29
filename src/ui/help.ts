@@ -1,8 +1,9 @@
 // The `? ?` keys sheet's layout: KEYMAP groups as a chip row and key rows, one column below 100 columns,
 // two from there (whole groups, Global and Panel left, the rest right), scrolled together by rows.
-import { BODY_PAD, innerWidth, popupWidth } from "./geometry"
-import { WORDMARK, fitWordmark } from "./status"
+
 import { clamp } from "../lib/text"
+import { BODY_PAD, innerWidth, popupWidth } from "./geometry"
+import { fitWordmark, WORDMARK } from "./status"
 
 export interface HelpGroup {
   title: string
@@ -41,7 +42,10 @@ export const HELP_COLUMNS: readonly (readonly string[])[] = [
 ]
 const COL_GAP = 4
 
-const groupLines = (g: HelpGroup): HelpLine[] => [{ kind: "chip", title: g.title }, ...g.entries.map((e) => ({ kind: "key" as const, ...e }))]
+const groupLines = (g: HelpGroup): HelpLine[] => [
+  { kind: "chip", title: g.title },
+  ...g.entries.map((e) => ({ kind: "key" as const, ...e })),
+]
 const join = (gs: HelpGroup[]): HelpLine[] => gs.flatMap((g, i) => (i ? [null, ...groupLines(g)] : groupLines(g)))
 
 export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, columns = HELP_COLUMNS): HelpLayout {

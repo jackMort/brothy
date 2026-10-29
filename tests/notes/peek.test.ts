@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
-import { render } from "../../src/markdown/render"
-import { normalize } from "../../src/markdown/lexer"
-import { parseFrontMatter } from "../../src/markdown/frontmatter"
-import { PEEK_BYTES, PEEK_TLDR, peekLines, peekWindow, switchSplit, type PeekInput } from "../../src/notes/peek"
 import type { Span } from "../../src/lib/spans"
-import { brothy } from "../helpers/theme"
+import { parseFrontMatter } from "../../src/markdown/frontmatter"
+import { normalize } from "../../src/markdown/lexer"
+import { render } from "../../src/markdown/render"
+import { PEEK_BYTES, PEEK_TLDR, type PeekInput, peekLines, peekWindow, switchSplit } from "../../src/notes/peek"
 import { indexNote, type SwitchRow } from "../../src/notes/vault"
+import { brothy } from "../helpers/theme"
 
 const t = brothy
 const W = 40
@@ -137,7 +137,10 @@ test("peekLines: the outline is a tree; its window keeps the hit's heading in vi
 const PARA = "Simmer the stock slowly and skim it often; patience is the whole recipe here. ".repeat(12).trim()
 const BIG =
   "---\ntitle: big\n---\nLead-in paragraph.\n\n" +
-  Array.from({ length: 60 }, (_, i) => `## Part ${i}\n\n${PARA}\n\nline ${i} marker\n\n\`\`\`js\nconst part = ${i}\n\`\`\`\n`).join("\n")
+  Array.from(
+    { length: 60 },
+    (_, i) => `## Part ${i}\n\n${PARA}\n\nline ${i} marker\n\n\`\`\`js\nconst part = ${i}\n\`\`\`\n`,
+  ).join("\n")
 const bigDoc = indexNote(BIG, 1, BIG.length)
 const bigLines = normalize(BIG).split("\n")
 const bigFm = parseFrontMatter(BIG).offset
@@ -146,7 +149,8 @@ const bigFull = render(parseFrontMatter(BIG).body, W, t)
 function both(row: SwitchRow) {
   const win = peekWindow(bigLines, bigFm, bigDoc, row)
   const view = render(bigLines.slice(win.from, win.to).join("\n"), W, t)
-  const at = (v: typeof view, b: number) => peekLines({ row, rel: "big.md", doc: bigDoc, view: v, base: b, words: 1, minutes: 1, summary: undefined }, t, W, 30)
+  const at = (v: typeof view, b: number) =>
+    peekLines({ row, rel: "big.md", doc: bigDoc, view: v, base: b, words: 1, minutes: 1, summary: undefined }, t, W, 30)
   return { win, full: at(bigFull, 0), part: at(view, win.base) }
 }
 
@@ -171,13 +175,25 @@ test("peekWindow: a note hit (no single H1) starts after the front matter; text 
   const text = both({ kind: "text", ...base, heading: 33, line, context: "line 33 marker", hits: [] })
   expect(text.part).toEqual(text.full)
   expect(body(text.part)[0]).toBe("line 33 marker")
-  const answer = both({ kind: "answer", ...base, heading: 59, text: "Part 59", key: "part 59", ord: 0, id: "x", query: "q", hits: [], right: "" })
+  const answer = both({
+    kind: "answer",
+    ...base,
+    heading: 59,
+    text: "Part 59",
+    key: "part 59",
+    ord: 0,
+    id: "x",
+    query: "q",
+    hits: [],
+    right: "",
+  })
   expect(answer.win.to).toBe(bigLines.length) // the last section runs to the end
   expect(answer.part).toEqual(answer.full)
 })
 
 test("peekWindow: a text hit past PEEK_BYTES into its section is still inside the window", () => {
-  const long = "# Long\n\n" + Array.from({ length: 2000 }, (_, i) => `row ${i} of a very long single section`).join("\n\n") + "\n"
+  const long =
+    "# Long\n\n" + Array.from({ length: 2000 }, (_, i) => `row ${i} of a very long single section`).join("\n\n") + "\n"
   const d = indexNote(long, 1, long.length)
   const lines = normalize(long).split("\n")
   const line = lines.indexOf("row 1900 of a very long single section")

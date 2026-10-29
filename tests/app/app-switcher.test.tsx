@@ -1,14 +1,17 @@
 // App: the C-p switcher and its peek pane.
-import { expect, test, spyOn } from "bun:test"
+import { expect, spyOn, test } from "bun:test"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import * as vaultModule from "../../src/notes/vault"
-import { filler, keys, OLLAMA, onBg, PRIMARY, sleep, waitFrame, useAppHarness } from "./helpers"
+import { filler, keys, OLLAMA, onBg, PRIMARY, sleep, useAppHarness, waitFrame } from "./helpers"
 
 const { tmp, mount, aiConfig, seedSummary } = useAppHarness()
 
 test("switcher: keys move the highlight away from a pointer resting on the list", async () => {
-  const s = await mount(tmp({ "alpha.md": "# a", "bravo.md": "# b", "charlie.md": "# c", "delta.md": "# d" }), "alpha.md")
+  const s = await mount(
+    tmp({ "alpha.md": "# a", "bravo.md": "# b", "charlie.md": "# c", "delta.md": "# d" }),
+    "alpha.md",
+  )
   const rows = (await keys(s, "C-p")).split("\n")
   const y = rows.findIndex((r) => /\bcharlie\b/.test(r))
   expect(y).toBeGreaterThan(0)
@@ -157,7 +160,10 @@ test("C-p at 120 columns peeks at the highlighted note, with its fresh TL;DR and
   aiConfig(OLLAMA)
   seedSummary(join(d, "notes/beta.md"), "Beta is about peeking.")
   let calls = 0
-  const s = await mount(d, "a.md", { size: { width: 120, height: 34 }, fetch: (async () => (calls++, new Response(""))) as unknown as typeof fetch })
+  const s = await mount(d, "a.md", {
+    size: { width: 120, height: 34 },
+    fetch: (async () => (calls++, new Response(""))) as unknown as typeof fetch,
+  })
   await keys(s, "C-p", "type:beta")
   const f = await waitFrame(s, (x) => x.includes("Peek body line."))
   expect(f).toContain("notes/beta.md")

@@ -3,16 +3,16 @@
 // Not pure: it holds the store and the timers.
 import type { CliRenderer } from "@opentui/core"
 import type { Dispatch, SetStateAction } from "react"
-import { VIEWS, saveConfig, type Config, type SidebarConfig, type View } from "../system/config"
+import { safeLine } from "../lib/spans"
+import { clamp } from "../lib/text"
+import type { Rendered } from "../markdown/render"
 import { ancestorsOf, type FileNode } from "../notes/files"
 import { keep, visit } from "../notes/history"
-import type { Rendered } from "../markdown/render"
-import { keepVisible } from "../ui/nav"
-import { safeLine } from "../lib/spans"
-import { GHOST_STEP, TOAST_HOLD, fadeStep, nextToast, type ToastKind } from "../ui/status"
-import { clamp } from "../lib/text"
 import { remember } from "../notes/vault"
-import type { DeriveRefs, Derived } from "./derive"
+import { type Config, type SidebarConfig, saveConfig, VIEWS, type View } from "../system/config"
+import { keepVisible } from "../ui/nav"
+import { fadeStep, GHOST_STEP, nextToast, TOAST_HOLD, type ToastKind } from "../ui/status"
+import type { Derived, DeriveRefs } from "./derive"
 import { OPEN_DELAY, type Spot, type UI } from "./store"
 
 /** The timer slots: one pending timeout each (toast and hint fades, Files preview, teleprompter, AI redraw, …). */
@@ -76,7 +76,12 @@ export interface Base extends DeriveRefs {
 function makeFeedback(base: Base) {
   const { ui, set, bump, timers } = base
   /** Re-render through a fade: wait out `hold` after `at()`, then step every GHOST_STEP until hidden, then `done()`. */
-  const runFade = (slot: "ghost" | "hints" | "toast" | "gloss", at: () => number | null, hold: number, done: () => void) => {
+  const runFade = (
+    slot: "ghost" | "hints" | "toast" | "gloss",
+    at: () => number | null,
+    hold: number,
+    done: () => void,
+  ) => {
     clearTimeout(timers.current[slot])
     const tick = () => {
       const a = at()
@@ -162,13 +167,24 @@ function makeOpening(base: Base) {
     // reveal it: every folder above the note opens (they are never closed automatically)
     const expanded = new Set(s.expanded)
     for (const a of ancestorsOf(s.tree, path)) expanded.add(a)
-    set({ openPath: path, history, outlineCur: 0, infoCur: 0, matchLine: null, expanded, listTop: { ...s.listTop, outline: 0, info: 0 } })
+    set({
+      openPath: path,
+      history,
+      outlineCur: 0,
+      infoCur: 0,
+      matchLine: null,
+      expanded,
+      listTop: { ...s.listTop, outline: 0, info: 0 },
+    })
     // the Files cursor jumps to the ● row and scrolls it into view
     const { rows, LH } = derive()
     const i = rows.findIndex((r) => r.node.path === path)
     if (i >= 0) {
       sidebarSeen.current.cursorPath = path
-      set({ cursor: i, listTop: { ...ui.current.listTop, files: keepVisible(ui.current.listTop.files, i, LH, rows.length) } })
+      set({
+        cursor: i,
+        listTop: { ...ui.current.listTop, files: keepVisible(ui.current.listTop.files, i, LH, rows.length) },
+      })
     }
   }
 
@@ -252,7 +268,13 @@ function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof
   const focusDoc = () => {
     clearTimeout(timers.current.open)
     const s = ui.current
-    set({ focus: "doc", drawerOpen: false, filterTyping: false, recent: remember(s.recent, s.openPath), history: keep(s.history) })
+    set({
+      focus: "doc",
+      drawerOpen: false,
+      filterTyping: false,
+      recent: remember(s.recent, s.openPath),
+      history: keep(s.history),
+    })
   }
 
   return { saveSidebar, selectView, panelViews, focusPanel, focusDoc }

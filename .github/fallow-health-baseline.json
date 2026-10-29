@@ -167,11 +167,6 @@
         "count": 1
       }
     },
-    "src/ui/layout.ts": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
     "src/ui/minimap.ts": {
       "complexity_moderate": {
         "count": 1
@@ -184,7 +179,7 @@
     },
     "src/ui/overlay.tsx": {
       "complexity_moderate": {
-        "count": 4
+        "count": 3
       }
     },
     "src/ui/panel.ts": {
@@ -194,7 +189,7 @@
     },
     "src/ui/rows.ts": {
       "complexity_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "src/ui/welcome.ts": {
@@ -202,11 +197,6 @@
         "count": 2
       },
       "crap_moderate": {
-        "count": 1
-      }
-    },
-    "tests/ai/ask.test.ts": {
-      "complexity_moderate": {
         "count": 1
       }
     },
@@ -524,22 +514,12 @@
         "count": 1
       }
     },
-    "src/ui/layout.ts\u0000layout": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
     "src/ui/minimap.ts\u0000inkedColumns": {
       "complexity_moderate": {
         "count": 1
       }
     },
     "src/ui/nav.ts\u0000overlayAt": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
-    "src/ui/overlay.tsx\u0000PickerInput": {
       "complexity_moderate": {
         "count": 1
       }
@@ -579,11 +559,6 @@
         "count": 1
       }
     },
-    "src/ui/rows.ts\u0000artSpans": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
     "src/ui/rows.ts\u0000fitHits": {
       "complexity_moderate": {
         "count": 1
@@ -598,11 +573,6 @@
       }
     },
     "src/ui/welcome.ts\u0000steamRows": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
-    "tests/ai/ask.test.ts\u0000<arrow>": {
       "complexity_moderate": {
         "count": 1
       }

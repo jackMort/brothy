@@ -1,6 +1,6 @@
 // WCAG contrast of each theme role against the surfaces it is drawn on, plus the two accent roles that look most alike.
 // Usage: bun scripts/contrast.ts [theme…]   (default: brothy brothy-light; ✗ marks a miss of the house floors in HOUSE)
-import { contrast, surface, themeByName, themes, type Theme } from "../src/theme/theme"
+import { contrast, surface, type Theme, themeByName, themes } from "../src/theme/theme"
 
 /** role, what it draws (markdown/render.ts, markdown/highlight.ts), the house floor; borders are decorative and never sit on the code fill */
 export const HOUSE: [keyof Theme, string, number][] = [
@@ -76,7 +76,9 @@ if (import.meta.main) {
       const r = ratios(t, k)
       const miss = worst(t, k) < floor || (k === "text" && r.bg < HOUSE_TEXT)
       const n = (x: number) => x.toFixed(2).padStart(6)
-      console.log(`  ${k.padEnd(13)} ${t[k]}  page${n(r.bg)}  panel${n(r.side)}  code${n(r.el)}  ≥${floor}${miss ? " ✗" : "  "}  ${use}`)
+      console.log(
+        `  ${k.padEnd(13)} ${t[k]}  page${n(r.bg)}  panel${n(r.side)}  code${n(r.el)}  ≥${floor}${miss ? " ✗" : "  "}  ${use}`,
+      )
     }
     const c = closestPair(t)
     console.log(`  closest pair  ${c.pair.join(" / ")}  ΔE ${c.dE.toFixed(1)}${c.dE < HOUSE_APART ? " ✗" : ""}`)

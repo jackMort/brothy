@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { A } from "../../src/lib/spans"
+import { width } from "../../src/lib/text"
 import {
-  PARSER_FILETYPES,
   cachedHighlight,
   canonicalLang,
   clearHighlightCache,
@@ -8,14 +9,13 @@ import {
   ensureHighlights,
   fallbackTokens,
   groupKind,
+  type Kind,
   kindStyle,
+  PARSER_FILETYPES,
   shutdownHighlighter,
   tokenize,
-  type Kind,
 } from "../../src/markdown/highlight"
 import { pendingHighlights, render } from "../../src/markdown/render"
-import { A } from "../../src/lib/spans"
-import { width } from "../../src/lib/text"
 import { themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
 
@@ -24,7 +24,8 @@ afterAll(() => shutdownHighlighter())
 
 const fenced = (lang: string, code: string) => "```" + lang + "\n" + code + "\n```"
 const kinds = (toks: { text: string; kind?: Kind }[]) => toks.filter((k) => k.kind).map((k) => [k.text, k.kind])
-const fg = (r: ReturnType<typeof render>, text: string) => r.lines.flatMap((l) => l.spans).find((s) => s.text.includes(text))?.fg
+const fg = (r: ReturnType<typeof render>, text: string) =>
+  r.lines.flatMap((l) => l.spans).find((s) => s.text.includes(text))?.fg
 
 describe("languages", () => {
   test("info strings map to parser filetypes", () => {
@@ -60,7 +61,8 @@ describe("capture names -> kinds", () => {
     expect(groupKind("constructor")).toBe("type")
   })
   test("editor metadata groups and unknown names are ignored", () => {
-    for (const g of ["spell", "nospell", "conceal", "markup.heading.1", "toString", "__proto__"]) expect(groupKind(g)).toBeUndefined()
+    for (const g of ["spell", "nospell", "conceal", "markup.heading.1", "toString", "__proto__"])
+      expect(groupKind(g)).toBeUndefined()
   })
 })
 
@@ -204,7 +206,8 @@ describe("cache and rendering", () => {
   })
   test("a block that is not cached never changes shape: codeSpans always yields one entry per line", () => {
     clearHighlightCache()
-    for (const code of ["", "a", "a\n", "\n\n", "x\r".slice(0, 1)]) expect(codeSpans("ts", code, t).lines.length).toBe(code.split("\n").length)
+    for (const code of ["", "a", "a\n", "\n\n", "x\r".slice(0, 1)])
+      expect(codeSpans("ts", code, t).lines.length).toBe(code.split("\n").length)
   })
 })
 
@@ -218,7 +221,9 @@ describe("languages without a parser", () => {
     }
   })
   test("unknown or missing languages stay plain", () => {
-    expect(fallbackTokens("# not // a -- comment 'or string' 12", "")).toEqual([{ text: "# not // a -- comment 'or string' 12" }])
+    expect(fallbackTokens("# not // a -- comment 'or string' 12", "")).toEqual([
+      { text: "# not // a -- comment 'or string' 12" },
+    ])
     expect(fallbackTokens("# nope", "nonsense")).toEqual([{ text: "# nope" }])
   })
   test("comment syntax only fires in the languages that use it", () => {

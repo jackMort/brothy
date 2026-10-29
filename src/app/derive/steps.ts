@@ -1,25 +1,26 @@
 // The steps of `derive()`, one per area, in the order it runs them: each reads the store and the memo and returns its slice.
 // Not pure: `filesCursor`, `scrollState` and `matchState` write back the Files cursor, the scroll entry and the match line.
-import { SCAN_LIMIT } from "../../notes/files"
-import { wrap } from "../../lib/text"
-import { projectRoot } from "../../notes/workspace"
-import type { layout } from "../../ui/layout"
-import type { Theme } from "../../theme/theme"
-import type { OpenRow } from "../../notes/projects"
-import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
-import { relocate, remapTop } from "../../ui/nav"
-import { shortModel } from "../../ai/client"
-import { PROMPTS, type GlossStyle } from "../../ai/config"
+
 import { questionOf } from "../../ai/ask"
 import { isFresh } from "../../ai/cache"
-import { parseGlossStyle, type GlossState, type GlossTarget } from "../../ai/gloss"
-import { noteTitle } from "../../ui/status"
-import type { ChangeView, SummaryView } from "../../ui/panel"
-import { hhmm, type Change } from "../../ai/delta"
-import { pageSlice, sectionAt, typewriterTop } from "../../ui/zen"
+import { shortModel } from "../../ai/client"
+import { type GlossStyle, PROMPTS } from "../../ai/config"
+import { type Change, hhmm } from "../../ai/delta"
+import { type GlossState, type GlossTarget, parseGlossStyle } from "../../ai/gloss"
+import { wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
-import { NO_CANDS, NO_CHANGES, NO_NOTES, jobKey, type FileRow, type Job, type UI } from "../store"
+import { SCAN_LIMIT } from "../../notes/files"
+import type { OpenRow } from "../../notes/projects"
+import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
+import { projectRoot } from "../../notes/workspace"
+import type { Theme } from "../../theme/theme"
+import type { layout } from "../../ui/layout"
+import { relocate, remapTop } from "../../ui/nav"
+import type { ChangeView, SummaryView } from "../../ui/panel"
+import { noteTitle } from "../../ui/status"
+import { pageSlice, sectionAt, typewriterTop } from "../../ui/zen"
 import type { DeriveRefs, Memo, ScrollEntry } from "../derive"
+import { type FileRow, type Job, jobKey, NO_CANDS, NO_CHANGES, NO_NOTES, type UI } from "../store"
 
 /** The screen layout `derive()` works at. */
 type Layout = ReturnType<typeof layout>
@@ -54,7 +55,9 @@ export function filesList(s: UI, memo: Memo) {
 export function truncationNote(s: UI, L: Layout) {
   // panel: strip and rule rows, then the view's list; Files pins the truncation note under it
   return s.view === "files" && s.tree.truncated
-    ? wrap([{ text: `scan stopped at ${SCAN_LIMIT / 1000}k entries — some notes missing` }], L.PNW - 2).map((r) => r.map((x) => x.text).join(""))
+    ? wrap([{ text: `scan stopped at ${SCAN_LIMIT / 1000}k entries — some notes missing` }], L.PNW - 2).map((r) =>
+        r.map((x) => x.text).join(""),
+      )
     : []
 }
 
@@ -64,12 +67,23 @@ function summaryView(s: UI, { file, src }: NoteView, memo: Memo, jobs: Map<strin
   const job = jobs.get(jobKey("tldr", s.openPath))
   if (job) return { text: memo.clean(job.raw), state: "streaming", model: "" }
   const saved = s.summaries[s.openPath]
-  if (saved) return { text: saved.summary, state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated", model: shortModel(saved.model) }
+  if (saved)
+    return {
+      text: saved.summary,
+      state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated",
+      model: shortModel(saved.model),
+    }
   return { text: "", state: "none", model: "" }
 }
 
 /** The Changed block in Info, null while there is nothing to list or explain. */
-function changeBlock(s: UI, base: UI["baseline"], changes: readonly Change[] | null, memo: Memo, jobs: Map<string, Job>): ChangeView | null {
+function changeBlock(
+  s: UI,
+  base: UI["baseline"],
+  changes: readonly Change[] | null,
+  memo: Memo,
+  jobs: Map<string, Job>,
+): ChangeView | null {
   const dl = s.delta && s.delta.path === s.openPath ? s.delta : null
   // loading, else the reply while nothing changed since the explained text, else the idle list
   const explained = dl ? explanationBlock(dl, changes, memo, jobs) : null
@@ -79,15 +93,32 @@ function changeBlock(s: UI, base: UI["baseline"], changes: readonly Change[] | n
 }
 
 /** `D`'s part of the Changed block: the reply streaming in, or the finished one while nothing changed since the explained text; else null. */
-function explanationBlock(dl: NonNullable<UI["delta"]>, changes: readonly Change[] | null, memo: Memo, jobs: Map<string, Job>): ChangeView | null {
+function explanationBlock(
+  dl: NonNullable<UI["delta"]>,
+  changes: readonly Change[] | null,
+  memo: Memo,
+  jobs: Map<string, Job>,
+): ChangeView | null {
   const dJob = jobs.get(jobKey("delta", dl.path))
   if (dJob) {
     const live = memo.partial(dJob.raw, dl.changes)
-    return { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
+    return {
+      state: "loading",
+      label: "",
+      changes: dl.changes,
+      summary: live?.summary ?? "",
+      notes: live?.notes ?? NO_NOTES,
+    }
   }
   // null: too large to compare, not unchanged
   if (dl.result && changes !== null && !changes.length)
-    return { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
+    return {
+      state: "result",
+      label: dl.result.model,
+      changes: dl.changes,
+      summary: dl.result.summary,
+      notes: dl.result.notes,
+    }
   return null
 }
 
@@ -133,15 +164,25 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
 }
 
 /** The panel list's height and its filter row; puts the Files cursor back on the same note when the list changes. */
-export function filesCursor(s: UI, L: Layout, { rows, filtered }: ReturnType<typeof filesList>, noteRows: number, seen: DeriveRefs["sidebarSeen"]["current"]) {
-  const filterRow = (s.view === "files" && (s.filterTyping || s.filter !== "")) || (s.view === "outline" && (s.filterTyping || s.outlineFilter !== ""))
+export function filesCursor(
+  s: UI,
+  L: Layout,
+  { rows, filtered }: ReturnType<typeof filesList>,
+  noteRows: number,
+  seen: DeriveRefs["sidebarSeen"]["current"],
+) {
+  const filterRow =
+    (s.view === "files" && (s.filterTyping || s.filter !== "")) ||
+    (s.view === "outline" && (s.filterTyping || s.outlineFilter !== ""))
   const LH = Math.max(1, L.bodyH - 2 - (filterRow ? 1 : 0) - noteRows)
 
   // when the Files list changes, put the cursor back on the same note
   if (rows !== seen.rows) {
     const paths = rows.map((r) => r.node.path)
     // filter results keep the cursor's note when it is still listed, else start on the top result
-    const r = filtered ? relocate(paths, [seen.cursorPath], 0, 0, LH) : relocate(paths, [seen.cursorPath, s.openPath], s.cursor, s.listTop.files, LH)
+    const r = filtered
+      ? relocate(paths, [seen.cursorPath], 0, 0, LH)
+      : relocate(paths, [seen.cursorPath, s.openPath], s.cursor, s.listTop.files, LH)
     s.cursor = r.cursor
     s.listTop.files = r.sideTop
     seen.rows = rows
@@ -157,13 +198,15 @@ export function switcherList(s: UI, memo: Memo, ix: VaultIndex) {
   const question = s.switcher ? questionOf(s.switcher.q) : null
   const askState = s.switcher?.ask
   // ranking waits for a complete index, then re-runs whenever it changes (ixVer)
-  const askCands = question && askState?.queries && !s.indexing ? memo.cands(ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
+  const askCands =
+    question && askState?.queries && !s.indexing ? memo.cands(ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
   const askCost = question && askCands.length ? memo.cost(question.text, askCands, ix, s.ixVer) : ""
-  const swRows: SwitchRow[] = !s.switcher
-    ? []
-    : question
+  let swRows: SwitchRow[] = []
+  if (s.switcher) {
+    swRows = question
       ? memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null)
       : memo.switch(ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
+  }
   // the highlight always sits on a stop (results change under it while typing or indexing)
   const swAt = s.switcher ? swRows[s.switcher.hl] : undefined
   const swHl = s.switcher && swAt && isStop(swAt) ? s.switcher.hl : firstHit(swRows)
@@ -215,11 +258,20 @@ export function matchState(s: UI, view: Rendered, memo: Memo, matchSeen: DeriveR
 // ------------------------------------------------------------- zen
 
 /** Zen gloss: the section under the reading line and the sheet on screen. */
-export function glossSheet(s: UI, L: Layout, { file, src }: NoteView, currentHeading: number, title: string, memo: Memo, jobs: Map<string, Job>) {
+export function glossSheet(
+  s: UI,
+  L: Layout,
+  { file, src }: NoteView,
+  currentHeading: number,
+  title: string,
+  memo: Memo,
+  jobs: Map<string, Job>,
+) {
   // zen gloss: the section under the reading line (currentHeading is sectionOf(view.headings, top)) and the sheet on screen
   // only with an ai block, or a gloss still running (`a` cancels it after the block goes)
   const glossing = !!s.ai || [...jobs.keys()].some((k) => k.startsWith("gloss:"))
-  const gHere: GlossTarget | null = L.zen && glossing && s.openPath && file && !file.error ? memo.gloss(src, currentHeading, s.openPath, title) : null
+  const gHere: GlossTarget | null =
+    L.zen && glossing && s.openPath && file && !file.error ? memo.gloss(src, currentHeading, s.openPath, title) : null
   const gHash = memo.glossHash(gHere?.text ?? "")
   const gStyle: GlossStyle = parseGlossStyle(s.ai?.gloss)
   let sheet: { state: GlossState; heading: string; text: string; fadeAt: number | null } | null = null
@@ -230,16 +282,29 @@ export function glossSheet(s: UI, L: Layout, { file, src }: NoteView, currentHea
     // the sheet's own section: the live hash while it is the reading section, else the one taken when it was shown
     const hash = gHere?.id === g.id ? gHash : g.hash
     if (job) sheet = { state: "loading", heading: g.heading, text: memo.glossClean(job.raw), fadeAt: g.fadeAt }
-    else if (e) sheet = { state: isFresh(e, hash, PROMPTS.gloss) ? "result" : "outdated", heading: g.heading, text: e.gloss, fadeAt: g.fadeAt }
+    else if (e)
+      sheet = {
+        state: isFresh(e, hash, PROMPTS.gloss) ? "result" : "outdated",
+        heading: g.heading,
+        text: e.gloss,
+        fadeAt: g.fadeAt,
+      }
   }
   return { gHere, gHash, gStyle, sheet }
 }
 
 /** The rows on screen: the section ranges, Spotlight's bright section, the window, the page and the Teleprompter flag. */
-export function readingWindow(s: UI, L: Layout, view: Rendered, { top, tw, pages }: ReturnType<typeof scrollState>, memo: Memo) {
+export function readingWindow(
+  s: UI,
+  L: Layout,
+  view: Rendered,
+  { top, tw, pages }: ReturnType<typeof scrollState>,
+  memo: Memo,
+) {
   const ranges = memo.ranges(view)
   /** Spotlight: the section kept bright (the one holding the reading / top line) */
-  const spot = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.spotlight ? (ranges[sectionAt(ranges, top)] ?? null) : null
+  const spot =
+    L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.spotlight ? (ranges[sectionAt(ranges, top)] ?? null) : null
   /** Rows on screen: row `i` shows line `first + i` when it lies in `lo..hi` (blank otherwise). */
   let win = { first: tw ? typewriterTop(top, L.CH) : top, lo: 0, hi: view.lines.length }
   let pg: { index: number; count: number; start: number; end: number; top: number; maxTop: number } | null = null

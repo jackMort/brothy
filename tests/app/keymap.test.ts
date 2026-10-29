@@ -1,12 +1,24 @@
 import { expect, test } from "bun:test"
-import { FOOTERS, HELP_GROUPS, PINNED, footerHints, isDown, modeOf, type FooterState } from "../../src/app/keymap"
+import { FOOTERS, type FooterState, footerHints, HELP_GROUPS, isDown, modeOf, PINNED } from "../../src/app/keymap"
 
 const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true }
 const NONE: FooterState = { query: false, preview: false, disk: false, ai: false, changes: false }
-const words = (on: FooterState, c: Parameters<typeof footerHints>[0] = "doc") => footerHints(c, on).map((h) => `${h.key} ${h.word}`)
+const words = (on: FooterState, c: Parameters<typeof footerHints>[0] = "doc") =>
+  footerHints(c, on).map((h) => `${h.key} ${h.word}`)
 
 test("document hints: short keys, a context's own word over the binding's", () => {
-  expect(words(ALL)).toEqual(["j k scroll", "␣ b page", "[ ] section", "/ find", "n N match", "f links", "H L history", "e edit", "tab panel", "? keys"])
+  expect(words(ALL)).toEqual([
+    "j k scroll",
+    "␣ b page",
+    "[ ] section",
+    "/ find",
+    "n N match",
+    "f links",
+    "H L history",
+    "e edit",
+    "tab panel",
+    "? keys",
+  ])
 })
 
 test("a hint waits for its state: n N for a query, f for Preview, e for a note on disk", () => {
@@ -16,7 +28,13 @@ test("a hint waits for its state: n N for a query, f for Preview, e for a note o
 })
 
 test("AI hints show only with an `ai` block; D also needs changes to explain", () => {
-  expect(words({ ...NONE, ai: true }, "panel:info")).toEqual(["↑↓ links", "⏎ open", "a summarize", "tab document", "? keys"])
+  expect(words({ ...NONE, ai: true }, "panel:info")).toEqual([
+    "↑↓ links",
+    "⏎ open",
+    "a summarize",
+    "tab document",
+    "? keys",
+  ])
   expect(words(ALL, "panel:info")).toContain("D changes")
   expect(words({ ...NONE, ai: true }, "zen")).toContain("a gloss")
   expect(words(NONE, "zen")).not.toContain("a gloss")
@@ -38,7 +56,8 @@ test("a typing binding's empty word stays empty", () => {
 })
 
 test("popups and typing pin their hints; the document, the panel and zen fade theirs", () => {
-  for (const c of Object.keys(FOOTERS) as (keyof typeof FOOTERS)[]) expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "zen" || c.startsWith("panel:")))
+  for (const c of Object.keys(FOOTERS) as (keyof typeof FOOTERS)[])
+    expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "zen" || c.startsWith("panel:")))
 })
 
 test("modeOf maps a panel context to its view's mode", () => {

@@ -1,7 +1,7 @@
 // What a folder opens as: its Files tree, the tree links resolve against and the first note; the piped document's
 // stand-in. Reads the folder (`scanTree`, `findVault`), otherwise pure.
 import { basename } from "node:path"
-import { ancestorsOf, findVault, firstFile, scanTree, type FileNode } from "./files"
+import { ancestorsOf, type FileNode, findVault, firstFile, scanTree } from "./files"
 
 /** The open path of the piped document: relative, so it can never be a file on disk. */
 export const STDIN = "stdin"
@@ -46,7 +46,16 @@ export function workspace(root: string, note?: string | null, single = false): W
 /** The piped document: an empty Files tree; links resolve against the notes under `root`, scanned on first use (`ensureLinks`). */
 export function stdinWorkspace(root: string): Workspace {
   const tree: FileNode = { name: basename(root) || root, path: root, rel: "", dir: true, children: [] }
-  return { root, tree, linkTree: tree, linkLazy: true, piped: true, linkRoot: null, openPath: STDIN, expanded: new Set() }
+  return {
+    root,
+    tree,
+    linkTree: tree,
+    linkLazy: true,
+    piped: true,
+    linkRoot: null,
+    openPath: STDIN,
+    expanded: new Set(),
+  }
 }
 
 /** The folder a workspace is recorded under: the vault a single note was opened in, else the root. */

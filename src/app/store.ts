@@ -1,20 +1,21 @@
 // The app's store: the one mutable UI object every handler reads at call time, its parts, the AI jobs the `jobs` ref
 // holds and the app's tunables. No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
-import type { AIConfig } from "../ai/config"
+
 import type { AskState, Candidate } from "../ai/ask"
-import { loadConfig, type Config, type View } from "../system/config"
+import { type Glosses, loadSummaries, type Summaries } from "../ai/cache"
+import type { AIConfig } from "../ai/config"
 import type { Change, DeltaNote } from "../ai/delta"
-import type { FileNode, TreeRow } from "../notes/files"
-import { startHistory, type History } from "../notes/history"
 import type { HeadingStyle } from "../markdown/heading-style"
 import type { Geometry } from "../markdown/render"
-import type { LinkSpot } from "../ui/nav"
+import type { FileNode, TreeRow } from "../notes/files"
+import { type History, startHistory } from "../notes/history"
 import type { ProjectEntry } from "../notes/projects"
-import type { Toast } from "../ui/status"
-import { loadSummaries, type Glosses, type Summaries } from "../ai/cache"
+import { stdinWorkspace, workspace } from "../notes/workspace"
+import { type Config, loadConfig, type View } from "../system/config"
 import { themes } from "../theme/theme"
 import { resolveTheme, type ThemePick } from "../theme/themepick"
-import { stdinWorkspace, workspace } from "../notes/workspace"
+import type { LinkSpot } from "../ui/nav"
+import type { Toast } from "../ui/status"
 import { normalizeZen, type ZenConfig } from "../ui/zen"
 import type { Ctx } from "./keymap"
 
@@ -181,7 +182,13 @@ export interface UI {
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
-function savedSettings(cfg: Config, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined) {
+function savedSettings(
+  cfg: Config,
+  themeName: string | undefined,
+  transparent: boolean | undefined,
+  piped: boolean,
+  motion: boolean | undefined,
+) {
   return {
     themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
     hidden: cfg.sidebar?.hidden ?? false,

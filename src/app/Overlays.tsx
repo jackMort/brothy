@@ -3,28 +3,52 @@
 // while its popup is closed; the components themselves live in overlay.tsx.
 import type { ReactNode } from "react"
 import { askTitleNote } from "../ai/ask"
-import { folderCounts } from "../notes/files"
-import { ROW_PAD, innerWidth, popupWidth } from "../ui/geometry"
-import { helpLayout } from "../ui/help"
+import { plural, truncate } from "../lib/text"
 import type { Rendered } from "../markdown/render"
-import { findItems, keepVisible } from "../ui/nav"
-import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, ZenSettings } from "../ui/overlay"
-import { truncate, plural } from "../lib/text"
-import type { Theme } from "../theme/theme"
-import { onlyMode, pickIndex, pickMode, pickMove, pickShown, pickTheme, pickTop, themeSplit, type FamilyHit, type ThemePick } from "../theme/themepick"
+import { folderCounts } from "../notes/files"
 import { stepRow } from "../notes/vault"
+import type { Theme } from "../theme/theme"
+import {
+  type FamilyHit,
+  onlyMode,
+  pickIndex,
+  pickMode,
+  pickMove,
+  pickShown,
+  pickTheme,
+  pickTop,
+  type ThemePick,
+  themeSplit,
+} from "../theme/themepick"
+import { innerWidth, popupWidth, ROW_PAD } from "../ui/geometry"
+import { helpLayout } from "../ui/help"
+import { findItems, keepVisible } from "../ui/nav"
+import {
+  HelpSheet,
+  OpenPicker,
+  Overlay,
+  PickerInput,
+  PickerList,
+  Switcher,
+  ThemePicker,
+  ZenSettings,
+} from "../ui/overlay"
 import { zenRows } from "../ui/zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { HELP_GROUPS } from "./keymap"
-import { WHEEL_ROWS } from "./store"
 import type { Popups } from "./popups"
+import { WHEEL_ROWS } from "./store"
 import type { SwitcherControl } from "./switcher"
 import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
 /** The `? ?` sheet, scrolled to `helpTop`; its title names the version and, while it fits, the theme. */
-export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { version: string } & Pick<Popups, "helpGo">): ReactNode {
+export function helpOverlay(
+  c: AppCtx,
+  d: Derived,
+  { version, helpGo }: { version: string } & Pick<Popups, "helpGo">,
+): ReactNode {
   const { set, W, H } = c
   const { s, t } = d
   if (!s.help) return null
@@ -34,7 +58,10 @@ export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { versio
   // title row: padding 4 each side, then the note and `esc`; the theme name goes first, then the title is cut
   const titleRoom = Math.min(layout.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
   const helpFull = `Keybindings · brothy v${version} · ${t.name}`
-  const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`, Math.max(1, titleRoom))
+  const helpTitle = truncate(
+    helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`,
+    Math.max(1, titleRoom),
+  )
   return (
     <HelpSheet
       t={t}
@@ -62,11 +89,18 @@ function hoverRow({ ui, set }: AppCtx, key: "switcher" | "opener" | "prompt", hl
 export function switchOverlay(
   c: AppCtx,
   d: Derived,
-  { closeSwitcher, swGo, swActivate, peekPane }: Pick<SwitcherControl, "closeSwitcher" | "swGo" | "swActivate" | "peekPane">,
+  {
+    closeSwitcher,
+    swGo,
+    swActivate,
+    peekPane,
+  }: Pick<SwitcherControl, "closeSwitcher" | "swGo" | "swActivate" | "peekPane">,
 ): ReactNode {
   const { W, H } = c
   const { s, L, t, swRows, swHl, question } = d
-  const notesLabel = s.indexing ? `indexing ${s.indexing[0]}/${s.indexing[1]}` : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")
+  const notesLabel = s.indexing
+    ? `indexing ${s.indexing[0]}/${s.indexing[1]}`
+    : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")
   const peek = peekPane(d)
   return s.switcher ? (
     <Switcher
@@ -79,7 +113,16 @@ export function switchOverlay(
       hl={swHl}
       top={keepVisible(s.switcher.top, Math.max(0, swHl), L.PH, swRows.length)}
       height={L.PH}
-      note={question ? askTitleNote({ off: !s.ai, state: s.switcher.ask, indexing: s.indexing ? notesLabel : null, notes: notesLabel }) : notesLabel}
+      note={
+        question
+          ? askTitleNote({
+              off: !s.ai,
+              state: s.switcher.ask,
+              indexing: s.indexing ? notesLabel : null,
+              notes: notesLabel,
+            })
+          : notesLabel
+      }
       peek={peek}
       onClose={closeSwitcher}
       onScroll={(dir) => swGo(stepRow(swRows, swHl, dir))}
@@ -90,7 +133,11 @@ export function switchOverlay(
 }
 
 /** The `o` Open picker: recent projects and path completions. */
-export function openOverlay(c: AppCtx, d: Derived, { opGo, opOpen }: Pick<WorkspaceControl, "opGo" | "opOpen">): ReactNode {
+export function openOverlay(
+  c: AppCtx,
+  d: Derived,
+  { opGo, opOpen }: Pick<WorkspaceControl, "opGo" | "opOpen">,
+): ReactNode {
   const { set, W, H } = c
   const { s, L, t } = d
   return s.opener ? (
@@ -115,7 +162,12 @@ export function openOverlay(c: AppCtx, d: Derived, { opGo, opOpen }: Pick<Worksp
 export function findOverlay(
   c: AppCtx,
   d: Derived,
-  { promptDefault, promptHighlight, promptSubmit, promptClose }: Pick<Popups, "promptDefault" | "promptHighlight" | "promptSubmit" | "promptClose">,
+  {
+    promptDefault,
+    promptHighlight,
+    promptSubmit,
+    promptClose,
+  }: Pick<Popups, "promptDefault" | "promptHighlight" | "promptSubmit" | "promptClose">,
 ): ReactNode {
   const { W, H } = c
   const { s, L, t, view, matches } = d
@@ -128,7 +180,15 @@ export function findOverlay(
   const ptop = keepVisible(prompt.hl >= 0 ? prompt.top : 0, Math.max(0, hl), height, items.length)
   const note = prompt.value ? `${matches.length} match${matches.length === 1 ? "" : "es"}` : undefined
   return (
-    <Overlay t={t} W={W} H={H} width={popupW} title="Find in Document" onClose={promptClose} onScroll={(dir) => items.length && promptHighlight(hl + dir)}>
+    <Overlay
+      t={t}
+      W={W}
+      H={H}
+      width={popupW}
+      title="Find in Document"
+      onClose={promptClose}
+      onScroll={(dir) => items.length && promptHighlight(hl + dir)}
+    >
       <PickerInput t={t} value={prompt.value} placeholder="Find in document..." note={note} width={popupW} />
       <PickerList
         t={t}
@@ -224,7 +284,11 @@ export function themeOverlay(
 }
 
 /** The `Z` zen settings popup. */
-export function zenOverlay(c: AppCtx, d: Derived, { revertZen, zenEdit }: Pick<Zen, "revertZen" | "zenEdit">): ReactNode {
+export function zenOverlay(
+  c: AppCtx,
+  d: Derived,
+  { revertZen, zenEdit }: Pick<Zen, "revertZen" | "zenEdit">,
+): ReactNode {
   const { ui, set, W, H } = c
   const { s, t } = d
   return s.zenOrig !== null ? (

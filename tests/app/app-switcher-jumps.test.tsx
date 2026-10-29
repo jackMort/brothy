@@ -2,12 +2,17 @@
 import { expect, test } from "bun:test"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { type Setup, type aiStub, filler, keys, OLLAMA, W120, waitFor, waitFrame, useAppHarness } from "./helpers"
+import { type aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
 
 const { tmp, aiConfig, mountAI } = useAppHarness()
 
 /** `?<question>`, ⏎; the stub replies with `queries`. Resolves with the frame once Answers show. */
-async function ask(s: Setup, ai: ReturnType<typeof aiStub>, queries: string[], question = "where does the soup simmer") {
+async function ask(
+  s: Setup,
+  ai: ReturnType<typeof aiStub>,
+  queries: string[],
+  question = "where does the soup simmer",
+) {
   await keys(s, "C-p", `type:?${question}`)
   await waitFrame(s, (f) => f.includes("⏎ ask"))
   await keys(s, "enter")
@@ -24,7 +29,10 @@ test("an answer whose line was edited away opens at its heading, with no find an
   const d = tmp({ "README.md": "# README\n", "soup.md": SOUP })
   const { s, ai } = await mountAI(d, "README.md", { size: W120 })
   await ask(s, ai, ["gentle simmer"])
-  writeFileSync(join(d, "soup.md"), readFileSync(join(d, "soup.md"), "utf8").replace("Keep the broth at a gentle simmer.", "Keep the broth warm."))
+  writeFileSync(
+    join(d, "soup.md"),
+    readFileSync(join(d, "soup.md"), "utf8").replace("Keep the broth at a gentle simmer.", "Keep the broth warm."),
+  )
   const f = await keys(s, "enter")
   expect(f).not.toContain("Ask")
   expect(f).not.toContain("heading gone")
@@ -34,7 +42,10 @@ test("an answer whose line was edited away opens at its heading, with no find an
 
 test("an answer from the lead-in whose line was edited away just opens the note", async () => {
   aiConfig(OLLAMA)
-  const d = tmp({ "README.md": "# README\n", "lead.md": "Zebra stripes are mentioned only here.\n\n# Title\n\nBody.\n" })
+  const d = tmp({
+    "README.md": "# README\n",
+    "lead.md": "Zebra stripes are mentioned only here.\n\n# Title\n\nBody.\n",
+  })
   const { s, ai } = await mountAI(d, "README.md", { size: W120 })
   await ask(s, ai, ["zebra"], "which animal has stripes")
   writeFileSync(join(d, "lead.md"), "Nothing about animals.\n\n# Title\n\nBody.\n")

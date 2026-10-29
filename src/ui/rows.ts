@@ -1,15 +1,15 @@
 // Pure row builders for the popups: hit highlighting and fitting, switcher and open-picker rows, the theme mode switch,
 // the scrim colour and the welcome art spans. No React: overlay.tsx draws them.
 import { basename, dirname } from "node:path"
-import { A, safeLine, type Span } from "../lib/spans"
+import { A, type Span, safeLine } from "../lib/spans"
 import { spanWidth, truncate, truncateLeft, width } from "../lib/text"
-import { chip, inkAt, steamColors } from "./chrome"
 import { stem } from "../notes/files"
-import { tildify, type OpenRow } from "../notes/projects"
+import { type OpenRow, tildify } from "../notes/projects"
 import type { SwitchRow } from "../notes/vault"
-import type { ArtCell } from "./welcome"
-import { BOARD_MODES, type ThemeMode } from "../theme/themepick"
 import type { Theme } from "../theme/theme"
+import { BOARD_MODES, type ThemeMode } from "../theme/themepick"
+import { chip, inkAt, steamColors } from "./chrome"
+import type { ArtCell } from "./welcome"
 
 /** Wash drawn over the page behind a popup: black over dark themes, white over light ones. */
 export function scrim(t: Theme): { r: number; g: number; b: number; a: number } {
@@ -70,7 +70,10 @@ export function fitHits(text: string, hits: readonly number[], room: number): { 
   }
   const tail = b < cps.length ? "…" : ""
   const shift = head.length - a
-  return { text: head + cps.slice(a, b).join("") + tail, hits: hits.filter((h) => h >= a && h < b).map((h) => h + shift) }
+  return {
+    text: head + cps.slice(a, b).join("") + tail,
+    hits: hits.filter((h) => h >= a && h < b).map((h) => h + shift),
+  }
 }
 
 /**
@@ -79,10 +82,17 @@ export function fitHits(text: string, hits: readonly number[], room: number): { 
  * most a quarter; the matched text gets the rest, cut around its hits, so the match stays in view.
  */
 export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
-  if (r.kind === "header") return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
+  if (r.kind === "header")
+    return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
   if (r.kind === "askNote") return { header: true, spans: [{ text: safeLine(r.text), fg: t.textMuted }] }
   if (r.kind === "askAction")
-    return { spans: [...(r.error ? [{ text: "✗ ", fg: t.error }] : []), { text: safeLine(r.text), fg: t.text }, { text: safeLine(r.note), fg: t.textMuted }] }
+    return {
+      spans: [
+        ...(r.error ? [{ text: "✗ ", fg: t.error }] : []),
+        { text: safeLine(r.text), fg: t.text },
+        { text: safeLine(r.note), fg: t.textMuted },
+      ],
+    }
   if (r.kind === "answer") {
     const room = w - (r.right ? width(r.right) + 1 : 0)
     if (r.heading < 0) {
@@ -91,7 +101,10 @@ export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
     }
     const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
     const f = fitHits(r.text, r.hits, room - width(name) - 3)
-    return { spans: [{ text: name + " › ", fg: t.textMuted }, ...hitSpans(f.text, f.hits, t.text, t.primary)], right: r.right }
+    return {
+      spans: [{ text: name + " › ", fg: t.textMuted }, ...hitSpans(f.text, f.hits, t.text, t.primary)],
+      right: r.right,
+    }
   }
   const folder = r.kind === "text" ? "" : truncateLeft(r.folder, Math.floor(w / 3))
   const room = w - (folder ? width(folder) + 1 : 0)
@@ -114,7 +127,10 @@ export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
       }
     }
     case "heading":
-      return { spans: [{ text: name + " › ", fg: t.textMuted }, ...fit(r.text, r.hits, width(name) + 3, t.text)], right: folder }
+      return {
+        spans: [{ text: name + " › ", fg: t.textMuted }, ...fit(r.text, r.hits, width(name) + 3, t.text)],
+        right: folder,
+      }
     case "text":
       return { spans: [{ text: name + "  ", fg: t.text }, ...fit(r.context, r.hits, width(name) + 2, t.textMuted)] }
   }
@@ -126,19 +142,27 @@ export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
  * itself marked "this folder".
  */
 export function openItem(r: OpenRow, t: Theme, w = Infinity, home?: string): PickerItem {
-  if (r.kind === "header") return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
+  if (r.kind === "header")
+    return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
   if (r.kind === "path") {
     if (r.self) return { spans: [{ text: r.completion, fg: t.text }], right: "this folder" }
-    return { spans: [...hitSpans(r.name, r.hits, t.text, t.primary), ...(r.dir ? [{ text: "/", fg: t.textMuted }] : [])] }
+    return {
+      spans: [...hitSpans(r.name, r.hits, t.text, t.primary), ...(r.dir ? [{ text: "/", fg: t.textMuted }] : [])],
+    }
   }
-  const right = r.missing ? "missing" : r.entry.lastNote ? truncate(stem(basename(r.entry.lastNote)), Math.max(8, Math.floor(w / 3))) : ""
+  const lastNote = r.entry.lastNote ? truncate(stem(basename(r.entry.lastNote)), Math.max(8, Math.floor(w / 3))) : ""
+  const right = r.missing ? "missing" : lastNote
   const name = fitHits(r.name, r.hits, Math.max(8, Math.floor(w / 3)))
   const room = w - (right ? width(right) + 1 : 0) - width(name.text) - 2
   // a path too long for the row drops its last segment (the name, already shown), then cuts from the left
   const full = tildify(r.entry.root, home)
-  const path = width(full) <= room ? full : room >= 6 ? truncateLeft(tildify(dirname(r.entry.root), home), room) : ""
+  const parent = room >= 6 ? truncateLeft(tildify(dirname(r.entry.root), home), room) : ""
+  const path = width(full) <= room ? full : parent
   return {
-    spans: [...hitSpans(name.text, name.hits, r.missing ? t.textMuted : t.text, t.primary), ...(path ? [{ text: "  " + path, fg: t.textMuted }] : [])],
+    spans: [
+      ...hitSpans(name.text, name.hits, r.missing ? t.textMuted : t.text, t.primary),
+      ...(path ? [{ text: "  " + path, fg: t.textMuted }] : []),
+    ],
     right,
   }
 }
@@ -151,24 +175,27 @@ export const SWITCH_MODES = BOARD_MODES
  * chip, the other muted; with `only` (a single-mode family) the missing side is also struck through.
  */
 export const modeSwitch = (t: Theme, mode: ThemeMode, only?: ThemeMode): Span[][] =>
-  SWITCH_MODES.map((m) => (m === mode ? chip(t, m, t.primary) : [{ text: ` ${m} `, fg: t.textMuted, ...(only && m !== only ? { attr: A.STRIKE } : {}) }]))
+  SWITCH_MODES.map((m) =>
+    m === mode
+      ? chip(t, m, t.primary)
+      : [{ text: ` ${m} `, fg: t.textMuted, ...(only && m !== only ? { attr: A.STRIKE } : {}) }],
+  )
 
 /** `spans` padded with spaces to `w` cells. */
-export const padTo = (spans: Span[], w: number): Span[] => [...spans, { text: " ".repeat(Math.max(0, w - spanWidth(spans))) }]
+export const padTo = (spans: Span[], w: number): Span[] => [
+  ...spans,
+  { text: " ".repeat(Math.max(0, w - spanWidth(spans))) },
+]
 
 /** Spans of one art row, `cells` coloured by role; neighbours with the same look share a span. */
 export function artSpans(t: Theme, cells: ArtCell[], ink: number): Span[] {
   const steam = steamColors(t)
   const out: Span[] = []
   for (const c of cells) {
-    const fg =
-      c.role === "mark" || c.role === "body"
-        ? inkAt(t, ink, t.primary)
-        : c.role === "edge"
-          ? inkAt(t, ink, t.text)
-          : c.role === "steam"
-            ? steam[c.row ?? 4]
-            : undefined
+    let fg: string | undefined
+    if (c.role === "mark" || c.role === "body") fg = inkAt(t, ink, t.primary)
+    else if (c.role === "edge") fg = inkAt(t, ink, t.text)
+    else if (c.role === "steam") fg = steam[c.row ?? 4]
     const bg = c.broth ? inkAt(t, ink, t.secondary) : undefined
     const last = out.at(-1)
     if (last && last.fg === fg && last.bg === bg) last.text += c.ch

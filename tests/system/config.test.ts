@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test } from "bun:test"
 import { chmodSync, lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { configPath, loadConfig, saveConfig } from "../../src/system/config"
 import { writeFileAtomic } from "../../src/lib/json"
+import { configPath, loadConfig, saveConfig } from "../../src/system/config"
 import { ZEN_DEFAULTS } from "../../src/ui/zen"
 import { useXdgDir } from "../helpers/env"
 
@@ -51,7 +51,10 @@ describe("legacy folds", () => {
   test("saving the sidebar drops the legacy key and keeps the rest", () => {
     writeFileSync(file(), '{"theme":"nord","folds":{"files":false}}')
     saveConfig({ sidebar: { view: "outline", hidden: false }, folds: undefined })
-    expect(JSON.parse(readFileSync(file(), "utf8"))).toEqual({ theme: "nord", sidebar: { view: "outline", hidden: false } })
+    expect(JSON.parse(readFileSync(file(), "utf8"))).toEqual({
+      theme: "nord",
+      sidebar: { view: "outline", hidden: false },
+    })
   })
   test("an unparsable file is still left alone", () => {
     writeFileSync(file(), "{oops")
@@ -67,7 +70,13 @@ describe("sidebar", () => {
     writeFileSync(file(), '{"sidebar":{"view":"tags","hidden":true}}')
     expect(loadConfig().sidebar).toEqual({ hidden: true })
   })
-  for (const bad of ['{"sidebar":null}', '{"sidebar":[1]}', '{"sidebar":"files"}', '{"sidebar":{}}', '{"sidebar":{"view":3,"hidden":"no"}}']) {
+  for (const bad of [
+    '{"sidebar":null}',
+    '{"sidebar":[1]}',
+    '{"sidebar":"files"}',
+    '{"sidebar":{}}',
+    '{"sidebar":{"view":3,"hidden":"no"}}',
+  ]) {
     test(`ignores ${bad}`, () => {
       writeFileSync(file(), bad)
       expect(loadConfig().sidebar).toBeUndefined()
@@ -305,14 +314,34 @@ describe("minimap", () => {
 describe("file format", () => {
   test("a hand-edited file round-trips byte for byte: unknown keys stay, a patch changes only its own key", () => {
     const text =
-      JSON.stringify({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, zen: { measure: 60 }, wide: true, extra: { a: [1, 2] } }, null, 2) + "\n"
+      JSON.stringify(
+        {
+          theme: "gruvbox",
+          sidebar: { view: "outline", hidden: true },
+          zen: { measure: 60 },
+          wide: true,
+          extra: { a: [1, 2] },
+        },
+        null,
+        2,
+      ) + "\n"
     writeFileSync(file(), text)
     expect(loadConfig()).toMatchObject({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, wide: true })
     expect(saveConfig({ theme: "gruvbox" })).toBe(true)
     expect(readFileSync(file(), "utf8")).toBe(text)
     expect(saveConfig({ wide: false, sidebar: { view: "info" } })).toBe(true)
     expect(readFileSync(file(), "utf8")).toBe(
-      JSON.stringify({ theme: "gruvbox", sidebar: { view: "info", hidden: true }, zen: { measure: 60 }, wide: false, extra: { a: [1, 2] } }, null, 2) + "\n",
+      JSON.stringify(
+        {
+          theme: "gruvbox",
+          sidebar: { view: "info", hidden: true },
+          zen: { measure: 60 },
+          wide: false,
+          extra: { a: [1, 2] },
+        },
+        null,
+        2,
+      ) + "\n",
     )
   })
   test("a BOM file and a blank file are both saved as plain two-space JSON", () => {

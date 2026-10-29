@@ -3,12 +3,12 @@
 // them. Not pure: they close over the app context and the feature factories.
 import { dirname } from "node:path"
 import { askSection } from "../ai/ask"
-import { ancestorsOf } from "../notes/files"
-import { helpLayout } from "../ui/help"
 import { clamp } from "../lib/text"
-import { pickMode, pickMove, pickQuery } from "../theme/themepick"
+import { ancestorsOf } from "../notes/files"
 import { nextSection, stepRow } from "../notes/vault"
-import { ZEN_ROWS, ZEN_WPM, stepMeasure } from "../ui/zen"
+import { pickMode, pickMove, pickQuery } from "../theme/themepick"
+import { helpLayout } from "../ui/help"
+import { stepMeasure, ZEN_ROWS, ZEN_WPM } from "../ui/zen"
 import type { Actions, Features, Moves } from "./actions"
 import type { AppCtx } from "./ctx"
 import { erase } from "./input"
@@ -20,13 +20,17 @@ import type { Popups } from "./popups"
 const typing = () => {}
 
 /** The document: scrolling, headings, matches, and the link labels. */
-export function makeDocActions(c: AppCtx, { startLabels }: Pick<Links, "startLabels">, { jumpHeading, jumpMatch }: Moves) {
+export function makeDocActions(
+  c: AppCtx,
+  { startLabels }: Pick<Links, "startLabels">,
+  { jumpHeading, jumpMatch }: Moves,
+) {
   const { ui, set, derive, setTop, scrollBy, focusPanel } = c
   return {
     docLine: (k) => scrollBy(isDown(k) ? 1 : -1),
     docHalf: (k) => scrollBy((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
     docPage: (k) => scrollBy((isDown(k) ? 1 : -1) * (derive().L.CH - 2)),
-    docEnds: (k) => setTop(k.name === "g" && !k.shift ? 0 : k.name === "home" ? 0 : derive().maxTop),
+    docEnds: (k) => setTop(k.name === "home" || (k.name === "g" && !k.shift) ? 0 : derive().maxTop),
     docHeading: (k) => jumpHeading(k.sequence === "]" || k.sequence === "}" ? 1 : -1),
     docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
     back: () => focusPanel(),
@@ -74,10 +78,12 @@ export function makeZenActions(c: AppCtx, { aiJobs, zen }: Features, { jumpHeadi
       else jumpHeading(dir)
     },
     zenMeasure: (k) => {
-      if (setZen({ measure: stepMeasure(ui.current.zenCfg.measure, k.sequence === ">" ? 1 : -1) }, true)) flash(`measure ${ui.current.zenCfg.measure}`)
+      if (setZen({ measure: stepMeasure(ui.current.zenCfg.measure, k.sequence === ">" ? 1 : -1) }, true))
+        flash(`measure ${ui.current.zenCfg.measure}`)
     },
     zenSpeed: (k) => {
-      if (setZen({ wpm: ui.current.zenCfg.wpm + (k.sequence === "+" ? 1 : -1) * ZEN_WPM.step }, true)) flash(`${ui.current.zenCfg.wpm} wpm`)
+      if (setZen({ wpm: ui.current.zenCfg.wpm + (k.sequence === "+" ? 1 : -1) * ZEN_WPM.step }, true))
+        flash(`${ui.current.zenCfg.wpm} wpm`)
     },
   } satisfies Partial<Actions>
 }
@@ -89,7 +95,8 @@ export function makeOutlineActions(c: AppCtx, { outlineGo }: Moves) {
     outlineMove: (k) => {
       const { outlineCur, oRows } = derive()
       const n = oRows.length
-      const next = k.name === "g" ? (k.shift ? n - 1 : 0) : outlineCur + (isDown(k) ? 1 : -1)
+      let next = outlineCur + (isDown(k) ? 1 : -1)
+      if (k.name === "g") next = k.shift ? n - 1 : 0
       set({ outlineCur: clamp(next, 0, n - 1) })
     },
     outlineJump: () => {
@@ -116,7 +123,11 @@ export function makeInfoActions(c: AppCtx, { openLink }: Pick<Links, "openLink">
       // g / G go to the first / last link (or row); the other keys step one
       const jump = k.name === "g"
       const toEnd = jump ? !!k.shift : dir > 0
-      const scroll = () => set({ listTop: { ...s.listTop, info: Math.max(0, Math.min(max, jump ? (toEnd ? max : 0) : s.listTop.info + dir)) } })
+      const edgeTop = toEnd ? max : 0
+      const scroll = () =>
+        set({
+          listTop: { ...s.listTop, info: Math.max(0, Math.min(max, jump ? edgeTop : s.listTop.info + dir)) },
+        })
       const edge = toEnd ? linkRows.length - 1 : 0
       // without links, or at the first/last one, the keys scroll the rest of the list into view
       if (!linkRows.length || infoCur === edge) return scroll()
@@ -218,7 +229,18 @@ export function makeFilterActions(c: AppCtx, { filterText, filterType, filterSto
 /** The help sheet, the find popup, the theme picker and the zen settings. */
 export function makePopupActions(c: AppCtx, { zen, popups }: Features) {
   const { ui, set, dims } = c
-  const { promptDefault, promptCount, promptHighlight, promptType, promptSubmit, promptClose, closeTheme, themeSet, applyTheme, helpGo } = popups
+  const {
+    promptDefault,
+    promptCount,
+    promptHighlight,
+    promptType,
+    promptSubmit,
+    promptClose,
+    closeTheme,
+    themeSet,
+    applyTheme,
+    helpGo,
+  } = popups
   return {
     helpScroll: (k) => {
       const vis = helpLayout(HELP_GROUPS, dims.current.W, dims.current.H).vis
@@ -232,7 +254,8 @@ export function makePopupActions(c: AppCtx, { zen, popups }: Features) {
 
     promptMove: (k) => {
       const pr = ui.current.prompt
-      if (pr && promptCount() > 0) promptHighlight((pr.hl >= 0 ? pr.hl : promptDefault()) + (k.name === "down" ? 1 : -1))
+      if (pr && promptCount() > 0)
+        promptHighlight((pr.hl >= 0 ? pr.hl : promptDefault()) + (k.name === "down" ? 1 : -1))
     },
     promptApply: () => promptSubmit(),
     promptClear: promptClose,
@@ -243,7 +266,10 @@ export function makePopupActions(c: AppCtx, { zen, popups }: Features) {
     themeType: typing,
     themeMove: (k) => themeSet((p) => pickMove(p, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
     // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
-    themeMode: (k) => themeSet((p) => pickMode(p, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
+    themeMode: (k) => {
+      if (k.name === "left") return themeSet((p) => pickMode(p, "dark"))
+      themeSet((p) => pickMode(p, k.name === "right" ? "light" : undefined))
+    },
     themeApply: applyTheme,
     themeClose: closeTheme,
     themeErase: () => themeSet((p) => pickQuery(p, erase(p.q))),

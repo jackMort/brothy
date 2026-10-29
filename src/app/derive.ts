@@ -2,47 +2,46 @@
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
 // Its steps, one per area, live in derive/steps.ts.
 import { existsSync } from "node:fs"
-import { rankNotes, visibleRows, type FileNode } from "../notes/files"
-import { render, type Geometry, type Rendered } from "../markdown/render"
-import { normalize } from "../markdown/lexer"
-import { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "../markdown/frontmatter"
-import { stats, wordStats, type Stats } from "../markdown/stats"
-import type { HeadingStyle } from "../markdown/heading-style"
-import { renderSource } from "../markdown/source"
+import { type AskState, askCandidates, askRows, type Candidate, rerankCost } from "../ai/ask"
+import { textHash } from "../ai/cache"
+import { cleanSummary, noteText } from "../ai/client"
+import { type AIConfig, resolveAI } from "../ai/config"
+import { type Change, type DeltaNote, diffSections, parseDelta } from "../ai/delta"
+import { glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
-import { readDoc, type DocFile } from "../notes/doc"
-import { STDIN } from "../notes/workspace"
-import { layout } from "../ui/layout"
-import { themes, type Theme } from "../theme/theme"
-import { MAX_BYTES } from "../notes/stdin"
+import { type FrontMatter, type Property, parseFrontMatter, parseProperties } from "../markdown/frontmatter"
+import type { HeadingStyle } from "../markdown/heading-style"
+import { normalize } from "../markdown/lexer"
+import { type Geometry, type Rendered, render } from "../markdown/render"
+import { renderSource } from "../markdown/source"
+import { type Stats, stats, wordStats } from "../markdown/stats"
+import { type DocFile, readDoc } from "../notes/doc"
+import { type FileNode, rankNotes, visibleRows } from "../notes/files"
 import { fsDirIO, loadProjects, openRows, type ProjectEntry } from "../notes/projects"
+import { MAX_BYTES } from "../notes/stdin"
 import { recentSection, searchVault, switchRows, type VaultIndex } from "../notes/vault"
-import { miniInk } from "../ui/minimap"
+import { STDIN } from "../notes/workspace"
+import type { View } from "../system/config"
+import { type Theme, themes } from "../theme/theme"
 import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
+import { layout } from "../ui/layout"
+import { miniInk } from "../ui/minimap"
 import { cached, findLines, matchIndex } from "../ui/nav"
-import { cleanSummary, noteText } from "../ai/client"
-import { resolveAI, type AIConfig } from "../ai/config"
-import { askCandidates, askRows, rerankCost, type AskState, type Candidate } from "../ai/ask"
-import { textHash } from "../ai/cache"
-import { glossTarget } from "../ai/gloss"
 import {
+  type ChangeState,
   extractLinks,
+  type FileMeta,
   fmtSize,
+  type InfoItem,
   infoItems,
+  type LinkRef,
   outlineRows,
   resolveLink,
-  type ChangeState,
-  type FileMeta,
-  type InfoItem,
-  type LinkRef,
   type SummaryState,
 } from "../ui/panel"
-import { diffSections, parseDelta, type Change, type DeltaNote } from "../ai/delta"
-import { sectionRanges, wordSuffix } from "../ui/zen"
 import { WELCOME_RECENTS } from "../ui/welcome"
-import type { View } from "../system/config"
-import type { FileRow, Job, UI } from "./store"
+import { sectionRanges, wordSuffix } from "../ui/zen"
 import {
   filesCursor,
   filesList,
@@ -56,23 +55,25 @@ import {
   switcherList,
   truncationNote,
 } from "./derive/steps"
+import type { FileRow, Job, UI } from "./store"
 
 /** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
 function documentMemo(stdin: string | undefined) {
   return {
-    read: cached(
-      (path: string, nonce: number): DocFile =>
-        path !== STDIN || stdin === undefined
-          ? readDoc(path, nonce)
-          : Buffer.byteLength(stdin) > MAX_BYTES
-            ? { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
-            : { src: stdin, info: null, error: null },
-    ),
+    read: cached((path: string, nonce: number): DocFile => {
+      if (path !== STDIN || stdin === undefined) return readDoc(path, nonce)
+      if (Buffer.byteLength(stdin) > MAX_BYTES) {
+        return { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
+      }
+      return { src: stdin, info: null, error: null }
+    }),
     fm: cached(parseFrontMatter),
     doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) =>
       render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
     ),
-    source: cached((src: string, w: number, t: Theme, tree: FileNode) => renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
+    source: cached((src: string, w: number, t: Theme, tree: FileNode) =>
+      renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null }),
+    ),
     stats: cached(stats),
     props: cached(parseProperties),
     propsKey: cached((fm: FrontMatter) => JSON.stringify(fm.entries)),
@@ -117,11 +118,15 @@ function panelMemo() {
           f,
           undefined,
           sState ? { text: sText, state: sState, model: sModel } : undefined,
-          cState ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title } : undefined,
+          cState
+            ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title }
+            : undefined,
         ),
     ),
     // Info cursor stops: links and change rows (removed sections are not stops)
-    linkIdx: cached((items: InfoItem[]) => items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : []))),
+    linkIdx: cached((items: InfoItem[]) =>
+      items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : [])),
+    ),
     rows: cached(visibleRows),
     outline: cached(outlineRows),
     rank: cached((tree: FileNode, q: string) => {
@@ -160,15 +165,21 @@ function viewMemo() {
 /** Memo builders for the popups: switcher, Open, welcome recents, theme picker and the switcher's peek. */
 function pickerMemo() {
   return {
-    switch: cached((ix: VaultIndex, tree: FileNode, q: string, _ver: number, recent: readonly string[], open: string | null) =>
-      switchRows(q.trim() ? searchVault(ix, tree, q, open) : recentSection(tree, recent, open)),
+    switch: cached(
+      (ix: VaultIndex, tree: FileNode, q: string, _ver: number, recent: readonly string[], open: string | null) =>
+        switchRows(q.trim() ? searchVault(ix, tree, q, open) : recentSection(tree, recent, open)),
     ),
     // relative paths resolve against the workspace folder; the current project is not listed
-    open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) => openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current })),
+    open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) =>
+      openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current }),
+    ),
     // the welcome page's recent projects: the `o` picker's rows with an empty query, header first; read again
     // after every workspace switch (`watchGen`) and a dropped missing one (`gen`)
     recents: cached((root: string, _gen: number, _watchGen: number) =>
-      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS),
+      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(
+        0,
+        1 + WELCOME_RECENTS,
+      ),
     ),
     /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
     themeRows: cached((q: string) => filterFamilies(q)),
@@ -180,10 +191,24 @@ function pickerMemo() {
       if (f.error) return null
       const fm = parseFrontMatter(f.src)
       const st = wordStats(fm.body) // stats() would lex the whole note
-      return { lines: normalize(f.src).split("\n"), fm: fm.offset, hash: textHash(noteText(f.src)), words: st.words, minutes: st.minutes }
+      return {
+        lines: normalize(f.src).split("\n"),
+        fm: fm.offset,
+        hash: textHash(noteText(f.src)),
+        words: st.words,
+        minutes: st.minutes,
+      }
     }),
-    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode, headings: HeadingStyle) =>
-      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
+    peek: cached(
+      (
+        lines: readonly string[],
+        from: number,
+        to: number,
+        w: number,
+        t: Theme,
+        tree: FileNode,
+        headings: HeadingStyle,
+      ) => render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
     ),
   }
 }
@@ -197,8 +222,12 @@ function askRowsMemo() {
       const r = resolveAI(ai, process.env)
       return "error" in r ? { error: r.error } : { host: r.host }
     }),
-    cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) => askCandidates(ix, tree, queries)),
-    cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) => rerankCost(question, cands, ix)),
+    cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) =>
+      askCandidates(ix, tree, queries),
+    ),
+    cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) =>
+      rerankCost(question, cands, ix),
+    ),
     ask: cached(
       (
         question: string,

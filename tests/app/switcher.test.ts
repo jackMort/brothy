@@ -6,13 +6,13 @@ import { textHash } from "../../src/ai/cache"
 import { noteText } from "../../src/ai/client"
 import { PROMPT_V } from "../../src/ai/config"
 import type { AppCtx } from "../../src/app/ctx"
-import { makeMemo, type Derived } from "../../src/app/derive"
-import { hitRows, makeSwitcher } from "../../src/app/switcher"
+import { type Derived, makeMemo } from "../../src/app/derive"
 import type { Job } from "../../src/app/store"
+import { hitRows, makeSwitcher } from "../../src/app/switcher"
+import type { Span } from "../../src/lib/spans"
 import { render } from "../../src/markdown/render"
 import { renderSource } from "../../src/markdown/source"
 import { emptyIndex, indexNote, type SwitchRow, type TextHit } from "../../src/notes/vault"
-import type { Span } from "../../src/lib/spans"
 import { brothy } from "../helpers/theme"
 import { useTmp } from "../helpers/tmp"
 
@@ -29,7 +29,12 @@ interface Calls {
 }
 
 /** A switcher over a stub context: `derived` is what `derive()` returns; `docs` is the vault index. */
-function switcherOver(o: { W?: number; derived?: object; docs?: [string, ReturnType<typeof indexNote>][]; q?: string }) {
+function switcherOver(o: {
+  W?: number
+  derived?: object
+  docs?: [string, ReturnType<typeof indexNote>][]
+  q?: string
+}) {
   const calls: Calls = { set: [], flash: [], setTop: [], showMatch: [], opened: [] }
   const ix = emptyIndex()
   for (const [p, doc] of o.docs ?? []) ix.docs.set(p, doc)
@@ -74,7 +79,8 @@ describe("peekPane", () => {
     const d = { s, swRows: [row(path)], swHl: 0, t: brothy, L: { PH: 20 } } as unknown as Derived
     return { path, doc, d }
   }
-  const noteRow = (path: string): SwitchRow => ({ kind: "note", path, name: "beta", folder: "notes", hits: [] }) as unknown as SwitchRow
+  const noteRow = (path: string): SwitchRow =>
+    ({ kind: "note", path, name: "beta", folder: "notes", hits: [] }) as unknown as SwitchRow
 
   test("nothing without the switcher open, or below PEEK_MIN_W", () => {
     const { path, doc, d } = peekSetup(noteRow)
@@ -94,11 +100,23 @@ describe("peekPane", () => {
   })
 
   test("a fresh TL;DR shows with its short model; an outdated one is left out", () => {
-    const fresh = peekSetup(noteRow, (hash) => ({ hash, v: PROMPT_V, summary: "Beta is about peeking.", model: "llama3.2", at: 1 }))
+    const fresh = peekSetup(noteRow, (hash) => ({
+      hash,
+      v: PROMPT_V,
+      summary: "Beta is about peeking.",
+      model: "llama3.2",
+      at: 1,
+    }))
     const out = text(switcherOver({ docs: [[fresh.path, fresh.doc]] }).sw.peekPane(fresh.d))
     expect(out).toContain("TL;DR · llama3.2")
     expect(out).toContain("Beta is about peeking.")
-    const stale = peekSetup(noteRow, () => ({ hash: "not-the-hash", v: PROMPT_V, summary: "Stale words.", model: "llama3.2", at: 1 }))
+    const stale = peekSetup(noteRow, () => ({
+      hash: "not-the-hash",
+      v: PROMPT_V,
+      summary: "Stale words.",
+      model: "llama3.2",
+      at: 1,
+    }))
     expect(text(switcherOver({ docs: [[stale.path, stale.doc]] }).sw.peekPane(stale.d))).not.toContain("Stale words.")
   })
 
@@ -112,7 +130,16 @@ describe("peekPane", () => {
   })
 
   test("a heading hit's body starts at its heading", () => {
-    const partRow = (p: string) => ({ kind: "heading", path: p, name: "beta", folder: "notes", heading: 1, text: "Part", hits: [] }) as unknown as SwitchRow
+    const partRow = (p: string) =>
+      ({
+        kind: "heading",
+        path: p,
+        name: "beta",
+        folder: "notes",
+        heading: 1,
+        text: "Part",
+        hits: [],
+      }) as unknown as SwitchRow
     const { path, doc, d } = peekSetup(partRow)
     const out = text(switcherOver({ docs: [[path, doc]] }).sw.peekPane(d))
     expect(out).toContain("more words")
@@ -125,7 +152,16 @@ describe("jumpToText (⏎ on a text hit)", () => {
   const SRC = "# One\n\napple\n\napple\n\n# Two\n\napple\n"
   const PATH = "/notes/a.md"
   const doc = indexNote(SRC, 0, SRC.length)
-  const hit = (heading: number | null, line: number): TextHit => ({ kind: "text", path: PATH, name: "a", folder: "", heading, line, context: "", hits: [] })
+  const hit = (heading: number | null, line: number): TextHit => ({
+    kind: "text",
+    path: PATH,
+    name: "a",
+    folder: "",
+    heading,
+    line,
+    context: "",
+    hits: [],
+  })
   /** Activate text hit `row` with `matches` as find's result in a view whose headings start at rows 0 and 10. */
   function activate(row: TextHit, matches: number[], source = false) {
     const derived = {
@@ -178,7 +214,16 @@ describe("jumpToText (⏎ on a text hit)", () => {
 
 describe("hitRows", () => {
   const SRC = "lead\n\n# One\n\napple\n\n# Two\n\napple\n"
-  const hit = (heading: number | null, line: number): TextHit => ({ kind: "text", path: "/a.md", name: "a", folder: "", heading, line, context: "", hits: [] })
+  const hit = (heading: number | null, line: number): TextHit => ({
+    kind: "text",
+    path: "/a.md",
+    name: "a",
+    folder: "",
+    heading,
+    line,
+    context: "",
+    hits: [],
+  })
 
   test("Preview: the hit's section, from its heading to the next one or the end", () => {
     const view = render(SRC, 80, brothy)

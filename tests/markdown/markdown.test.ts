@@ -1,26 +1,52 @@
 import { describe, expect, test } from "bun:test"
-import { rankNotes, scanTree, visibleRows, folderCounts } from "../../src/notes/files"
+import { join } from "node:path"
+import { width, wrap } from "../../src/lib/text"
 import { parseFrontMatter, parseProperties } from "../../src/markdown/frontmatter"
 import { HEADING_STYLES, type HeadingStyle } from "../../src/markdown/heading-style"
 import { render } from "../../src/markdown/render"
 import { renderSource } from "../../src/markdown/source"
 import { stats, stripCode, wordStats } from "../../src/markdown/stats"
-import { width, wrap } from "../../src/lib/text"
+import { folderCounts, rankNotes, scanTree, visibleRows } from "../../src/notes/files"
 import { contrast, themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
-import { join } from "node:path"
 
 const t = brothy
 const text = (r: ReturnType<typeof render>) => r.lines.map((l) => l.spans.map((s) => s.text).join(""))
 
 describe("heading styles", () => {
   const src = "# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six\n"
-  const rowsOf = (style: HeadingStyle, s = src, w = 40) => text(render(s, w, t, { headings: style })).map((l) => l.trimEnd())
+  const rowsOf = (style: HeadingStyle, s = src, w = 40) =>
+    text(render(s, w, t, { headings: style })).map((l) => l.trimEnd())
   const expected: Record<HeadingStyle, string[]> = {
-    classic: ["One", "━━━" + "─".repeat(37), "", "## Two", "", "### Three", "", "#### Four", "", "##### Five", "", "###### Six"],
+    classic: [
+      "One",
+      "━━━" + "─".repeat(37),
+      "",
+      "## Two",
+      "",
+      "### Three",
+      "",
+      "#### Four",
+      "",
+      "##### Five",
+      "",
+      "###### Six",
+    ],
     bars: ["█ One", "", "▌ Two", "", "┃ Three", "", "│ Four", "", "┆ Five", "", "┊ Six"],
     ladder: ["██ One", "", "▓▓▓ Two", "", "▒▒▒▒ Three", "", "░░░░░ Four", "", "░░░░░░ Five", "", "░░░░░░░ Six"],
-    rules: ["━━ One " + "━".repeat(33), "", "── Two " + "─".repeat(33), "", "╌╌ Three", "", "Four", "", "Five", "", "Six"],
+    rules: [
+      "━━ One " + "━".repeat(33),
+      "",
+      "── Two " + "─".repeat(33),
+      "",
+      "╌╌ Three",
+      "",
+      "Four",
+      "",
+      "Five",
+      "",
+      "Six",
+    ],
   }
   for (const style of HEADING_STYLES) {
     describe(style, () => {
@@ -43,7 +69,11 @@ describe("heading styles", () => {
         }
       })
       test("headings in a blockquote keep the │ prefix", () => {
-        const rows = rowsOf(style, "> ## Quoted heading that is long enough to wrap onto more rows than one\n> ### Deep\n", 30).filter((r) => r.trim())
+        const rows = rowsOf(
+          style,
+          "> ## Quoted heading that is long enough to wrap onto more rows than one\n> ### Deep\n",
+          30,
+        ).filter((r) => r.trim())
         expect(rows.length).toBeGreaterThan(2)
         for (const r of rows) expect(r.startsWith("▎")).toBe(true)
         for (const r of rows) expect(width(r)).toBeLessThanOrEqual(30)
@@ -71,7 +101,8 @@ describe("heading styles", () => {
     expect(q[0]!.fg).toBe(t.border)
     expect(q.find((s) => s.text.includes("Two"))!.fg).toBe(t.secondary)
   })
-  test("the default is classic", () => expect(text(render(src, 40, t))).toEqual(text(render(src, 40, t, { headings: "classic" }))))
+  test("the default is classic", () =>
+    expect(text(render(src, 40, t))).toEqual(text(render(src, 40, t, { headings: "classic" }))))
 })
 
 describe("wrap", () => {
@@ -115,7 +146,8 @@ describe("render", () => {
   })
   test("nothing overflows on narrow widths", () => {
     const src = require("node:fs").readFileSync(join(import.meta.dir, "../../examples/README.md"), "utf8")
-    for (const w of [20, 37, 80]) for (const l of text(render(parseFrontMatter(src).body, w, t))) expect(width(l)).toBeLessThanOrEqual(w)
+    for (const w of [20, 37, 80])
+      for (const l of text(render(parseFrontMatter(src).body, w, t))) expect(width(l)).toBeLessThanOrEqual(w)
   })
 })
 
@@ -164,7 +196,8 @@ describe("parseProperties", () => {
     ])
   })
   test("flow, comma and block lists; commas in other scalars stay", () => {
-    const src = "---\ntags: [a, \"b c\", ]\naliases: x, y\ncats:\n  - one\n  - 'two'\nafter: z\ntitle: Hello, world\n---\n"
+    const src =
+      "---\ntags: [a, \"b c\", ]\naliases: x, y\ncats:\n  - one\n  - 'two'\nafter: z\ntitle: Hello, world\n---\n"
     expect(parseProperties(src)).toEqual([
       ["tags", ["a", "b c"]],
       ["aliases", ["x", "y"]],
@@ -211,7 +244,10 @@ describe("document text stays readable in every theme", () => {
         for (const l of draw(doc, 80, th).lines)
           for (const sp of l.spans) {
             if (BOX.test(sp.text)) continue
-            expect(contrast(sp.fg ?? th.text, sp.bg ?? th.background), `${th.name} ${label} "${sp.text}"`).toBeGreaterThanOrEqual(3)
+            expect(
+              contrast(sp.fg ?? th.text, sp.bg ?? th.background),
+              `${th.name} ${label} "${sp.text}"`,
+            ).toBeGreaterThanOrEqual(3)
           }
     })
   }

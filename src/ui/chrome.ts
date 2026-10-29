@@ -7,7 +7,8 @@ import { contrast, mix, type Theme } from "../theme/theme"
 export const fade = (t: Theme, c: string, k: number) => mix(c, t.background, k)
 
 /** Zen chrome, the ghost line's hints and toasts: every span's colour (text when unset) faded `k` toward the background (0 = full colour). */
-export const fadeSpans = (t: Theme, spans: Span[], k: number): Span[] => spans.map((sp) => ({ ...sp, fg: fade(t, sp.fg ?? t.text, k) }))
+export const fadeSpans = (t: Theme, spans: Span[], k: number): Span[] =>
+  spans.map((sp) => ({ ...sp, fg: fade(t, sp.fg ?? t.text, k) }))
 
 /** Help groups in their one-column order. */
 export const HELP_GROUP_TITLES = ["Global", "Document", "Zen", "Panel", "AI"] as const
@@ -37,12 +38,20 @@ export const keycap = (t: Theme, key: string): Span[] => [{ text: ` ${key} `, fg
 
 /** Keycaps with their words in textMuted, the footer's 3-cell gaps between them. */
 export const keycaps = (t: Theme, items: readonly (readonly [string, string])[]): Span[] =>
-  items.flatMap(([k, word], i) => [...(i ? [{ text: "   " }] : []), ...keycap(t, k), { text: " " + word, fg: t.textMuted }])
+  items.flatMap(([k, word], i) => [
+    ...(i ? [{ text: "   " }] : []),
+    ...keycap(t, k),
+    { text: " " + word, fg: t.textMuted },
+  ])
 
 /** Ink-in frames: border, the role faded 2/5, 1/5, then the role. */
 export const INK_STEPS = 4
 export const INK_MS = 100
-export const inkAt = (t: Theme, step: number, c: string) => (step <= 0 ? t.border : step === 1 ? fade(t, c, 2 / 5) : step === 2 ? fade(t, c, 1 / 5) : c)
+export const inkAt = (t: Theme, step: number, c: string) => {
+  if (step <= 0) return t.border
+  if (step === 1) return fade(t, c, 2 / 5)
+  return step === 2 ? fade(t, c, 1 / 5) : c
+}
 
 /** Steam is decorative: every row stays at least this far from the background. */
 export const STEAM_FLOOR = 1.5

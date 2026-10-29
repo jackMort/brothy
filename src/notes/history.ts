@@ -18,7 +18,8 @@ export interface History<P> {
   at: number
 }
 
-export const startHistory = <P>(path: string | null): History<P> => (path ? { entries: [{ path, pos: null, peek: false }], at: 0 } : { entries: [], at: -1 })
+export const startHistory = <P>(path: string | null): History<P> =>
+  path ? { entries: [{ path, pos: null, peek: false }], at: 0 } : { entries: [], at: -1 }
 
 /** `entries` with the current one's `pos` set to `pos`. */
 const leave = <P>(h: History<P>, pos: P | null): Entry<P>[] => h.entries.map((e, i) => (i === h.at ? { ...e, pos } : e))

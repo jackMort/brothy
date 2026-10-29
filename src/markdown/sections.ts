@@ -46,14 +46,26 @@ export function noteSections(src: string): NoteSection[] {
     return o
   }
   const lead = headings[0]?.line ?? n
-  const out: NoteSection[] = [{ index: -1, depth: 0, text: "", key: "", ord: ordOf(""), line: 0, end: -1, own: [0, lead], tree: [0, lead] }]
+  const out: NoteSection[] = [
+    { index: -1, depth: 0, text: "", key: "", ord: ordOf(""), line: 0, end: -1, own: [0, lead], tree: [0, lead] },
+  ]
   // headings whose subtree is still open, deepest last: a heading closes every one at its depth or deeper
   const open: NoteSection[] = []
   headings.forEach((h, i) => {
     while (open.length && open.at(-1)!.depth >= h.depth) open.pop()!.tree[1] = h.line
     const next = headings[i + 1]?.line ?? n
     const key = headingKey(h.text)
-    const s: NoteSection = { index: i, depth: h.depth, text: h.text, key, ord: ordOf(key), line: h.line, end: h.end, own: [h.line, next], tree: [h.line, n] }
+    const s: NoteSection = {
+      index: i,
+      depth: h.depth,
+      text: h.text,
+      key,
+      ord: ordOf(key),
+      line: h.line,
+      end: h.end,
+      own: [h.line, next],
+      tree: [h.line, n],
+    }
     out.push(s)
     open.push(s)
   })

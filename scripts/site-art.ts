@@ -6,7 +6,7 @@
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { WORDMARK } from "../src/ui/status"
-import { BIG, STILL_TICK, artWidth, steamRows, welcomeArt } from "../src/ui/welcome"
+import { artWidth, BIG, STILL_TICK, steamRows, welcomeArt } from "../src/ui/welcome"
 
 /** a cell in SVG units: the terminal's 1:2 cell */
 const CW = 10,

@@ -1,16 +1,17 @@
 // The side panel: tab strip, rule, filter row and the Files / Outline / Info list, inline or as a drawer.
 // Not pure: drawn from the app context, and it writes the Outline and Info list tops (and `infoSeen`) back to the store
 // as it draws, so App calls it once per render, before its too-small return. Row spans come from panel.ts.
-import { MouseButton, type MouseEvent } from "@opentui/core"
+
 import { dirname } from "node:path"
+import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
-import type { View } from "../system/config"
-import { folderCounts, folderOf, stem } from "../notes/files"
-import { keepVisible, stripLayout, thumb } from "../ui/nav"
-import { fileRowSpans, infoSpans, outlineRowSpans } from "../ui/panel"
 import type { Span } from "../lib/spans"
 import { fmtNum, spanWidth, truncate, truncateLeft, width, wrap } from "../lib/text"
+import { folderCounts, folderOf, stem } from "../notes/files"
+import type { View } from "../system/config"
 import { contrastOn, mix, surface } from "../theme/theme"
+import { keepVisible, stripLayout, thumb } from "../ui/nav"
+import { fileRowSpans, infoSpans, outlineRowSpans } from "../ui/panel"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
@@ -34,7 +35,11 @@ interface PanelKit {
   /** text columns: col 0 is padding, the last column is kept for the scroll thumb */
   AW: number
   /** One panel row, `PNW` wide: col 0 padding (`lead`), text, then the thumb column. `sel` fills the row as the cursor. */
-  panelRow: (key: string, spans: Span[], o?: { sel?: boolean; lead?: boolean; thumb?: boolean; onDown?: (e: MouseEvent) => void }) => ReactNode
+  panelRow: (
+    key: string,
+    spans: Span[],
+    o?: { sel?: boolean; lead?: boolean; thumb?: boolean; onDown?: (e: MouseEvent) => void },
+  ) => ReactNode
   /** Which visible list rows (0 = first) carry the scroll thumb. */
   thumbRows: (top: number, n: number) => (i: number) => boolean
   /** view `v`'s saved list top, clamped for `n` rows */
@@ -78,7 +83,12 @@ function stripRows({ c, d, PNW, panelRow }: PanelKit): ReactNode[] {
     if (lb.x0 > at) stripSpans.push({ text: " ".repeat(lb.x0 - at) })
     stripSpans.push({ text: lb.digit, fg: t.textMuted })
     const active = lb.view === s.view
-    stripSpans.push({ text: lb.text, fg: active ? (sideFocus ? t.primary : t.text) : t.textMuted, attr: active ? 1 : 0 })
+    const activeFg = sideFocus ? t.primary : t.text
+    stripSpans.push({
+      text: lb.text,
+      fg: active ? activeFg : t.textMuted,
+      attr: active ? 1 : 0,
+    })
   }
   const activeLabel = strip.labels.find((lb) => lb.view === s.view) ?? strip.labels[0]!
   const stripRule: Span[] = [
@@ -102,7 +112,10 @@ function filesList({ c, d, AW, panelRow, thumbRows, topOf }: PanelKit): ReactNod
   const { s, t, rows, LH, note, sideFocus } = d
   const listEls: ReactNode[] = []
   const fTop = topOf("files", rows.length)
-  if (rows.length === 0) listEls.push(panelRow("files-empty", [{ text: s.filter ? "no matching notes" : "no Markdown files here", fg: t.textMuted }]))
+  if (rows.length === 0)
+    listEls.push(
+      panelRow("files-empty", [{ text: s.filter ? "no matching notes" : "no Markdown files here", fg: t.textMuted }]),
+    )
   const counts = folderCounts(s.tree)
   const on = thumbRows(fTop, rows.length)
   rows.slice(fTop, fTop + LH).forEach((r, i) => {
@@ -122,7 +135,9 @@ function filesList({ c, d, AW, panelRow, thumbRows, topOf }: PanelKit): ReactNod
       }),
     )
   })
-  note.forEach((text, i) => listEls.push(panelRow(`files-truncated-${i}`, [{ text: truncate(text, AW), fg: t.warning }])))
+  note.forEach((text, i) =>
+    listEls.push(panelRow(`files-truncated-${i}`, [{ text: truncate(text, AW), fg: t.warning }])),
+  )
   return listEls
 }
 
@@ -132,7 +147,10 @@ function outlineList({ d, AW, panelRow, thumbRows }: PanelKit, { outlineGo }: Pa
   const listEls: ReactNode[] = []
   const n = d.oRows.length
   if (!s.openPath) listEls.push(panelRow("outline-empty", [{ text: "no note open", fg: t.textMuted }]))
-  else if (!n) listEls.push(panelRow("outline-empty", [{ text: s.outlineFilter ? "no matching headings" : "no headings", fg: t.textMuted }]))
+  else if (!n)
+    listEls.push(
+      panelRow("outline-empty", [{ text: s.outlineFilter ? "no matching headings" : "no headings", fg: t.textMuted }]),
+    )
   // unfocused, the list keeps the reading heading in view; focused, the cursor
   const reading = Math.max(
     0,
@@ -156,14 +174,19 @@ function outlineList({ d, AW, panelRow, thumbRows }: PanelKit, { outlineGo }: Pa
 }
 
 /** The Info list (a link or change row is clickable), or the read error; it writes its list top and `infoSeen` back. */
-function infoList({ c, d, AW, panelRow, thumbRows, topOf }: PanelKit, { jumpChange, openLink }: PanelActions): ReactNode[] {
+function infoList(
+  { c, d, AW, panelRow, thumbRows, topOf }: PanelKit,
+  { jumpChange, openLink }: PanelActions,
+): ReactNode[] {
   const { set, focusPanel } = c
   const { s, t, file, infoRows, linkRows, LH, sideFocus } = d
   const { openPath } = s
   const listEls: ReactNode[] = []
   if (!openPath) listEls.push(panelRow("info-empty", [{ text: "no note open", fg: t.textMuted }]))
   else if (file?.error)
-    wrap([{ text: file.error }], AW).forEach((r, i) => listEls.push(panelRow(`info-err-${i}`, [{ text: r.map((x) => x.text).join(""), fg: t.error }])))
+    wrap([{ text: file.error }], AW).forEach((r, i) =>
+      listEls.push(panelRow(`info-err-${i}`, [{ text: r.map((x) => x.text).join(""), fg: t.error }])),
+    )
   else {
     const items = infoRows
     const curItem = linkRows[d.infoCur] ?? -1
@@ -198,7 +221,11 @@ function infoList({ c, d, AW, panelRow, thumbRows, topOf }: PanelKit, { jumpChan
 }
 
 /** Each view's list rows. */
-const LISTS: Record<View, (k: PanelKit, acts: PanelActions) => ReactNode[]> = { files: filesList, outline: outlineList, info: infoList }
+const LISTS: Record<View, (k: PanelKit, acts: PanelActions) => ReactNode[]> = {
+  files: filesList,
+  outline: outlineList,
+  info: infoList,
+}
 
 /** The filter row while shown; its right side is the Outline count, the Files count or a duplicate's folder. */
 function filterRows({ d, AW, panelRow }: PanelKit): ReactNode[] {
@@ -212,14 +239,28 @@ function filterRows({ d, AW, panelRow }: PanelKit): ReactNode[] {
       { text: truncate(value, Math.max(1, AW - 4 - width(right))), fg: t.text },
     ]
     if (typing) left.push({ text: "▏", fg: t.primary })
-    return panelRow("filter", [...left, { text: " ".repeat(Math.max(1, AW - spanWidth(left) - width(right))) }, { text: right, fg: t.textMuted }])
+    return panelRow("filter", [
+      ...left,
+      { text: " ".repeat(Math.max(1, AW - spanWidth(left) - width(right))) },
+      { text: right, fg: t.textMuted },
+    ])
   }
   const cur = rows[cursor]
   // two results with the same name and folder: show the cursor row's full folder instead of the count
-  const dup = filtered && cur && rows.some((r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node))
-  const filesRight = dup ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
+  const dup =
+    filtered &&
+    cur &&
+    rows.some(
+      (r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node),
+    )
+  const count = filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
+  const filesRight = dup ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8)) : count
   return [
-    filterRowEl(s.view === "outline" ? s.outlineFilter : filter, s.filterTyping && !!sideFocus, s.view === "outline" ? String(d.oRows.length) : filesRight),
+    filterRowEl(
+      s.view === "outline" ? s.outlineFilter : filter,
+      s.filterTyping && !!sideFocus,
+      s.view === "outline" ? String(d.oRows.length) : filesRight,
+    ),
   ]
 }
 
@@ -235,19 +276,37 @@ export function panelBox(c: AppCtx, d: Derived, acts: PanelActions): ReactNode {
   const listEls = LISTS[s.view](k, acts)
 
   const scrollList = (e: MouseEvent) => {
-    const n = s.view === "files" ? rows.length : s.view === "outline" ? d.oRows.length : infoRows.length
+    const n = { files: rows.length, outline: d.oRows.length, info: infoRows.length }[s.view]
     const dlt = e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS
     set({ listTop: { ...s.listTop, [s.view]: Math.max(0, Math.min(n - LH, k.topOf(s.view, n) + dlt)) } })
   }
   const panelRows = [...strip, ...filterRows(k), ...listEls]
   // distinct keys: the reconciler does not clear style props between the two boxes
   return L.inline ? (
-    <box key="side-inline" style={{ width: SW, height: bodyH, flexShrink: 0, flexDirection: "column", backgroundColor: paint.side }} onMouseScroll={scrollList}>
+    <box
+      key="side-inline"
+      style={{ width: SW, height: bodyH, flexShrink: 0, flexDirection: "column", backgroundColor: paint.side }}
+      onMouseScroll={scrollList}
+    >
       {panelRows}
     </box>
   ) : (
-    <box key="side-drawer" style={{ position: "absolute", left: 0, top: 1 + L.gap, zIndex: 5, width: k.PNW + 1, height: bodyH, flexDirection: "row" }}>
-      <box style={{ width: k.PNW, height: bodyH, flexDirection: "column", backgroundColor: t.backgroundElement }} onMouseScroll={scrollList}>
+    <box
+      key="side-drawer"
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 1 + L.gap,
+        zIndex: 5,
+        width: k.PNW + 1,
+        height: bodyH,
+        flexDirection: "row",
+      }}
+    >
+      <box
+        style={{ width: k.PNW, height: bodyH, flexDirection: "column", backgroundColor: t.backgroundElement }}
+        onMouseScroll={scrollList}
+      >
         {panelRows}
       </box>
       <box style={{ width: 1, height: bodyH, flexDirection: "column", backgroundColor: t.background }}>

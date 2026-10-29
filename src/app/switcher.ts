@@ -2,41 +2,41 @@
 // index it searches, opening what a row points at, and the peek pane's data. Not pure: `makeSwitcher` closes over the
 // app context.
 import { relative } from "node:path"
-import { shortModel, type Failure } from "../ai/client"
 import {
   ASK_MEMO,
   ASK_MIN,
-  RERANK_MEMO,
+  type AskState,
   askLocate,
   askRequest,
   parseQueries,
   parseRerank,
   putNewest,
   questionOf,
+  RERANK_MEMO,
   rerankRequest,
-  type AskState,
 } from "../ai/ask"
-import { folderCounts } from "../notes/files"
-import { keepHitVisible } from "../ui/nav"
-import { peekLines, peekWindow, switchSplit } from "../notes/peek"
+import { isFresh, type Summary, textHash } from "../ai/cache"
+import { type Failure, shortModel } from "../ai/client"
 import type { Rendered } from "../markdown/render"
-import { PEEK_MIN_W } from "../ui/geometry"
-import { errText } from "../ui/status"
-import { isFresh, textHash, type Summary } from "../ai/cache"
+import { folderCounts } from "../notes/files"
+import { peekLines, peekWindow, switchSplit } from "../notes/peek"
 import {
+  type AnswerRow,
   emptyIndex,
   firstHit,
   foldSame,
   fsIO,
   hitOrdinal,
   indexNote,
-  refreshIndex,
-  type AnswerRow,
   type NoteDoc,
+  refreshIndex,
   type SwitchRow,
   type TextHit,
 } from "../notes/vault"
-import { AI_OFF, makeJobs, type Jobs } from "./ai-jobs"
+import { PEEK_MIN_W } from "../ui/geometry"
+import { keepHitVisible } from "../ui/nav"
+import { errText } from "../ui/status"
+import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
@@ -180,7 +180,13 @@ function makeVaultIndex(c: AppCtx) {
     const live = () => vault.current === v
     const tree = ui.current.linkTree
     set({ indexing: [0, folderCounts(tree).get(tree.path) ?? 0] })
-    refreshIndex(v.ix, tree, fsIO, (done, total) => live() && set({ indexing: [done, total], ixVer: ui.current.ixVer + 1 }), live)
+    refreshIndex(
+      v.ix,
+      tree,
+      fsIO,
+      (done, total) => live() && set({ indexing: [done, total], ixVer: ui.current.ixVer + 1 }),
+      live,
+    )
       .catch((e) => live() && flash(`index failed · ${errText(e)}`, "error")) // a throwing note scan or progress callback; unreadable files never get here
       .finally(() => {
         v.running = false
@@ -266,7 +272,11 @@ function makeActivate(
     if (!at) return flash("heading gone")
     const heading = at.heading < 0 ? null : at.heading
     if (at.line !== null)
-      return jumpToText({ kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] }, row.query, doc)
+      return jumpToText(
+        { kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] },
+        row.query,
+        doc,
+      )
     if (heading === null) return
     const h = derive().view.headings[heading]
     return h ? setTop(h.line) : flash("heading gone")
@@ -381,7 +391,9 @@ export function hitRows(view: Rendered, source: boolean, row: TextHit) {
 
 /** A cached TL;DR for the peek, only while fresh for the note as read. */
 function freshTldr(saved: Summary | undefined, note: { hash: string } | null) {
-  return saved && note && isFresh(saved, note.hash) ? { text: saved.summary, model: shortModel(saved.model) } : undefined
+  return saved && note && isFresh(saved, note.hash)
+    ? { text: saved.summary, model: shortModel(saved.model) }
+    : undefined
 }
 
 /** What `makeSwitcher` gives App and the other factories. */

@@ -46,7 +46,9 @@ function steamDots(tick: number, W: number, H: number): Uint8Array {
     const life = (tick * 0.55 + (i * per) / STEAM_PARTICLES) % per
     const py = Math.round(H - 1 - life)
     if (py < 0 || py >= H) continue
-    const px = Math.round(W / 2 + Math.sin(tick * 0.11 + i * 1.9 + life * 0.2) * (1.5 + life * 0.3) + (((i * 7) % 11) - 5) * 1.1)
+    const px = Math.round(
+      W / 2 + Math.sin(tick * 0.11 + i * 1.9 + life * 0.2) * (1.5 + life * 0.3) + (((i * 7) % 11) - 5) * 1.1,
+    )
     if (px >= 0 && px < W) dots[py * W + px] = 1
     if (life < H * 0.5 && px + 1 >= 0 && px + 1 < W) dots[py * W + px + 1] = 1
   }
@@ -62,7 +64,8 @@ export function steamRows(tick: number, w: number, h: number): string[] {
     let s = ""
     for (let cx = 0; cx < w; cx++) {
       let b = 0
-      for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 2; dx++) if (dots[(cy * 4 + dy) * W + cx * 2 + dx]) b |= BRAILLE[dy]![dx]!
+      for (let dy = 0; dy < 4; dy++)
+        for (let dx = 0; dx < 2; dx++) if (dots[(cy * 4 + dy) * W + cx * 2 + dx]) b |= BRAILLE[dy]![dx]!
       s += b ? String.fromCharCode(0x2800 + b) : " "
     }
     rows.push(s)
@@ -88,10 +91,16 @@ type Put = (x: number, y: number, c: ArtCell) => void
 function drawBowl(put: Put, size: WelcomeSize, rim: number, ox: number, cx: number) {
   const w = size.bowlW
   // rim: one cell wider than the body each side, rounded at the ends; the broth fills the top half of its inner cells
-  for (let i = 0; i < w + 2; i++) put(ox + i, rim, { ch: i === 0 ? "▗" : i === w + 1 ? "▖" : "▄", role: "edge", broth: i >= 2 && i < w })
+  for (let i = 0; i < w + 2; i++) {
+    let ch = "▄"
+    if (i === 0) ch = "▗"
+    else if (i === w + 1) ch = "▖"
+    put(ox + i, rim, { ch, role: "edge", broth: i >= 2 && i < w })
+  }
   // body: a quarter ellipse at 2×2 pixels per cell, so the last row is still about half the rim
   const PH = size.bowlH * 2
-  const px = (r: number, c: number) => (Math.abs(c + 0.5 - w) <= w * Math.sqrt(1 - ((r + 0.5) / (PH * 1.12)) ** 2) ? 1 : 0)
+  const px = (r: number, c: number) =>
+    Math.abs(c + 0.5 - w) <= w * Math.sqrt(1 - ((r + 0.5) / (PH * 1.12)) ** 2) ? 1 : 0
   for (let cy = 0; cy < size.bowlH; cy++)
     for (let c = 0; c < w; c++) {
       const [r, p] = [cy * 2, c * 2]
@@ -100,7 +109,9 @@ function drawBowl(put: Put, size: WelcomeSize, rim: number, ox: number, cx: numb
     }
   if (size.foot) {
     const fw = Math.round(w * 0.4)
-    ;[...("▝" + "▀".repeat(fw - 2) + "▘")].forEach((ch, i) => put(cx - (fw >> 1) + i, rim + 1 + size.bowlH, { ch, role: "body" }))
+    ;[...("▝" + "▀".repeat(fw - 2) + "▘")].forEach((ch, i) =>
+      put(cx - (fw >> 1) + i, rim + 1 + size.bowlH, { ch, role: "body" }),
+    )
   }
   // chopsticks: two steep diagonals resting in the broth, right of the steam
   if (size.sticks) {
@@ -121,15 +132,23 @@ export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean
   const gap = size.sticks ? 1 : 0
   const rim = WORDMARK.length + gap + steamH
   const height = bowl ? rim + 1 + size.bowlH + (size.foot ? 1 : 0) : WORDMARK.length
-  const g: ArtCell[][] = Array.from({ length: height }, () => Array.from({ length: AW }, () => ({ ch: " ", role: "none" as const })))
+  const g: ArtCell[][] = Array.from({ length: height }, () =>
+    Array.from({ length: AW }, () => ({ ch: " ", role: "none" as const })),
+  )
   const put: Put = (x, y, c) => {
     if (y >= 0 && y < height && x >= 0 && x < AW) g[y]![x] = c
   }
-  WORDMARK.forEach((l, y) => [...l].forEach((ch, i) => ch !== " " && put(cx - (WORDMARK_W >> 1) + i, y, { ch, role: "mark" })))
+  WORDMARK.forEach((l, y) =>
+    [...l].forEach((ch, i) => ch !== " " && put(cx - (WORDMARK_W >> 1) + i, y, { ch, role: "mark" })),
+  )
   if (!bowl) return g
   if (steam)
     steamRows(tick, size.steamW, size.steamH).forEach((r, cy) =>
-      [...r].forEach((ch, i) => ch !== " " && put(cx - (size.steamW >> 1) + i, rim - size.steamH + cy, { ch, role: "steam", row: cy + 5 - size.steamH })),
+      [...r].forEach(
+        (ch, i) =>
+          ch !== " " &&
+          put(cx - (size.steamW >> 1) + i, rim - size.steamH + cy, { ch, role: "steam", row: cy + 5 - size.steamH }),
+      ),
     )
   drawBowl(put, size, rim, ox, cx)
   return g
@@ -150,8 +169,10 @@ export interface WelcomeFit {
   height: number
 }
 
-const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) =>
-  !f.mark ? 0 : !f.bowl ? WORDMARK.length : welcomeArt(f.size, 0, { steam: f.steam }).length
+const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) => {
+  if (!f.mark) return 0
+  return f.bowl ? welcomeArt(f.size, 0, { steam: f.steam }).length : WORDMARK.length
+}
 
 /**
  * The page's height: art, a blank, the message, a blank, the keycaps; then a blank, the `Recent` header and its
@@ -160,7 +181,8 @@ const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) =>
 function pageHeight(f: Omit<WelcomeFit, "top" | "height" | "hint">, hint: boolean) {
   const art = artHeight(f)
   const list = f.recents ? 2 + f.recents : 0
-  return art + (art ? 1 : 0) + 3 + list + (hint ? ((f.size === BIG && f.mark && f.bowl) || !f.recents ? 2 : 1) : 0)
+  const hintRows = (f.size === BIG && f.mark && f.bowl) || !f.recents ? 2 : 1
+  return art + (art ? 1 : 0) + 3 + list + (hint ? hintRows : 0)
 }
 
 /** What fits a `CW`×`CH` area. In order the page gives up: the big bowl, the steam, recent rows, the bowl, the wordmark, the hint. */

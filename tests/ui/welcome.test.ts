@@ -1,11 +1,16 @@
 import { expect, test } from "bun:test"
-import { BIG, SMALL, STILL_TICK, steamRows, welcomeArt, welcomeFit, type ArtCell } from "../../src/ui/welcome"
 import { WORDMARK } from "../../src/ui/status"
+import { type ArtCell, BIG, SMALL, STILL_TICK, steamRows, welcomeArt, welcomeFit } from "../../src/ui/welcome"
 
 const text = (rows: ArtCell[][]) => rows.map((r) => r.map((c) => c.ch).join(""))
 
 test("steamRows: v3's particle field, braille or blank, the same for the same tick and moving between ticks", () => {
-  expect(steamRows(12, 22, 4)).toEqual(["        ⠠ ⠂   ⢈       ", "         ⠐⣈⡀   ⠄      ", "         ⠭   ⢐⡂       ", "        ⢉⡐⠂  ⠠⠄       "])
+  expect(steamRows(12, 22, 4)).toEqual([
+    "        ⠠ ⠂   ⢈       ",
+    "         ⠐⣈⡀   ⠄      ",
+    "         ⠭   ⢐⡂       ",
+    "        ⢉⡐⠂  ⠠⠄       ",
+  ])
   expect(steamRows(12, 16, 2)).toEqual(["     ⡠⢁⡈  ⠰     ", "      ⢒⡒  ⠈⠥    "])
   const a = steamRows(7, 22, 4)
   for (const r of a) {
@@ -64,8 +69,26 @@ test("welcomeArt: without steam the field is blank; without the bowl only the wo
 })
 
 test("welcomeFit: v3's rows at 120×34 (CH 30) and 80×24 (CH 21) with 3 recent projects", () => {
-  expect(welcomeFit(80, 30, 3)).toEqual({ size: BIG, steam: true, bowl: true, mark: true, recents: 3, hint: true, top: 2, height: 26 })
-  expect(welcomeFit(74, 21, 3)).toEqual({ size: SMALL, steam: true, bowl: true, mark: true, recents: 3, hint: true, top: 1, height: 19 })
+  expect(welcomeFit(80, 30, 3)).toEqual({
+    size: BIG,
+    steam: true,
+    bowl: true,
+    mark: true,
+    recents: 3,
+    hint: true,
+    top: 2,
+    height: 26,
+  })
+  expect(welcomeFit(74, 21, 3)).toEqual({
+    size: SMALL,
+    steam: true,
+    bowl: true,
+    mark: true,
+    recents: 3,
+    hint: true,
+    top: 1,
+    height: 19,
+  })
 })
 
 test("welcomeFit: shrinks the bowl, then drops steam, recent rows, the bowl and the wordmark; message, keys and hint stay", () => {

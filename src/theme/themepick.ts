@@ -3,13 +3,14 @@
 // the board (a `dark` / `light` column per family, each cell a specimen in that theme's own roles) and the pane's
 // sample note rendered in the candidate theme on its own background. App holds the state and
 // applies the theme; nothing here saves config or re-themes the app.
-import { fuzzyHits } from "../notes/files"
-import { PEEK_MIN_W, SPLIT_ROWS_MARGIN, innerWidth, paneWidth, popupWidth, splitWidth } from "../ui/geometry"
-import { render, type Rendered } from "../markdown/render"
-import type { HeadingStyle } from "../markdown/heading-style"
+
 import { A, type Span } from "../lib/spans"
 import { clamp, spanWidth, width } from "../lib/text"
-import { contrast, themes, type Theme } from "./theme"
+import type { HeadingStyle } from "../markdown/heading-style"
+import { type Rendered, render } from "../markdown/render"
+import { fuzzyHits } from "../notes/files"
+import { innerWidth, PEEK_MIN_W, paneWidth, popupWidth, SPLIT_ROWS_MARGIN, splitWidth } from "../ui/geometry"
+import { contrast, type Theme, themes } from "./theme"
 
 export type ThemeMode = Theme["mode"]
 
@@ -36,7 +37,10 @@ export function themeFamilies(list: readonly Theme[] = themes): Family[] {
 export const FAMILIES = themeFamilies()
 
 /** The one mode a single-mode family has, undefined for a pair. */
-export const onlyMode = (f: Family): ThemeMode | undefined => (f.dark && f.light ? undefined : f.dark ? "dark" : "light")
+export const onlyMode = (f: Family): ThemeMode | undefined => {
+  if (f.dark && f.light) return undefined
+  return f.dark ? "dark" : "light"
+}
 
 /** The family's theme in `mode`, or its only theme when it lacks that mode. */
 export const familyTheme = (f: Family, mode: ThemeMode): Theme => (f[mode] ?? f.dark ?? f.light)!
@@ -92,7 +96,8 @@ export const pickIndex = (p: ThemePick, rows: readonly FamilyHit[]) => rows.find
 const pickFamily = (p: ThemePick, fams: readonly Family[]) => fams.find((x) => x.name === p.family) ?? fams[0]!
 
 /** The candidate: the highlighted family in the picker's mode, or in its only mode. */
-export const pickTheme = (p: ThemePick, fams: readonly Family[] = FAMILIES): Theme => familyTheme(pickFamily(p, fams), p.mode)
+export const pickTheme = (p: ThemePick, fams: readonly Family[] = FAMILIES): Theme =>
+  familyTheme(pickFamily(p, fams), p.mode)
 
 /** The mode the switch shows as active: the candidate's. */
 export const pickShown = (p: ThemePick, fams: readonly Family[] = FAMILIES): ThemeMode => pickTheme(p, fams).mode
@@ -129,13 +134,23 @@ const THEME_NARROW_W = 48
  * pane (padded 2 left and 4 right around `peekW`), with `max(ph, H − 10)` rows so the sample fits.
  * Below that it is THEME_NARROW_W wide with `ph` rows and no pane.
  */
-export function themeSplit(W: number, H: number, ph: number): { split: boolean; width: number; listW: number; peekW: number; rows: number } {
+export function themeSplit(
+  W: number,
+  H: number,
+  ph: number,
+): { split: boolean; width: number; listW: number; peekW: number; rows: number } {
   if (W < PEEK_MIN_W) {
     const popupW = popupWidth(W, THEME_NARROW_W)
     return { split: false, width: popupW, listW: innerWidth(popupW), peekW: 0, rows: ph }
   }
   const popupW = splitWidth(W)
-  return { split: true, width: popupW, listW: THEME_LIST_W, peekW: paneWidth(innerWidth(popupW), THEME_LIST_W), rows: Math.max(ph, H - SPLIT_ROWS_MARGIN) }
+  return {
+    split: true,
+    width: popupW,
+    listW: THEME_LIST_W,
+    peekW: paneWidth(innerWidth(popupW), THEME_LIST_W),
+    rows: Math.max(ph, H - SPLIT_ROWS_MARGIN),
+  }
 }
 
 /** The board's modes, left to right (the switch's order too). */
@@ -187,7 +202,11 @@ export type SlotFrame = "cursor" | "current" | undefined
  */
 export function boardFrames(f: Family, mode: ThemeMode, orig: string, sel: boolean): Record<ThemeMode, SlotFrame> {
   const shown = familyTheme(f, mode)
-  const frame = (x: Theme | undefined): SlotFrame => (!x ? undefined : sel && x === shown ? "cursor" : x.name === orig ? "current" : undefined)
+  const frame = (x: Theme | undefined): SlotFrame => {
+    if (!x) return undefined
+    if (sel && x === shown) return "cursor"
+    return x.name === orig ? "current" : undefined
+  }
   return { dark: frame(f.dark), light: frame(f.light) }
 }
 
@@ -203,18 +222,19 @@ const struckWord = (word: string, w: number, fg: string): Span[] => {
  */
 export function boardSlot(t: Theme, x: Theme | undefined, mode: ThemeMode, frame: SlotFrame): Span[] {
   if (!x) return [{ text: " " }, ...struckWord(mode, CELL_W, t.textMuted), { text: " " }]
-  const [l, r]: [Span, Span] =
-    frame === "cursor"
-      ? [
-          { text: "▐", fg: t.primary },
-          { text: "▌", fg: t.primary },
-        ]
-      : frame === "current"
-        ? [
-            { text: "▕", fg: t.textMuted },
-            { text: "▏", fg: t.textMuted },
-          ]
-        : [{ text: " " }, { text: " " }]
+  let edges: [Span, Span] = [{ text: " " }, { text: " " }]
+  if (frame === "cursor") {
+    edges = [
+      { text: "▐", fg: t.primary },
+      { text: "▌", fg: t.primary },
+    ]
+  } else if (frame === "current") {
+    edges = [
+      { text: "▕", fg: t.textMuted },
+      { text: "▏", fg: t.textMuted },
+    ]
+  }
+  const [l, r] = edges
   return [l, ...specimen(x), r]
 }
 
@@ -224,7 +244,11 @@ export function boardHeader(t: Theme, shown: ThemeMode, L: BoardLayout): Span[] 
   BOARD_MODES.forEach((m, i) => {
     if (i) out.push({ text: " ".repeat(L.gap) })
     const l = (SLOT_W - width(m)) >> 1
-    out.push({ text: " ".repeat(l) }, { text: m, fg: m === shown ? t.primary : t.textMuted, attr: A.BOLD }, { text: " ".repeat(SLOT_W - l - width(m)) })
+    out.push(
+      { text: " ".repeat(l) },
+      { text: m, fg: m === shown ? t.primary : t.textMuted, attr: A.BOLD },
+      { text: " ".repeat(SLOT_W - l - width(m)) },
+    )
   })
   return out
 }
@@ -233,7 +257,8 @@ export function boardHeader(t: Theme, shown: ThemeMode, L: BoardLayout): Span[] 
 export const listTop = (hl: number, rows: number, n: number) => clamp(hl - (rows >> 1), 0, n - rows)
 
 /** The board's first row on screen: the held `top` (clamped), else centred on the highlight `hl`. */
-export const pickTop = (p: ThemePick, hl: number, rows: number, n: number) => (p.top === null ? listTop(Math.max(0, hl), rows, n) : clamp(p.top, 0, n - rows))
+export const pickTop = (p: ThemePick, hl: number, rows: number, n: number) =>
+  p.top === null ? listTop(Math.max(0, hl), rows, n) : clamp(p.top, 0, n - rows)
 
 /** The pane's note: one of each thing a theme colours (marks, links, code, callout, tasks, table). */
 export const SAMPLE = [
@@ -261,7 +286,11 @@ export const sampleView = (t: Theme, w: number, headings?: HeadingStyle): Render
 
 const ROLES = ["text", "textMuted", "primary", "secondary", "accent", "error", "warning", "success", "info"] as const
 const LABEL: Partial<Record<(typeof ROLES)[number], string>> = { textMuted: "muted" }
-const SHORT: Partial<Record<(typeof ROLES)[number], string>> = { textMuted: "muted", secondary: "second", warning: "warn" }
+const SHORT: Partial<Record<(typeof ROLES)[number], string>> = {
+  textMuted: "muted",
+  secondary: "second",
+  warning: "warn",
+}
 
 /** The nine content roles as words, each in its own colour: two-cell gaps, then one, then short labels, then the first six. */
 export function roleWords(t: Theme, w: number): Span[] {
@@ -287,7 +316,11 @@ export function paneLines(t: Theme, view: Rendered, w: number, h: number): Span[
   const right = `text ${contrast(t.text, t.background).toFixed(1)}:1`
   const head: Span[] =
     width(t.name) + 1 + width(right) <= w
-      ? [{ text: t.name, fg: t.textMuted }, { text: " ".repeat(w - width(t.name) - width(right)) }, { text: right, fg: t.textMuted }]
+      ? [
+          { text: t.name, fg: t.textMuted },
+          { text: " ".repeat(w - width(t.name) - width(right)) },
+          { text: right, fg: t.textMuted },
+        ]
       : [{ text: t.name, fg: t.textMuted }]
   const out: Span[][] = [head, roleWords(t, w), []]
   for (const l of view.lines) {
@@ -296,7 +329,10 @@ export function paneLines(t: Theme, view: Rendered, w: number, h: number): Span[
       continue
     }
     const used = spanWidth(l.spans)
-    out.push([...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - used)), bg: l.fill }])
+    out.push([
+      ...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })),
+      { text: " ".repeat(Math.max(0, w - used)), bg: l.fill },
+    ])
   }
   return out.slice(0, h)
 }

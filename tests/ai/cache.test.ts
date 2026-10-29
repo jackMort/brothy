@@ -2,31 +2,39 @@ import { describe, expect, test } from "bun:test"
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
-import { PROMPT_V } from "../../src/ai/config"
 import {
   CACHE_CAP,
-  GLOSS_CAP,
-  loadGlosses,
-  saveGlosses,
-  type Gloss,
   cacheFile,
   cachePath,
+  GLOSS_CAP,
+  type Gloss,
   isFresh,
   loadCache,
+  loadGlosses,
   loadSummaries,
   pruneSummaries,
+  type Summary,
   saveCache,
+  saveGlosses,
   saveSummaries,
   textHash,
-  type Summary,
 } from "../../src/ai/cache"
+import { PROMPT_V } from "../../src/ai/config"
 import { useXdgDir } from "../helpers/env"
 
 const cache = useXdgDir("XDG_CACHE_HOME")
-const entry = (at: number, over: Partial<Summary> = {}): Summary => ({ hash: "h", v: PROMPT_V, summary: "s", model: "m", at, ...over })
+const entry = (at: number, over: Partial<Summary> = {}): Summary => ({
+  hash: "h",
+  v: PROMPT_V,
+  summary: "s",
+  model: "m",
+  at,
+  ...over,
+})
 
 describe("path", () => {
-  test("absolute XDG_CACHE_HOME, resolved per call", () => expect(cachePath()).toBe(join(cache(), "brothy", "summaries.json")))
+  test("absolute XDG_CACHE_HOME, resolved per call", () =>
+    expect(cachePath()).toBe(join(cache(), "brothy", "summaries.json")))
   test("relative XDG_CACHE_HOME is ignored", () => {
     process.env.XDG_CACHE_HOME = "rel"
     expect(cachePath()).toBe(join(homedir(), ".cache", "brothy", "summaries.json"))
@@ -50,7 +58,10 @@ describe("load / save", () => {
   })
   test("save merges with what another instance wrote; newest at wins per path", () => {
     saveSummaries({ "/a.md": entry(5) })
-    writeFileSync(cachePath(), JSON.stringify({ ...JSON.parse(readFileSync(cachePath(), "utf8")), "/other.md": entry(6) })) // the other instance
+    writeFileSync(
+      cachePath(),
+      JSON.stringify({ ...JSON.parse(readFileSync(cachePath(), "utf8")), "/other.md": entry(6) }),
+    ) // the other instance
     saveSummaries({ "/b.md": entry(7), "/a.md": entry(4, { summary: "older" }) })
     expect(loadSummaries()).toEqual({ "/a.md": entry(5), "/other.md": entry(6), "/b.md": entry(7) })
   })
@@ -91,7 +102,8 @@ describe("prune / freshness", () => {
 
 describe("generic store", () => {
   type G = { hash: string; v: number; gloss: string; model: string; at: number }
-  const isG = (e: unknown): e is G => !!e && typeof e === "object" && typeof (e as G).gloss === "string" && Number.isFinite((e as G).at)
+  const isG = (e: unknown): e is G =>
+    !!e && typeof e === "object" && typeof (e as G).gloss === "string" && Number.isFinite((e as G).at)
   const g = (at: number, gloss = "g"): G => ({ hash: "h", v: 1, gloss, model: "m", at })
   const K = "/v/a.md#why#0#explain"
 
@@ -125,7 +137,10 @@ describe("generic store", () => {
 test("a summaries.json in today's format still loads, and its entries stay fresh", () => {
   const h = textHash("# A\n\nApples.")
   mkdirSync(dirname(cachePath()), { recursive: true })
-  writeFileSync(cachePath(), JSON.stringify({ "/v/a.md": { hash: h, v: 1, summary: "About apples.", model: "llama3.2", at: 1 } }) + "\n")
+  writeFileSync(
+    cachePath(),
+    JSON.stringify({ "/v/a.md": { hash: h, v: 1, summary: "About apples.", model: "llama3.2", at: 1 } }) + "\n",
+  )
   const e = loadSummaries()["/v/a.md"]!
   expect(e.summary).toBe("About apples.")
   expect(isFresh(e, h)).toBe(true)
@@ -155,7 +170,9 @@ test("glosses: merge on save keeps the newest per key and other keys", () => {
 })
 
 test("glosses: pruned to the newest GLOSS_CAP", () => {
-  const add = Object.fromEntries(Array.from({ length: GLOSS_CAP + 5 }, (_, i) => [`/n/a.md#h${i}#0#explain`, gl("g", i)]))
+  const add = Object.fromEntries(
+    Array.from({ length: GLOSS_CAP + 5 }, (_, i) => [`/n/a.md#h${i}#0#explain`, gl("g", i)]),
+  )
   saveGlosses(add)
   const all = loadGlosses()
   expect(Object.keys(all).length).toBe(GLOSS_CAP)
@@ -165,7 +182,10 @@ test("glosses: pruned to the newest GLOSS_CAP", () => {
 
 test("glosses: entries of the wrong shape are skipped; a corrupt file is empty", () => {
   mkdirSync(join(cache(), "brothy"), { recursive: true })
-  writeFileSync(join(cache(), "brothy", "glosses.json"), JSON.stringify({ [K]: { hash: "h", v: 1, summary: "x", model: "m", at: 1 } }))
+  writeFileSync(
+    join(cache(), "brothy", "glosses.json"),
+    JSON.stringify({ [K]: { hash: "h", v: 1, summary: "x", model: "m", at: 1 } }),
+  )
   expect(loadGlosses()).toEqual({})
   writeFileSync(join(cache(), "brothy", "glosses.json"), "{ nope")
   expect(loadGlosses()).toEqual({})
@@ -203,7 +223,10 @@ test("a summary and a gloss are told apart by their own text field", () => {
   expect(Object.keys(loadGlosses())).toEqual(["/a.md"])
   writeFileSync(
     cachePath(),
-    JSON.stringify({ "/c.md": { hash: "h", v: 1, summary: "s", model: "m", at: "1" }, "/d.md": { hash: "h", v: 1, summary: "s", model: "m", at: null } }),
+    JSON.stringify({
+      "/c.md": { hash: "h", v: 1, summary: "s", model: "m", at: "1" },
+      "/d.md": { hash: "h", v: 1, summary: "s", model: "m", at: null },
+    }),
   )
   expect(loadSummaries()).toEqual({})
 })

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
-import { PEEK_MIN_W, POPUP_W, innerWidth, paneWidth, popupWidth, splitWidth } from "../../src/ui/geometry"
 import { switchSplit } from "../../src/notes/peek"
 import { themeSplit } from "../../src/theme/themepick"
+import { innerWidth, PEEK_MIN_W, POPUP_W, paneWidth, popupWidth, splitWidth } from "../../src/ui/geometry"
 
 test("popupWidth: the usual 70 columns, less on a narrow screen", () => {
   expect(popupWidth(120)).toBe(POPUP_W)

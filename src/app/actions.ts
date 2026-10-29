@@ -2,24 +2,25 @@
 // or document) the keys and hints go by. `makeActions` composes one factory per family of bindings: the global ones here,
 // the document, zen, panel and popup ones in view-actions.ts; the key handler is in dispatch.ts. Not pure: the factories
 // close over the app context and the feature factories.
-import type { KeyEvent } from "@opentui/core"
+
 import { closeSync, openSync } from "node:fs"
 import { basename } from "node:path"
-import { loadConfig } from "../system/config"
-import { quoteNeedle, type Change } from "../ai/delta"
-import { editorCommand, runEditor, sourceLineAt, type EditResult } from "../system/editor"
-import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
-import { MEASURE } from "../ui/layout"
-import { HEADING_STYLES } from "../markdown/heading-style"
+import type { KeyEvent } from "@opentui/core"
+import { type Change, quoteNeedle } from "../ai/delta"
 import { parseFrontMatter } from "../markdown/frontmatter"
+import { HEADING_STYLES } from "../markdown/heading-style"
 import type { Rendered } from "../markdown/render"
+import { headingKey } from "../markdown/sections"
+import { sourceScan } from "../markdown/source"
+import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
+import { STDIN } from "../notes/workspace"
+import { loadConfig } from "../system/config"
+import { type EditResult, editorCommand, runEditor, sourceLineAt } from "../system/editor"
+import { MEASURE } from "../ui/layout"
 import { MINI_MIN_W } from "../ui/minimap"
 import { findQuote, stepMatch } from "../ui/nav"
 import { findHeading } from "../ui/panel"
-import { headingKey } from "../markdown/sections"
-import { sourceScan } from "../markdown/source"
-import { HINT_HOLD, errText, fadeStep } from "../ui/status"
-import { STDIN } from "../notes/workspace"
+import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import { makeOnKey } from "./dispatch"
@@ -127,8 +128,11 @@ function makeMoves(c: AppCtx) {
   const jumpMatch = (dir: 1 | -1) => {
     const { matches, win, L, s, pg } = derive()
     // pages: only the current page's own lines count as on screen (not the blank pad above it)
-    const m = pg ? stepMatch(matches, s.matchLine, pg.top, Math.min(L.CH, pg.end - pg.top), dir) : stepMatch(matches, s.matchLine, win.first, L.CH, dir)
-    if (m === undefined) return s.query ? flash(`no match for “${s.query}”`, "error") : flash("nothing to find · / to search", "error")
+    const m = pg
+      ? stepMatch(matches, s.matchLine, pg.top, Math.min(L.CH, pg.end - pg.top), dir)
+      : stepMatch(matches, s.matchLine, win.first, L.CH, dir)
+    if (m === undefined)
+      return s.query ? flash(`no match for “${s.query}”`, "error") : flash("nothing to find · / to search", "error")
     showMatch(m)
   }
 
@@ -204,7 +208,8 @@ function makeToggleActions(c: AppCtx, { zen }: Features, { pokeHints, currentCtx
       if (persist({ minimap })) flash(minimap ? "minimap on" : "minimap off")
     },
     headings: () => {
-      const headingStyle = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headingStyle) + 1) % HEADING_STYLES.length]!
+      const headingStyle =
+        HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headingStyle) + 1) % HEADING_STYLES.length]!
       set({ headingStyle })
       if (persist({ headings: headingStyle })) flash(`headings · ${headingStyle}`)
     },
@@ -217,7 +222,11 @@ function makeToggleActions(c: AppCtx, { zen }: Features, { pokeHints, currentCtx
 }
 
 /** The other global keys: pickers, find, focus, reload, esc, help, history, the AI keys and quit. */
-function makeGlobalActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace, popups }: Features, { pokeHints, currentCtx, hintsVisible }: KeyContext) {
+function makeGlobalActions(
+  c: AppCtx,
+  { aiJobs, links, zen, switcher, workspace, popups }: Features,
+  { pokeHints, currentCtx, hintsVisible }: KeyContext,
+) {
   const { ui, set, derive, renderer, flash, selectView, focusPanel, focusDoc } = c
   return {
     switcher: switcher.openSwitcher,
@@ -238,7 +247,9 @@ function makeGlobalActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace,
       const folders = folderCounts(tree)
       const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
       if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
-      const linkTree = piped ? (s.linkLazy ? s.linkTree : scanTree(s.root)) : s.linkRoot ? scanTree(s.linkRoot) : tree
+      let linkTree = tree
+      if (piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
+      else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
       set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1, ai: loadConfig().ai ?? null })
       if (ui.current.zen) aiJobs.ensureGlosses()
       switcher.dropIndex()
@@ -309,7 +320,8 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
       if (res && "error" in res) return flash(res.error, "error")
       set({ reload: s.reload + 1 }) // a failed editor may still have saved
       const ed = basename(argv[0]!)
-      if (res && res.code !== 0) return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")
+      if (res && res.code !== 0)
+        return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")
       flash(`edited · ${basename(s.openPath)}`)
     },
   } satisfies Partial<Actions>
@@ -319,7 +331,10 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
 export function changeRows(view: Rendered, c: Change) {
   const hs = view.headings
   // rows listed while a request runs come from the sent text: a heading that moved is found again by key
-  const i = c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key ? c.index : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
+  const i =
+    c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key
+      ? c.index
+      : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
   const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
   const to = hs[i + 1]?.line ?? view.lines.length
   return { from, to }

@@ -3,10 +3,10 @@
 
 import { statSync } from "node:fs"
 import { dirname, sep } from "node:path"
-import { rankNotes, scoreName, stem, type FileNode } from "./files"
 import { parseProperties } from "../markdown/frontmatter"
 import { parseWikilink, wikiLabel } from "../markdown/lexer"
 import { sourceScan } from "../markdown/source"
+import { type FileNode, rankNotes, scoreName, stem } from "./files"
 
 /** Notes larger than this (bytes) are indexed by name and headings only. */
 export const BODY_LIMIT = 2 * 1024 * 1024
@@ -193,7 +193,9 @@ export function searchVault(ix: VaultIndex | null, tree: FileNode, q: string, op
     out.push({
       title: "Notes",
       count: countOf(ranked.rows.length, ranked.total),
-      hits: ranked.rows.map((r): NoteHit => ({ kind: "note", ...base(r.node), hits: r.hits, ...(r.alias ? { alias: r.alias } : {}) })),
+      hits: ranked.rows.map(
+        (r): NoteHit => ({ kind: "note", ...base(r.node), hits: r.hits, ...(r.alias ? { alias: r.alias } : {}) }),
+      ),
     })
   if (!ix) return out
   const notes = notesOf(tree)
@@ -213,7 +215,8 @@ export function searchVault(ix: VaultIndex | null, tree: FileNode, q: string, op
     })
   if ([...needle].length >= TEXT_MIN) {
     const text = textHits(ix, notes, needle, open)
-    if (text.hits.length) out.push({ title: "Text", count: text.full ? `${SWITCH_CAP.text}+` : String(text.hits.length), hits: text.hits })
+    if (text.hits.length)
+      out.push({ title: "Text", count: text.full ? `${SWITCH_CAP.text}+` : String(text.hits.length), hits: text.hits })
   }
   return out
 }
@@ -232,7 +235,13 @@ function textHits(ix: VaultIndex, notes: FileNode[], needle: string, open: strin
       const line = lineOf(doc.starts, at)
       const start = doc.starts[line]!
       const end = line + 1 < doc.starts.length ? doc.starts[line + 1]! - 1 : doc.text.length
-      hits.push({ kind: "text", ...base(n), heading: headingAt(doc.headings, line), line, ...snippet(doc.text.slice(start, end), at - start, want.length) })
+      hits.push({
+        kind: "text",
+        ...base(n),
+        heading: headingAt(doc.headings, line),
+        line,
+        ...snippet(doc.text.slice(start, end), at - start, want.length),
+      })
       if (hits.length === SWITCH_CAP.text) return { hits, full: true }
       from = end + 1 // one hit per line
     }
@@ -339,7 +348,12 @@ export type AnswerRow = {
 export type AskActionRow = { kind: "askAction"; act: "ask" | "rerank"; text: string; note: string; error?: boolean }
 /** Ask mode: a muted line that is never highlighted (states, `searched: …`) */
 export type AskNoteRow = { kind: "askNote"; text: string }
-export type SwitchRow = { kind: "header"; title: string; count: string } | SwitchHit | AnswerRow | AskActionRow | AskNoteRow
+export type SwitchRow =
+  | { kind: "header"; title: string; count: string }
+  | SwitchHit
+  | AnswerRow
+  | AskActionRow
+  | AskNoteRow
 
 /** Rows the highlight can rest on: not section titles, not ask notes. */
 export const isStop = (r: { kind: string }) => r.kind !== "header" && r.kind !== "askNote"
@@ -348,7 +362,8 @@ export const switchRows = (sections: Section[]): SwitchRow[] =>
   sections.flatMap((s): SwitchRow[] => [{ kind: "header", title: s.title, count: s.count }, ...s.hits])
 
 /** First stop row at or after `from`; -1 when there is none. */
-export const firstHit = (rows: readonly { kind: string }[], from = 0): number => rows.findIndex((r, k) => k >= from && isStop(r))
+export const firstHit = (rows: readonly { kind: string }[], from = 0): number =>
+  rows.findIndex((r, k) => k >= from && isStop(r))
 
 /** The next stop row from `cur` in `dir`, skipping headers and notes; stays put at either end. */
 export function stepRow(rows: readonly { kind: string }[], cur: number, dir: 1 | -1): number {

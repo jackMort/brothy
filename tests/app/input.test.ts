@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test"
 import { erase, typed } from "../../src/app/input"
 
-const key = (sequence: string, mods: { ctrl?: boolean; meta?: boolean } = {}) => ({ sequence, ctrl: false, meta: false, ...mods })
+const key = (sequence: string, mods: { ctrl?: boolean; meta?: boolean } = {}) => ({
+  sequence,
+  ctrl: false,
+  meta: false,
+  ...mods,
+})
 
 test("a printable key types its sequence, pasted text and non-ASCII included", () => {
   expect(typed(key("a"))).toBe("a")

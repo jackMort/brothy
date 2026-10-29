@@ -1,27 +1,23 @@
 import { afterAll, expect, test } from "bun:test"
-import { cachedHighlight, ensureHighlights, shutdownHighlighter } from "../../src/markdown/highlight"
-import { pendingHighlights } from "../../src/markdown/render"
-import { PEEK_MIN_W } from "../../src/ui/geometry"
 import { A, type Span } from "../../src/lib/spans"
 import { width as sw } from "../../src/lib/text"
-import { contrast, themeByName, themes, type Theme } from "../../src/theme/theme"
-import { brothy } from "../helpers/theme"
+import { cachedHighlight, ensureHighlights, shutdownHighlighter } from "../../src/markdown/highlight"
+import { pendingHighlights } from "../../src/markdown/render"
+import { contrast, type Theme, themeByName, themes } from "../../src/theme/theme"
 import {
   BOARD_MODES,
-  CELL_W,
-  FAMILIES,
-  NAME_W,
-  SLOT_W,
-  SAMPLE,
-  THEME_LIST_W,
   boardFrames,
   boardHeader,
   boardLayout,
   boardSlot,
+  CELL_W,
+  FAMILIES,
   familyOf,
   familyTheme,
   filterFamilies,
   listTop,
+  NAME_W,
+  onlyMode,
   paneLines,
   pickIndex,
   pickMode,
@@ -30,15 +26,19 @@ import {
   pickShown,
   pickStart,
   pickTheme,
-  resolveTheme,
   pickTop,
-  onlyMode,
+  resolveTheme,
   roleWords,
+  SAMPLE,
+  SLOT_W,
   sampleView,
   specimen,
+  THEME_LIST_W,
   themeFamilies,
   themeSplit,
 } from "../../src/theme/themepick"
+import { PEEK_MIN_W } from "../../src/ui/geometry"
+import { brothy } from "../helpers/theme"
 
 afterAll(() => shutdownHighlighter())
 
@@ -63,12 +63,17 @@ const names = (q: string) => filterFamilies(q).map((h) => h.family.name)
 
 test("themeFamilies: 22 families in the darks' order, one-dark and one-light as one, synthwave84 and vesper dark-only", () => {
   expect(FAMILIES).toHaveLength(22)
-  expect(FAMILIES.map((f) => f.name)).toEqual(themes.filter((t) => t.mode === "dark").map((t) => t.name.replace(/-dark$/, "")))
+  expect(FAMILIES.map((f) => f.name)).toEqual(
+    themes.filter((t) => t.mode === "dark").map((t) => t.name.replace(/-dark$/, "")),
+  )
   for (const f of FAMILIES) {
     expect(f.dark?.mode ?? "dark").toBe("dark")
     expect(f.light?.mode ?? "light").toBe("light")
   }
-  expect(FAMILIES.find((f) => f.name === "one")).toMatchObject({ dark: { name: "one-dark" }, light: { name: "one-light" } })
+  expect(FAMILIES.find((f) => f.name === "one")).toMatchObject({
+    dark: { name: "one-dark" },
+    light: { name: "one-light" },
+  })
   expect(familyOf(themeByName("gruvbox-light"))?.name).toBe("gruvbox")
   expect(FAMILIES.filter((f) => onlyMode(f)).map((f) => [f.name, onlyMode(f)])).toEqual([
     ["synthwave84", "dark"],
@@ -99,7 +104,13 @@ test("filterFamilies: fuzzy on the name, tightest and earliest first, hits marke
 
 test("pickStart opens on the current theme's family and mode", () => {
   expect(pickStart(themeByName("brothy"))).toEqual({ q: "", family: "brothy", mode: "dark", orig: "brothy", top: null })
-  expect(pickStart(themeByName("one-light"))).toEqual({ q: "", family: "one", mode: "light", orig: "one-light", top: null })
+  expect(pickStart(themeByName("one-light"))).toEqual({
+    q: "",
+    family: "one",
+    mode: "light",
+    orig: "one-light",
+    top: null,
+  })
   expect(pickTheme(pickStart(themeByName("kanagawa-light"))).name).toBe("kanagawa-light")
 })
 

@@ -31,13 +31,20 @@ interface Scan {
 }
 
 /** `-t`/`--theme`/`--theme=` at `argv[i]`: its value and the index to resume from (an option-looking next argument is left for the loop). Not a theme flag: null. */
-function themeOption(argv: string[], i: number, names: string): { value: string; next: number } | { error: string; next: number } | null {
+function themeOption(
+  argv: string[],
+  i: number,
+  names: string,
+): { value: string; next: number } | { error: string; next: number } | null {
   const a = argv[i]!
   const eq = a.startsWith("--theme=")
   if (!eq && a !== "-t" && a !== "--theme") return null
   const value = eq ? a.slice(8) : argv[i + 1]
   if (value && (eq || !value.startsWith("-"))) return { value, next: eq ? i : i + 1 }
-  return { error: `option ${eq ? "--theme" : a} requires a value: ${names}`, next: eq || value?.startsWith("-") ? i : i + 1 }
+  return {
+    error: `option ${eq ? "--theme" : a} requires a value: ${names}`,
+    next: eq || value?.startsWith("-") ? i : i + 1,
+  }
 }
 
 /** One pass over argv: the paths, the theme and `--transparent`, the first error, or an early exit. */
@@ -66,7 +73,15 @@ function scanArgs(argv: string[], names: string): Scan {
 
 /** Pure CLI argument parser: returns the parsed options or `{ error }`. */
 export function parseArgs(argv: string[]): Args | { error: string } {
-  const out: Args = { path: ".", stdin: false, given: false, theme: undefined, transparent: false, help: false, version: false }
+  const out: Args = {
+    path: ".",
+    stdin: false,
+    given: false,
+    theme: undefined,
+    transparent: false,
+    help: false,
+    version: false,
+  }
   const names = `a family (${FAMILIES.map((f) => f.name).join(", ")}) or one of its themes (<family>-light, one-dark)`
   const { paths, theme, transparent, early, error } = scanArgs(argv, names)
   if (early) return { ...out, [early]: true }

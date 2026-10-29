@@ -2,13 +2,15 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { aiStub, HINT_ROW, keys, OLLAMA, panelShown, W120, waitFor, waitFrame, withEnv, useAppHarness } from "./helpers"
+import { aiStub, HINT_ROW, keys, OLLAMA, panelShown, useAppHarness, W120, waitFor, waitFrame, withEnv } from "./helpers"
 
 const { cfgDir, tmp, mount, aiConfig, glossFile, glossCache, seedGloss, mountAI } = useAppHarness()
 
 const said = (w: string, n = 25) => Array.from({ length: n }, (_, i) => `${w}${i}`).join(" ")
 /** Four sections, each with 25 words of its own. */
-const GLOSS_MD = ["Guide", "Apples", "Pears", "Plums"].map((h, i) => `${i ? "##" : "#"} ${h}\n\n${said(h.toLowerCase())}\n`).join("\n")
+const GLOSS_MD = ["Guide", "Apples", "Pears", "Plums"]
+  .map((h, i) => `${i ? "##" : "#"} ${h}\n\n${said(h.toLowerCase())}\n`)
+  .join("\n")
 
 describe("a gloss on screen", () => {
   test("zen shows a fresh cached gloss for the reading section by itself, without a request", async () => {

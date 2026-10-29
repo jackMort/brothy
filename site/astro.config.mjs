@@ -1,7 +1,7 @@
-import { defineConfig } from "astro/config"
+import { mkdirSync, writeFileSync } from "node:fs"
 import starlight from "@astrojs/starlight"
 import { ExpressiveCodeTheme } from "@astrojs/starlight/expressive-code"
-import { mkdirSync, writeFileSync } from "node:fs"
+import { defineConfig } from "astro/config"
 import { codeTheme, followPalette } from "./src/code-theme.mjs"
 import { pickerData, siteThemesCss } from "./src/themes"
 
@@ -47,7 +47,10 @@ export default defineConfig({
         Footer: "./src/components/Footer.astro",
       },
       expressiveCode: {
-        themes: [ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("dark"))), ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("light")))],
+        themes: [
+          ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("dark"))),
+          ExpressiveCodeTheme.fromJSONString(JSON.stringify(codeTheme("light"))),
+        ],
         plugins: [followPalette],
         // the stand-in colors are not contrast-checked against the stand-in background: the palettes are (tests/theme/theme.test.ts)
         minSyntaxHighlightingColorContrast: 0,
@@ -71,7 +74,10 @@ export default defineConfig({
         // IBM Plex Mono for everything; the few symbols it lacks come from a Fira Code subset of just those glyphs
         {
           tag: "link",
-          attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" },
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+          },
         },
         {
           tag: "link",
@@ -82,14 +88,30 @@ export default defineConfig({
         },
       ],
       sidebar: [
-        { label: "Getting started", items: ["getting-started/install", "getting-started/quick-start", "getting-started/the-screen"] },
-        { label: "Usage", items: ["usage/reading", "usage/navigating-notes", "usage/obsidian-notes", "usage/zen-mode", "usage/pipes-and-editor"] },
+        {
+          label: "Getting started",
+          items: ["getting-started/install", "getting-started/quick-start", "getting-started/the-screen"],
+        },
+        {
+          label: "Usage",
+          items: [
+            "usage/reading",
+            "usage/navigating-notes",
+            "usage/obsidian-notes",
+            "usage/zen-mode",
+            "usage/pipes-and-editor",
+          ],
+        },
         "keys",
         { label: "Themes", items: ["themes/theme-picker", "themes/all-themes"] },
         { label: "Config", items: ["config/config-json", "config/zen-settings", "config/recent-projects"] },
         {
           label: "AI",
-          items: ["ai/setup", { label: "Features", items: ["ai/tldr", "ai/zen-gloss", "ai/what-changed", "ai/ask-your-vault"] }, "ai/what-is-sent"],
+          items: [
+            "ai/setup",
+            { label: "Features", items: ["ai/tldr", "ai/zen-gloss", "ai/what-changed", "ai/ask-your-vault"] },
+            "ai/what-is-sent",
+          ],
         },
         "faq",
         "changelog",

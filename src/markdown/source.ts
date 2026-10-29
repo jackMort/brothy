@@ -3,13 +3,23 @@
 // Outline parity: these headings are Preview's, in the same order, so anything Preview hides is skipped here too.
 
 import type { Token } from "marked"
-import { themes, type Theme } from "../theme/theme"
-
-import { parseFrontMatter } from "./frontmatter"
-import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf } from "./lexer"
-import { CALLOUT_KINDS, calloutKind, calloutOf, inline, pad, plainOf, type Heading, type Line, type RenderOpts, type Rendered } from "./render"
 import { A, type Span } from "../lib/spans"
 import { wrap } from "../lib/text"
+import { type Theme, themes } from "../theme/theme"
+import { parseFrontMatter } from "./frontmatter"
+import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf } from "./lexer"
+import {
+  CALLOUT_KINDS,
+  calloutKind,
+  calloutOf,
+  type Heading,
+  inline,
+  type Line,
+  pad,
+  plainOf,
+  type Rendered,
+  type RenderOpts,
+} from "./render"
 
 /** A heading found on source lines, keyed by its first line. */
 interface SourceHeading {
@@ -85,7 +95,12 @@ function endsParagraph(s: LineScan, i: number, body: string, depth: number): boo
   if (/^[ \t]*$/.test(body)) return true
   if (atxHeading(s, i, body)) return true
   if (setextHeading(s, i, body, depth)) return true
-  if (/^ {0,3}([-*_])([ \t]*\1){2,}[ \t]*$/.test(body) || /^ {0,3}([-*+]|\d{1,9}[.)])([ \t]|$)/.test(body) || /^ {0,3}\|/.test(body)) return true
+  if (
+    /^ {0,3}([-*_])([ \t]*\1){2,}[ \t]*$/.test(body) ||
+    /^ {0,3}([-*+]|\d{1,9}[.)])([ \t]|$)/.test(body) ||
+    /^ {0,3}\|/.test(body)
+  )
+    return true
   // a lazy line continues a quoted paragraph, which can no longer take an underline
   return s.para.length > 0 && depth < s.paraDepth
 }
@@ -231,7 +246,12 @@ function locator(text: string, line0: number, retry: boolean) {
 function lexedHeading(s: LexScan, tok: Token, line: number) {
   const h = tokenOf(tok, "heading")
   const end = s.at[line + rawRows(tok.raw).length - 1] ?? s.at[line]!
-  s.headings.set(s.at[line]!, { depth: h.depth, text: titleOf(h.tokens, s.t), end, setext: !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(tok.raw) })
+  s.headings.set(s.at[line]!, {
+    depth: h.depth,
+    text: titleOf(h.tokens, s.t),
+    end,
+    setext: !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(tok.raw),
+  })
 }
 
 /** A fenced code token on lexed line `line`: the fence lines and the code rows between them (a missing close leaves its last row code). */
@@ -242,7 +262,8 @@ function lexedCode(s: LexScan, tok: Token, line: number) {
   const close = rows.length > 1 ? /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(rows[rows.length - 1]!) : null
   const closed = !!open && !!close && close[1]![0] === open[1]![0] && close[1]!.length >= open[1]!.length
   s.fenceLines.add(s.at[line]!)
-  for (let k = 1; k < rows.length; k++) (k === rows.length - 1 && closed ? s.fenceLines : s.codeLines).add(s.at[line + k]!)
+  for (let k = 1; k < rows.length; k++)
+    (k === rows.length - 1 && closed ? s.fenceLines : s.codeLines).add(s.at[line + k]!)
 }
 
 /** A list token on lexed line `line`: each item's tokens, located within the list's raw. */
@@ -315,7 +336,9 @@ export function sourceScan(src: string, t: Theme = themes[0]!): SourceScan {
   const { kept, hidden } = scanComments(lines, fmLines)
   const { headings, fenceLines, codeLines } = sourceStructure(kept, fmLines, t, hidden)
   return {
-    headings: [...headings].sort((a, b) => a[0] - b[0]).map(([line, h]) => ({ depth: h.depth, text: h.text, line, end: h.end })),
+    headings: [...headings]
+      .sort((a, b) => a[0] - b[0])
+      .map(([line, h]) => ({ depth: h.depth, text: h.text, line, end: h.end })),
     text: lines.map((_, i) => (i < fmLines || hidden[i] || fenceLines.has(i) || codeLines.has(i) ? "" : kept[i]!)),
   }
 }
@@ -330,7 +353,9 @@ function tintWikilinks(spans: Span[], t: Theme, exists?: (target: string) => boo
     s.text
       .split(/(!?\[\[[^[\]\n]+\]\])/)
       .filter(Boolean)
-      .map((part) => (/^!?\[\[/.test(part) && part.endsWith("]]") ? { ...s, text: part, fg: tint(part) } : { ...s, text: part })),
+      .map((part) =>
+        /^!?\[\[/.test(part) && part.endsWith("]]") ? { ...s, text: part, fg: tint(part) } : { ...s, text: part },
+      ),
   )
 }
 
@@ -378,7 +403,13 @@ function listSpans(text: string, t: Theme): Span[] {
 }
 
 /** Source line `i` as spans: front matter, comments, fences and code first, then headings (`setext` while inside one), quotes, lists and tables. */
-function sourceSpans(c: SourceStyle, i: number, text: string, h: SourceHeading | undefined, setext: SourceHeading | null): Span[] {
+function sourceSpans(
+  c: SourceStyle,
+  i: number,
+  text: string,
+  h: SourceHeading | undefined,
+  setext: SourceHeading | null,
+): Span[] {
   const { t } = c
   if (i < c.fmLines) return [{ text, fg: t.textMuted }]
   if (c.hidden[i]) return [{ text, fg: t.textMuted, attr: A.ITALIC }]

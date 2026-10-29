@@ -1,12 +1,12 @@
 // The key handler: dispatch by mode, and the order a key goes through (C-c, the open popup or typing, the modal modes,
 // then zen, the welcome page and the focused view's bindings). Not pure: `makeOnKey` closes over the app context.
 import type { KeyEvent } from "@opentui/core"
-import { matchKey } from "../ui/nav"
 import { pickQuery } from "../theme/themepick"
+import { matchKey } from "../ui/nav"
 import type { Actions, Features } from "./actions"
 import type { AppCtx } from "./ctx"
 import { typed } from "./input"
-import { KEY_IDS, WELCOME_OFF, ZEN_OFF, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./keymap"
+import { type Ctx, KEY_IDS, type KeyId, keyDef, type Mode, modeOf, WELCOME_OFF, ZEN_OFF } from "./keymap"
 import type { UI } from "./store"
 
 /** Run the first binding of the given modes (in order) that matches `k`; `skip` bindings are ignored. */
@@ -31,7 +31,11 @@ function makePopupKey({ workspace, switcher, popups }: Features, actions: Action
     { mode: "theme", open: (s) => !!s.themePick, type: (_, text) => themeSet((p) => pickQuery(p, p.q + text)) },
     { mode: "zenSettings", open: (s) => s.zenOrig !== null },
     { mode: "open", open: (s) => !!s.opener, type: (s, text) => s.opener && workspace.opType(s.opener.q + text) },
-    { mode: "switch", open: (s) => !!s.switcher, type: (s, text) => s.switcher && switcher.swType(s.switcher.q + text) },
+    {
+      mode: "switch",
+      open: (s) => !!s.switcher,
+      type: (s, text) => s.switcher && switcher.swType(s.switcher.q + text),
+    },
     { mode: "prompt", open: (s) => !!s.prompt, type: (s, text) => s.prompt && promptType(s.prompt.value + text) },
   ]
 

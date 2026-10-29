@@ -8,7 +8,11 @@ const cli = join(import.meta.dir, "../src/cli.tsx")
 const root = join(import.meta.dir, "..")
 async function run(...args: string[]) {
   const p = Bun.spawn(["bun", cli, ...args], { cwd: root, stdout: "pipe", stderr: "pipe", stdin: "ignore" })
-  const [out, errText, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited])
+  const [out, errText, code] = await Promise.all([
+    new Response(p.stdout).text(),
+    new Response(p.stderr).text(),
+    p.exited,
+  ])
   return { out, err: errText, code }
 }
 
@@ -93,7 +97,12 @@ describe("cli", () => {
   // util-linux setsid detaches /dev/tty; macOS has no setsid
   test.skipIf(!Bun.which("setsid"))("- without a terminal for keys exits 1 with the reason", async () => {
     // no controlling terminal: setsid detaches /dev/tty
-    const p = Bun.spawn(["setsid", "-w", "bun", cli, "-"], { cwd: root, stdout: "pipe", stderr: "pipe", stdin: new Blob(["# hi\n"]) })
+    const p = Bun.spawn(["setsid", "-w", "bun", cli, "-"], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: new Blob(["# hi\n"]),
+    })
     const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited])
     expect(code).toBe(1)
     expect(err).toContain("brothy:")

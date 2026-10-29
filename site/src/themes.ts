@@ -3,7 +3,7 @@
 // (written to src/generated/themes.css by the `brothyThemes` integration, see astro.config.mjs); `families` feeds the
 // picker (ThemeSelect.astro, through src/generated/families.json so the page's script carries only the specimens, not
 // every palette) and the pre-paint head script.
-import { themes, type Theme } from "../../src/theme/theme"
+import { type Theme, themes } from "../../src/theme/theme"
 
 export type Mode = Theme["mode"]
 /** The picker's row: a dark / light pair, or one of them (synthwave84, vesper); `x` or `x-dark` with `x-light`, as src/themepick.ts groups them. */
@@ -22,7 +22,14 @@ interface Specimen {
   accent: string
 }
 
-const spec = (t: Theme): Specimen => ({ theme: t.name, bg: t.background, text: t.text, primary: t.primary, secondary: t.secondary, accent: t.accent })
+const spec = (t: Theme): Specimen => ({
+  theme: t.name,
+  bg: t.background,
+  text: t.text,
+  primary: t.primary,
+  secondary: t.secondary,
+  accent: t.accent,
+})
 
 /** The palettes grouped by family name, in theme.ts order of each family's first palette (the picker's order). */
 export const families: Family[] = (() => {
@@ -37,12 +44,15 @@ export const families: Family[] = (() => {
 })()
 
 /** The family's one mode, for the single-mode ones. */
-export const onlyModes: Record<string, Mode> = Object.fromEntries(families.filter((f) => !(f.dark && f.light)).map((f) => [f.name, f.dark ? "dark" : "light"]))
+export const onlyModes: Record<string, Mode> = Object.fromEntries(
+  families.filter((f) => !(f.dark && f.light)).map((f) => [f.name, f.dark ? "dark" : "light"]),
+)
 
 /** What the picker's script imports (src/generated/families.json). */
 export const pickerData = { families, only: onlyModes }
 
-const rgba = (hex: string, a: number) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")}, ${a})`
+const rgba = (hex: string, a: number) =>
+  `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")}, ${a})`
 
 /** The tokens brothy.css and the components use: the palette's roles, and the demo window's glass, edge, shadow and wallpaper wash derived from them. */
 function tokens(t: Theme): string {

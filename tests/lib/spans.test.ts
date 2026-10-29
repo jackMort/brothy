@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { render } from "../../src/markdown/render"
-import { renderSource } from "../../src/markdown/source"
 import { lineText, safe, safeLine } from "../../src/lib/spans"
 import { width } from "../../src/lib/text"
+import { render } from "../../src/markdown/render"
+import { renderSource } from "../../src/markdown/source"
 import { brothy } from "../helpers/theme"
 
 const t = brothy
@@ -20,7 +20,8 @@ describe("safe", () => {
   })
 
   test("zero-width characters are mapped, also a BOM in the middle", () => {
-    for (const cp of [0x200b, 0x200e, 0x200f, 0xfeff]) expect(safe(`a${String.fromCodePoint(cp)}b`), cp.toString(16)).toBe("a�b")
+    for (const cp of [0x200b, 0x200e, 0x200f, 0xfeff])
+      expect(safe(`a${String.fromCodePoint(cp)}b`), cp.toString(16)).toBe("a�b")
   })
 
   test("ZWJ survives inside emoji sequences", () => {

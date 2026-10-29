@@ -3,12 +3,12 @@ import type { FileNode } from "../../src/notes/files"
 import {
   BODY_LIMIT,
   CHUNK,
-  SWITCH_CAP,
   emptyIndex,
   firstHit,
   foldSame,
   headingAt,
   hitOrdinal,
+  type IndexIO,
   indexNote,
   isStop,
   lineOf,
@@ -17,12 +17,12 @@ import {
   recentSection,
   refreshIndex,
   remember,
+  SWITCH_CAP,
+  type SwitchHit,
+  type SwitchRow,
   searchVault,
   stepRow,
   switchRows,
-  type IndexIO,
-  type SwitchHit,
-  type SwitchRow,
 } from "../../src/notes/vault"
 
 /** An in-memory tree under /v from "dir/name.md" paths (folders created on the way). */
@@ -61,7 +61,8 @@ export function memIO(files: Record<string, string>, mtimes: Record<string, numb
 
 describe("indexNote", () => {
   test("aliases (list or scalar), outline headings with lines, searchable text without fences or front matter", () => {
-    const src = "---\naliases: [Kafka, Streams]\n---\n# Top\nbody line\n```\nsecret code\n```\n## Sub\n%% hidden %%\nend\n"
+    const src =
+      "---\naliases: [Kafka, Streams]\n---\n# Top\nbody line\n```\nsecret code\n```\n## Sub\n%% hidden %%\nend\n"
     const d = indexNote(src, 5, src.length)
     expect(d.aliases).toEqual(["Kafka", "Streams"])
     expect(d.headings).toEqual([
@@ -211,7 +212,19 @@ describe("recents and rows", () => {
     const rows: SwitchRow[] = [
       { kind: "askNote", text: "asking…" },
       { kind: "header", title: "Answers", count: "1" },
-      { kind: "answer", path: "/v/a.md", name: "a", heading: 0, text: "A", key: "a", ord: 0, id: "/v/a.md#a#0", query: "a", hits: [0], right: "1/1" },
+      {
+        kind: "answer",
+        path: "/v/a.md",
+        name: "a",
+        heading: 0,
+        text: "A",
+        key: "a",
+        ord: 0,
+        id: "/v/a.md#a#0",
+        query: "a",
+        hits: [0],
+        right: "1/1",
+      },
       { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: " · ~1k tokens" },
       { kind: "askNote", text: "searched: a" },
     ]
@@ -243,7 +256,12 @@ describe("recents and rows", () => {
       { title: "Notes", count: "2", hits: [hit("a"), hit("b")] },
       { title: "Text", count: "1", hits: [hit("c")] },
     ])
-    expect(rows.map((r) => (r.kind === "header" ? "#" + r.title : "path" in r ? r.path : ""))).toEqual(["#Notes", "a", "b", "#Text", "c"])
+    expect(
+      rows.map((r) => {
+        if (r.kind === "header") return "#" + r.title
+        return "path" in r ? r.path : ""
+      }),
+    ).toEqual(["#Notes", "a", "b", "#Text", "c"])
     expect(firstHit(rows)).toBe(1)
     expect(stepRow(rows, 2, 1)).toBe(4)
     expect(stepRow(rows, 4, 1)).toBe(4)
@@ -270,7 +288,10 @@ describe("text without headings or inline marks", () => {
   test("context drops *, _, `, ==, heading # and shows wikilinks by their label; hits stay on the match", async () => {
     const body = "Some **bold needle** and `code` ==hi== [[dir/target|Alias]] [[Plain#Sec]] snake_case_x 2 * 3 _em_\n"
     const [h] = await textOf(body, "needle")
-    expect(shown(h!)).toEqual({ context: "Some bold needle and code hi Alias Plain › Sec snake_case_x 2 * 3 em", hit: "needle" })
+    expect(shown(h!)).toEqual({
+      context: "Some bold needle and code hi Alias Plain › Sec snake_case_x 2 * 3 em",
+      hit: "needle",
+    })
     const [k] = await textOf(body, "alias plain")
     expect(shown(k!).hit).toBe("Alias Plain")
   })
@@ -285,8 +306,21 @@ describe("text without headings or inline marks", () => {
 
 describe("hitOrdinal", () => {
   test("earlier matches in the hit's section: its heading's title, then one per earlier line", () => {
-    const doc = indexNote("intro needle\n\n# One\n\nneedle a\n\n# Two Needles\n\nneedle b\nnot here\nNEEDLE c needle\n", 0, 0)
-    const hit = (line: number, heading: number | null) => ({ kind: "text" as const, path: "", name: "", folder: "", line, heading, context: "", hits: [] })
+    const doc = indexNote(
+      "intro needle\n\n# One\n\nneedle a\n\n# Two Needles\n\nneedle b\nnot here\nNEEDLE c needle\n",
+      0,
+      0,
+    )
+    const hit = (line: number, heading: number | null) => ({
+      kind: "text" as const,
+      path: "",
+      name: "",
+      folder: "",
+      line,
+      heading,
+      context: "",
+      hits: [],
+    })
     expect(hitOrdinal(doc, hit(0, null), "needle")).toBe(0)
     expect(hitOrdinal(doc, hit(4, 0), "needle")).toBe(0)
     expect(hitOrdinal(doc, hit(8, 1), "needle")).toBe(1) // the heading "Two Needles"

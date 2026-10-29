@@ -1,6 +1,6 @@
 // config.json under $XDG_CONFIG_HOME/brothy: validated load, merge-on-save that refuses to overwrite a file that does not parse.
 import { join } from "node:path"
-import { normalizeAI, type AIConfig } from "../ai/config"
+import { type AIConfig, normalizeAI } from "../ai/config"
 import { configHome, isRecord, readJSON, writeFileAtomic } from "../lib/json"
 import { HEADING_STYLES, type HeadingStyle } from "../markdown/heading-style"
 import { pickZen, type ZenConfig } from "../ui/zen"
@@ -76,7 +76,8 @@ export function loadConfig(): Config {
   if (typeof raw.transparent === "boolean") out.transparent = raw.transparent
   if (typeof raw.motion === "boolean") out.motion = raw.motion
   if (typeof raw.minimap === "boolean") out.minimap = raw.minimap
-  if (typeof raw.headings === "string" && (HEADING_STYLES as readonly string[]).includes(raw.headings)) out.headings = raw.headings as HeadingStyle
+  if (typeof raw.headings === "string" && (HEADING_STYLES as readonly string[]).includes(raw.headings))
+    out.headings = raw.headings as HeadingStyle
   let folds: Partial<Record<View, boolean>> | undefined
   const f = raw.folds
   if (isRecord(f)) {
@@ -105,7 +106,8 @@ export function saveConfig(patch: Config): boolean {
   const current = readRaw()
   if (!current) return false
   const next: Raw = { ...current }
-  for (const [k, v] of Object.entries(patch)) next[k] = isRecord(v) && isRecord(current[k]) ? { ...current[k], ...v } : v
+  for (const [k, v] of Object.entries(patch))
+    next[k] = isRecord(v) && isRecord(current[k]) ? { ...current[k], ...v } : v
   try {
     writeFileAtomic(configPath(), JSON.stringify(next, null, 2) + "\n")
     return true

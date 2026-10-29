@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { DELTA_PROMPT } from "../../src/ai/delta"
-import { bodyRows, keys, OLLAMA, openHelp, W120, waitFor, waitFrame, withClock, useAppHarness } from "./helpers"
+import { bodyRows, keys, OLLAMA, openHelp, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
 
 const { cfgDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 
@@ -89,7 +89,10 @@ test("D streams an explanation of the changed hunks into Info; the baseline move
   await waitFrame(s, (f) => f.includes("Rewords the first part"))
   ai.send(0, ' | "first, edited"\n§2: new closing section\n')
   ai.end(0)
-  await waitFrame(s, (f) => f.includes("Changed · llama3.2") && f.includes("first line reworded") && f.includes("new closing section"))
+  await waitFrame(
+    s,
+    (f) => f.includes("Changed · llama3.2") && f.includes("first line reworded") && f.includes("new closing section"),
+  )
   expect(await keys(s, "D")).toMatch(/no changes since \d\d:\d\d/)
 })
 
@@ -128,7 +131,10 @@ test("an explanation goes once a reload is too large to compare", async () => {
   aiConfig(OLLAMA)
   // five sections of 1000 lines: rewriting them all is over DIFF_BUDGET, editing one line is not
   const big = (v: (k: number, i: number) => string) =>
-    Array.from({ length: 5 }, (_, k) => `## S${k}\n\n` + Array.from({ length: 1000 }, (_, i) => v(k, i)).join("\n") + "\n").join("\n")
+    Array.from(
+      { length: 5 },
+      (_, k) => `## S${k}\n\n` + Array.from({ length: 1000 }, (_, i) => v(k, i)).join("\n") + "\n",
+    ).join("\n")
   const d = tmp({ "a.md": big((k, i) => `a${k}-${i}`) })
   const { s, ai } = await mountAI(d, "a.md", { size: W120 })
   writeFileSync(
@@ -174,7 +180,11 @@ test("a reply past MAX_DELTA keeps the summary and the finished section lines", 
   ai.send(0, "Rewords the first part.\n§1: first line reworded\n")
   await waitFrame(s, (f) => f.includes("first line reworded"))
   ai.send(0, "§2: " + "very ".repeat(500))
-  await waitFrame(s, (f) => f.includes("Changed · llama3.2") && f.includes("Rewords the first part.") && f.includes("first line reworded"))
+  await waitFrame(
+    s,
+    (f) =>
+      f.includes("Changed · llama3.2") && f.includes("Rewords the first part.") && f.includes("first line reworded"),
+  )
   const f = s.captureCharFrame()
   expect(f).not.toContain("too long")
   expect(f).not.toContain("very very")
@@ -248,7 +258,10 @@ test("help lists D in the AI group; the Info footer shows D changes only with ch
 test("⏎ on a change row jumps to its heading; removed rows are skipped", async () => {
   const d = tmp({ "a.md": LONG })
   const s = await mount(d, "a.md", { size: W120 })
-  writeFileSync(join(d, "a.md"), LONG.replace("row 3\n", "row 3 edited\n").replace("## Two\n\nsecond\n\n", "").replace("third", "third!"))
+  writeFileSync(
+    join(d, "a.md"),
+    LONG.replace("row 3\n", "row 3 edited\n").replace("## Two\n\nsecond\n\n", "").replace("third", "third!"),
+  )
   await waitFrame(s, (f) => f.includes("3 sections changed"), 4000)
   await keys(s, "3")
   // rows: ~ One (stop), − Two (not a stop), ~ Three (stop): j goes from One straight to Three

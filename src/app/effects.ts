@@ -5,14 +5,14 @@
 import { basename } from "node:path"
 import { useEffect, useRef } from "react"
 import { reloadToast } from "../ai/delta"
+import { plural } from "../lib/text"
 import { ensureHighlights } from "../markdown/highlight"
 import { pendingHighlights, type Rendered } from "../markdown/render"
-import { copiedCount, selectedText } from "../ui/nav"
-import { LOGO_HOLD } from "../ui/status"
-import { plural } from "../lib/text"
-import { resolveTheme } from "../theme/themepick"
 import { watchPath } from "../notes/watch"
 import { STDIN } from "../notes/workspace"
+import { resolveTheme } from "../theme/themepick"
+import { copiedCount, selectedText } from "../ui/nav"
+import { LOGO_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Ctx } from "./keymap"
@@ -21,7 +21,9 @@ import { jobKey } from "./store"
 import type { WorkspaceControl } from "./workspace"
 
 /** What the effects call from the feature factories. */
-export type EffectDeps = Pick<AIJobs, "dropDelta"> & Pick<Links, "ensureLinks"> & Pick<WorkspaceControl, "recordProject" | "leave" | "animateWelcome">
+export type EffectDeps = Pick<AIJobs, "dropDelta"> &
+  Pick<Links, "ensureLinks"> &
+  Pick<WorkspaceControl, "recordProject" | "leave" | "animateWelcome">
 
 /** Register every effect of App on the app context (hooks: call it unconditionally, before any early return). */
 export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject, leave, animateWelcome }: EffectDeps) {
@@ -36,7 +38,10 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
 }
 
 /** Live reload of the open note, then its change baseline. */
-function useNoteWatch({ ui, set, bump, derive, memo, timers, jobs, flash }: AppCtx, dropDelta: EffectDeps["dropDelta"]) {
+function useNoteWatch(
+  { ui, set, bump, derive, memo, timers, jobs, flash }: AppCtx,
+  dropDelta: EffectDeps["dropDelta"],
+) {
   const { openPath, watchGen } = ui.current
   useEffect(() => {
     if (!openPath || openPath === STDIN) return
@@ -48,7 +53,8 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, jobs, flash }: AppC
         const d = derive()
         // a shown explanation goes once the list moves on, or once it can't be compared
         const dl = d.s.delta
-        if (dl?.result && (d.changes === null || d.changes.length) && !jobs.current.has(jobKey("delta", dl.path))) set({ delta: null })
+        if (dl?.result && (d.changes === null || d.changes.length) && !jobs.current.has(jobKey("delta", dl.path)))
+          set({ delta: null })
         flash(reloadToast(d.changes, d.propsChanged, !!d.s.ai))
       },
       error: (msg) => flash(msg, "error"),
@@ -68,7 +74,11 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, jobs, flash }: AppC
 }
 
 /** What runs once at mount: the project record, the config theme toast and a piped document's link scan. */
-function useStartup({ ui, themeName, linkScanDelay, flash }: AppCtx, ensureLinks: EffectDeps["ensureLinks"], recordProject: EffectDeps["recordProject"]) {
+function useStartup(
+  { ui, themeName, linkScanDelay, flash }: AppCtx,
+  ensureLinks: EffectDeps["ensureLinks"],
+  recordProject: EffectDeps["recordProject"],
+) {
   // the start is a project opened too
   useEffect(recordProject, [])
   // `--theme` is checked by the CLI, so a name nothing resolves came from config.json (brothy stands in)
@@ -132,7 +142,11 @@ type RenderDeps = { pokeHints: (ctx: Ctx) => void } & Pick<AIJobs, "glossEntered
  * The effects that need this render's values, in order: hints for a new context, the zen gloss on a section change, the
  * theme sample's highlighting (hooks: call it unconditionally, before any early return).
  */
-export function useRenderEffects(c: AppCtx, { ctxNow, glossAt, sample }: RenderWatch, { pokeHints, glossEntered }: RenderDeps) {
+export function useRenderEffects(
+  c: AppCtx,
+  { ctxNow, glossAt, sample }: RenderWatch,
+  { pokeHints, glossEntered }: RenderDeps,
+) {
   /** the context the hints were last poked for */
   const ctxSeen = useRef<Ctx | null>(null)
   /** the note and section the gloss auto-show last ran for (null: outside zen) */

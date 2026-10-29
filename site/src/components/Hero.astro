@@ -8,7 +8,14 @@ import art from "../art.json"
 const { data } = Astro.locals.starlightRoute.entry
 const { tagline, actions = [] } = data.hero ?? {}
 const base = import.meta.env.BASE_URL.replace(/\/$/, "")
-const START = ["getting-started/install", "getting-started/quick-start", "keys", "usage/reading", "themes/theme-picker", "ai/setup"]
+const START = [
+  "getting-started/install",
+  "getting-started/quick-start",
+  "keys",
+  "usage/reading",
+  "themes/theme-picker",
+  "ai/setup",
+]
 const start = await Promise.all(
   START.map(async (id) => {
     const e = await getEntry("docs", id)

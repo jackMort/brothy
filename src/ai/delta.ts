@@ -3,10 +3,10 @@
  * baseline, the hunks sent to the model, and what of its reply is kept.
  */
 
-import { cleanReply, cleanSummary, stripThink, type ChatReq } from "./client"
-import { noteSections, type NoteSection } from "../markdown/sections"
 import { truncate } from "../lib/text"
+import { type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
+import { type ChatReq, cleanReply, cleanSummary, stripThink } from "./client"
 
 /** One line of a diff: unchanged (" "), removed ("-") or added ("+"). */
 export type Op = { op: " " | "-" | "+"; text: string }
@@ -51,7 +51,9 @@ export function lineDiff(a: string[], b: string[], cap = DIFF_CELLS): Op[] | nul
   const w = m + 1
   const lcs = new Uint32Array((n + 1) * w)
   for (let i = n - 1; i >= 0; i--)
-    for (let j = m - 1; j >= 0; j--) lcs[i * w + j] = x[i] === y[j] ? lcs[(i + 1) * w + j + 1]! + 1 : Math.max(lcs[(i + 1) * w + j]!, lcs[i * w + j + 1]!)
+    for (let j = m - 1; j >= 0; j--)
+      lcs[i * w + j] =
+        x[i] === y[j] ? lcs[(i + 1) * w + j + 1]! + 1 : Math.max(lcs[(i + 1) * w + j]!, lcs[i * w + j + 1]!)
   const ops: Op[] = a.slice(0, head).map((text) => ({ op: " ", text }))
   let i = 0
   let j = 0
@@ -138,7 +140,11 @@ const idOf = (x: Sec) => (x.s.index < 0 ? "\0lead" : `${x.s.key}\0${x.s.ord}`)
 const sameLines = (a: string[], b: string[]) => a.length === b.length && a.every((l, i) => l === b[i])
 const all = (op: Op["op"], lines: string[]): Op[] => lines.map((text) => ({ op, text }))
 
-function change(status: ChangeStatus, x: Sec, rest: Pick<Change, "plus" | "minus" | "hunks" | "rewritten" | "newText">): Change {
+function change(
+  status: ChangeStatus,
+  x: Sec,
+  rest: Pick<Change, "plus" | "minus" | "hunks" | "rewritten" | "newText">,
+): Change {
   return { status, index: x.s.index, path: x.path, key: x.s.key, ord: x.s.ord, ...rest }
 }
 
@@ -189,13 +195,30 @@ export function diffSections(before: string, after: string): Change[] | null {
   let budget = DIFF_BUDGET
   const pushRemoved = (list: Sec[] | undefined) => {
     for (const o of list ?? [])
-      out.push(change("removed", o, { plus: 0, minus: o.lines.length, hunks: [{ ops: all("-", o.lines) }], rewritten: false, newText: "" }))
+      out.push(
+        change("removed", o, {
+          plus: 0,
+          minus: o.lines.length,
+          hunks: [{ ops: all("-", o.lines) }],
+          rewritten: false,
+          newText: "",
+        }),
+      )
   }
   pushRemoved(removedAfter.get(null))
   for (const n of news) {
     const o = oldById.get(idOf(n))
     const newText = n.lines.join("\n")
-    if (!o) out.push(change("added", n, { plus: n.lines.length, minus: 0, hunks: [{ ops: all("+", n.lines) }], rewritten: false, newText }))
+    if (!o)
+      out.push(
+        change("added", n, {
+          plus: n.lines.length,
+          minus: 0,
+          hunks: [{ ops: all("+", n.lines) }],
+          rewritten: false,
+          newText,
+        }),
+      )
     else if (!sameLines(o.lines, n.lines)) {
       const cells = diffCells(o.lines, n.lines)
       if (cells <= DIFF_CELLS && (budget -= cells) < 0) return null
@@ -226,7 +249,8 @@ const opLine = (o: Op) => (o.op === " " ? "  " : o.op + " ") + o.text
 function sectionBody(c: Change): string[] {
   if (c.rewritten) return c.newText.split("\n").map((t) => "+ " + t)
   const ops = c.hunks.flatMap((h) => h.ops)
-  if (c.status === "removed") return [...ops.slice(0, REMOVED_LINES).map(opLine), ...(ops.length > REMOVED_LINES ? ["- …"] : [])]
+  if (c.status === "removed")
+    return [...ops.slice(0, REMOVED_LINES).map(opLine), ...(ops.length > REMOVED_LINES ? ["- …"] : [])]
   if (c.status === "added") return ops.map(opLine)
   return c.hunks.flatMap((h) => ["@@", ...h.ops.map(opLine)])
 }
@@ -272,7 +296,12 @@ export function deltaMessage(title: string, changes: Change[], max: number): str
 
 /** The `D` request: `deltaMessage` within DELTA_MAX (or `maxChars`, the target's, if lower); the reply is parsed from `raw`. */
 export function deltaRequest(title: string, changes: Change[], maxChars: number): ChatReq {
-  return { system: DELTA_PROMPT, user: deltaMessage(title, changes, Math.min(maxChars, DELTA_MAX)), maxOut: MAX_DELTA, clean: cleanReply }
+  return {
+    system: DELTA_PROMPT,
+    user: deltaMessage(title, changes, Math.min(maxChars, DELTA_MAX)),
+    maxOut: MAX_DELTA,
+    clean: cleanReply,
+  }
 }
 
 export interface DeltaNote {
@@ -299,7 +328,10 @@ const unquote = (s: string) => collapse(s.trim().replace(/^["“”'`]+|["“”
 
 /** The + lines of a change, as one whitespace-collapsed text (quotes must occur in it). */
 function plusText(c: Change): string {
-  const lines = c.rewritten || c.status === "added" ? c.newText.split("\n") : c.hunks.flatMap((h) => h.ops.filter((o) => o.op === "+").map((o) => o.text))
+  const lines =
+    c.rewritten || c.status === "added"
+      ? c.newText.split("\n")
+      : c.hunks.flatMap((h) => h.ops.filter((o) => o.op === "+").map((o) => o.text))
   return collapse(lines.join(" "))
 }
 
@@ -351,4 +383,5 @@ export const hhmm = (at: number) => {
 }
 
 /** What `findQuote` looks for: Source rows show the Markdown as written; Preview drops list/task markers and inline marks. */
-export const quoteNeedle = (quote: string, source: boolean) => (source ? quote : plainLine(quote.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, "")))
+export const quoteNeedle = (quote: string, source: boolean) =>
+  source ? quote : plainLine(quote.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, ""))

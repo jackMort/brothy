@@ -54,7 +54,8 @@ export function layout(W: number, H: number, s: LayoutState) {
   const gap = H >= 28 ? 1 : 0
   const bodyH = Math.max(4, H - 3 - gap)
   const areaW = W - 2 - (inline ? SW + 1 : 0)
-  const want = zen ? s.zenCfg.measure : s.wide ? "full" : MEASURE
+  const plain = s.wide ? "full" : MEASURE
+  const want = zen ? s.zenCfg.measure : plain
   let CW = Math.max(MIN_MEASURE, want === "full" ? areaW - 4 : Math.min(want, areaW - 4))
   let padL = Math.max(0, Math.floor((areaW - CW) / 2))
   // the minimap takes the last MINI_W columns (the right margin and padding): the text keeps its

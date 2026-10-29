@@ -1,10 +1,11 @@
 // What the popups and the panel filter row do to the store: Find in Document, the `t` theme picker, the help sheet's
 // scroll and the filter's typing. Not pure: `makePopups` closes over the app context.
-import { helpLayout } from "../ui/help"
-import { keepVisible } from "../ui/nav"
+
 import { clamp } from "../lib/text"
 import { themes } from "../theme/theme"
 import { filterFamilies, pickIndex, pickStart, pickTheme, type ThemePick } from "../theme/themepick"
+import { helpLayout } from "../ui/help"
+import { keepVisible } from "../ui/nav"
 import type { AppCtx } from "./ctx"
 import { HELP_GROUPS } from "./keymap"
 
@@ -21,7 +22,8 @@ function makeFilter(c: AppCtx) {
   /** Leave typing; `clear` also empties the shown view's filter. */
   const filterStop = (clear: boolean) => {
     clearTimeout(timers.current.open)
-    set({ filterTyping: false, ...(clear ? (ui.current.view === "outline" ? { outlineFilter: "" } : { filter: "" }) : {}) })
+    const emptied = ui.current.view === "outline" ? { outlineFilter: "" } : { filter: "" }
+    set({ filterTyping: false, ...(clear ? emptied : {}) })
   }
 
   return { filterText, filterType, filterStop }
@@ -45,7 +47,12 @@ function makeFind(c: AppCtx) {
     if (!pr) return
     const { L } = derive()
     const n = clamp(hl, 0, promptCount() - 1)
-    const top = keepVisible(pr.hl >= 0 ? pr.top : keepVisible(0, promptDefault(), L.PH, promptCount()), n, L.PH, promptCount())
+    const top = keepVisible(
+      pr.hl >= 0 ? pr.top : keepVisible(0, promptDefault(), L.PH, promptCount()),
+      n,
+      L.PH,
+      promptCount(),
+    )
     set({ prompt: { ...pr, hl: n, top } })
   }
   const promptType = (v: string) => set({ prompt: { value: v, hl: -1, top: 0 }, query: v, matchLine: null })

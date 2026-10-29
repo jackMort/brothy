@@ -1,17 +1,17 @@
 #!/usr/bin/env bun
-// The CLI entry: parse args, stat the path, check the TTY, read a piped document, create the renderer and mount <App>.
-import { createCliRenderer } from "@opentui/core"
-import { createRoot } from "@opentui/react"
 import { openSync, readdirSync, statSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { ReadStream } from "node:tty"
+// The CLI entry: parse args, stat the path, check the TTY, read a piped document, create the renderer and mount <App>.
+import { createCliRenderer } from "@opentui/core"
+import { createRoot } from "@opentui/react"
 import { App, VERSION } from "./App"
+import { isMarkdown } from "./notes/files"
+import { readCapped } from "./notes/stdin"
 import { parseArgs } from "./system/args"
 import { loadConfig } from "./system/config"
-import { readCapped } from "./notes/stdin"
-import { isMarkdown } from "./notes/files"
-import { WORDMARK } from "./ui/status"
 import { FAMILIES, onlyMode } from "./theme/themepick"
+import { WORDMARK } from "./ui/status"
 
 const die: (msg: string) => never = (msg) => {
   console.error(`brothy: ${msg}`)
@@ -97,11 +97,17 @@ if (piped) {
   }
   if (isFile && !isMarkdown(abs)) console.error(`brothy: ${args.path} doesn't look like Markdown, opening anyway`)
   root = isFile ? dirname(abs) : abs
-  if (!process.stdout.isTTY || !process.stdin.isTTY) die("needs an interactive terminal (stdin and stdout must be a TTY)")
+  if (!process.stdout.isTTY || !process.stdin.isTTY)
+    die("needs an interactive terminal (stdin and stdout must be a TTY)")
 }
 
 try {
-  const renderer = await createCliRenderer({ exitOnCtrlC: true, useMouse: true, targetFps: 30, ...(keys && { stdin: keys }) })
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: true,
+    useMouse: true,
+    targetFps: 30,
+    ...(keys && { stdin: keys }),
+  })
   createRoot(renderer).render(
     <App
       root={root}

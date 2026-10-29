@@ -1,14 +1,25 @@
 // Ask → jump (`?` in the `C-p` switcher). The model turns a question into search queries (tier 0)
 // or orders excerpts brothy picked (tier 1); every answer is a place the local index found. Pure.
 
-import { cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens, type ChatReq } from "./client"
-import { SCORE_SUBSEQUENCE, scoreName, stem, type FileNode } from "../notes/files"
 import { isRecord } from "../lib/json"
-import { headingKey, sectionId } from "../markdown/sections"
 import { safeLine } from "../lib/spans"
 import { truncate } from "../lib/text"
-import { SWITCH_CAP, foldSame, headingAt, lineOf, nextSection, notesOf, type AnswerRow, type NoteDoc, type SwitchRow, type VaultIndex } from "../notes/vault"
+import { headingKey, sectionId } from "../markdown/sections"
+import { type FileNode, SCORE_SUBSEQUENCE, scoreName, stem } from "../notes/files"
+import {
+  type AnswerRow,
+  foldSame,
+  headingAt,
+  lineOf,
+  type NoteDoc,
+  nextSection,
+  notesOf,
+  SWITCH_CAP,
+  type SwitchRow,
+  type VaultIndex,
+} from "../notes/vault"
 import { headingPath } from "../ui/zen"
+import { type ChatReq, cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./client"
 
 /** `PROMPTS.ask` (ai/config.ts): bump it with any change. */
 export const ASK_PROMPT =
@@ -203,7 +214,10 @@ export function askCandidates(ix: VaultIndex, tree: FileNode, queries: readonly 
  * Where an answer lands in `doc`, the note as it is now: its section found again by key and
  * occurrence, then the first line there holding `query`. null when the heading is gone.
  */
-export function askLocate(doc: NoteDoc, a: { heading: number; key: string; ord: number; query: string }): { heading: number; line: number | null } | null {
+export function askLocate(
+  doc: NoteDoc,
+  a: { heading: number; key: string; ord: number; query: string },
+): { heading: number; line: number | null } | null {
   const i = a.heading < 0 ? -1 : keysOf(doc).findIndex((x) => x.key === a.key && x.ord === a.ord)
   if (a.heading >= 0 && i < 0) return null
   const [from, to] = sectionLines(doc, i)
@@ -308,9 +322,17 @@ export function askRows(v: AskView): SwitchRow[] {
   if ([...v.question].length < ASK_MIN) return [note("type a question")]
   if (!st) {
     if ("error" in v.target) return [note(v.target.error)]
-    return [{ kind: "askAction", act: "ask", text: "⏎ ask", note: ` · only the question${v.cut ? "…" : ""} → ${v.target.host}` }]
+    return [
+      {
+        kind: "askAction",
+        act: "ask",
+        text: "⏎ ask",
+        note: ` · only the question${v.cut ? "…" : ""} → ${v.target.host}`,
+      },
+    ]
   }
-  if (st.phase === "error") return [{ kind: "askAction", act: "ask", text: `${st.error ?? ""} · ⏎ asks again`, note: "", error: true }]
+  if (st.phase === "error")
+    return [{ kind: "askAction", act: "ask", text: `${st.error ?? ""} · ⏎ asks again`, note: "", error: true }]
   if (st.phase === "asking" || v.indexing) return [note("asking…")]
   const queries = st.queries ?? []
   const searched = `searched: ${queries.join(" · ")}`
@@ -324,14 +346,21 @@ export function askRows(v: AskView): SwitchRow[] {
     return [
       { kind: "header", title: "Answers", count: String(top.length) },
       ...top.map((c) => answer(c, st.why?.[c.id] ?? "")),
-      ...(rest.length ? [{ kind: "header" as const, title: "Other matches", count: String(rest.length) }, ...rest.map((c) => answer(c, hits(c)))] : []),
+      ...(rest.length
+        ? [
+            { kind: "header" as const, title: "Other matches", count: String(rest.length) },
+            ...rest.map((c) => answer(c, hits(c))),
+          ]
+        : []),
       note(searched),
     ]
   }
   return [
     { kind: "header", title: "Answers", count: String(v.cands.length) },
     ...v.cands.map((c) => answer(c, hits(c))),
-    st.phase === "reranking" ? note("reranking…") : { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: ` · ${v.cost}` },
+    st.phase === "reranking"
+      ? note("reranking…")
+      : { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: ` · ${v.cost}` },
     note(searched),
   ]
 }
@@ -346,7 +375,12 @@ export function askSection(rows: readonly SwitchRow[], cur: number): number {
 }
 
 /** Right of the `Ask` title, before `esc`: nothing when AI is off, index progress, the answering model, else the note count. */
-export function askTitleNote(v: { off: boolean; state: AskState | undefined; indexing: string | null; notes: string }): string | undefined {
+export function askTitleNote(v: {
+  off: boolean
+  state: AskState | undefined
+  indexing: string | null
+  notes: string
+}): string | undefined {
   if (v.off) return undefined
   if (v.indexing) return v.indexing
   const p = v.state?.phase

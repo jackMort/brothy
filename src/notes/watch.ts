@@ -1,5 +1,5 @@
 // Live reload for the open note: `watchPath` survives atomic saves and falls back to polling. The one module here with timers and watchers.
-import { statSync, watch, type FSWatcher } from "node:fs"
+import { type FSWatcher, statSync, watch } from "node:fs"
 import { basename, dirname } from "node:path"
 
 /** Identity of the file's current content (mtime, size, inode), or `"missing"`. */

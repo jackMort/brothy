@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { editorCommand, runEditor, sourceLineAt, type EditorIO } from "../../src/system/editor"
-import { render } from "../../src/markdown/render"
 import { parseFrontMatter } from "../../src/markdown/frontmatter"
+import { render } from "../../src/markdown/render"
 import { renderSource, sourceScan } from "../../src/markdown/source"
+import { type EditorIO, editorCommand, runEditor, sourceLineAt } from "../../src/system/editor"
 import { brothy } from "../helpers/theme"
 
 const t = brothy
-const note = ["---", "title: x", "---", "intro line", "", "# One", "", "alpha", "", "## Two", "", "beta", "gamma"].join("\n")
+const note = ["---", "title: x", "---", "intro line", "", "# One", "", "alpha", "", "## Two", "", "beta", "gamma"].join(
+  "\n",
+)
 
 describe("sourceLineAt", () => {
   test("Source view: the source line whose first row is at or above the top", () => {
@@ -20,7 +22,15 @@ describe("sourceLineAt", () => {
     const r = render(fm.body, 80, t)
     const scan = sourceScan(note, t)
     const two = r.headings.findIndex((h) => h.text === "Two")
-    expect(sourceLineAt({ source: false, top: r.headings[two]!.line, headings: r.headings, scan: scan.headings, offset: fm.offset })).toBe(10)
+    expect(
+      sourceLineAt({
+        source: false,
+        top: r.headings[two]!.line,
+        headings: r.headings,
+        scan: scan.headings,
+        offset: fm.offset,
+      }),
+    ).toBe(10)
   })
 
   test("Preview: rows below a heading advance from it, never past the next heading", () => {
@@ -28,7 +38,8 @@ describe("sourceLineAt", () => {
     const r = render(fm.body, 80, t)
     const scan = sourceScan(note, t)
     const one = r.headings.find((h) => h.text === "One")!
-    const at = (top: number) => sourceLineAt({ source: false, top, headings: r.headings, scan: scan.headings, offset: fm.offset })
+    const at = (top: number) =>
+      sourceLineAt({ source: false, top, headings: r.headings, scan: scan.headings, offset: fm.offset })
     expect(at(one.line)).toBe(6)
     expect(at(one.line + 2)).toBe(8)
     const two = r.headings.find((h) => h.text === "Two")!
@@ -38,16 +49,26 @@ describe("sourceLineAt", () => {
     const ss = sourceScan(short, t)
     // a wrapped paragraph can't push the line into the next heading
     expect(
-      sourceLineAt({ source: false, top: sr.headings[1]!.line - 1 + 40, headings: sr.headings.slice(0, 1), scan: ss.headings.slice(0, 1), offset: 0 }),
+      sourceLineAt({
+        source: false,
+        top: sr.headings[1]!.line - 1 + 40,
+        headings: sr.headings.slice(0, 1),
+        scan: ss.headings.slice(0, 1),
+        offset: 0,
+      }),
     ).toBeGreaterThan(0)
-    expect(sourceLineAt({ source: false, top: 2, headings: sr.headings, scan: ss.headings, offset: 0 })).toBeLessThanOrEqual(4)
+    expect(
+      sourceLineAt({ source: false, top: 2, headings: sr.headings, scan: ss.headings, offset: 0 }),
+    ).toBeLessThanOrEqual(4)
   })
 
   test("Preview: before the first heading counts from the end of the front matter", () => {
     const fm = parseFrontMatter(note)
     const r = render(fm.body, 80, t)
     const scan = sourceScan(note, t)
-    expect(sourceLineAt({ source: false, top: 0, headings: r.headings, scan: scan.headings, offset: fm.offset })).toBe(4)
+    expect(sourceLineAt({ source: false, top: 0, headings: r.headings, scan: scan.headings, offset: fm.offset })).toBe(
+      4,
+    )
   })
 
   test("Preview without headings", () => {
@@ -69,7 +90,12 @@ describe("editorCommand", () => {
   })
   test("VS Code and its forks take -g path:line, Sublime Text path:line, by the command's basename", () => {
     expect(editorCommand({ EDITOR: "code --wait" }, "/a.md", 3)).toEqual(["code", "--wait", "-g", "/a.md:3"])
-    expect(editorCommand({ VISUAL: "/usr/bin/codium -w" }, "/a.md", 3)).toEqual(["/usr/bin/codium", "-w", "-g", "/a.md:3"])
+    expect(editorCommand({ VISUAL: "/usr/bin/codium -w" }, "/a.md", 3)).toEqual([
+      "/usr/bin/codium",
+      "-w",
+      "-g",
+      "/a.md:3",
+    ])
     expect(editorCommand({ VISUAL: "cursor --wait" }, "/a.md", 9)).toEqual(["cursor", "--wait", "-g", "/a.md:9"])
     expect(editorCommand({ EDITOR: "subl -w" }, "/a.md", 3)).toEqual(["subl", "-w", "/a.md:3"])
     expect(editorCommand({ EDITOR: "/opt/encode" }, "/a.md", 3)).toEqual(["/opt/encode", "+3", "/a.md"]) // only the whole name counts

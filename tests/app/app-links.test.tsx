@@ -3,8 +3,8 @@ import { expect, test } from "bun:test"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { EditResult } from "../../src/system/editor"
-import { B, HINT_ROW, keys, longB, onBg, spansOf, waitFor, waitFrame, useAppHarness } from "./helpers"
 import { hex } from "../helpers/theme"
+import { B, HINT_ROW, keys, longB, onBg, spansOf, useAppHarness, waitFor, waitFrame } from "./helpers"
 
 const { tmp, mount } = useAppHarness()
 
@@ -60,7 +60,10 @@ test("Source and zen do not label", async () => {
 })
 
 test("labels drop when the view moves", async () => {
-  const root = tmp({ "a.md": "see [[b]]\n\n" + Array.from({ length: 80 }, (_, i) => `line ${i}`).join("\n\n"), "b.md": "# Bee\n" })
+  const root = tmp({
+    "a.md": "see [[b]]\n\n" + Array.from({ length: 80 }, (_, i) => `line ${i}`).join("\n\n"),
+    "b.md": "# Bee\n",
+  })
   const s = await mount(root, "a.md")
   await keys(s, "f")
   await s.mockMouse.scroll(70, 10, "down") // inside the document column
@@ -70,7 +73,8 @@ test("labels drop when the view moves", async () => {
 
 test("link labels: survive code highlighting landing, and the typed label is followed", async () => {
   const root = tmp({
-    "a.md": "see [[b]]\n\n```ts\nconst labelsLand = 20260429 // not highlighted by an earlier test: the cache is shared\n```\n",
+    "a.md":
+      "see [[b]]\n\n```ts\nconst labelsLand = 20260429 // not highlighted by an earlier test: the cache is shared\n```\n",
     "b.md": "# Bee\n",
   })
   const s = await mount(root, "a.md")
@@ -140,7 +144,11 @@ test("Source, where f only says preview only, does not offer f links", async () 
 })
 
 test("a single note inside a vault resolves links against the vault root", async () => {
-  const v = tmp({ "Journal/a.md": "see [[Elsewhere/b]] and [[c]]\n", "Elsewhere/b.md": "# Bee\n", "c.md": "# Sea note\n" })
+  const v = tmp({
+    "Journal/a.md": "see [[Elsewhere/b]] and [[c]]\n",
+    "Elsewhere/b.md": "# Bee\n",
+    "c.md": "# Sea note\n",
+  })
   mkdirSync(join(v, ".obsidian"))
   const s = await mount(join(v, "Journal"), "a.md")
   const b = s
@@ -152,7 +160,11 @@ test("a single note inside a vault resolves links against the vault root", async
 })
 
 test("a note reached outside the opened folder names its vault folder in the top line, not ..", async () => {
-  const v = tmp({ "Journal/a.md": "see [[Elsewhere/b]] and [[c]]\n", "Elsewhere/b.md": "# Bee\n", "c.md": "# Sea note\n" })
+  const v = tmp({
+    "Journal/a.md": "see [[Elsewhere/b]] and [[c]]\n",
+    "Elsewhere/b.md": "# Bee\n",
+    "c.md": "# Sea note\n",
+  })
   mkdirSync(join(v, ".obsidian"))
   const s = await mount(join(v, "Journal"), "a.md")
   const top = (await keys(s, "f", "a")).split("\n")[0]!

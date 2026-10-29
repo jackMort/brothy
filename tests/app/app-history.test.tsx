@@ -2,13 +2,16 @@
 import { expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
-import { bodyRows, HINT_ROW, keys, longB, openHelp, panelShown, waitFrame, useAppHarness } from "./helpers"
+import { bodyRows, HINT_ROW, keys, longB, openHelp, panelShown, useAppHarness, waitFrame } from "./helpers"
 
 const { tmp, mount } = useAppHarness()
 
 // ------------------------------------------------------------- history (H / L)
 
-const histA = "# A\n\n" + Array.from({ length: 60 }, (_, i) => (i % 8 === 4 ? `row ${i} see [[b]]` : `row ${i}`)).join("\n\n") + "\n"
+const histA =
+  "# A\n\n" +
+  Array.from({ length: 60 }, (_, i) => (i % 8 === 4 ? `row ${i} see [[b]]` : `row ${i}`)).join("\n\n") +
+  "\n"
 const histVault = () => tmp({ "a.md": histA, "b.md": longB, "c.md": "# Sea note\n", "d.md": "# Dee note\n" })
 
 test("H goes back to the note a link left, at its top then; L goes forward again", async () => {
@@ -56,7 +59,11 @@ test("a previewed note revisited with L under document focus stays in history", 
   await waitFrame(s, (f) => f.includes("Go to") && f.includes("Dee note"))
   await keys(s, "enter")
   // H must come after the switcher closed and the forward toast cleared
-  await waitFrame(s, (f) => !f.includes("Go to") && f.includes("Dee note") && !f.split("\n")[HINT_ROW]!.includes("forward · b"), 6000)
+  await waitFrame(
+    s,
+    (f) => !f.includes("Go to") && f.includes("Dee note") && !f.split("\n")[HINT_ROW]!.includes("forward · b"),
+    6000,
+  )
   expect((await keys(s, "H")).split("\n")[HINT_ROW]).toContain("back · b")
 }, 10_000) // the forward toast holds and fades for ~2.4 s
 

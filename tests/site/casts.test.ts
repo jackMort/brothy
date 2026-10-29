@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { readFileSync, readdirSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { Screen, undrawn, unsupported } from "../../site/src/scripts/ansi"
 
@@ -32,7 +32,13 @@ for (const f of casts)
 
 test("unsupported / undrawn: what the player can't replay is reported", () => {
   expect(unsupported("\x1b[2J\x1b[?25l\x1b[3;7H\x1b[0;1;38;2;1;2;3;48;2;4;5;6mx\x1b[0m")).toEqual([])
-  expect(unsupported("\x1b[K\x1b[2;5r\x1b[38;5;12m\x1b[1J\x1b]0;t\x07")).toEqual(["\x1b[K", "\x1b[2;5r", "\x1b[38;5;12m", "\x1b[1J", "\x1b]"])
+  expect(unsupported("\x1b[K\x1b[2;5r\x1b[38;5;12m\x1b[1J\x1b]0;t\x07")).toEqual([
+    "\x1b[K",
+    "\x1b[2;5r",
+    "\x1b[38;5;12m",
+    "\x1b[1J",
+    "\x1b]",
+  ])
   expect(undrawn("─━┈▌ ok ╌ ▒")).toEqual(["╌", "▒"])
 })
 

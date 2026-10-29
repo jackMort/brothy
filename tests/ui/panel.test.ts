@@ -1,37 +1,46 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
-import { scanTree } from "../../src/notes/files"
+import type { Change } from "../../src/ai/delta"
+import { width } from "../../src/lib/text"
 import { headingKey } from "../../src/markdown/sections"
 import type { Stats } from "../../src/markdown/stats"
-import type { Change } from "../../src/ai/delta"
+import type { FileNode } from "../../src/notes/files"
+import { scanTree } from "../../src/notes/files"
+import { mix, themeByName } from "../../src/theme/theme"
 import {
-  MAX_CHANGE_ROWS,
-  SUMMARY_ROWS,
+  type ChangeView,
   changeItems,
   extractLinks,
   fileRowSpans,
   findHeading,
   fmtAge,
+  type InfoItem,
   infoItems,
   infoSpans,
   linkDest,
+  MAX_CHANGE_ROWS,
   noteIndex,
   outlineRowSpans,
   outlineRows,
   resolveLink,
+  SUMMARY_ROWS,
   tldrItems,
   wrapProperty,
-  type ChangeView,
-  type InfoItem,
 } from "../../src/ui/panel"
-import { mix, themeByName } from "../../src/theme/theme"
-import { width } from "../../src/lib/text"
-import type { FileNode } from "../../src/notes/files"
 import { useTmp } from "../helpers/tmp"
 
 const fixture = useTmp("brothy-panel-")
 
-const STATS: Stats = { words: 1021, lines: 10, headings: 12, links: 0, codeBlocks: 0, tables: 1, tasks: [2, 5], minutes: 5 }
+const STATS: Stats = {
+  words: 1021,
+  lines: 10,
+  headings: 12,
+  links: 0,
+  codeBlocks: 0,
+  tables: 1,
+  tasks: [2, 5],
+  minutes: 5,
+}
 
 describe("outlineRows", () => {
   const hs = [
@@ -85,7 +94,14 @@ describe("infoItems", () => {
   test("links: at most 8, then +N more; stats lines omit zero counts", () => {
     const links = Array.from({ length: 10 }, (_, i) => ({ target: `n${i}`, path: i % 2 ? null : `/v/n${i}.md` }))
     const now = Date.UTC(2026, 9, 12)
-    const items = infoItems([], { ...STATS, tables: 0 }, links, 30, { size: 8602, mtime: new Date(now - 3 * 86400e3) }, now)
+    const items = infoItems(
+      [],
+      { ...STATS, tables: 0 },
+      links,
+      30,
+      { size: 8602, mtime: new Date(now - 3 * 86400e3) },
+      now,
+    )
     expect(items[0]).toEqual({ kind: "label", text: "Links" })
     expect(items.filter((i) => i.kind === "link").length).toBe(8)
     expect(items).toContainEqual({ kind: "more", n: 2 })
@@ -108,13 +124,19 @@ describe("infoItems", () => {
       40,
       null,
     )
-    expect(items.filter((i) => i.kind === "prop" && i.key).map((i) => (i as { key: string }).key)).toEqual(["title", "date", "zeta", "alpha"])
+    expect(items.filter((i) => i.kind === "prop" && i.key).map((i) => (i as { key: string }).key)).toEqual([
+      "title",
+      "date",
+      "zeta",
+      "alpha",
+    ])
   })
 })
 
 describe("links", () => {
   test("extractLinks: aliases, headings, note embeds; not images, code or self links", () => {
-    const body = "See [[A]], [[B|alias]], [[C#Heading]], ![[D]], ![[pic.png]], ![[E.md]], [[a]] again, `[[code]]`\n```\n[[fenced]]\n```\n[[#local]]"
+    const body =
+      "See [[A]], [[B|alias]], [[C#Heading]], ![[D]], ![[pic.png]], ![[E.md]], [[a]] again, `[[code]]`\n```\n[[fenced]]\n```\n[[#local]]"
     expect(extractLinks(body)).toEqual(["A", "B", "C", "D", "E.md"])
   })
   test("resolveLink: exact relative path, else the note name; case-insensitive", () => {
@@ -147,7 +169,16 @@ describe("noteIndex / resolveLink", () => {
     expect(noteIndex(tree)).toBe(noteIndex(tree)) // cached per tree
   })
   test("ambiguous names resolve like Obsidian: a path suffix narrows, then the linking note's folder, then the shortest path", () => {
-    const d = fixture(["plans/x.md", "specs/x.md", "deep/er/x.md", "p/q/take.md", "r/q/take.md", "r/take.md", "s/u/v.md", "t/u/v.md"])
+    const d = fixture([
+      "plans/x.md",
+      "specs/x.md",
+      "deep/er/x.md",
+      "p/q/take.md",
+      "r/q/take.md",
+      "r/take.md",
+      "s/u/v.md",
+      "t/u/v.md",
+    ])
     const tree = scanTree(d)
     expect(resolveLink("x", tree, join(d, "specs/other.md"))).toBe(join(d, "specs/x.md"))
     expect(resolveLink("x", tree, join(d, "plans/other.md"))).toBe(join(d, "plans/x.md"))
@@ -165,27 +196,55 @@ describe("linkDest", () => {
   const tree = scanTree(d)
   const from = join(d, "dir/a.md")
   test("wikilinks resolve by name; same-note heading links stay", () => {
-    expect(linkDest({ kind: "wiki", target: "z", heading: "H", embed: false }, from, tree)).toEqual({ path: join(d, "dir/sub/z.md"), heading: "H", label: "z" })
-    expect(linkDest({ kind: "wiki", target: "", heading: "Here", embed: false }, from, tree)).toEqual({ path: from, heading: "Here", label: "Here" })
+    expect(linkDest({ kind: "wiki", target: "z", heading: "H", embed: false }, from, tree)).toEqual({
+      path: join(d, "dir/sub/z.md"),
+      heading: "H",
+      label: "z",
+    })
+    expect(linkDest({ kind: "wiki", target: "", heading: "Here", embed: false }, from, tree)).toEqual({
+      path: from,
+      heading: "Here",
+      label: "Here",
+    })
     expect(linkDest({ kind: "wiki", target: "nope", embed: false }, from, tree).path).toBeNull()
   })
   test("an ambiguous wikilink prefers the linking note's folder", () => {
     const v = fixture(["one/n.md", "two/n.md"])
     const vt = scanTree(v)
-    expect(linkDest({ kind: "wiki", target: "n", embed: false }, join(v, "two/a.md"), vt).path).toBe(join(v, "two/n.md"))
+    expect(linkDest({ kind: "wiki", target: "n", embed: false }, join(v, "two/a.md"), vt).path).toBe(
+      join(v, "two/n.md"),
+    )
   })
   test("markdown links resolve relative to the note, URL-decoded, with #fragment", () => {
-    expect(linkDest({ kind: "md", href: "b%20c.md#Sec" }, from, tree)).toEqual({ path: join(d, "dir/b c.md"), heading: "Sec", label: "b c.md" })
-    expect(linkDest({ kind: "md", href: "../up.md" }, from, tree)).toEqual({ path: join(d, "up.md"), label: "../up.md" })
+    expect(linkDest({ kind: "md", href: "b%20c.md#Sec" }, from, tree)).toEqual({
+      path: join(d, "dir/b c.md"),
+      heading: "Sec",
+      label: "b c.md",
+    })
+    expect(linkDest({ kind: "md", href: "../up.md" }, from, tree)).toEqual({
+      path: join(d, "up.md"),
+      label: "../up.md",
+    })
     expect(linkDest({ kind: "md", href: "sub/z" }, from, tree).path).toBe(join(d, "dir/sub/z.md"))
-    expect(linkDest({ kind: "md", href: "#local" }, from, tree)).toEqual({ path: from, heading: "local", label: "local" })
+    expect(linkDest({ kind: "md", href: "#local" }, from, tree)).toEqual({
+      path: from,
+      heading: "local",
+      label: "local",
+    })
     expect(linkDest({ kind: "md", href: "missing.md" }, from, tree).path).toBeNull()
   })
   test("a percent-encoded control character never survives decoding", () => {
-    expect(linkDest({ kind: "md", href: "%1b]0;LNKPWN%07.md" }, from, tree)).toEqual({ path: null, label: "\ufffd]0;LNKPWN\ufffd.md" })
+    expect(linkDest({ kind: "md", href: "%1b]0;LNKPWN%07.md" }, from, tree)).toEqual({
+      path: null,
+      label: "\ufffd]0;LNKPWN\ufffd.md",
+    })
   })
   test("URLs are not opened, only reported", () => {
-    expect(linkDest({ kind: "url", href: "https://x.y" }, from, tree)).toEqual({ path: null, label: "https://x.y", url: "https://x.y" })
+    expect(linkDest({ kind: "url", href: "https://x.y" }, from, tree)).toEqual({
+      path: null,
+      label: "https://x.y",
+      url: "https://x.y",
+    })
   })
 })
 
@@ -205,7 +264,10 @@ describe("TL;DR block", () => {
   const TEXT =
     "A tour of brothy, a terminal Markdown reader with Files, Outline and Info beside a calm text column. It covers live reload, find, themes and installing with bun."
   const rows = (items: ReturnType<typeof tldrItems>) =>
-    items.map((it) => (it.kind === "tldr" ? "TL;DR" + it.status : it.kind === "summary" ? it.text : `<${it.kind}>`))
+    items.map((it) => {
+      if (it.kind === "tldr") return "TL;DR" + it.status
+      return it.kind === "summary" ? it.text : `<${it.kind}>`
+    })
 
   test("none: label and a muted hint", () => {
     expect(tldrItems({ text: "", state: "none", model: "" }, 30)).toEqual([
@@ -237,8 +299,14 @@ describe("TL;DR block", () => {
     expect(items.slice(1).every((it) => it.kind === "summary" && it.muted)).toBe(true)
   })
   test("outdated suffix shortens when the full one doesn't fit", () => {
-    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 30)[0]).toEqual({ kind: "tldr", status: " · outdated · a" })
-    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 31)[0]).toEqual({ kind: "tldr", status: " · outdated · a to refresh" })
+    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 30)[0]).toEqual({
+      kind: "tldr",
+      status: " · outdated · a",
+    })
+    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 31)[0]).toEqual({
+      kind: "tldr",
+      status: " · outdated · a to refresh",
+    })
   })
   test("streaming label; fresh text not muted", () => {
     const items = tldrItems({ text: "Partial", state: "streaming", model: "" }, 30)
@@ -282,16 +350,17 @@ const chg = (status: Change["status"], name: string, plus: number, minus: number
   rewritten: false,
   newText: "",
 })
-const SAMPLE = [chg("edited", "Why another reader?", 2, 1), chg("added", "Install on macOS", 9, 0, 1), chg("removed", "Pager notes", 0, 14, 2)]
+const SAMPLE = [
+  chg("edited", "Why another reader?", 2, 1),
+  chg("added", "Install on macOS", 9, 0, 1),
+  chg("removed", "Pager notes", 0, 14, 2),
+]
 const idle: ChangeView = { state: "idle", label: "14:02", changes: SAMPLE, summary: "", notes: [] }
-const rowOf = (it: InfoItem) =>
-  it.kind === "changes"
-    ? "Changed" + it.status
-    : it.kind === "change"
-      ? it.mark + " " + it.text + it.counts
-      : it.kind === "summary" || it.kind === "stat"
-        ? it.text
-        : it.kind
+const rowOf = (it: InfoItem) => {
+  if (it.kind === "changes") return "Changed" + it.status
+  if (it.kind === "change") return it.mark + " " + it.text + it.counts
+  return it.kind === "summary" || it.kind === "stat" ? it.text : it.kind
+}
 
 describe("changeItems", () => {
   test("idle: label with the baseline time, one row per change, counts right-aligned", () => {
@@ -302,12 +371,25 @@ describe("changeItems", () => {
       "+ Install on macOS          +9",
       "− Pager notes              −14",
     ])
-    expect(items.filter((i) => i.kind === "change").map((i) => (i as { stop: boolean }).stop)).toEqual([true, true, false])
+    expect(items.filter((i) => i.kind === "change").map((i) => (i as { stop: boolean }).stop)).toEqual([
+      true,
+      true,
+      false,
+    ])
     expect(items.filter((i) => i.kind === "change").map((i) => (i as { at: number }).at)).toEqual([0, 1, 2])
   })
   test("loading: explaining…, the streamed summary and notes so far", () => {
-    const items = changeItems({ ...idle, state: "loading", summary: "Adds macOS", notes: [{ what: "feature list trimmed" }] }, "Welcome", 30)
-    expect(items.map(rowOf).slice(0, 4)).toEqual(["Changed · explaining…", "Adds macOS", "~ Why another reader?    +2 −1", "    feature list trimmed"])
+    const items = changeItems(
+      { ...idle, state: "loading", summary: "Adds macOS", notes: [{ what: "feature list trimmed" }] },
+      "Welcome",
+      30,
+    )
+    expect(items.map(rowOf).slice(0, 4)).toEqual([
+      "Changed · explaining…",
+      "Adds macOS",
+      "~ Why another reader?    +2 −1",
+      "    feature list trimmed",
+    ])
   })
   test("result: model name, summary at most 3 rows, one muted line under each explained change", () => {
     const long = "Adds macOS install steps and drops the old pager notes, then rewrites the intro twice over and again."
@@ -335,7 +417,9 @@ describe("changeItems", () => {
     ])
   })
   test("the lead-in is named by the note title", () => {
-    expect(changeItems({ ...idle, changes: [chg("edited", "", 1, 0, -1)] }, "Welcome", 30).map(rowOf)[1]).toBe("~ Welcome" + " ".repeat(19) + "+1")
+    expect(changeItems({ ...idle, changes: [chg("edited", "", 1, 0, -1)] }, "Welcome", 30).map(rowOf)[1]).toBe(
+      "~ Welcome" + " ".repeat(19) + "+1",
+    )
   })
   test("at most 8 change rows, then + n more sections", () => {
     const many = Array.from({ length: 11 }, (_, i) => chg("edited", `S${i}`, 1, 0, i))
@@ -344,7 +428,11 @@ describe("changeItems", () => {
     expect(rowOf(items.at(-1)!)).toBe("+ 3 more sections")
   })
   test("narrow: long headings are cut with …, rows never exceed the width", () => {
-    const items = changeItems({ ...idle, changes: [chg("edited", "A very long heading that cannot fit", 12, 345)] }, "W", 20)
+    const items = changeItems(
+      { ...idle, changes: [chg("edited", "A very long heading that cannot fit", 12, 345)] },
+      "W",
+      20,
+    )
     const row = rowOf(items[1]!)
     expect(Bun.stringWidth(row)).toBe(20)
     expect(row).toContain("…")
@@ -357,7 +445,16 @@ describe("changeItems", () => {
 })
 
 test("infoItems puts the Changed block under the TL;DR and above the properties", () => {
-  const items = infoItems([["title", "T"]], STATS, [], 30, null, 0, { text: "Sum.", state: "fresh", model: "m" }, { view: idle, title: "T" })
+  const items = infoItems(
+    [["title", "T"]],
+    STATS,
+    [],
+    30,
+    null,
+    0,
+    { text: "Sum.", state: "fresh", model: "m" },
+    { view: idle, title: "T" },
+  )
   const kinds = items.map((i) => i.kind)
   expect(kinds.indexOf("tldr")).toBeLessThan(kinds.indexOf("changes"))
   expect(kinds.indexOf("changes")).toBeLessThan(kinds.indexOf("prop"))
@@ -366,8 +463,22 @@ test("infoItems puts the Changed block under the TL;DR and above the properties"
 describe("row spans", () => {
   const t = themeByName("brothy")
   const text = (spans: { text: string }[]) => spans.map((s) => s.text).join("")
-  const node = (rel: string, o: Partial<FileNode> = {}): FileNode => ({ name: rel.split("/").at(-1)!, path: "/r/" + rel, rel, dir: false, children: [], ...o })
-  const opts = { t, cols: 24, open: "/r/notes/open.md", expanded: new Set(["/r/open"]), counts: new Map([["/r/shut", 12]]), maxDepth: 2 }
+  const node = (rel: string, o: Partial<FileNode> = {}): FileNode => ({
+    name: rel.split("/").at(-1)!,
+    path: "/r/" + rel,
+    rel,
+    dir: false,
+    children: [],
+    ...o,
+  })
+  const opts = {
+    t,
+    cols: 24,
+    open: "/r/notes/open.md",
+    expanded: new Set(["/r/open"]),
+    counts: new Map([["/r/shut", 12]]),
+    maxDepth: 2,
+  }
 
   test("fileRowSpans: a closed folder shows its note count at the right edge, an open one none", () => {
     const shut = fileRowSpans({ node: node("shut", { dir: true }), depth: 0 }, opts)
@@ -390,12 +501,18 @@ describe("row spans", () => {
     expect(text(hit)).toBe("  alpha" + " ".repeat(12) + "notes")
     expect(hit.filter((s) => s.fg === t.primary && s.attr).map((s) => s.text)).toEqual(["al"])
     // no folder with fewer than 6 columns to spare
-    expect(text(fileRowSpans({ node: node("notes/alpha.md"), depth: 0, hits: [] }, { ...opts, cols: 12 }))).toBe("  alpha")
+    expect(text(fileRowSpans({ node: node("notes/alpha.md"), depth: 0, hits: [] }, { ...opts, cols: 12 }))).toBe(
+      "  alpha",
+    )
   })
 
   test("outlineRowSpans: the reading heading behind ▸ in primary, read ones faded, indented", () => {
     const row = { index: 0, text: "Intro", indent: 2, level: 1 as const, read: false, current: true, hits: [] }
-    expect(outlineRowSpans(row, t, 20)).toEqual([{ text: "▸ ", fg: t.primary }, { text: "  " }, { text: "Intro", fg: t.primary, attr: 1 }])
+    expect(outlineRowSpans(row, t, 20)).toEqual([
+      { text: "▸ ", fg: t.primary },
+      { text: "  " },
+      { text: "Intro", fg: t.primary, attr: 1 },
+    ])
     const read = outlineRowSpans({ ...row, current: false, read: true, level: 2 }, t, 20)
     expect(read.at(-1)).toEqual({ text: "Intro", fg: mix(t.textMuted, t.background, 0.35), attr: 0 })
     expect(text(outlineRowSpans({ ...row, text: "a long heading text" }, t, 10))).toBe("▸   a lon…")
@@ -411,8 +528,13 @@ describe("row spans", () => {
       { text: "Gone", fg: t.textMuted },
       { text: "?", fg: t.textMuted },
     ])
-    expect(infoSpans({ kind: "link", target: "Here", path: "/r/here.md" }, t, 20)[1]).toEqual({ text: "Here", fg: t.info })
-    expect(text(infoSpans({ kind: "chips", key: "tags", keyW: 5, tags: ["one", "averyverylongtag"], more: true }, t, 12))).toBe("tags #one #avery… …")
+    expect(infoSpans({ kind: "link", target: "Here", path: "/r/here.md" }, t, 20)[1]).toEqual({
+      text: "Here",
+      fg: t.info,
+    })
+    expect(
+      text(infoSpans({ kind: "chips", key: "tags", keyW: 5, tags: ["one", "averyverylongtag"], more: true }, t, 12)),
+    ).toBe("tags #one #avery… …")
     expect(infoSpans({ kind: "change", mark: "+", text: "New", counts: " +3", at: 0, stop: true }, t, 20)).toEqual([
       { text: "+ ", fg: t.success },
       { text: "New", fg: t.text },

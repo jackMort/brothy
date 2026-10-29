@@ -2,12 +2,12 @@
 // `H` / `L` back and forward. Not pure: `makeLinks` closes over the app context.
 import { existsSync } from "node:fs"
 import { basename } from "node:path"
+import type { LinkTarget } from "../markdown/render"
 import { scanTree, stem } from "../notes/files"
 import { drop, go, keep, stepTo } from "../notes/history"
-import type { LinkTarget } from "../markdown/render"
-import { linkLabels, narrowLabels, visibleLinks } from "../ui/nav"
-import { findHeading, linkDest, resolveLink, type InfoItem } from "../ui/panel"
 import { STDIN } from "../notes/workspace"
+import { linkLabels, narrowLabels, visibleLinks } from "../ui/nav"
+import { findHeading, type InfoItem, linkDest, resolveLink } from "../ui/panel"
 import type { AppCtx } from "./ctx"
 import type { UI } from "./store"
 
@@ -57,7 +57,10 @@ function makeFollow(c: AppCtx) {
 }
 
 /** The `f` labels over the links on screen. */
-function makeLabels(c: AppCtx, { ensureLinks, followLink }: Pick<ReturnType<typeof makeFollow>, "ensureLinks" | "followLink">) {
+function makeLabels(
+  c: AppCtx,
+  { ensureLinks, followLink }: Pick<ReturnType<typeof makeFollow>, "ensureLinks" | "followLink">,
+) {
   const { ui, set, derive, flash } = c
 
   /** Labels still match what is drawn: same note, mode, width, length and scroll position. */
@@ -75,7 +78,14 @@ function makeLabels(c: AppCtx, { ensureLinks, followLink }: Pick<ReturnType<type
     const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
     if (!spots.length) return flash("no links on screen")
     const labels = linkLabels(spots.length)
-    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) } })
+    set({
+      labels: {
+        spots: spots.slice(0, labels.length),
+        labels,
+        typed: "",
+        geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top),
+      },
+    })
   }
 
   const labelType = (ch: string) => {
@@ -120,7 +130,8 @@ function makeHistory(c: AppCtx) {
       return flash([...gone, `${dir < 0 ? "back" : "forward"} · ${name(e.path)}`].join(" · "))
     }
     set({ history: h })
-    flash(gone.length ? gone.join(" · ") : dir < 0 ? "no earlier note" : "no later note")
+    const none = dir < 0 ? "no earlier note" : "no later note"
+    flash(gone.length ? gone.join(" · ") : none)
   }
 
   return { histMove }
