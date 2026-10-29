@@ -46,7 +46,16 @@ export function workspace(root: string, note?: string | null, single = false): W
 /** The piped document: an empty Files tree; links resolve against the notes under `root`, scanned on first use (`ensureLinks`). */
 export function stdinWorkspace(root: string): Workspace {
   const tree: FileNode = { name: basename(root) || root, path: root, rel: "", dir: true, children: [] }
-  return { root, tree, linkTree: tree, linkLazy: true, piped: true, linkRoot: null, openPath: STDIN, expanded: new Set() }
+  return {
+    root,
+    tree,
+    linkTree: tree,
+    linkLazy: true,
+    piped: true,
+    linkRoot: null,
+    openPath: STDIN,
+    expanded: new Set(),
+  }
 }
 
 /** The folder a workspace is recorded under: the vault a single note was opened in, else the root. */

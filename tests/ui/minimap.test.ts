@@ -74,7 +74,12 @@ test("miniCells: during a find the lane puts one dot per match line at its row",
   const cells = miniCells(ink, { top: 0, h: 4, heads: [], hits: [1, 3, 9], total: 16, lane: true })
   const lane = cells.map((r) => r[MINI_COLS]!)
   expect(lane.map((c) => c.kind)).toEqual(["lane", "lane", "lane", "lane"])
-  expect(lane.map((c) => c.ch)).toEqual([String.fromCharCode(0x2800 + (0x02 | 0x40)), " ", String.fromCharCode(0x2800 + 0x02), " "])
+  expect(lane.map((c) => c.ch)).toEqual([
+    String.fromCharCode(0x2800 + (0x02 | 0x40)),
+    " ",
+    String.fromCharCode(0x2800 + 0x02),
+    " ",
+  ])
   expect(lane.map((c) => c.band)).toEqual([true, false, false, false])
 })
 

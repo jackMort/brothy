@@ -1,6 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import type { Span } from "../../src/lib/spans"
-import { clamp, fmtNum, graphemes, mergeSpans, plural, pushSpan, sameStyle, spanWidth, superscript, truncate, truncateLeft, width } from "../../src/lib/text"
+import {
+  clamp,
+  fmtNum,
+  graphemes,
+  mergeSpans,
+  plural,
+  pushSpan,
+  sameStyle,
+  spanWidth,
+  superscript,
+  truncate,
+  truncateLeft,
+  width,
+} from "../../src/lib/text"
 import { expectLinear, SCALE } from "../helpers/perf"
 
 describe("width", () => {

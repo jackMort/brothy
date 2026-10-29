@@ -162,8 +162,10 @@ export function sections(n: number, para = "text") {
 }
 /** Sections whose paragraphs wrap differently at each measure. */
 export const wrapped = () => sections(12, "lorem ipsum dolor sit amet ".repeat(9).trim())
-export const parts = (n: number) => Array.from({ length: n }, (_, i) => `## Part ${i + 1}\n\nbody ${i + 1}\n`).join("\n")
-export const longB = "# Bee\n\n" + Array.from({ length: 60 }, (_, i) => `row ${i + 1}`).join("\n\n") + "\n\n## Part two\n\nend\n"
+export const parts = (n: number) =>
+  Array.from({ length: n }, (_, i) => `## Part ${i + 1}\n\nbody ${i + 1}\n`).join("\n")
+export const longB =
+  "# Bee\n\n" + Array.from({ length: 60 }, (_, i) => `row ${i + 1}`).join("\n\n") + "\n\n## Part two\n\nend\n"
 export const filler = (n: number) => Array.from({ length: n }, (_, i) => `filler ${i}`).join("\n\n")
 
 // ------------------------------------------------------------- AI
@@ -240,7 +242,12 @@ export function useAppHarness() {
   /** Mount `<App>` headless on `root`, opening `file` (relative to it); every mount is destroyed after the test. */
   async function mount(root: string, file?: string, opts: MountOpts = {}) {
     const { size = { width: 100, height: 30 }, theme, ...props } = opts
-    const s = quietAct(await testRender(<App root={root} initialFile={file ? join(root, file) : undefined} themeName={theme} {...props} />, size))
+    const s = quietAct(
+      await testRender(
+        <App root={root} initialFile={file ? join(root, file) : undefined} themeName={theme} {...props} />,
+        size,
+      ),
+    )
     const destroy = s.renderer.destroy
     let gone = false
     s.renderer.destroy = () => {
@@ -282,21 +289,40 @@ export function useAppHarness() {
   function seedProjects(entries: { root: string; at: number; lastNote?: string }[]) {
     writeProjects(entries.map((e) => ({ lastNote: null, top: 0, ...e })))
   }
-  const readProjects = (): { root: string; lastNote: string | null; top: number }[] => JSON.parse(readFileSync(projectsFile(), "utf8")).projects
+  const readProjects = (): { root: string; lastNote: string | null; top: number }[] =>
+    JSON.parse(readFileSync(projectsFile(), "utf8")).projects
 
   const cacheFile = () => join(cacheDir, "brothy", "summaries.json")
-  const cached = () => (existsSync(cacheFile()) ? (JSON.parse(readFileSync(cacheFile(), "utf8")) as Record<string, { summary: string }>) : {})
-  function seedSummary(path: string, summary: string, hash = textHash(noteText(readFileSync(path, "utf8"))), model = "llama3.2") {
+  const cached = () =>
+    existsSync(cacheFile())
+      ? (JSON.parse(readFileSync(cacheFile(), "utf8")) as Record<string, { summary: string }>)
+      : {}
+  function seedSummary(
+    path: string,
+    summary: string,
+    hash = textHash(noteText(readFileSync(path, "utf8"))),
+    model = "llama3.2",
+  ) {
     mkdirSync(join(cacheDir, "brothy"), { recursive: true })
-    writeFileSync(join(cacheDir, "brothy", "summaries.json"), JSON.stringify({ [path]: { hash, v: 1, summary, model, at: Date.now() } }))
+    writeFileSync(
+      join(cacheDir, "brothy", "summaries.json"),
+      JSON.stringify({ [path]: { hash, v: 1, summary, model, at: Date.now() } }),
+    )
   }
   const glossFile = () => join(cacheDir, "brothy", "glosses.json")
-  const glossCache = () => (existsSync(glossFile()) ? (JSON.parse(readFileSync(glossFile(), "utf8")) as Record<string, { gloss: string }>) : {})
+  const glossCache = () =>
+    existsSync(glossFile()) ? (JSON.parse(readFileSync(glossFile(), "utf8")) as Record<string, { gloss: string }>) : {}
   /** Cache a gloss for section `index` of the note at `path`, fresh unless `hash` is given. */
   function seedGloss(path: string, index: number, gloss: string, hash?: string) {
     const g = glossTarget(readFileSync(path, "utf8"), index, path, "a")!
     const all = glossCache()
-    all[glossKey(g.id, "explain")] = { hash: hash ?? textHash(g.text), v: 1, gloss, model: "llama3.2", at: Date.now() } as never
+    all[glossKey(g.id, "explain")] = {
+      hash: hash ?? textHash(g.text),
+      v: 1,
+      gloss,
+      model: "llama3.2",
+      at: Date.now(),
+    } as never
     mkdirSync(join(cacheDir, "brothy"), { recursive: true })
     writeFileSync(glossFile(), JSON.stringify(all))
   }

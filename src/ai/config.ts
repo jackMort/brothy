@@ -22,7 +22,11 @@ export const PRESETS: Record<Exclude<Provider, "custom">, Preset> = {
   openai: { baseURL: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY", maxChars: 48_000 },
   openrouter: { baseURL: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY", maxChars: 48_000 },
   anthropic: { baseURL: "https://api.anthropic.com/v1", keyEnv: "ANTHROPIC_API_KEY", maxChars: 48_000 },
-  gemini: { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", keyEnv: "GEMINI_API_KEY", maxChars: 48_000 },
+  gemini: {
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    keyEnv: "GEMINI_API_KEY",
+    maxChars: 48_000,
+  },
   // the OpenAI API can't set Ollama's context size, and it cuts an over-long prompt from the front
   ollama: { baseURL: "http://localhost:11434/v1", maxChars: 8_000 },
   lmstudio: { baseURL: "http://localhost:1234/v1", maxChars: 8_000 },
@@ -55,7 +59,8 @@ export function parseGlossStyle(v: unknown, fallback?: GlossStyle): GlossStyle
 export function parseGlossStyle(v: unknown, fallback: null): GlossStyle | undefined
 export function parseGlossStyle(v: unknown, fallback: GlossStyle | null = "explain"): GlossStyle | undefined {
   if (v === "explain" || v === "simplify") return v
-  if (typeof v === "string" && v.startsWith("translate:") && LANG_TAG.test(v.slice("translate:".length))) return v as GlossStyle
+  if (typeof v === "string" && v.startsWith("translate:") && LANG_TAG.test(v.slice("translate:".length)))
+    return v as GlossStyle
   return fallback ?? undefined
 }
 
@@ -84,11 +89,13 @@ export function normalizeAI(raw: unknown): AIConfig | undefined {
   const out: AIConfig = { provider, model: raw.model }
   if (base) out.baseURL = base
   if (typeof raw.keyEnv === "string" && ENV_NAME.test(raw.keyEnv)) out.keyEnv = raw.keyEnv
-  if (typeof raw.maxChars === "number" && Number.isInteger(raw.maxChars) && raw.maxChars >= 1000) out.maxChars = raw.maxChars
+  if (typeof raw.maxChars === "number" && Number.isInteger(raw.maxChars) && raw.maxChars >= 1000)
+    out.maxChars = raw.maxChars
   if (isRecord(raw.headers)) {
     const h: Record<string, string> = {}
     for (const [k, v] of Object.entries(raw.headers))
-      if (HEADER_NAME.test(k) && k.toLowerCase() !== "authorization" && typeof v === "string" && !/[\r\n\0]/.test(v)) h[k] = v
+      if (HEADER_NAME.test(k) && k.toLowerCase() !== "authorization" && typeof v === "string" && !/[\r\n\0]/.test(v))
+        h[k] = v
     if (Object.keys(h).length) out.headers = h
   }
   const gloss = parseGlossStyle(raw.gloss, null)
@@ -108,18 +115,24 @@ export interface AITarget {
   key?: string
 }
 
-const loopback = (h: string) => h === "localhost" || h === "[::1]" || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
+const loopback = (h: string) =>
+  h === "localhost" || h === "[::1]" || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
 
 /** The request target, or the toast for why there is none (missing key, key or custom headers over plain http). */
-export function resolveAI(cfg: AIConfig, env: Record<string, string | undefined> = process.env): AITarget | { error: string } {
+export function resolveAI(
+  cfg: AIConfig,
+  env: Record<string, string | undefined> = process.env,
+): AITarget | { error: string } {
   const preset = cfg.provider === "custom" ? undefined : PRESETS[cfg.provider]
   const base = cfg.baseURL ?? preset!.baseURL
   const u = new URL(base)
   const keyEnv = cfg.keyEnv ?? preset?.keyEnv
   const key = keyEnv ? env[keyEnv]?.trim() || undefined : undefined
   if (keyEnv && !key) return { error: `AI: set ${keyEnv}` }
-  if (key && u.protocol === "http:" && !loopback(u.hostname)) return { error: `AI: won't send the key over http to ${u.host}` }
-  if (cfg.headers && u.protocol === "http:" && !loopback(u.hostname)) return { error: `AI: won't send headers over http to ${u.host}` }
+  if (key && u.protocol === "http:" && !loopback(u.hostname))
+    return { error: `AI: won't send the key over http to ${u.host}` }
+  if (cfg.headers && u.protocol === "http:" && !loopback(u.hostname))
+    return { error: `AI: won't send headers over http to ${u.host}` }
   const headers: Record<string, string> = { "Content-Type": "application/json", ...cfg.headers }
   if (key) headers.Authorization = `Bearer ${key}`
   // the path goes before a query (`?api-version=…`); a fragment is never sent

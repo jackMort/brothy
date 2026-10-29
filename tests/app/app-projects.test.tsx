@@ -2,7 +2,18 @@
 import { expect, test } from "bun:test"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { firstDocRow, HINT_ROW, keys, numbered, openHelp, sections, sleep, topLine, useAppHarness, wrapped } from "./helpers"
+import {
+  firstDocRow,
+  HINT_ROW,
+  keys,
+  numbered,
+  openHelp,
+  sections,
+  sleep,
+  topLine,
+  useAppHarness,
+  wrapped,
+} from "./helpers"
 
 const { tmp, mount, configFile, writeConfig, savedConfig, writeProjects, readProjects } = useAppHarness()
 
@@ -146,10 +157,21 @@ test("leaving a project from zen records the Preview position, moved in zen or n
 test("a config.json that doesn't parse: saving toasts an error instead of claiming it", async () => {
   writeConfig("{ not json")
   const root = tmp({ "a.md": sections(2) })
-  for (const k of [["w"], ["T"], ["C-b"], ["2"], ["t", "down", "enter"], ["z", "<"], ["z", "+"], ["Z", "j", "space", "enter"]]) {
+  for (const k of [
+    ["w"],
+    ["T"],
+    ["C-b"],
+    ["2"],
+    ["t", "down", "enter"],
+    ["z", "<"],
+    ["z", "+"],
+    ["Z", "j", "space", "enter"],
+  ]) {
     const s = await mount(root, "a.md")
     const f = await keys(s, ...k)
-    expect(f.split("\n")[HINT_ROW], k.join(" ")).toContain("config.json not saved · it doesn't parse or can't be written")
+    expect(f.split("\n")[HINT_ROW], k.join(" ")).toContain(
+      "config.json not saved · it doesn't parse or can't be written",
+    )
     expect(f, k.join(" ")).not.toMatch(/full width|background|zen settings saved|theme ·|measure \d|wpm/)
     s.renderer.destroy()
   }

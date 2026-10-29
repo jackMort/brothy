@@ -98,7 +98,11 @@ export function progressLine(c: AppCtx, d: Derived): ReactNode {
  * The ghost line (row H-2): key hints for context `ctx` on the left (`hints`, as many as fit beside the toast), the
  * toast on the right; blank at rest. `pinned` hints stay at full colour, others fade after HINT_HOLD.
  */
-export function ghostLine(c: AppCtx, d: Derived, { ctx, pinned, hints }: { ctx: Ctx; pinned: boolean; hints: (ctx: Ctx) => HintItem[] }): ReactNode {
+export function ghostLine(
+  c: AppCtx,
+  d: Derived,
+  { ctx, pinned, hints }: { ctx: Ctx; pinned: boolean; hints: (ctx: Ctx) => HintItem[] },
+): ReactNode {
   const { s, t } = d
   let hintK: number | null = null
   if (pinned) hintK = 0
@@ -108,7 +112,10 @@ export function ghostLine(c: AppCtx, d: Derived, { ctx, pinned, hints }: { ctx: 
     hintK = st === null ? null : st / (GHOST_STEPS + 1)
   }
   const toast = toastSpans(t, s.toast, Date.now(), c.W - 2)
-  const hinted = hintK === null ? [] : fadeSpans(t, hintSpans(t, hints(ctx), c.W - 2 - (toast.length ? spanWidth(toast) + 3 : 0)), hintK)
+  const hinted =
+    hintK === null
+      ? []
+      : fadeSpans(t, hintSpans(t, hints(ctx), c.W - 2 - (toast.length ? spanWidth(toast) + 3 : 0)), hintK)
   return (
     <box style={{ height: 1, flexDirection: "row", justifyContent: "space-between", paddingLeft: 1, paddingRight: 1 }}>
       <Row spans={hinted} />

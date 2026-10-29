@@ -118,7 +118,9 @@ const BRAILLE = /[⠁-⣿]/
 /** the two braille cells at the right edge (the lane is the last column) */
 const miniCol = (f: string, W: number) => f.split("\n").map((r) => [...r].slice(W - 3, W - 1).join(""))
 const laneCol = (f: string, W: number) => f.split("\n").map((r) => [...r][W - 1] ?? "")
-const LONG_NOTE = "# Top\n\n" + Array.from({ length: 12 }, (_, i) => `## Part ${i}\n\n${"lorem ipsum dolor sit amet ".repeat(6)}\n`).join("\n")
+const LONG_NOTE =
+  "# Top\n\n" +
+  Array.from({ length: 12 }, (_, i) => `## Part ${i}\n\n${"lorem ipsum dolor sit amet ".repeat(6)}\n`).join("\n")
 
 test("minimap: on at 120 columns, braille at the right edge, headings in primary, the text column unmoved", async () => {
   const t = themeByName("brothy")
@@ -126,7 +128,9 @@ test("minimap: on at 120 columns, braille at the right edge, headings in primary
   const f = await keys(s)
   expect(miniCol(f, 120).some((c) => BRAILLE.test(c))).toBe(true)
   expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.primary)).toBe(true)
-  expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.textMuted && hex(sp.bg) === t.backgroundElement)).toBe(true)
+  expect(
+    spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.textMuted && hex(sp.bg) === t.backgroundElement),
+  ).toBe(true)
   expect(spansOf(s).some((sp) => BRAILLE.test(sp.text) && hex(sp.fg) === t.borderSubtle)).toBe(true)
   const rule = f.split("\n")[1]! // the gap row's rule spans the text column: 80 wide from column 36, as without the minimap
   expect((rule.match(/─/g) ?? []).length).toBe(80)
@@ -139,7 +143,9 @@ test("minimap: shown in Source too, where the line-number gutter draws no dots",
   expect(miniCol(await keys(s, "s"), 120).some((c) => BRAILLE.test(c))).toBe(true)
   unmount()
   // text only at the far right of each line: the left cell stays empty
-  const s2 = await mount(tmp({ "b.md": Array.from({ length: 40 }, () => " ".repeat(70) + "x").join("\n") }), "b.md", { size: { width: 120, height: 34 } })
+  const s2 = await mount(tmp({ "b.md": Array.from({ length: 40 }, () => " ".repeat(70) + "x").join("\n") }), "b.md", {
+    size: { width: 120, height: 34 },
+  })
   const f = await keys(s2, "s")
   expect(
     f

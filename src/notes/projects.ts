@@ -36,7 +36,9 @@ const isCount = (n: unknown): n is number => Number.isInteger(n) && (n as number
 function pickGeometry(raw: unknown): Geometry | undefined {
   if (!isRecord(raw)) return undefined
   const { heads, total } = raw
-  return Array.isArray(heads) && heads.every(isCount) && isCount(total) ? { heads: heads as number[], total } : undefined
+  return Array.isArray(heads) && heads.every(isCount) && isCount(total)
+    ? { heads: heads as number[], total }
+    : undefined
 }
 
 /** One stored entry with bad fields defaulted; null when it is not an object or has no absolute `root`. */
@@ -167,7 +169,12 @@ export interface PathHit {
  * dot-entries only once the segment starts with a dot. With nothing after the last `/` the folder
  * itself comes first. `~`, `.` and `..` alone mean that folder; relative paths resolve against `cwd`.
  */
-export function pathCompletions(query: string, io: DirIO, o: { cwd: string; home?: string }, cap = PATH_CAP): PathHit[] {
+export function pathCompletions(
+  query: string,
+  io: DirIO,
+  o: { cwd: string; home?: string },
+  cap = PATH_CAP,
+): PathHit[] {
   const home = o.home ?? homedir()
   const q = query === "~" || query === "." || query === ".." ? query + "/" : query
   const cut = q.lastIndexOf("/") + 1
@@ -182,14 +189,24 @@ export function pathCompletions(query: string, io: DirIO, o: { cwd: string; home
     if (!e.dir && !isMarkdown(e.name)) continue
     const m = prefix ? scoreName(e.name, prefix) : { hits: [], score: 0 }
     if (!m) continue
-    hits.push({ path: join(dir, e.name), name: e.name, dir: e.dir, hits: m.hits, score: m.score, completion: head + e.name + (e.dir ? "/" : "") })
+    hits.push({
+      path: join(dir, e.name),
+      name: e.name,
+      dir: e.dir,
+      hits: m.hits,
+      score: m.score,
+      completion: head + e.name + (e.dir ? "/" : ""),
+    })
   }
   hits.sort((a, b) => b.score - a.score || Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name))
   const rows: PathHit[] = hits.slice(0, cap).map(({ score: _, ...h }) => h)
   return prefix ? rows : [{ path: dir, name: head, dir: true, hits: [], completion: head, self: true }, ...rows]
 }
 
-export type OpenRow = { kind: "header"; title: string; count: string } | ({ kind: "recent"; missing: boolean } & RankedProject) | ({ kind: "path" } & PathHit)
+export type OpenRow =
+  | { kind: "header"; title: string; count: string }
+  | ({ kind: "recent"; missing: boolean } & RankedProject)
+  | ({ kind: "path" } & PathHit)
 
 /**
  * The picker's rows: Recent (all but `current`) matching `q` fuzzily. A path-looking `q` lists the

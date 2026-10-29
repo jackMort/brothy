@@ -162,7 +162,8 @@ export function scanComments(lines: string[], from = 0): { kept: string[]; hidde
       return
     }
     const code = [...line.matchAll(/`[^`\n]*`/g)].map((m): [number, number] => [m.index!, m.index! + m[0].length])
-    for (const m of line.matchAll(/%%/g)) if (!code.some(([a, b]) => m.index! >= a && m.index! < b)) marks.push([i, m.index!])
+    for (const m of line.matchAll(/%%/g))
+      if (!code.some(([a, b]) => m.index! >= a && m.index! < b)) marks.push([i, m.index!])
   })
   if (marks.length % 2) marks.pop()
   const kept = [...lines]

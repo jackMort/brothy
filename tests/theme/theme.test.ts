@@ -81,7 +81,8 @@ test("themes: contrast floors on background and backgroundPanel", () => {
   ]
   for (const t of themes)
     for (const [k, min] of floors)
-      for (const bg of ["background", "backgroundPanel"] as const) expect(contrast(t[k], t[bg]), `${t.name} ${k} on ${bg}`).toBeGreaterThanOrEqual(min)
+      for (const bg of ["background", "backgroundPanel"] as const)
+        expect(contrast(t[k], t[bg]), `${t.name} ${k} on ${bg}`).toBeGreaterThanOrEqual(min)
 })
 
 test("the house themes: body text about 14:1, every content role 4.5:1 on page, panel and code fill, visible borders, no two accents alike", () => {
@@ -111,7 +112,8 @@ test("themes: content colors stay readable on backgroundElement (code blocks, fi
     ["info", 3],
   ]
   for (const t of themes)
-    for (const [k, min] of floors) expect(contrast(t[k], t.backgroundElement), `${t.name} ${k} on backgroundElement`).toBeGreaterThanOrEqual(min)
+    for (const [k, min] of floors)
+      expect(contrast(t[k], t.backgroundElement), `${t.name} ${k} on backgroundElement`).toBeGreaterThanOrEqual(min)
 })
 
 test("themes: the picker/selection fill (primary) carries readable text", () => {

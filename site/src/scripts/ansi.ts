@@ -20,7 +20,14 @@ export const BOX: Record<string, string> = {
   "┈": "dash",
 }
 /** block elements as [left, right] fractions of the cell */
-export const BLOCK: Record<string, [number, number]> = { "▌": [0, 0.5], "▐": [0.5, 1], "▎": [0, 0.25], "▏": [0, 0.125], "▕": [0.875, 1], "█": [0, 1] }
+export const BLOCK: Record<string, [number, number]> = {
+  "▌": [0, 0.5],
+  "▐": [0.5, 1],
+  "▎": [0, 0.25],
+  "▏": [0, 0.125],
+  "▕": [0.875, 1],
+  "█": [0, 1],
+}
 
 const CSI = /\x1b\[([?0-9;]*)([A-Za-z])|([^\x1b])|(\x1b)/gsu
 const SGR_FLAGS: Record<number, number> = { 1: 1, 3: 2, 4: 4, 9: 8 }

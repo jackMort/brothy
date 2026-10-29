@@ -71,7 +71,9 @@ export async function press(s: Session, k: string) {
 }
 
 /** Text plus colors: equal keys mean an identical picture. */
-export const frameKey = (s: Session) => s.captureCharFrame() + JSON.stringify(s.captureSpans().lines.map((l) => l.spans.map((x) => [x.fg, x.bg, x.attributes])))
+export const frameKey = (s: Session) =>
+  s.captureCharFrame() +
+  JSON.stringify(s.captureSpans().lines.map((l) => l.spans.map((x) => [x.fg, x.bg, x.attributes])))
 
 /**
  * Render until the frame has not changed for `quiet` ms (at most 5 s): code blocks fill in asynchronously, parsers answer in
@@ -107,5 +109,9 @@ export function frame(s: Session): Frame {
               .padStart(2, "0"),
           )
           .join("")
-  return { cols: f.cols, rows: f.rows, lines: f.lines.map((l) => l.spans.map((x) => ({ t: x.text, fg: toHex(x.fg), bg: toHex(x.bg), a: x.attributes }))) }
+  return {
+    cols: f.cols,
+    rows: f.rows,
+    lines: f.lines.map((l) => l.spans.map((x) => ({ t: x.text, fg: toHex(x.fg), bg: toHex(x.bg), a: x.attributes }))),
+  }
 }

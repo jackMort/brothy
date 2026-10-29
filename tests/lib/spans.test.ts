@@ -20,7 +20,8 @@ describe("safe", () => {
   })
 
   test("zero-width characters are mapped, also a BOM in the middle", () => {
-    for (const cp of [0x200b, 0x200e, 0x200f, 0xfeff]) expect(safe(`a${String.fromCodePoint(cp)}b`), cp.toString(16)).toBe("a�b")
+    for (const cp of [0x200b, 0x200e, 0x200f, 0xfeff])
+      expect(safe(`a${String.fromCodePoint(cp)}b`), cp.toString(16)).toBe("a�b")
   })
 
   test("ZWJ survives inside emoji sequences", () => {

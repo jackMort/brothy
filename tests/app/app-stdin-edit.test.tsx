@@ -21,7 +21,12 @@ async function mountEdit(root: string, file?: string, result?: EditResult) {
 /** `scanDelay`: when the background link scan starts; far off by default so a test controls when the folder is read. */
 async function mountStdin(text: string, root: string, size = { width: 120, height: 30 }, scanDelay = 60_000) {
   const spawned: string[][] = []
-  const s = await mount(root, undefined, { size, stdin: text, linkScanDelay: scanDelay, edit: (argv) => void spawned.push(argv) })
+  const s = await mount(root, undefined, {
+    size,
+    stdin: text,
+    linkScanDelay: scanDelay,
+    edit: (argv) => void spawned.push(argv),
+  })
   return { s, spawned }
 }
 

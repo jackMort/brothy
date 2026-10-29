@@ -11,7 +11,15 @@ import { type Derived, makeDerive, makeMemo } from "./app/derive"
 import { useAppEffects, useRenderEffects } from "./app/effects"
 import { type FooterState, footerHints, PINNED } from "./app/keymap"
 import { makeLinks } from "./app/links"
-import { findOverlay, helpOverlay, openOverlay, switchOverlay, themeOverlay, themePickView, zenOverlay } from "./app/Overlays"
+import {
+  findOverlay,
+  helpOverlay,
+  openOverlay,
+  switchOverlay,
+  themeOverlay,
+  themePickView,
+  zenOverlay,
+} from "./app/Overlays"
 import { panelBox } from "./app/Panel"
 import { makePopups } from "./app/popups"
 import { type FileRow, initUI, type Job, MIN_H, MIN_W, type Spot, type UI, ZEN_DIM } from "./app/store"
@@ -69,7 +77,9 @@ export function App({
   dims.current = { W, H }
 
   // a ref-like box built once, on the first render: handlers read `ui.current` at call time
-  const [ui] = useState(() => ({ current: initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion) }))
+  const [ui] = useState(() => ({
+    current: initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion),
+  }))
   const [, bump] = useState(0)
   const set = (patch: Partial<UI>) => {
     Object.assign(ui.current, patch)
@@ -90,7 +100,15 @@ export function App({
   const switcher = makeSwitcher(ctx, links)
   const workspace = makeWorkspace(ctx, switcher, aiJobs)
   const popups = makePopups(ctx)
-  const { currentCtx, pokeHints, outlineGo, jumpChange, onKey } = makeActions(ctx, { aiJobs, links, zen, switcher, workspace, popups, edit: editImpl })
+  const { currentCtx, pokeHints, outlineGo, jumpChange, onKey } = makeActions(ctx, {
+    aiJobs,
+    links,
+    zen,
+    switcher,
+    workspace,
+    popups,
+    edit: editImpl,
+  })
 
   // ---------------------------------------------------- effects and keys
   const { openPath } = ui.current
@@ -112,7 +130,11 @@ export function App({
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
   const footer = footerState(d)
-  const ghostEl = ghostLine(ctx, d, { ctx: ctxNow, pinned: PINNED.includes(ctxNow), hints: (c) => footerHints(c, footer) })
+  const ghostEl = ghostLine(ctx, d, {
+    ctx: ctxNow,
+    pinned: PINNED.includes(ctxNow),
+    hints: (c) => footerHints(c, footer),
+  })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo: popups.helpGo })
   const switchEl = switchOverlay(ctx, d, switcher)
@@ -121,12 +143,28 @@ export function App({
   const pickView = themePickView(ctx, d)
   // zen gloss: runs when the reading line changes section (not on every scroll tick)
   const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
-  useRenderEffects(ctx, { ctxNow, glossAt, sample: pickView?.sample ?? null }, { pokeHints, glossEntered: aiJobs.glossEntered })
+  useRenderEffects(
+    ctx,
+    { ctxNow, glossAt, sample: pickView?.sample ?? null },
+    { pokeHints, glossEntered: aiJobs.glossEntered },
+  )
   const themeEl = themeOverlay(ctx, d, pickView, popups)
   const zenEl = zenOverlay(ctx, d, zen)
 
   if (W < MIN_W || H < MIN_H) return tooSmallScreen(d, W, H)
-  const parts: ScreenParts = { panelEl, docEl, miniEl, ghostEl, progressEl, helpEl, findEl, switchEl, openEl, themeEl, zenEl }
+  const parts: ScreenParts = {
+    panelEl,
+    docEl,
+    miniEl,
+    ghostEl,
+    progressEl,
+    helpEl,
+    findEl,
+    switchEl,
+    openEl,
+    themeEl,
+    zenEl,
+  }
   return L.zen ? zenScreen(d, W, H, pointer.note, parts) : mainScreen(d, W, H, pointer.note, parts)
 }
 
@@ -249,7 +287,11 @@ function mainScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: 
   const { s, L, t } = d
   const paint = surface(t, s.transparent)
   return (
-    <box key="main" onMouse={note} style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}>
+    <box
+      key="main"
+      onMouse={note}
+      style={{ width: W, height: H, flexDirection: "column", backgroundColor: paint.main }}
+    >
       {topRow(d, 0)}
       {gapRow(d)}
       <box style={{ flexDirection: "row", height: L.bodyH, paddingLeft: 1, paddingRight: L.mini ? 0 : 1, gap: 1 }}>

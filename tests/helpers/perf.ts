@@ -28,7 +28,10 @@ export function expectLinear(label: string, f: (big: boolean) => unknown) {
       time(() => f(true)),
     )
   }
-  if (b > 20) expect(b / Math.max(a, 1), `${label}: ${b.toFixed(0)} ms vs ${a.toFixed(1)} ms at 1/${SCALE}`).toBeLessThan(MAX_RATIO)
+  if (b > 20)
+    expect(b / Math.max(a, 1), `${label}: ${b.toFixed(0)} ms vs ${a.toFixed(1)} ms at 1/${SCALE}`).toBeLessThan(
+      MAX_RATIO,
+    )
 }
 
 /** A note with `n` headings at depths 1–3, each with one line of text. */

@@ -58,7 +58,15 @@ export function outlineRows(headings: { depth: number; text: string }[], current
     const hits = q ? fuzzyHits(h.text, q) : []
     if (!hits) return
     const d = h.depth - min
-    out.push({ index, text: h.text, indent: 2 * d, level: d === 0 ? 0 : d === 1 ? 1 : 2, read: index < current, current: index === current, hits })
+    out.push({
+      index,
+      text: h.text,
+      indent: 2 * d,
+      level: d === 0 ? 0 : d === 1 ? 1 : 2,
+      read: index < current,
+      current: index === current,
+      hits,
+    })
   })
   return out
 }
@@ -119,7 +127,9 @@ export function wrapProperty(key: string, value: string | string[], cols: number
     rows = lines.map((tg, i): InfoItem => ({ kind: "chips", key: i ? "" : k, keyW, tags: tg }))
   } else {
     const text = Array.isArray(value) ? value.join(" · ") : value
-    rows = wrap([{ text }], room).map((r, i): InfoItem => ({ kind: "prop", key: i ? "" : k, keyW, text: r.map((s) => s.text).join("") }))
+    rows = wrap([{ text }], room).map(
+      (r, i): InfoItem => ({ kind: "prop", key: i ? "" : k, keyW, text: r.map((s) => s.text).join("") }),
+    )
   }
   if (!rows.length) rows = [{ kind: "prop", key: k, keyW, text: "" }]
   if (rows.length > MAX_PROP_ROWS) {
@@ -166,7 +176,8 @@ export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
           : ""
   const out: InfoItem[] = [{ kind: "tldr", status }]
   if (sv.state === "none") return [...out, { kind: "summary", text: "a to summarize", muted: true }]
-  for (const text of clippedRows(sv.text, cols, SUMMARY_ROWS)) out.push({ kind: "summary", text, muted: sv.state === "outdated" })
+  for (const text of clippedRows(sv.text, cols, SUMMARY_ROWS))
+    out.push({ kind: "summary", text, muted: sv.state === "outdated" })
   return out
 }
 
@@ -186,15 +197,22 @@ export interface ChangeView {
 const MARK = { edited: "~", added: "+", removed: "−" } as const
 
 /** `+a −r`, one side omitted when zero. */
-const changeCounts = (c: Pick<Change, "plus" | "minus">) => [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
+const changeCounts = (c: Pick<Change, "plus" | "minus">) =>
+  [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
 
 /** The `Changed` block (spec: Strings): label, summary, then a row per change with its model line under it. */
 export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
   const label = "Changed"
-  const status = cv.state === "loading" ? " · explaining…" : cv.state === "result" ? truncate(" · " + cv.label, cols - width(label)) : ` · since ${cv.label}`
+  const status =
+    cv.state === "loading"
+      ? " · explaining…"
+      : cv.state === "result"
+        ? truncate(" · " + cv.label, cols - width(label))
+        : ` · since ${cv.label}`
   const out: InfoItem[] = [{ kind: "changes", status }]
   if (cv.state !== "idle" && cv.summary) {
-    for (const text of clippedRows(cv.summary, cols, CHANGE_SUMMARY_ROWS)) out.push({ kind: "summary", text, muted: true })
+    for (const text of clippedRows(cv.summary, cols, CHANGE_SUMMARY_ROWS))
+      out.push({ kind: "summary", text, muted: true })
   }
   cv.changes.slice(0, MAX_CHANGE_ROWS).forEach((c, at) => {
     const counts = changeCounts(c)
@@ -205,7 +223,8 @@ export function changeItems(cv: ChangeView, title: string, cols: number): InfoIt
     const what = cv.state === "idle" ? undefined : cv.notes[at]?.what
     if (what) out.push({ kind: "summary", text: truncate("    " + safeLine(what), cols), muted: true })
   })
-  if (cv.changes.length > MAX_CHANGE_ROWS) out.push({ kind: "stat", text: `+ ${cv.changes.length - MAX_CHANGE_ROWS} more sections` })
+  if (cv.changes.length > MAX_CHANGE_ROWS)
+    out.push({ kind: "stat", text: `+ ${cv.changes.length - MAX_CHANGE_ROWS} more sections` })
   return out
 }
 
@@ -260,7 +279,14 @@ const FOLDER_MIN = 6
 /** Files row `r` in `t`, `cols` text columns wide: a folder with its arrow (and its note count while closed), a ranked hit with its folder, or a note; `open` is marked `●`. */
 export function fileRowSpans(
   r: { node: FileNode; depth: number; hits?: number[] },
-  o: { t: Theme; cols: number; open: string | null; expanded: ReadonlySet<string>; counts: Map<string, number>; maxDepth: number },
+  o: {
+    t: Theme
+    cols: number
+    open: string | null
+    expanded: ReadonlySet<string>
+    counts: Map<string, number>
+    maxDepth: number
+  },
 ): Span[] {
   const { t, cols } = o
   const n = r.node
@@ -276,7 +302,8 @@ export function fileRowSpans(
     const count = open ? "" : String(o.counts.get(n.path) ?? 0)
     const name = truncate(n.name, room)
     spans.push({ text: name, fg: t.textMuted }, ...mark)
-    if (count && width(n.name) + 1 + width(count) <= room) spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
+    if (count && width(n.name) + 1 + width(count) <= room)
+      spans.push({ text: " ".repeat(room - width(name) - width(count)) }, { text: count, fg: t.textMuted })
     return spans
   }
   if (r.hits) {
@@ -285,8 +312,16 @@ export function fileRowSpans(
     // a note's name is never cut for its folder; the folder shows only with FOLDER_MIN columns to spare
     const seg = folderOf(n)
     const folder = seg && left >= FOLDER_MIN ? truncateLeft(seg, left) : ""
-    const spans: Span[] = [{ text: isOpen ? "● " : "  ", fg: t.primary }, ...hitSpans(shown, r.hits, isOpen ? t.primary : t.text, t.primary, isOpen), ...mark]
-    if (folder) spans.push({ text: " ".repeat(cols - 2 - width(shown) - spanWidth(mark) - width(folder)) }, { text: folder, fg: t.textMuted })
+    const spans: Span[] = [
+      { text: isOpen ? "● " : "  ", fg: t.primary },
+      ...hitSpans(shown, r.hits, isOpen ? t.primary : t.text, t.primary, isOpen),
+      ...mark,
+    ]
+    if (folder)
+      spans.push(
+        { text: " ".repeat(cols - 2 - width(shown) - spanWidth(mark) - width(folder)) },
+        { text: folder, fg: t.textMuted },
+      )
     return spans
   }
   return [
@@ -324,7 +359,10 @@ export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
     case "chips":
       return [
         { text: pad(it.key, it.keyW), fg: t.textMuted },
-        ...it.tags.flatMap((tg, i): Span[] => [...(i ? [{ text: " " }] : []), { text: truncate("#" + tg, cols - it.keyW), fg: t.secondary }]),
+        ...it.tags.flatMap((tg, i): Span[] => [
+          ...(i ? [{ text: " " }] : []),
+          { text: truncate("#" + tg, cols - it.keyW), fg: t.secondary },
+        ]),
         ...(it.more ? [{ text: " …", fg: t.textMuted }] : []),
       ]
     case "label":
@@ -430,7 +468,9 @@ export function resolveLink(target: string, tree: FileNode, from?: string | null
   if (named.length < 2) return named[0]?.path ?? null
   const here = from ? named.filter((n) => dirname(n.path) === dirname(from)) : []
   if (here.length) return here[0]!.path
-  return named.reduce((a, b) => (b.rel.length < a.rel.length || (b.rel.length === a.rel.length && b.rel < a.rel) ? b : a)).path
+  return named.reduce((a, b) =>
+    b.rel.length < a.rel.length || (b.rel.length === a.rel.length && b.rel < a.rel) ? b : a,
+  ).path
 }
 
 export interface LinkDest {

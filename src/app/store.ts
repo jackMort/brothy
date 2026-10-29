@@ -182,7 +182,13 @@ export interface UI {
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
-function savedSettings(cfg: Config, themeName: string | undefined, transparent: boolean | undefined, piped: boolean, motion: boolean | undefined) {
+function savedSettings(
+  cfg: Config,
+  themeName: string | undefined,
+  transparent: boolean | undefined,
+  piped: boolean,
+  motion: boolean | undefined,
+) {
   return {
     themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
     hidden: cfg.sidebar?.hidden ?? false,

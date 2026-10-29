@@ -19,7 +19,12 @@ import {
 } from "../../src/notes/projects"
 import { useXdgDir } from "../helpers/env"
 
-const entry = (root: string, at = 0, lastNote: string | null = null, top = 0): ProjectEntry => ({ root, lastNote, top, at })
+const entry = (root: string, at = 0, lastNote: string | null = null, top = 0): ProjectEntry => ({
+  root,
+  lastNote,
+  top,
+  at,
+})
 
 describe("remember", () => {
   test("puts the entry first and drops the older one for the same root", () => {
@@ -51,7 +56,10 @@ describe("load / save", () => {
     expect(loadProjects()).toEqual(list)
   })
   test('the file is {"projects": [...]} in two-space JSON with a trailing newline, and a stored file reads back', () => {
-    const list = [{ root: "/a", lastNote: "/a/n.md", top: 12, geo: { heads: [0, 5], total: 30 }, at: 5 }, entry("/b", 4)]
+    const list = [
+      { root: "/a", lastNote: "/a/n.md", top: 12, geo: { heads: [0, 5], total: 30 }, at: 5 },
+      entry("/b", 4),
+    ]
     saveProjects(list)
     const text = readFileSync(projectsPath(), "utf8")
     expect(text).toBe(JSON.stringify({ projects: list }, null, 2) + "\n")
@@ -197,7 +205,10 @@ describe("pathCompletions", () => {
   test("~ alone lists home; relative paths resolve against cwd", () => {
     expect(pathCompletions("~", io, at)[0]).toMatchObject({ self: true, path: "/home/me", completion: "~/" })
     expect(pathCompletions("./", io, at).map((p) => p.completion)).toEqual(["./", "./proj/"])
-    expect(pathCompletions("/home/me/Docs/", io, at).map((p) => p.path)).toEqual(["/home/me/Docs", "/home/me/Docs/a.md"])
+    expect(pathCompletions("/home/me/Docs/", io, at).map((p) => p.path)).toEqual([
+      "/home/me/Docs",
+      "/home/me/Docs/a.md",
+    ])
   })
   test("an unreadable dir gives nothing", () => {
     expect(pathCompletions("/nope/", io, at)).toEqual([])
@@ -224,7 +235,12 @@ describe("openRows", () => {
   test("a path query lists Path first; Recent keeps only projects under that path", () => {
     const mine = [entry("/home/me/Docs/vault", 3), entry("/home/me/dev/x", 2), entry("/w/brothy", 1)]
     const rows = openRows(mine, "~/Doc", o)
-    expect(rows.map((r) => (r.kind === "header" ? r.title : r.kind === "recent" ? r.name : r.name))).toEqual(["Path", "Docs", "Recent", "vault"])
+    expect(rows.map((r) => (r.kind === "header" ? r.title : r.kind === "recent" ? r.name : r.name))).toEqual([
+      "Path",
+      "Docs",
+      "Recent",
+      "vault",
+    ])
     // "~/" fuzzily matches every path under home, but only a prefix counts
     expect(
       openRows(mine, "~/", o)
@@ -251,7 +267,9 @@ describe("openRows path filters", () => {
     }
   })
   test("the path count has a + only when there are more rows", () => {
-    const files = (n: number): DirIO => ({ list: () => Array.from({ length: n }, (_, i) => ({ name: `n${i}.md`, dir: false })) })
+    const files = (n: number): DirIO => ({
+      list: () => Array.from({ length: n }, (_, i) => ({ name: `n${i}.md`, dir: false })),
+    })
     const count = (n: number) => (openRows([], "/x/", o(files(n)))[0] as { count: string }).count
     expect(count(PATH_CAP)).toBe(String(PATH_CAP))
     expect(count(PATH_CAP + 1)).toBe(`${PATH_CAP}+`)

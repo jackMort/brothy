@@ -72,7 +72,9 @@ function documentMemo(stdin: string | undefined) {
     doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) =>
       render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
     ),
-    source: cached((src: string, w: number, t: Theme, tree: FileNode) => renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null })),
+    source: cached((src: string, w: number, t: Theme, tree: FileNode) =>
+      renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null }),
+    ),
     stats: cached(stats),
     props: cached(parseProperties),
     propsKey: cached((fm: FrontMatter) => JSON.stringify(fm.entries)),
@@ -117,11 +119,15 @@ function panelMemo() {
           f,
           undefined,
           sState ? { text: sText, state: sState, model: sModel } : undefined,
-          cState ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title } : undefined,
+          cState
+            ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title }
+            : undefined,
         ),
     ),
     // Info cursor stops: links and change rows (removed sections are not stops)
-    linkIdx: cached((items: InfoItem[]) => items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : []))),
+    linkIdx: cached((items: InfoItem[]) =>
+      items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : [])),
+    ),
     rows: cached(visibleRows),
     outline: cached(outlineRows),
     rank: cached((tree: FileNode, q: string) => {
@@ -160,15 +166,21 @@ function viewMemo() {
 /** Memo builders for the popups: switcher, Open, welcome recents, theme picker and the switcher's peek. */
 function pickerMemo() {
   return {
-    switch: cached((ix: VaultIndex, tree: FileNode, q: string, _ver: number, recent: readonly string[], open: string | null) =>
-      switchRows(q.trim() ? searchVault(ix, tree, q, open) : recentSection(tree, recent, open)),
+    switch: cached(
+      (ix: VaultIndex, tree: FileNode, q: string, _ver: number, recent: readonly string[], open: string | null) =>
+        switchRows(q.trim() ? searchVault(ix, tree, q, open) : recentSection(tree, recent, open)),
     ),
     // relative paths resolve against the workspace folder; the current project is not listed
-    open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) => openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current })),
+    open: cached((list: ProjectEntry[], q: string, cwd: string, current: string) =>
+      openRows(list, q, { cwd, io: fsDirIO, exists: existsSync, current }),
+    ),
     // the welcome page's recent projects: the `o` picker's rows with an empty query, header first; read again
     // after every workspace switch (`watchGen`) and a dropped missing one (`gen`)
     recents: cached((root: string, _gen: number, _watchGen: number) =>
-      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(0, 1 + WELCOME_RECENTS),
+      openRows(loadProjects(), "", { cwd: root, io: fsDirIO, exists: existsSync, current: root }).slice(
+        0,
+        1 + WELCOME_RECENTS,
+      ),
     ),
     /** the `t` picker's rows, its sample in the candidate theme (`_hl`: re-render once code is highlighted) and the pane rows */
     themeRows: cached((q: string) => filterFamilies(q)),
@@ -180,10 +192,24 @@ function pickerMemo() {
       if (f.error) return null
       const fm = parseFrontMatter(f.src)
       const st = wordStats(fm.body) // stats() would lex the whole note
-      return { lines: normalize(f.src).split("\n"), fm: fm.offset, hash: textHash(noteText(f.src)), words: st.words, minutes: st.minutes }
+      return {
+        lines: normalize(f.src).split("\n"),
+        fm: fm.offset,
+        hash: textHash(noteText(f.src)),
+        words: st.words,
+        minutes: st.minutes,
+      }
     }),
-    peek: cached((lines: readonly string[], from: number, to: number, w: number, t: Theme, tree: FileNode, headings: HeadingStyle) =>
-      render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
+    peek: cached(
+      (
+        lines: readonly string[],
+        from: number,
+        to: number,
+        w: number,
+        t: Theme,
+        tree: FileNode,
+        headings: HeadingStyle,
+      ) => render(lines.slice(from, to).join("\n"), w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
     ),
   }
 }
@@ -197,8 +223,12 @@ function askRowsMemo() {
       const r = resolveAI(ai, process.env)
       return "error" in r ? { error: r.error } : { host: r.host }
     }),
-    cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) => askCandidates(ix, tree, queries)),
-    cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) => rerankCost(question, cands, ix)),
+    cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) =>
+      askCandidates(ix, tree, queries),
+    ),
+    cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) =>
+      rerankCost(question, cands, ix),
+    ),
     ask: cached(
       (
         question: string,

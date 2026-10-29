@@ -76,7 +76,9 @@ if (import.meta.main) {
       const r = ratios(t, k)
       const miss = worst(t, k) < floor || (k === "text" && r.bg < HOUSE_TEXT)
       const n = (x: number) => x.toFixed(2).padStart(6)
-      console.log(`  ${k.padEnd(13)} ${t[k]}  page${n(r.bg)}  panel${n(r.side)}  code${n(r.el)}  ≥${floor}${miss ? " ✗" : "  "}  ${use}`)
+      console.log(
+        `  ${k.padEnd(13)} ${t[k]}  page${n(r.bg)}  panel${n(r.side)}  code${n(r.el)}  ≥${floor}${miss ? " ✗" : "  "}  ${use}`,
+      )
     }
     const c = closestPair(t)
     console.log(`  closest pair  ${c.pair.join(" / ")}  ΔE ${c.dE.toFixed(1)}${c.dE < HOUSE_APART ? " ✗" : ""}`)

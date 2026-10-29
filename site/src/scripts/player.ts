@@ -44,7 +44,9 @@ export async function mountCast(el: HTMLElement) {
     time = el.querySelector<HTMLElement>("[data-time]"),
     bar = el.querySelector<HTMLElement>("[data-bar]")
   const font = getComputedStyle(el).getPropertyValue("--cast-font").trim() || "monospace"
-  const casts: Record<Mode, Cast> = await Promise.all([load(el.dataset.dark!), load(el.dataset.light!)]).then(([dark, light]) => ({ dark, light }))
+  const casts: Record<Mode, Cast> = await Promise.all([load(el.dataset.dark!), load(el.dataset.light!)]).then(
+    ([dark, light]) => ({ dark, light }),
+  )
   // the faces, and the symbol subset the casts take from the fallback (↻ ⏎ ␣ …), before the first paint
   const sample = "Aa ↪↻⌫⏎␣◡◦★▸▾●"
   try {

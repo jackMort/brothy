@@ -31,7 +31,11 @@ function makePopupKey({ workspace, switcher, popups }: Features, actions: Action
     { mode: "theme", open: (s) => !!s.themePick, type: (_, text) => themeSet((p) => pickQuery(p, p.q + text)) },
     { mode: "zenSettings", open: (s) => s.zenOrig !== null },
     { mode: "open", open: (s) => !!s.opener, type: (s, text) => s.opener && workspace.opType(s.opener.q + text) },
-    { mode: "switch", open: (s) => !!s.switcher, type: (s, text) => s.switcher && switcher.swType(s.switcher.q + text) },
+    {
+      mode: "switch",
+      open: (s) => !!s.switcher,
+      type: (s, text) => s.switcher && switcher.swType(s.switcher.q + text),
+    },
     { mode: "prompt", open: (s) => !!s.prompt, type: (s, text) => s.prompt && promptType(s.prompt.value + text) },
   ]
 

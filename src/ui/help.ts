@@ -42,7 +42,10 @@ export const HELP_COLUMNS: readonly (readonly string[])[] = [
 ]
 const COL_GAP = 4
 
-const groupLines = (g: HelpGroup): HelpLine[] => [{ kind: "chip", title: g.title }, ...g.entries.map((e) => ({ kind: "key" as const, ...e }))]
+const groupLines = (g: HelpGroup): HelpLine[] => [
+  { kind: "chip", title: g.title },
+  ...g.entries.map((e) => ({ kind: "key" as const, ...e })),
+]
 const join = (gs: HelpGroup[]): HelpLine[] => gs.flatMap((g, i) => (i ? [null, ...groupLines(g)] : groupLines(g)))
 
 export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, columns = HELP_COLUMNS): HelpLayout {

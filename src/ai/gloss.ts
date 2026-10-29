@@ -25,13 +25,21 @@ const SAME = "Write in the same language as the section."
 
 /** Bump `PROMPTS.gloss` (ai/config.ts) whenever one of these changes. */
 export function glossSystem(style: GlossStyle): string {
-  if (style === "simplify") return `Restate this section in plain, simple words in 1–2 sentences, at most 35 words. ${PLAIN} ${SAME}`
-  if (style.startsWith("translate:")) return `Give the gist of this section in ${style.slice("translate:".length)} in 1–2 sentences, at most 35 words. ${PLAIN}`
+  if (style === "simplify")
+    return `Restate this section in plain, simple words in 1–2 sentences, at most 35 words. ${PLAIN} ${SAME}`
+  if (style.startsWith("translate:"))
+    return `Give the gist of this section in ${style.slice("translate:".length)} in 1–2 sentences, at most 35 words. ${PLAIN}`
   return `Explain this section of a note to its reader in 1–2 sentences, at most 35 words: what it says and why it matters. ${PLAIN} ${SAME}`
 }
 
 /** The request: the system prompt and the one user message (the lead-in, an empty trail, is named by the note title), cleaned to plain text, at most GLOSS_MAX. */
-export function glossRequest(style: GlossStyle, title: string, trail: string[], text: string, maxChars: number): ChatReq {
+export function glossRequest(
+  style: GlossStyle,
+  title: string,
+  trail: string[],
+  text: string,
+  maxChars: number,
+): ChatReq {
   const section = trail.length ? trail.join(" › ") : title
   const user = `Note: ${title}\nSection: ${section}\n\n${clip(text, Math.min(maxChars, GLOSS_CHARS))}`
   return { system: glossSystem(style), user, maxOut: GLOSS_MAX, clean: cleanSummary }
@@ -60,7 +68,13 @@ export function glossTarget(src: string, index: number, path: string, title: str
   if (!text) return null
   // position = index once the lead-in is dropped, which is what headingPath expects
   const heads = secs.filter((x) => x.index >= 0)
-  return { id: sectionId(path, s), index, heading: index < 0 ? title : s.text, trail: index < 0 ? [] : headingPath(heads, index), text }
+  return {
+    id: sectionId(path, s),
+    index,
+    heading: index < 0 ? title : s.text,
+    trail: index < 0 ? [] : headingPath(heads, index),
+    text,
+  }
 }
 
 /** Cache key: the section and the style it was glossed in. */

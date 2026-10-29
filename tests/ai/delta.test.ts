@@ -62,14 +62,19 @@ describe("hunks", () => {
   test("changes whose context touches merge", () => {
     const a = nums(6)
     const b = a.map((l, i) => (i === 1 || i === 3 ? l + "!" : l))
-    expect(hunks(lineDiff(a, b)!).map((h) => show(h.ops))).toEqual([[" l0", "-l1", "+l1!", " l2", "-l3", "+l3!", " l4"]])
+    expect(hunks(lineDiff(a, b)!).map((h) => show(h.ops))).toEqual([
+      [" l0", "-l1", "+l1!", " l2", "-l3", "+l3!", " l4"],
+    ])
   })
 })
 
 /** Shared by the message tests: one section edited, one removed, two added (Install and its macOS child). */
-const BEFORE = "Intro line.\n\n# Title\n\n## Why\n\nPagers dump text.\n- Find with n / N\n\n## Pager notes\n\nold 1\nold 2\n"
-const AFTER = "Intro line.\n\n# Title\n\n## Why\n\nPagers dump text.\n- Find in the vault\n\n## Install\n\n### macOS\n\nbrew install bun\n"
-const brief = (cs: ReturnType<typeof diffSections>) => cs!.map((c) => `${c.status} ${c.path.join(" › ") || "(lead-in)"} +${c.plus} -${c.minus}`)
+const BEFORE =
+  "Intro line.\n\n# Title\n\n## Why\n\nPagers dump text.\n- Find with n / N\n\n## Pager notes\n\nold 1\nold 2\n"
+const AFTER =
+  "Intro line.\n\n# Title\n\n## Why\n\nPagers dump text.\n- Find in the vault\n\n## Install\n\n### macOS\n\nbrew install bun\n"
+const brief = (cs: ReturnType<typeof diffSections>) =>
+  cs!.map((c) => `${c.status} ${c.path.join(" › ") || "(lead-in)"} +${c.plus} -${c.minus}`)
 
 describe("diffSections", () => {
   test("edited, removed and added, in document order", () => {
@@ -81,7 +86,9 @@ describe("diffSections", () => {
     ])
     const [why, gone, , mac] = diffSections(BEFORE, AFTER)!
     expect(why!.index).toBe(1)
-    expect(why!.hunks.map((h) => show(h.ops))).toEqual([[" Pagers dump text.", "-- Find with n / N", "+- Find in the vault"]])
+    expect(why!.hunks.map((h) => show(h.ops))).toEqual([
+      [" Pagers dump text.", "-- Find with n / N", "+- Find in the vault"],
+    ])
     expect(gone!.index).toBe(2) // the old outline's index
     expect(gone!.newText).toBe("")
     expect(mac!.newText).toBe("### macOS\n\nbrew install bun")
@@ -92,7 +99,10 @@ describe("diffSections", () => {
   })
   test("a renamed heading is removed + added", () => {
     // no shared section precedes Why, so its removal is listed first
-    expect(brief(diffSections("## Why\n\ntext\n", "## Why not\n\ntext\n"))).toEqual(["removed Why +0 -3", "added Why not +3 -0"])
+    expect(brief(diffSections("## Why\n\ntext\n", "## Why not\n\ntext\n"))).toEqual([
+      "removed Why +0 -3",
+      "added Why not +3 -0",
+    ])
   })
   test("a heading edit that keeps the key is an edit", () => {
     expect(brief(diffSections("## Install\n\nx\n", "## Install!\n\nx\n"))).toEqual(["edited Install! +1 -1"])
@@ -137,19 +147,26 @@ describe("diffSections", () => {
     // every line of every section changed (a formatter run): each section is under DIFF_CELLS, together over the budget
     const lines = 200
     const count = Math.floor(DIFF_BUDGET / (lines * lines)) + 1
-    const note = (tag: string, k: number) => Array.from({ length: k }, (_, i) => `## S${i}\n\n${nums(lines, tag + i + "-").join("\n")}\n`).join("\n")
+    const note = (tag: string, k: number) =>
+      Array.from({ length: k }, (_, i) => `## S${i}\n\n${nums(lines, tag + i + "-").join("\n")}\n`).join("\n")
     expect(lines * lines).toBeLessThanOrEqual(DIFF_CELLS)
     expect(diffSections(note("a", count), note("b", count))).toBeNull()
     expect(diffSections(note("a", count - 1), note("b", count - 1))).toHaveLength(count - 1)
     // rewritten sections (over the cell cap) run no diff, so they spend none of it
-    const big = (tag: string) => Array.from({ length: 10 }, (_, i) => `## B${i}\n\n${nums(1100, tag).join("\n")}\n`).join("\n")
+    const big = (tag: string) =>
+      Array.from({ length: 10 }, (_, i) => `## B${i}\n\n${nums(1100, tag).join("\n")}\n`).join("\n")
     expect(diffSections(big("a"), big("b"))!.every((c) => c.rewritten)).toBe(true)
   })
   test("stays linear in the number of headings", () => {
     const N = 48_000
     const before = { big: manyHeadings(N), small: manyHeadings(N / SCALE) }
-    const edited = { big: before.big.replace("body 7\n", "body seven\n"), small: before.small.replace("body 7\n", "body seven\n") }
-    expectLinear("one line edited", (b) => (b ? diffSections(before.big, edited.big) : diffSections(before.small, edited.small)))
+    const edited = {
+      big: before.big.replace("body 7\n", "body seven\n"),
+      small: before.small.replace("body 7\n", "body seven\n"),
+    }
+    expectLinear("one line edited", (b) =>
+      b ? diffSections(before.big, edited.big) : diffSections(before.small, edited.small),
+    )
     // every section but the first is removed, all listed after it: the list grows by push, not by copying
     const first = manyHeadings(1)
     expectLinear("all but one removed", (b) => diffSections(b ? before.big : before.small, first))
@@ -182,7 +199,9 @@ describe("deltaMessage", () => {
     )
   })
   test("the lead-in is named by the note title", () => {
-    expect(deltaMessage("Readme", diffSections("a\n", "b\n")!, 16_000)).toBe("Note: Readme\n§1 edited · Readme\n@@\n- a\n+ b")
+    expect(deltaMessage("Readme", diffSections("a\n", "b\n")!, 16_000)).toBe(
+      "Note: Readme\n§1 edited · Readme\n@@\n- a\n+ b",
+    )
   })
   test("a removed section sends its first 20 lines", () => {
     const before = "## Old\n\n" + nums(30).join("\n") + "\n"
@@ -210,7 +229,11 @@ describe("deltaMessage", () => {
     expect(m).toContain("§1 edited · Title › Why (not shown)")
     expect(m).not.toContain("§2")
     // many sections: ids stay 1…k, the rest are only counted
-    const many = (v: string) => Array.from({ length: 500 }, (_, i) => `## Section number ${i} with a longish heading\n\nline ${v} of ${i}\n`).join("\n")
+    const many = (v: string) =>
+      Array.from(
+        { length: 500 },
+        (_, i) => `## Section number ${i} with a longish heading\n\nline ${v} of ${i}\n`,
+      ).join("\n")
     const big = deltaMessage("T", diffSections(many("a"), many("b"))!, 8000)
     expect([...big].length).toBeLessThanOrEqual(8000)
     const ids = big
@@ -295,7 +318,9 @@ describe("parseDelta", () => {
   test("a leading <think> block is dropped, also while streaming; a partial tag or a second block keeps nothing", () => {
     for (const partial of [false, true]) {
       expect(parseDelta("<think>hm</think>\nSum.", cs(), partial)!.summary).toBe("Sum.")
-      expect(parseDelta("  <think>hm</think>Sum.\n§1: vault search\n", cs(), partial)!.notes[0]!.what).toBe("vault search")
+      expect(parseDelta("  <think>hm</think>Sum.\n§1: vault search\n", cs(), partial)!.notes[0]!.what).toBe(
+        "vault search",
+      )
       expect(parseDelta("<think", cs(), partial)).toBeNull()
       expect(parseDelta("<think>a</think><think>b</think>Sum.\n§1: x", cs(), partial)).toBeNull()
     }

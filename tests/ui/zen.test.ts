@@ -64,8 +64,22 @@ describe("pickZen", () => {
 describe("settings rows", () => {
   test("one row per setting, in popup order", () => {
     expect(zenRows(ZEN_DEFAULTS).map((r) => r.id)).toEqual([...ZEN_ROWS])
-    expect(zenRows(ZEN_DEFAULTS).map((r) => r.value)).toEqual(["◀ scroll ▶", "on", "on", "on", "off · ◀ 220 wpm ▶", "◀ 72 ▶"])
-    expect(zenRows(ZEN_DEFAULTS).map((r) => r.label)).toEqual(["Flow", "Spotlight", "Typewriter", "Ghost chrome", "Teleprompter", "Measure"])
+    expect(zenRows(ZEN_DEFAULTS).map((r) => r.value)).toEqual([
+      "◀ scroll ▶",
+      "on",
+      "on",
+      "on",
+      "off · ◀ 220 wpm ▶",
+      "◀ 72 ▶",
+    ])
+    expect(zenRows(ZEN_DEFAULTS).map((r) => r.label)).toEqual([
+      "Flow",
+      "Spotlight",
+      "Typewriter",
+      "Ghost chrome",
+      "Teleprompter",
+      "Measure",
+    ])
   })
   test("pages greys out the scroll-only aids", () => {
     const rows = zenRows({ ...ZEN_DEFAULTS, flow: "pages" })
@@ -188,7 +202,11 @@ describe("headingPath", () => {
 describe("dimSpans", () => {
   const t = brothy
   test("mixes fg (and bg) toward the background, keeping text and attributes", () => {
-    const out = dimSpans([{ text: "a", fg: "#ffffff", attr: 1 }, { text: "b" }, { text: "c", fg: "#000000", bg: "#ffffff" }], t, 0.6)
+    const out = dimSpans(
+      [{ text: "a", fg: "#ffffff", attr: 1 }, { text: "b" }, { text: "c", fg: "#000000", bg: "#ffffff" }],
+      t,
+      0.6,
+    )
     expect(out).toEqual([
       { text: "a", fg: mix("#ffffff", t.background, 0.6), attr: 1 },
       { text: "b", fg: mix(t.text, t.background, 0.6) },
@@ -229,7 +247,16 @@ describe("prompterRate", () => {
 
 describe("fadeStep", () => {
   test("full for the hold, then four fading steps, then hidden", () => {
-    expect([0, 1499, GHOST_HOLD, 1619, 1620, 1860, 1979, 1980].map((e) => fadeStep(e))).toEqual([0, 0, 1, 1, 2, 4, 4, null])
+    expect([0, 1499, GHOST_HOLD, 1619, 1620, 1860, 1979, 1980].map((e) => fadeStep(e))).toEqual([
+      0,
+      0,
+      1,
+      1,
+      2,
+      4,
+      4,
+      null,
+    ])
   })
   test("a custom hold shifts the steps", () => {
     expect([1999, HINT_HOLD, 2119, 2120, 2479, 2480].map((e) => fadeStep(e, HINT_HOLD))).toEqual([0, 1, 1, 2, 4, null])

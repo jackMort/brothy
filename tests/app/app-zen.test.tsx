@@ -2,7 +2,19 @@
 import { expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { HINT_ROW, keys, loremWidth, numbered, onBg, openHelp, panelShown, READING_ROW, sections, useAppHarness, waitFrame } from "./helpers"
+import {
+  HINT_ROW,
+  keys,
+  loremWidth,
+  numbered,
+  onBg,
+  openHelp,
+  panelShown,
+  READING_ROW,
+  sections,
+  useAppHarness,
+  waitFrame,
+} from "./helpers"
 
 const { cfgDir, tmp, mount, unmount, zenConfig, savedConfig } = useAppHarness()
 
@@ -191,7 +203,9 @@ test("Z inside zen keeps zen on after esc", async () => {
 })
 
 test("an opening paragraph reads as written, in Preview and in zen: no initial, no altered letters", async () => {
-  const s = await mount(tmp({ "a.md": `# A\n\n${OPENING}\n\n## Two\n\nSecond ${ZEN_BODY}\n` }), "a.md", { size: { width: 100, height: 40 } })
+  const s = await mount(tmp({ "a.md": `# A\n\n${OPENING}\n\n## Two\n\nSecond ${ZEN_BODY}\n` }), "a.md", {
+    size: { width: 100, height: 40 },
+  })
   const f = await keys(s)
   expect(f).toContain("brothy is a terminal Markdown reader")
   expect(f).not.toMatch(/[ᴀ-ᴢʀʏ▘▝▀▖▌▞▛▗▚▐▜▄▙▟]/)

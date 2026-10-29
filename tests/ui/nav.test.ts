@@ -183,7 +183,9 @@ test("matchIndex is 1-based and null when unset or stale", () => {
   expect(matchIndex([], 3)).toBeNull()
 })
 describe("link labels", () => {
-  const row = (...parts: [string, number?][]) => ({ spans: parts.map(([text, link]) => (link === undefined ? { text } : { text, link })) })
+  const row = (...parts: [string, number?][]) => ({
+    spans: parts.map(([text, link]) => (link === undefined ? { text } : { text, link })),
+  })
   test("visibleLinks: column of the first cell, top-to-bottom, left-to-right", () => {
     const lines = [row(["see "], ["b", 0], [" and "], ["Sea", 1]), row(["é "], ["x", 2])]
     expect(visibleLinks(lines, 0, 5)).toEqual([
@@ -207,7 +209,8 @@ describe("link labels", () => {
     expect(many[0]).toBe("aa")
     expect(new Set(linkLabels(144)).size).toBe(144)
     expect(linkLabels(200)).toHaveLength(144) // more links than labels: the rest go unlabelled
-    for (const set of [linkLabels(12), linkLabels(40)]) for (const a of set) for (const b of set) if (a !== b) expect(b.startsWith(a)).toBe(false)
+    for (const set of [linkLabels(12), linkLabels(40)])
+      for (const a of set) for (const b of set) if (a !== b) expect(b.startsWith(a)).toBe(false)
   })
   test("narrowLabels keeps labels starting with what was typed", () => {
     const ls = ["aa", "as", "sa"]
@@ -291,7 +294,14 @@ test("findItems: a numbered row per match in Preview, the hits in primary, cut t
   expect(a!.spans[0]).toEqual({ text: "   1  ", fg: t.textMuted })
   expect(b!.spans.filter((s) => s.fg === t.primary).map((s) => s.text)).toEqual(["LINE"])
   // Source rows carry no number, and a narrow room keeps the hit in view
-  const [c] = findItems([{ spans: [{ text: "a long line of words before the word needle" }] }], [0], "needle", true, 16, t)
+  const [c] = findItems(
+    [{ spans: [{ text: "a long line of words before the word needle" }] }],
+    [0],
+    "needle",
+    true,
+    16,
+    t,
+  )
   expect(text(c)).toContain("needle")
   expect(text(c).startsWith("…")).toBe(true)
   expect(findItems(lines, [], "x", false, 40, t)).toEqual([])

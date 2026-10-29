@@ -97,11 +97,17 @@ if (piped) {
   }
   if (isFile && !isMarkdown(abs)) console.error(`brothy: ${args.path} doesn't look like Markdown, opening anyway`)
   root = isFile ? dirname(abs) : abs
-  if (!process.stdout.isTTY || !process.stdin.isTTY) die("needs an interactive terminal (stdin and stdout must be a TTY)")
+  if (!process.stdout.isTTY || !process.stdin.isTTY)
+    die("needs an interactive terminal (stdin and stdout must be a TTY)")
 }
 
 try {
-  const renderer = await createCliRenderer({ exitOnCtrlC: true, useMouse: true, targetFps: 30, ...(keys && { stdin: keys }) })
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: true,
+    useMouse: true,
+    targetFps: 30,
+    ...(keys && { stdin: keys }),
+  })
   createRoot(renderer).render(
     <App
       root={root}

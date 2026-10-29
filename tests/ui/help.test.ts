@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test"
 import { HELP_COLUMNS, HELP_KEY_W, type HelpGroup, type HelpLine, helpLayout } from "../../src/ui/help"
 
-const g = (title: string, n: number, desc = "does a thing"): HelpGroup => ({ title, entries: Array.from({ length: n }, (_, i) => ({ keys: `k${i}`, desc })) })
+const g = (title: string, n: number, desc = "does a thing"): HelpGroup => ({
+  title,
+  entries: Array.from({ length: n }, (_, i) => ({ keys: `k${i}`, desc })),
+})
 const GROUPS = [g("Global", 20), g("Document", 8), g("Zen", 8), g("Panel", 15), g("AI", 3)]
 const chips = (col: HelpLine[]) => col.flatMap((x) => (x?.kind === "chip" ? [x.title] : []))
 

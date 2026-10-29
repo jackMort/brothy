@@ -24,7 +24,17 @@ import {
 import { chip, groupColor, keycaps } from "./chrome"
 import { BODY_PAD, innerWidth, PANE_PAD, POPUP_INSET, popupWidth, ROW_PAD, ZEN_POPUP_W } from "./geometry"
 import type { HelpLayout, HelpLine } from "./help"
-import { artSpans, hitSpans, modeSwitch, openItem, type PickerItem, padTo, SWITCH_MODES, scrim, switchItem } from "./rows"
+import {
+  artSpans,
+  hitSpans,
+  modeSwitch,
+  openItem,
+  type PickerItem,
+  padTo,
+  SWITCH_MODES,
+  scrim,
+  switchItem,
+} from "./rows"
 import { WORDMARK } from "./status"
 import { artWidth, BIG, welcomeArt, welcomeFit } from "./welcome"
 import type { ZenRow } from "./zen"
@@ -147,7 +157,8 @@ function OverlayPanel({
       onMouse={pointer.note} // down and the wheel stop here, short of App's root
       onMouseDown={(e: MouseEvent) => e.stopPropagation()}
       onMouseScroll={(e: MouseEvent) => {
-        if (e.scroll?.direction === "up" || e.scroll?.direction === "down") onScroll?.(e.scroll.direction === "up" ? -1 : 1)
+        if (e.scroll?.direction === "up" || e.scroll?.direction === "down")
+          onScroll?.(e.scroll.direction === "up" ? -1 : 1)
         e.stopPropagation()
       }}
       style={{
@@ -175,7 +186,13 @@ function OverlayPanel({
 const LIST_BOX = { flexDirection: "column", paddingLeft: 1, paddingRight: 1 } as const
 
 /** A pickable row's frame, shared by PickerList and ThemeBoard: one line, 3 cells of padding, `bg` when highlighted. */
-const rowBox = (bg: string | undefined) => ({ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3, backgroundColor: bg })
+const rowBox = (bg: string | undefined) => ({
+  height: 1,
+  flexShrink: 0,
+  paddingLeft: 3,
+  paddingRight: 3,
+  backgroundColor: bg,
+})
 
 /** The longest prefix of `text` within `room` columns, cut by code point and measuring each once. */
 function cutTo(text: string, room: number): string {
@@ -281,13 +298,19 @@ export function PickerInput({
   width?: number
 }) {
   // a long query shows its end, where the typing is; `width` is the popup's column count
-  const side = note ? sw(note) : right?.length ? right.reduce((n, seg) => n + seg.reduce((m, s) => m + sw(s.text), 0), right.length - 1) : 0
+  const side = note
+    ? sw(note)
+    : right?.length
+      ? right.reduce((n, seg) => n + seg.reduce((m, s) => m + sw(s.text), 0), right.length - 1)
+      : 0
   const room = width === undefined ? Infinity : width - POPUP_INSET - BODY_PAD - 1 - (side ? side + 1 : 0)
   const shown = safeLine(value)
   return (
     <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 4, paddingRight: 4, height: 1 }}>
       <text>
-        {value ? <span fg={t.textMuted}>{room === Infinity ? shown : truncateLeft(shown, Math.max(1, room))}</span> : null}
+        {value ? (
+          <span fg={t.textMuted}>{room === Infinity ? shown : truncateLeft(shown, Math.max(1, room))}</span>
+        ) : null}
         <span fg={t.primary}>▏</span>
         {value ? null : <span fg={t.textMuted}>{placeholder}</span>}
       </text>
@@ -425,7 +448,11 @@ export function Switcher({
   return (
     <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
-      {lines ? <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={lines} /> : list}
+      {lines ? (
+        <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={lines} />
+      ) : (
+        list
+      )}
     </Overlay>
   )
 }
@@ -454,7 +481,16 @@ export function OpenPicker({
   const width = popupWidth(W)
   const paths = rows.some((r) => r.kind === "path")
   return (
-    <Overlay t={t} W={W} H={H} width={width} title="Open" note={paths ? "tab completes" : undefined} onClose={onClose} onScroll={onScroll}>
+    <Overlay
+      t={t}
+      W={W}
+      H={H}
+      width={width}
+      title="Open"
+      note={paths ? "tab completes" : undefined}
+      onClose={onClose}
+      onScroll={onScroll}
+    >
       <PickerInput t={t} value={q} placeholder="Recent project, or a path: ~/ / ./" width={width} />
       <PickerList
         t={t}
@@ -472,7 +508,17 @@ export function OpenPicker({
 }
 
 /** ThemeBoard's top row: the `dark` / `light` header, or the empty note. */
-function BoardHead({ t, L, shown, empty }: { t: Theme; L: ReturnType<typeof boardLayout>; shown: ThemeMode; empty: boolean }) {
+function BoardHead({
+  t,
+  L,
+  shown,
+  empty,
+}: {
+  t: Theme
+  L: ReturnType<typeof boardLayout>
+  shown: ThemeMode
+  empty: boolean
+}) {
   return empty ? (
     <box key="none" style={{ height: 1, paddingLeft: 3 }}>
       <text fg={t.textMuted}>No themes match</text>
@@ -781,9 +827,17 @@ export function HelpSheet({
   return (
     <Overlay t={t} W={W} H={H} width={layout.width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
       <box key="help-body" style={{ flexDirection: "column", paddingLeft: 3, paddingRight: 4 }}>
-        {layout.mark ? [...WORDMARK.map((l, i) => <Line key={"wm" + i} spans={[{ text: " " + l, fg: t.primary }]} />), <Line key="wm-gap" spans={[]} />] : null}
+        {layout.mark
+          ? [
+              ...WORDMARK.map((l, i) => <Line key={"wm" + i} spans={[{ text: " " + l, fg: t.primary }]} />),
+              <Line key="wm-gap" spans={[]} />,
+            ]
+          : null}
         {Array.from({ length: layout.vis }, (_, i) => (
-          <Line key={i} spans={layout.cols.flatMap((c, k) => [...(k ? [{ text: "   " }] : []), ...helpCell(t, c[top + i], layout)])} />
+          <Line
+            key={i}
+            spans={layout.cols.flatMap((c, k) => [...(k ? [{ text: "   " }] : []), ...helpCell(t, c[top + i], layout)])}
+          />
         ))}
       </box>
     </Overlay>
@@ -830,7 +884,10 @@ export function Welcome({
   onActivate?: (i: number) => void
 }) {
   const fit = welcomeFit(CW, CH, recents.filter((r) => r.kind === "recent").length)
-  const centre = (spans: Span[]): Span[] => [{ text: " ".repeat(Math.max(0, Math.floor((CW - spanWidth(spans)) / 2))) }, ...spans]
+  const centre = (spans: Span[]): Span[] => [
+    { text: " ".repeat(Math.max(0, Math.floor((CW - spanWidth(spans)) / 2))) },
+    ...spans,
+  ]
   const rows: ReactNode[] = []
   const line = (spans: Span[]) => rows.push(<Line key={rows.length} spans={spans} />)
   for (let i = 0; i < fit.top; i++) line([])
@@ -850,7 +907,10 @@ export function Welcome({
   if (list.length) {
     line([])
     rows.push(
-      <box key="recent" style={{ flexDirection: "column", alignItems: "flex-start", flexShrink: 0, paddingLeft: Math.max(0, fx - 1) }}>
+      <box
+        key="recent"
+        style={{ flexDirection: "column", alignItems: "flex-start", flexShrink: 0, paddingLeft: Math.max(0, fx - 1) }}
+      >
         <PickerList
           t={t}
           items={list.map((r) => openItem(r, t, innerW - ROW_PAD, home))}
@@ -866,8 +926,15 @@ export function Welcome({
   }
   if (fit.hint) {
     if ((fit.size === BIG && fit.bowl) || !list.length) line([])
-    const hint: [string, string][] = [...(list.length ? [["⏎", "open"] as [string, string]] : []), ["o", "all projects or a path"]]
-    const spans = hint.flatMap(([k, w], i): Span[] => [...(i ? [{ text: "   " }] : []), { text: k, fg: t.text }, { text: " " + w, fg: t.textMuted }])
+    const hint: [string, string][] = [
+      ...(list.length ? [["⏎", "open"] as [string, string]] : []),
+      ["o", "all projects or a path"],
+    ]
+    const spans = hint.flatMap(([k, w], i): Span[] => [
+      ...(i ? [{ text: "   " }] : []),
+      { text: k, fg: t.text },
+      { text: " " + w, fg: t.textMuted },
+    ])
     line(list.length ? [{ text: " ".repeat(fx + 3) }, ...spans] : centre(spans))
   }
   return (

@@ -3,7 +3,16 @@ import { DRAWER_BELOW, layout, MEASURE } from "../../src/ui/layout"
 import { ZEN_DEFAULTS } from "../../src/ui/zen"
 
 type State = Parameters<typeof layout>[2]
-const base: State = { hidden: false, drawerOpen: false, zen: false, source: false, zenCfg: ZEN_DEFAULTS, wide: false, minimap: false, openPath: "/n.md" }
+const base: State = {
+  hidden: false,
+  drawerOpen: false,
+  zen: false,
+  source: false,
+  zenCfg: ZEN_DEFAULTS,
+  wide: false,
+  minimap: false,
+  openPath: "/n.md",
+}
 const at = (W: number, H: number, patch: Partial<State> = {}) => layout(W, H, { ...base, ...patch })
 
 test("wide enough, the panel is a column left of the measure, centred in what is left", () => {
@@ -35,7 +44,17 @@ test("a hidden panel gives the document the whole width; `wide` drops the measur
 
 test("below DRAWER_BELOW the panel is a drawer: shown only while open, and the document lays out without it", () => {
   const closed = at(DRAWER_BELOW - 10, 30)
-  expect(closed).toMatchObject({ mode: "drawer", shown: false, inline: false, SW: 24, DW: 40, PNW: 40, areaW: 88, CW: 80, padL: 4 })
+  expect(closed).toMatchObject({
+    mode: "drawer",
+    shown: false,
+    inline: false,
+    SW: 24,
+    DW: 40,
+    PNW: 40,
+    areaW: 88,
+    CW: 80,
+    padL: 4,
+  })
   const open = at(DRAWER_BELOW - 10, 30, { drawerOpen: true })
   expect(open).toMatchObject({ mode: "drawer", shown: true, inline: false, areaW: 88, CW: 80, padL: 4 })
   expect(at(DRAWER_BELOW, 30).mode).toBe("inline")
@@ -62,14 +81,26 @@ test("the text column never narrows below 20 and its margin never goes negative"
 })
 
 test("zen drops the panel and wraps at its own measure; with Source shown it is not zen", () => {
-  expect(at(120, 40, { zen: true })).toMatchObject({ zen: true, shown: false, inline: false, areaW: 118, CW: ZEN_DEFAULTS.measure, padL: 23 })
+  expect(at(120, 40, { zen: true })).toMatchObject({
+    zen: true,
+    shown: false,
+    inline: false,
+    areaW: 118,
+    CW: ZEN_DEFAULTS.measure,
+    padL: 23,
+  })
   expect(at(120, 40, { zen: true, zenCfg: { ...ZEN_DEFAULTS, measure: "full" } }).CW).toBe(114)
   expect(at(120, 40, { zen: true, source: true })).toMatchObject({ zen: false, shown: true, CW: 80 })
   expect(at(120, 40, { zen: true, minimap: true }).mini).toBe(false)
 })
 
 test("the welcome page (no note open) has the whole width: no panel, drawer or minimap", () => {
-  expect(at(120, 40, { openPath: null, minimap: true })).toMatchObject({ shown: false, inline: false, areaW: 118, mini: false })
+  expect(at(120, 40, { openPath: null, minimap: true })).toMatchObject({
+    shown: false,
+    inline: false,
+    areaW: 118,
+    mini: false,
+  })
   expect(at(60, 20, { openPath: null, drawerOpen: true }).shown).toBe(false)
 })
 

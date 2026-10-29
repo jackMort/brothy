@@ -195,7 +195,8 @@ function sheetKey(e: KeyboardEvent) {
   }
 }
 /** the cast player owns space, enter and the arrows while it has focus */
-const playerKey = (e: KeyboardEvent) => !!(e.target as HTMLElement).closest?.("[data-cast]") && [" ", "Enter", "ArrowLeft", "ArrowRight"].includes(e.key)
+const playerKey = (e: KeyboardEvent) =>
+  !!(e.target as HTMLElement).closest?.("[data-cast]") && [" ", "Enter", "ArrowLeft", "ArrowRight"].includes(e.key)
 
 /** the action for this key press: `C-b` is the only ctrl binding, and ctrl turns the plain keys off */
 function actionFor(e: KeyboardEvent) {
@@ -206,7 +207,12 @@ function actionFor(e: KeyboardEvent) {
 }
 
 /** the page leaves this key press alone: modified, handled, typed into a field, or the search dialog's */
-const notOurs = (e: KeyboardEvent) => e.defaultPrevented || e.altKey || e.metaKey || typing(e.target) || !!document.querySelector("dialog[open]:not(.sheet)")
+const notOurs = (e: KeyboardEvent) =>
+  e.defaultPrevented ||
+  e.altKey ||
+  e.metaKey ||
+  typing(e.target) ||
+  !!document.querySelector("dialog[open]:not(.sheet)")
 
 addEventListener("keydown", (e) => {
   if (notOurs(e)) return

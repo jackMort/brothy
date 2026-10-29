@@ -99,7 +99,8 @@ function subfolder(s: Scan, ent: Dirent, full: string, depth: number): FileNode 
   const rp = realOf(full)
   if (!rp || s.visited.has(rp)) return null
   // links into (or around) the tree alias directories the walk reaches anyway
-  if (ent.isSymbolicLink() && s.rootReal && (rp.startsWith(s.rootReal + sep) || s.rootReal.startsWith(rp + sep))) return null
+  if (ent.isSymbolicLink() && s.rootReal && (rp.startsWith(s.rootReal + sep) || s.rootReal.startsWith(rp + sep)))
+    return null
   s.visited.add(rp)
   const sub = walkDir(s, full, depth + 1)
   if (!sub || sub.children.length === 0) return null
@@ -110,7 +111,14 @@ function subfolder(s: Scan, ent: Dirent, full: string, depth: number): FileNode 
 function noteNode(s: Scan, ent: Dirent, full: string): FileNode {
   const rp = ent.isSymbolicLink() ? realOf(full) : null
   const outside = !!rp && !!s.rootReal && !rp.startsWith(s.rootReal + sep)
-  return { name: safeLine(ent.name), path: full, rel: safeLine(relative(s.root, full)), dir: false, children: [], ...(outside ? { outside } : {}) }
+  return {
+    name: safeLine(ent.name),
+    path: full,
+    rel: safeLine(relative(s.root, full)),
+    dir: false,
+    children: [],
+    ...(outside ? { outside } : {}),
+  }
 }
 
 /** README first, then natural order. */
@@ -291,7 +299,9 @@ export function scoreName(name: string, needle: string): { hits: number[]; score
   const at = indexOfSeq(fold(name), nq)
   if (at >= 0) return { hits: nq.map((_, j) => at + j), score: SCORE_SUBSTRING - at }
   const hits = fuzzyHits(name, q)
-  return hits ? { hits, score: SCORE_SUBSEQUENCE - (hits[hits.length - 1]! - hits[0]!) * SPAN_PENALTY - hits[0]! } : null
+  return hits
+    ? { hits, score: SCORE_SUBSEQUENCE - (hits[hits.length - 1]! - hits[0]!) * SPAN_PENALTY - hits[0]! }
+    : null
 }
 
 export interface RankedNote {
@@ -308,7 +318,12 @@ export interface RankedNote {
  * then earlier start), then an alias from `aliases`, then a match only in the folder path.
  * Ties go to the shorter name, then alphabetical. At most `limit` rows; `total` counts every match.
  */
-export function rankNotes(root: FileNode, q: string, limit = 500, aliases?: (node: FileNode) => readonly string[]): { rows: RankedNote[]; total: number } {
+export function rankNotes(
+  root: FileNode,
+  q: string,
+  limit = 500,
+  aliases?: (node: FileNode) => readonly string[],
+): { rows: RankedNote[]; total: number } {
   const needle = q.trim()
   if (!needle) return { rows: [], total: 0 }
   const out: RankedNote[] = []
@@ -328,7 +343,13 @@ export function rankNotes(root: FileNode, q: string, limit = 500, aliases?: (nod
         const a = scoreName(text, needle)
         if (a && (!best || a.score > best.score)) best = { text, ...a }
       }
-      if (best) out.push({ node: c, hits: [], score: SCORE_PATH + (best.score - SCORE_PATH) / ALIAS_DAMP, alias: { text: best.text, hits: best.hits } })
+      if (best)
+        out.push({
+          node: c,
+          hits: [],
+          score: SCORE_PATH + (best.score - SCORE_PATH) / ALIAS_DAMP,
+          alias: { text: best.text, hits: best.hits },
+        })
       else if (fuzzyHits(stem(c.rel), needle)) out.push({ node: c, hits: [], score: SCORE_PATH })
     }
   }

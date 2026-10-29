@@ -11,7 +11,9 @@ test("a usable reply is the explanation", () => {
 })
 
 test("a reply with nothing usable in it is an invalid failure", () => {
-  expect(deltaOutcome({ ok: true, text: "§7: no such section", raw: "" }, "", changes)).toEqual({ failure: { kind: "invalid" } })
+  expect(deltaOutcome({ ok: true, text: "§7: no such section", raw: "" }, "", changes)).toEqual({
+    failure: { kind: "invalid" },
+  })
 })
 
 test("a reply cut at MAX_DELTA keeps what had streamed in; with nothing usable it stays too long", () => {

@@ -56,7 +56,9 @@ function rootProblem(root: string) {
   return null
 }
 
-type SwitchDeps = Pick<ReturnType<typeof makeRecents>, "recordProject"> & Pick<SwitcherControl, "dropAsk" | "dropIndex"> & Pick<AIJobs, "dropDelta">
+type SwitchDeps = Pick<ReturnType<typeof makeRecents>, "recordProject"> &
+  Pick<SwitcherControl, "dropAsk" | "dropIndex"> &
+  Pick<AIJobs, "dropDelta">
 
 /** Make a folder the workspace: `switchWorkspace`, the one rebuild everything goes through. */
 function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }: SwitchDeps) {
@@ -250,10 +252,20 @@ function makeWelcomeMotion(c: AppCtx) {
 }
 
 /** The workspace over the app context; a switch drops the ask, the vault index and the change baseline first. */
-export function makeWorkspace(c: AppCtx, drops: Pick<SwitcherControl, "dropAsk" | "dropIndex">, delta: Pick<AIJobs, "dropDelta">) {
+export function makeWorkspace(
+  c: AppCtx,
+  drops: Pick<SwitcherControl, "dropAsk" | "dropIndex">,
+  delta: Pick<AIJobs, "dropDelta">,
+) {
   const { recordProject, leave } = makeRecents(c)
   const switchWorkspace = makeSwitch(c, { recordProject, ...drops, ...delta })
-  return { recordProject, leave, ...makeOpener(c, switchWorkspace), ...makeWelcomeRows(c, switchWorkspace), ...makeWelcomeMotion(c) }
+  return {
+    recordProject,
+    leave,
+    ...makeOpener(c, switchWorkspace),
+    ...makeWelcomeRows(c, switchWorkspace),
+    ...makeWelcomeMotion(c),
+  }
 }
 /** What `makeWorkspace` gives App and the effects. */
 export type WorkspaceControl = ReturnType<typeof makeWorkspace>

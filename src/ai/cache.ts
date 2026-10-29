@@ -20,7 +20,13 @@ const isCached =
   <K extends string>(field: K): IsEntry<Cached<K>> =>
   (e): e is Cached<K> => {
     if (!isRecord(e)) return false
-    return typeof e.hash === "string" && typeof e.v === "number" && typeof e[field] === "string" && typeof e.model === "string" && Number.isFinite(e.at)
+    return (
+      typeof e.hash === "string" &&
+      typeof e.v === "number" &&
+      typeof e[field] === "string" &&
+      typeof e.model === "string" &&
+      Number.isFinite(e.at)
+    )
   }
 
 /** `$XDG_CACHE_HOME/brothy/<name>.json`, resolved on every call (tests point XDG_CACHE_HOME at a temp dir); a relative XDG path is ignored. */
@@ -50,7 +56,12 @@ function pruneCache<T extends Stamped>(all: Record<string, T>, cap: number): Rec
  * Re-read the file, overlay `add` (newest `at` wins per key, so another instance's entries
  * survive), prune to `cap` and write atomically: folder 0700, new file 0600. False when it can't write.
  */
-export function saveCache<T extends Stamped>(name: string, add: Record<string, T>, cap: number, isEntry: IsEntry<T>): boolean {
+export function saveCache<T extends Stamped>(
+  name: string,
+  add: Record<string, T>,
+  cap: number,
+  isEntry: IsEntry<T>,
+): boolean {
   const merged = loadCache(name, isEntry)
   for (const [k, v] of Object.entries(add)) if (!merged[k] || merged[k]!.at <= v.at) merged[k] = v
   try {
@@ -82,7 +93,8 @@ export const saveSummaries = (add: Summaries): boolean => saveCache("summaries",
 export const textHash = (text: string) => Bun.hash(text).toString(16)
 
 /** The model that made it doesn't matter; the text and the prompt version do. */
-export const isFresh = (e: { hash: string; v: number }, hash: string, v: number = PROMPT_V) => e.hash === hash && e.v === v
+export const isFresh = (e: { hash: string; v: number }, hash: string, v: number = PROMPT_V) =>
+  e.hash === hash && e.v === v
 
 /** One cached zen gloss; `hash` is of the exact section text sent (before clipping), `v` is `PROMPTS.gloss`. */
 export type Gloss = Cached<"gloss">

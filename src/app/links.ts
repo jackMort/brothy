@@ -57,7 +57,10 @@ function makeFollow(c: AppCtx) {
 }
 
 /** The `f` labels over the links on screen. */
-function makeLabels(c: AppCtx, { ensureLinks, followLink }: Pick<ReturnType<typeof makeFollow>, "ensureLinks" | "followLink">) {
+function makeLabels(
+  c: AppCtx,
+  { ensureLinks, followLink }: Pick<ReturnType<typeof makeFollow>, "ensureLinks" | "followLink">,
+) {
   const { ui, set, derive, flash } = c
 
   /** Labels still match what is drawn: same note, mode, width, length and scroll position. */
@@ -75,7 +78,14 @@ function makeLabels(c: AppCtx, { ensureLinks, followLink }: Pick<ReturnType<type
     const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
     if (!spots.length) return flash("no links on screen")
     const labels = linkLabels(spots.length)
-    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) } })
+    set({
+      labels: {
+        spots: spots.slice(0, labels.length),
+        labels,
+        typed: "",
+        geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top),
+      },
+    })
   }
 
   const labelType = (ch: string) => {

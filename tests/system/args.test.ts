@@ -15,7 +15,16 @@ const err = (argv: string[]) => {
 const theme = themes[1]!.name
 
 describe("parseArgs", () => {
-  test("defaults", () => expect(ok([])).toEqual({ path: ".", stdin: false, given: false, theme: undefined, transparent: false, help: false, version: false }))
+  test("defaults", () =>
+    expect(ok([])).toEqual({
+      path: ".",
+      stdin: false,
+      given: false,
+      theme: undefined,
+      transparent: false,
+      help: false,
+      version: false,
+    }))
   test("path", () => expect(ok(["docs"]).path).toBe("docs"))
   test("-t / --theme / --theme=", () => {
     expect(ok(["-t", theme]).theme).toBe(theme)

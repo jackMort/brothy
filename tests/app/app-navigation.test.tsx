@@ -6,7 +6,13 @@ import { keys, numbered, onBg, openHelp, sections, sleep, topLine, useAppHarness
 
 const { tmp, mount } = useAppHarness()
 
-const pocs = () => tmp({ "other.md": "# other", "poc notes.md": "# poc", "Proof of concept.md": "# proof", "deep/pocket.md": "# pocket" })
+const pocs = () =>
+  tmp({
+    "other.md": "# other",
+    "poc notes.md": "# poc",
+    "Proof of concept.md": "# proof",
+    "deep/pocket.md": "# pocket",
+  })
 
 test("n moves to the next match instead of sticking on the current one", async () => {
   const s = await mount(tmp({ "a.md": numbered(200, [50, 60, 70]) }), "a.md")

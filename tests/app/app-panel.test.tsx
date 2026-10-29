@@ -10,9 +10,13 @@ const { tmp, mount, unmount, vault } = useAppHarness()
 
 const STOCK = "Work/Projects/Soup Base Stock.md"
 
-const infoNote = "---\ntitle: Calm\ntags:\n  - focus\n  - reading\n---\nSee [[b]] and [[nowhere]] and [[c]].\n\n# H\n\n- [x] one\n- [ ] two\n"
+const infoNote =
+  "---\ntitle: Calm\ntags:\n  - focus\n  - reading\n---\nSee [[b]] and [[nowhere]] and [[c]].\n\n# H\n\n- [x] one\n- [ ] two\n"
 
-const tallInfo = "---\n" + Array.from({ length: 8 }, (_, i) => `prop${i}: value${i}`).join("\n") + "\n---\nSee [[b]] and [[c]].\n\n# H\n\nword\n"
+const tallInfo =
+  "---\n" +
+  Array.from({ length: 8 }, (_, i) => `prop${i}: value${i}`).join("\n") +
+  "\n---\nSee [[b]] and [[c]].\n\n# H\n\nword\n"
 const tallFiles = { "a.md": tallInfo, "b.md": "# bee", "c.md": "# sea" }
 
 test("only the open note's path starts expanded; closed folders show note counts", async () => {
@@ -110,7 +114,10 @@ test("/ in the Outline filters headings; ⏎ jumps, focuses the document and cle
 })
 
 test("in Source the Outline lists the Source headings and jumps to Source lines", async () => {
-  const s = await mount(tmp({ "a.md": "# Title\n\n" + "para\n\n".repeat(30) + "## Sub\n\n" + "para\n\n".repeat(30) + "end\n" }), "a.md")
+  const s = await mount(
+    tmp({ "a.md": "# Title\n\n" + "para\n\n".repeat(30) + "## Sub\n\n" + "para\n\n".repeat(30) + "end\n" }),
+    "a.md",
+  )
   const f = await keys(s, "s", "2", "j", "enter")
   expect(f.split("\n")[0]).toContain("Sub")
   expect(f).toContain("## Sub")
@@ -119,7 +126,8 @@ test("in Source the Outline lists the Source headings and jumps to Source lines"
 test("Info shows properties with tag chips, resolved and unresolved links, and stats", async () => {
   const s = await mount(tmp({ "a.md": infoNote, "b.md": "# bee", "c.md": "# sea" }), "a.md")
   const f = await keys(s, "3")
-  for (const x of ["title", "Calm", "#focus", "#reading", "Links", "→ b", "→ nowhere?", "1 heading · 1/2 tasks"]) expect(f).toContain(x)
+  for (const x of ["title", "Calm", "#focus", "#reading", "Links", "→ b", "→ nowhere?", "1 heading · 1/2 tasks"])
+    expect(f).toContain(x)
   expect(f).toMatch(/\d+ words · \d+ min read/)
   expect(hex(spansOf(s).find((sp) => sp.text.includes("#focus"))!.fg)).toBe(B.secondary) // secondary
   // the document also shows `[[nowhere]]`, so look only at the panel's link row
@@ -158,7 +166,8 @@ test("Info with links: j/k at the first and last link scroll the rest of the lis
 })
 
 test("Info without links: j/k scroll the list, G and g go to its bottom and top", async () => {
-  const noLinks = "---\n" + Array.from({ length: 8 }, (_, i) => `prop${i}: value${i}`).join("\n") + "\n---\n# H\n\nword\n"
+  const noLinks =
+    "---\n" + Array.from({ length: 8 }, (_, i) => `prop${i}: value${i}`).join("\n") + "\n---\n# H\n\nword\n"
   const s = await mount(tmp({ "a.md": noLinks, "b.md": "# bee" }), "a.md", { size: { width: 80, height: 16 } })
   expect(await keys(s, "3")).toContain("prop0")
   const bottom = await keys(s, "G")
@@ -181,7 +190,9 @@ test("Info: wheel scrolling sticks until the cursor moves", async () => {
 })
 
 test("a click on an Info link row focuses the panel; an unresolved one only toasts", async () => {
-  const s = await mount(tmp({ ...tallFiles, "a.md": tallInfo.replace("[[c]]", "[[nowhere]]") }), "a.md", { size: { width: 100, height: 30 } })
+  const s = await mount(tmp({ ...tallFiles, "a.md": tallInfo.replace("[[c]]", "[[nowhere]]") }), "a.md", {
+    size: { width: 100, height: 30 },
+  })
   await keys(s, "3", "tab") // Info visible, focus on the document
   const lines = s.captureCharFrame().split("\n")
   const y = lines.findIndex((l) => l.includes("→ nowhere"))

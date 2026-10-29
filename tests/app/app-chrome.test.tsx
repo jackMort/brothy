@@ -4,7 +4,21 @@ import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { GHOST_STEP, HINT_HOLD } from "../../src/ui/status"
 import { hex } from "../helpers/theme"
-import { B, HINT_ROW, keys, numbered, openHelp, PRIMARY, type Setup, sections, spansOf, useAppHarness, waitFor, waitFrame, withClock } from "./helpers"
+import {
+  B,
+  HINT_ROW,
+  keys,
+  numbered,
+  openHelp,
+  PRIMARY,
+  type Setup,
+  sections,
+  spansOf,
+  useAppHarness,
+  waitFor,
+  waitFrame,
+  withClock,
+} from "./helpers"
 
 const { tmp, mount, unmount, projectsFile, readProjects } = useAppHarness()
 
@@ -25,7 +39,8 @@ const TEXT_R = 97
 const head = (f: string) => f.split("\n")[0]!.replace("󰘗", "L")
 
 /** fg of the first span on row 0 containing `text`. */
-const row0Fg = (s: Setup, text: string) => hex(s.captureSpans().lines[0]!.spans.find((sp) => sp.text.includes(text))!.fg)
+const row0Fg = (s: Setup, text: string) =>
+  hex(s.captureSpans().lines[0]!.spans.find((sp) => sp.text.includes(text))!.fg)
 
 /** Run `fn` with `process.exit` stubbed out; returns the codes it was called with. */
 async function trapExit(fn: () => Promise<unknown>) {
@@ -105,7 +120,9 @@ test("the search item stays on the top line after find closes", async () => {
 })
 
 test("a read error is also a toast", async () => {
-  expect((await keys(await mount(tmp({ "a.md": "# a" }), "missing.md"))).split("\n")[HINT_ROW]).toMatch(/✗ .*(ENOENT|no such file)/i)
+  expect((await keys(await mount(tmp({ "a.md": "# a" }), "missing.md"))).split("\n")[HINT_ROW]).toMatch(
+    /✗ .*(ENOENT|no such file)/i,
+  )
 })
 
 test("escape sequences in front matter, names and links never reach the screen", async () => {
@@ -156,7 +173,9 @@ test("󰘗 is muted while watching, primary after a live reload, muted again aft
 
 test("a deep folder is shrunk first / … / last over the panel; a short one is shown in full", async () => {
   const deep = "alpha/bravo/charlie/delta/echo"
-  const s = await mount(tmp({ [deep + "/n.md"]: "# n", "x/y/m.md": "# m" }), deep + "/n.md", { size: { width: 120, height: 32 } })
+  const s = await mount(tmp({ [deep + "/n.md"]: "# n", "x/y/m.md": "# m" }), deep + "/n.md", {
+    size: { width: 120, height: 32 },
+  })
   expect((await keys(s)).split("\n")[0]).toMatch(/^󰘗 alpha \/ … \/ echo\s/)
   const t = await mount(tmp({ "x/y/m.md": "# m" }), "x/y/m.md", { size: { width: 120, height: 32 } })
   expect((await keys(t)).split("\n")[0]).toMatch(/^󰘗 x \/ y\s/)
@@ -202,7 +221,10 @@ test("drawer width (80×24): 󰘗 and the folder lead the title; 60×14 fits wit
   const wide = head(await keys(await mount(tmp(short), "notes/a.md", { size: { width: 80, height: 24 } }), "]"))
   expect(wide).toMatch(/^L +notes \/ a › t › A long section heading/)
   unmount()
-  const body = { "notes/a-fairly-long-note-title-for-a-narrow-screen-so-it-must-be-cut.md": "# t\n\n## A long section heading\n\n" + "text\n\n".repeat(40) }
+  const body = {
+    "notes/a-fairly-long-note-title-for-a-narrow-screen-so-it-must-be-cut.md":
+      "# t\n\n## A long section heading\n\n" + "text\n\n".repeat(40),
+  }
   const key = Object.keys(body)[0]!
   const f = head(await keys(await mount(tmp(body), key, { size: { width: 60, height: 14 } }), "]"))
   expect(f.length).toBeLessThanOrEqual(60)
@@ -245,7 +267,9 @@ test("help title never wraps: the theme name goes first at 60x14", async () => {
 
 test("find rows show a match near the line end", async () => {
   const long = "word ".repeat(12) + "zebra"
-  const s = await mount(tmp({ "a.md": `# T\n\n\`\`\`\n${long}\n\`\`\`\n` }), "a.md", { size: { width: 80, height: 24 } })
+  const s = await mount(tmp({ "a.md": `# T\n\n\`\`\`\n${long}\n\`\`\`\n` }), "a.md", {
+    size: { width: 80, height: 24 },
+  })
   const f = await keys(s, "/", "type:zebra")
   expect(f.split("\n").filter((r) => r.includes("zebra") && r.includes("…")).length).toBeGreaterThan(0)
 })

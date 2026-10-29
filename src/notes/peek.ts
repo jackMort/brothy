@@ -87,7 +87,8 @@ function treePrefixes(depths: number[]): string[] {
 }
 
 /** The title: the note's one H1 (outline index 0), else null (the name stands in). */
-const titleOf = (doc: NoteDoc): 0 | null => (doc.headings[0]?.depth === 1 && doc.headings.filter((x) => x.depth === 1).length === 1 ? 0 : null)
+const titleOf = (doc: NoteDoc): 0 | null =>
+  doc.headings[0]?.depth === 1 && doc.headings.filter((x) => x.depth === 1).length === 1 ? 0 : null
 
 /** The outline index the pane starts at: the row's section, a note's title, else null (the top). */
 const startOf = (r: SwitchRow, doc: NoteDoc) => sectionOf(r) ?? (r.kind === "note" ? titleOf(doc) : null)
@@ -98,7 +99,12 @@ const startOf = (r: SwitchRow, doc: NoteDoc) => sectionOf(r) ?? (r.kind === "not
  * PEEK_BYTES cut at a line, through a text hit's line. `lines` are the normalized source lines
  * (`sourceScan`'s numbering), `fm` the front matter's line count.
  */
-export function peekWindow(lines: readonly string[], fm: number, doc: NoteDoc, r: SwitchRow): { from: number; to: number; base: number } {
+export function peekWindow(
+  lines: readonly string[],
+  fm: number,
+  doc: NoteDoc,
+  r: SwitchRow,
+): { from: number; to: number; base: number } {
   const sec = startOf(r, doc)
   const head = sec === null ? undefined : doc.headings[sec]
   const from = head ? head.line : fm
@@ -131,7 +137,9 @@ function pathRow(p: PeekInput, t: Theme, w: number): Span[] {
   const right = p.words !== undefined && p.minutes !== undefined ? `${plural(p.words, "word")} · ${p.minutes} min` : ""
   const fits = right && w - width(right) - 1 >= MIN_PATH_W
   const path = truncateLeft(p.rel, fits ? w - width(right) - 1 : w)
-  return fits ? [muted(path, t), { text: " ".repeat(w - width(path) - width(right)) }, muted(right, t)] : [muted(path, t)]
+  return fits
+    ? [muted(path, t), { text: " ".repeat(w - width(path) - width(right)) }, muted(right, t)]
+    : [muted(path, t)]
 }
 
 /** The title (the note's one H1, else its name), then the other headings (depth ≤ 3) as a tree around the row's section. */
@@ -139,7 +147,15 @@ function outlineRows(doc: NoteDoc, r: SwitchHit | AnswerRow, t: Theme, w: number
   const hs = doc.headings
   const title = titleOf(doc)
   const cur = sectionOf(r)
-  const out: Span[][] = [[{ text: truncate(title === null ? r.name : hs[0]!.text, w), fg: title !== null && cur === 0 ? t.primary : t.text, attr: A.BOLD }]]
+  const out: Span[][] = [
+    [
+      {
+        text: truncate(title === null ? r.name : hs[0]!.text, w),
+        fg: title !== null && cur === 0 ? t.primary : t.text,
+        attr: A.BOLD,
+      },
+    ],
+  ]
   const kids = hs.map((x, i) => ({ ...x, i })).filter((x) => x.i !== title && x.depth <= 3)
   if (!kids.length) return out
   const pre = treePrefixes(kids.map((x) => x.depth))
@@ -155,7 +171,11 @@ function outlineRows(doc: NoteDoc, r: SwitchHit | AnswerRow, t: Theme, w: number
     const on = x.i === cur
     out.push([
       { text: " " + pre[k]!, fg: t.borderSubtle },
-      { text: truncate(x.text, Math.max(1, w - 1 - width(pre[k]!))), fg: on ? t.primary : t.textMuted, ...(on ? { attr: A.BOLD } : {}) },
+      {
+        text: truncate(x.text, Math.max(1, w - 1 - width(pre[k]!))),
+        fg: on ? t.primary : t.textMuted,
+        ...(on ? { attr: A.BOLD } : {}),
+      },
     ])
   }
   if (to < kids.length) out.push([{ text: "   " }, muted("…", t)])
@@ -182,7 +202,10 @@ function bodyRows(view: Rendered, i: number, w: number, room: number): Span[][] 
     if (blank && prevBlank) continue
     prevBlank = blank
     const spans = l.fill
-      ? [...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - width(rowText(l.spans)))), bg: l.fill }]
+      ? [
+          ...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })),
+          { text: " ".repeat(Math.max(0, w - width(rowText(l.spans)))), bg: l.fill },
+        ]
       : l.spans
     out.push(spans)
   }
@@ -195,7 +218,8 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
   if (!r || (r.kind !== "note" && r.kind !== "heading" && r.kind !== "text" && r.kind !== "answer")) return []
   const out: Span[][] = [pathRow(p, t, w), []]
   const doc = p.doc
-  if (!doc) return [...out, [{ text: truncate(r.name, w), fg: t.text, attr: A.BOLD }], [], [muted("indexing…", t)]].slice(0, h)
+  if (!doc)
+    return [...out, [{ text: truncate(r.name, w), fg: t.text, attr: A.BOLD }], [], [muted("indexing…", t)]].slice(0, h)
   out.push(...outlineRows(doc, r, t, w))
   if (p.summary) out.push(...tldrRows(p.summary, t, w))
   const view = p.view

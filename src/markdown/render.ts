@@ -47,7 +47,10 @@ export interface Geometry {
 /** Blocks `r` is still waiting on: `await ensureHighlights(...)`, then re-render if it returns true. */
 export const pendingHighlights = (r: Rendered): HighlightRequest[] => r.pending ?? []
 
-export type LinkTarget = { kind: "wiki"; target: string; heading?: string; embed: boolean } | { kind: "md"; href: string } | { kind: "url"; href: string }
+export type LinkTarget =
+  | { kind: "wiki"; target: string; heading?: string; embed: boolean }
+  | { kind: "md"; href: string }
+  | { kind: "url"; href: string }
 
 /** Where `inline()` records link targets while rendering; absent for outline titles. */
 interface LinkSink {
@@ -137,13 +140,21 @@ function inlineText(tok: Token, run: InlineRun) {
 
 function inlineCode(tok: Token, run: InlineRun) {
   const { t } = run
-  run.out.push({ text: safe(tokenOf(tok, "codespan").text).replace(/ /g, "\u00a0"), fg: t.accent, bg: t.backgroundElement })
+  run.out.push({
+    text: safe(tokenOf(tok, "codespan").text).replace(/ /g, "\u00a0"),
+    fg: t.accent,
+    bg: t.backgroundElement,
+  })
 }
 
 function inlineLink(tok: Token, run: InlineRun) {
   const l = tokenOf(tok, "link")
   const style: Omit<Span, "text"> = { ...run.cur, fg: run.t.info, attr: (run.cur.attr ?? 0) | A.UNDERLINE }
-  if (run.sink) style.link = run.sink.links.push(/^[a-z][\w+.-]*:/i.test(l.href) ? { kind: "url", href: l.href } : { kind: "md", href: l.href }) - 1
+  if (run.sink)
+    style.link =
+      run.sink.links.push(
+        /^[a-z][\w+.-]*:/i.test(l.href) ? { kind: "url", href: l.href } : { kind: "md", href: l.href },
+      ) - 1
   run.out.push(...inline(l.tokens, run.t, style, run.sink))
 }
 
@@ -209,7 +220,12 @@ const INLINE_KINDS = new Map<string, (tok: Token, run: InlineRun) => void>([
 ])
 
 /** Inline tokens as spans, styled from `base` down; with a `sink`, links are numbered into it (`Span.link`). */
-export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> = { fg: t.text }, sink?: LinkSink): Span[] {
+export function inline(
+  tokens: Token[] | undefined,
+  t: Theme,
+  base: Omit<Span, "text"> = { fg: t.text },
+  sink?: LinkSink,
+): Span[] {
   const run: InlineRun = { t, base, cur: base, sink, out: [] }
   if (!tokens) return run.out
   for (const tok of tokens) {
@@ -224,13 +240,16 @@ const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quo
 
 /** Single-pass entity decode, so "&amp;lt;" becomes "&lt;" and not "<". */
 function decode(s: string): string {
-  return safe(s).replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(amp|lt|gt|quot|apos|nbsp));/g, (m, dec, hex, name) => {
-    if (name) return NAMED_ENTITIES[name]!
-    const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16)
-    // refuse control characters (marked itself decodes most numeric entities; `safe` covers those)
-    const ok = cp >= 0x20 && cp <= 0x10ffff && !(cp >= 0x7f && cp <= 0x9f) && !(cp >= 0xd800 && cp <= 0xdfff)
-    return ok ? String.fromCodePoint(cp) : m
-  })
+  return safe(s).replace(
+    /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(amp|lt|gt|quot|apos|nbsp));/g,
+    (m, dec, hex, name) => {
+      if (name) return NAMED_ENTITIES[name]!
+      const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16)
+      // refuse control characters (marked itself decodes most numeric entities; `safe` covers those)
+      const ok = cp >= 0x20 && cp <= 0x10ffff && !(cp >= 0x7f && cp <= 0x9f) && !(cp >= 0xd800 && cp <= 0xdfff)
+      return ok ? String.fromCodePoint(cp) : m
+    },
+  )
 }
 
 /** The text of a row of spans. */
@@ -367,12 +386,22 @@ function muteQuote(ctx: Ctx, from: number) {
  * depth's color; `p` prefixes the first row and `rest` the others. A mark before the title indents the wrapped rows
  * by its display width.
  */
-function headingRows(ctx: Ctx, depth: number, styled: Span[], fg: string, idx: number, max: number, p: Span[], rest: Span[]) {
+function headingRows(
+  ctx: Ctx,
+  depth: number,
+  styled: Span[],
+  fg: string,
+  idx: number,
+  max: number,
+  p: Span[],
+  rest: Span[],
+) {
   const { t } = ctx
   const style = ctx.headingStyle
   const emit = (rows: Span[][]) => emitRows(ctx, rows, { heading: idx })
   const marked = (mark: Span, w = max) => wrap(styled, w, [...p, mark], [...rest, { text: pad(width(mark.text)) }])
-  if (style === "bars" || style === "ladder") return emit(marked({ text: (style === "bars" ? BARS : LADDER)[depth - 1]!, fg }))
+  if (style === "bars" || style === "ladder")
+    return emit(marked({ text: (style === "bars" ? BARS : LADDER)[depth - 1]!, fg }))
   if (style === "rules") {
     if (depth > 3) return emit(wrap(styled, max, p, rest))
     const lead = { text: RULE_LEADS[depth - 1]!, fg: [fg, t.border, t.textMuted][depth - 1]! }
@@ -380,7 +409,13 @@ function headingRows(ctx: Ctx, depth: number, styled: Span[], fg: string, idx: n
     // h1 and h2 run a rule to the right edge: a rule row reserves " " and one fill cell, so the last row always has room for its fill
     const rows = marked(lead, max - 2)
     const last = rows[rows.length - 1]!
-    last.push({ text: " " }, { text: (depth === 1 ? "━" : "─").repeat(Math.max(0, max - spanWidth(last) - 1)), fg: depth === 1 ? fg : t.border })
+    last.push(
+      { text: " " },
+      {
+        text: (depth === 1 ? "━" : "─").repeat(Math.max(0, max - spanWidth(last) - 1)),
+        fg: depth === 1 ? fg : t.border,
+      },
+    )
     return emit(rows)
   }
   // classic: h2 and deeper show their `#`s; an h1 is underlined across the measure, `━` under its text and `─` after
@@ -389,7 +424,11 @@ function headingRows(ctx: Ctx, depth: number, styled: Span[], fg: string, idx: n
   emit(rows)
   const tw = Math.max(0, Math.min(max - spanWidth(rest), maxOf(rows.map((r) => spanWidth(r) - spanWidth(rest)))))
   ctx.lines.push({
-    spans: [...rest, { text: "━".repeat(tw), fg }, { text: "─".repeat(Math.max(0, max - spanWidth(rest) - tw)), fg: t.border }],
+    spans: [
+      ...rest,
+      { text: "━".repeat(tw), fg },
+      { text: "─".repeat(Math.max(0, max - spanWidth(rest) - tw)), fg: t.border },
+    ],
   })
 }
 
@@ -400,7 +439,10 @@ function callout(ctx: Ctx, c: Callout, max: number, first: Span[], rest: Span[],
   const fg = t[k.color]
   const bar = { text: "▎ ", fg }
   const start = ctx.lines.length
-  const head: Span[] = [{ text: `${k.icon} `, fg, attr: A.BOLD }, ...inline(lexInline(c.title), t, { fg, attr: A.BOLD }, ctx.sink)]
+  const head: Span[] = [
+    { text: `${k.icon} `, fg, attr: A.BOLD },
+    ...inline(lexInline(c.title), t, { fg, attr: A.BOLD }, ctx.sink),
+  ]
   if (c.fold) head.push({ text: " ▾", fg: t.textMuted })
   emitRows(ctx, wrap(head, max, [...first, bar], [...rest, bar]))
   const bodyStart = ctx.lines.length
@@ -488,7 +530,8 @@ function listItem(ctx: Ctx, item: Tokens.ListItem, num: string | null, first: Sp
   if (bare) ctx.lines.push({ spans: itemFirst.map((s) => ({ ...s })) })
   else blocks(ctx, body, f.max, itemFirst, itemRest, f.depth + 1)
   if (checked) {
-    for (let k = startLine; k < ctx.lines.length; k++) for (const s of ctx.lines[k]!.spans) if (s.fg === t.text) s.fg = t.textMuted
+    for (let k = startLine; k < ctx.lines.length; k++)
+      for (const s of ctx.lines[k]!.spans) if (s.fg === t.text) s.fg = t.textMuted
   }
   if (!loose) trimTrailingBlank(ctx, startLine, f.rest)
 }
@@ -718,13 +761,19 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   }
   const cols = dropped ? fits - 1 : tb.header.length
   const more: Span[][] = dropped ? [[{ text: "…", fg: t.textMuted }]] : []
-  const header = tb.header
-    .slice(0, cols)
-    .map((c) => inline(c.tokens, t, undefined, ctx.sink).map((s) => ({ ...s, fg: s.bg ? s.fg : t.primary, attr: (s.attr ?? 0) | A.BOLD })))
+  const header = tb.header.slice(0, cols).map((c) =>
+    inline(c.tokens, t, undefined, ctx.sink).map((s) => ({
+      ...s,
+      fg: s.bg ? s.fg : t.primary,
+      attr: (s.attr ?? 0) | A.BOLD,
+    })),
+  )
   const rows = tb.rows.map((r) => r.slice(0, cols).map((c) => inline(c.tokens, t, undefined, ctx.sink)))
   // cell room: the measure less the prefix, a border per column plus one, 2 cells of padding per column, the `…` column
   const avail = max - prefixW - (cols + 1 + more.length) - (cols + more.length) * 2 - more.length
-  const natural = Array.from({ length: cols }, (_, i) => Math.max(3, spanWidth(header[i] ?? []), maxOf(rows.map((r) => spanWidth(r[i] ?? [])))))
+  const natural = Array.from({ length: cols }, (_, i) =>
+    Math.max(3, spanWidth(header[i] ?? []), maxOf(rows.map((r) => spanWidth(r[i] ?? [])))),
+  )
   const widths = [...fitWidths(natural, avail), ...more.map(() => 1)]
   const B = t.border
   const rule = (l: string, m: string, r: string, p: Span[]) => ({
@@ -732,7 +781,9 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   })
   // one table row: every cell wrapped (or truncated) to its width, as many rows as its tallest cell, aligned per column
   const row = (cells: Span[][], p: Span[]) => {
-    const wrapped = widths.map((cw, i) => (cw < MIN_WRAP_COL ? [truncate(cells[i] ?? [], cw)] : wrap(cells[i] ?? [], cw)))
+    const wrapped = widths.map((cw, i) =>
+      cw < MIN_WRAP_COL ? [truncate(cells[i] ?? [], cw)] : wrap(cells[i] ?? [], cw),
+    )
     const h = maxOf(
       wrapped.map((w) => w.length),
       1,
@@ -763,11 +814,27 @@ const MIN_MEASURE = 10
 /** Lay out a Markdown document into styled, wrapped terminal lines. */
 export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}): Rendered {
   const tokens = lexBlocks(stripComments(normalize(src)))
-  const ctx: Ctx = { t, lines: [], headings: [], pending: [], sink: { links: [], exists: opts.exists }, headingStyle: opts.headings ?? "classic" }
+  const ctx: Ctx = {
+    t,
+    lines: [],
+    headings: [],
+    pending: [],
+    sink: { links: [], exists: opts.exists },
+    headingStyle: opts.headings ?? "classic",
+  }
   blocks(ctx, tokens, Math.max(MIN_MEASURE, max), [], [])
-  while (ctx.lines.length && plainOf(ctx.lines[ctx.lines.length - 1]!.spans).trim() === "" && ctx.lines[ctx.lines.length - 1]!.fill === undefined)
+  while (
+    ctx.lines.length &&
+    plainOf(ctx.lines[ctx.lines.length - 1]!.spans).trim() === "" &&
+    ctx.lines[ctx.lines.length - 1]!.fill === undefined
+  )
     ctx.lines.pop()
-  while (ctx.lines.length && plainOf(ctx.lines[0]!.spans).trim() === "" && ctx.lines[0]!.heading === undefined && ctx.lines[0]!.fill === undefined) {
+  while (
+    ctx.lines.length &&
+    plainOf(ctx.lines[0]!.spans).trim() === "" &&
+    ctx.lines[0]!.heading === undefined &&
+    ctx.lines[0]!.fill === undefined
+  ) {
     ctx.lines.shift()
     ctx.headings.forEach((h) => h.line--)
   }

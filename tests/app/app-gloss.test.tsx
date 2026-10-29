@@ -8,7 +8,9 @@ const { cfgDir, tmp, mount, aiConfig, glossFile, glossCache, seedGloss, mountAI 
 
 const said = (w: string, n = 25) => Array.from({ length: n }, (_, i) => `${w}${i}`).join(" ")
 /** Four sections, each with 25 words of its own. */
-const GLOSS_MD = ["Guide", "Apples", "Pears", "Plums"].map((h, i) => `${i ? "##" : "#"} ${h}\n\n${said(h.toLowerCase())}\n`).join("\n")
+const GLOSS_MD = ["Guide", "Apples", "Pears", "Plums"]
+  .map((h, i) => `${i ? "##" : "#"} ${h}\n\n${said(h.toLowerCase())}\n`)
+  .join("\n")
 
 describe("a gloss on screen", () => {
   test("zen shows a fresh cached gloss for the reading section by itself, without a request", async () => {

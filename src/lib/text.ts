@@ -20,7 +20,8 @@ export const spanWidth = (spans: Span[]) => spans.reduce((n, s) => n + width(s.t
 // ------------------------------------------------------------- spans
 
 /** Do `a` and `b` look the same (colours, attributes, link)? A missing `attr` is 0; a link never merges with another. */
-export const sameStyle = (a: Span, b: Span) => a.fg === b.fg && a.bg === b.bg && (a.attr ?? 0) === (b.attr ?? 0) && a.link === b.link
+export const sameStyle = (a: Span, b: Span) =>
+  a.fg === b.fg && a.bg === b.bg && (a.attr ?? 0) === (b.attr ?? 0) && a.link === b.link
 
 /** Append a copy of `s` to `spans`, or its text to the last span when they look the same; empty text is dropped. */
 export function pushSpan(spans: Span[], s: Span) {

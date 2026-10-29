@@ -287,7 +287,11 @@ test("borderSubtle is only used for decorative glyphs, never for readable text",
       .map((sp) => sp.text.trim())
   const decorative = /^[›/▸▾─━│]+$/
   const s = await mount(
-    tmp({ "a.md": "---\ntitle: A\ntags: [x, y]\nauthor: me\n---\n# a\n\n[b](dir/b.md) [gone](missing.md)\n", "dir/b.md": "# b", "dir/c.md": "# c" }),
+    tmp({
+      "a.md": "---\ntitle: A\ntags: [x, y]\nauthor: me\n---\n# a\n\n[b](dir/b.md) [gone](missing.md)\n",
+      "dir/b.md": "# b",
+      "dir/c.md": "# c",
+    }),
     "a.md",
   )
   const seen = [...drawn(s)]

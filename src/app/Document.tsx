@@ -24,16 +24,28 @@ import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
 /** The document box: borderless, wrapped at the reading measure and centered; a click focuses it, the wheel scrolls it. */
-export function docBox(c: AppCtx, d: Derived, ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">): ReactNode {
+export function docBox(
+  c: AppCtx,
+  d: Derived,
+  ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">,
+): ReactNode {
   const { focusDoc, scrollBy } = c
   const { s, L, file } = d
-  const content = !s.openPath ? welcomePage(c, d, ws) : file?.error ? openError(d, file.error) : L.zen ? zenLines(d) : noteLines(d)
+  const content = !s.openPath
+    ? welcomePage(c, d, ws)
+    : file?.error
+      ? openError(d, file.error)
+      : L.zen
+        ? zenLines(d)
+        : noteLines(d)
   return (
     <box
       key="doc"
       style={{ flexDirection: "column", flexGrow: 1, height: L.bodyH, paddingLeft: L.zen ? L.padL - 2 : L.padL }}
       onMouseDown={() => focusDoc()}
-      onMouseScroll={(e: MouseEvent) => (L.zen ? ws.zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)}
+      onMouseScroll={(e: MouseEvent) =>
+        (L.zen ? ws.zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)
+      }
     >
       {content}
     </box>
@@ -41,7 +53,11 @@ export function docBox(c: AppCtx, d: Derived, ws: Pick<WorkspaceControl, "welcom
 }
 
 /** No note open: the welcome page, its highlighted row clamped to the recent rows on screen. */
-function welcomePage(c: AppCtx, { s, L, t }: Derived, { welcomeRows, welcomeOpen }: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen">) {
+function welcomePage(
+  c: AppCtx,
+  { s, L, t }: Derived,
+  { welcomeRows, welcomeOpen }: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen">,
+) {
   const { welcome, bump } = c
   const { rows: recents, shown } = welcomeRows()
   const w = welcome.current
@@ -156,7 +172,10 @@ export function miniBox(c: AppCtx, d: Derived): ReactNode {
   const { memo, setTop } = c
   const { s, L, t, file, view, top, maxTop, matches } = d
   const { bodyH, CW, CH } = L
-  const miniInkData = L.mini && s.openPath && !file?.error ? memo.mini(view, CW, bodyH, view.srcRow ? String(view.srcRow.length).length + 2 : 0) : null
+  const miniInkData =
+    L.mini && s.openPath && !file?.error
+      ? memo.mini(view, CW, bodyH, view.srcRow ? String(view.srcRow.length).length + 2 : 0)
+      : null
   const mc = miniColors(t)
   return L.mini ? (
     <box
@@ -168,8 +187,22 @@ export function miniBox(c: AppCtx, d: Derived): ReactNode {
       }}
     >
       {miniInkData
-        ? miniCells(miniInkData, { top, h: CH, heads: memo.geo(view).heads, hits: matches, total: view.lines.length, lane: !!s.query }).map((row, i) => (
-            <Row key={i} spans={row.map((cell) => ({ text: cell.ch, fg: mc[cell.kind], bg: cell.band ? t.backgroundElement : undefined }))} />
+        ? miniCells(miniInkData, {
+            top,
+            h: CH,
+            heads: memo.geo(view).heads,
+            hits: matches,
+            total: view.lines.length,
+            lane: !!s.query,
+          }).map((row, i) => (
+            <Row
+              key={i}
+              spans={row.map((cell) => ({
+                text: cell.ch,
+                fg: mc[cell.kind],
+                bg: cell.band ? t.backgroundElement : undefined,
+              }))}
+            />
           ))
         : null}
     </box>

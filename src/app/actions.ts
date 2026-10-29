@@ -128,8 +128,11 @@ function makeMoves(c: AppCtx) {
   const jumpMatch = (dir: 1 | -1) => {
     const { matches, win, L, s, pg } = derive()
     // pages: only the current page's own lines count as on screen (not the blank pad above it)
-    const m = pg ? stepMatch(matches, s.matchLine, pg.top, Math.min(L.CH, pg.end - pg.top), dir) : stepMatch(matches, s.matchLine, win.first, L.CH, dir)
-    if (m === undefined) return s.query ? flash(`no match for “${s.query}”`, "error") : flash("nothing to find · / to search", "error")
+    const m = pg
+      ? stepMatch(matches, s.matchLine, pg.top, Math.min(L.CH, pg.end - pg.top), dir)
+      : stepMatch(matches, s.matchLine, win.first, L.CH, dir)
+    if (m === undefined)
+      return s.query ? flash(`no match for “${s.query}”`, "error") : flash("nothing to find · / to search", "error")
     showMatch(m)
   }
 
@@ -205,7 +208,8 @@ function makeToggleActions(c: AppCtx, { zen }: Features, { pokeHints, currentCtx
       if (persist({ minimap })) flash(minimap ? "minimap on" : "minimap off")
     },
     headings: () => {
-      const headingStyle = HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headingStyle) + 1) % HEADING_STYLES.length]!
+      const headingStyle =
+        HEADING_STYLES[(HEADING_STYLES.indexOf(ui.current.headingStyle) + 1) % HEADING_STYLES.length]!
       set({ headingStyle })
       if (persist({ headings: headingStyle })) flash(`headings · ${headingStyle}`)
     },
@@ -218,7 +222,11 @@ function makeToggleActions(c: AppCtx, { zen }: Features, { pokeHints, currentCtx
 }
 
 /** The other global keys: pickers, find, focus, reload, esc, help, history, the AI keys and quit. */
-function makeGlobalActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace, popups }: Features, { pokeHints, currentCtx, hintsVisible }: KeyContext) {
+function makeGlobalActions(
+  c: AppCtx,
+  { aiJobs, links, zen, switcher, workspace, popups }: Features,
+  { pokeHints, currentCtx, hintsVisible }: KeyContext,
+) {
   const { ui, set, derive, renderer, flash, selectView, focusPanel, focusDoc } = c
   return {
     switcher: switcher.openSwitcher,
@@ -310,7 +318,8 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
       if (res && "error" in res) return flash(res.error, "error")
       set({ reload: s.reload + 1 }) // a failed editor may still have saved
       const ed = basename(argv[0]!)
-      if (res && res.code !== 0) return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")
+      if (res && res.code !== 0)
+        return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")
       flash(`edited · ${basename(s.openPath)}`)
     },
   } satisfies Partial<Actions>
@@ -320,7 +329,10 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
 export function changeRows(view: Rendered, c: Change) {
   const hs = view.headings
   // rows listed while a request runs come from the sent text: a heading that moved is found again by key
-  const i = c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key ? c.index : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
+  const i =
+    c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key
+      ? c.index
+      : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
   const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
   const to = hs[i + 1]?.line ?? view.lines.length
   return { from, to }

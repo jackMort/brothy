@@ -7,7 +7,8 @@ import { dirname, join, normalize, relative } from "node:path"
 
 const SRC = join(import.meta.dir, "../src")
 const DOMAINS = ["markdown", "ai", "notes", "ui", "theme", "system"]
-const IMPORT = /^(?:import|export)\s+(type\s+)?[\w$*{},\s]*?from\s+"(\.{1,2}\/[^"]*)"|import\(\s*"(\.{1,2}\/[^"]*)"\s*\)/gm
+const IMPORT =
+  /^(?:import|export)\s+(type\s+)?[\w$*{},\s]*?from\s+"(\.{1,2}\/[^"]*)"|import\(\s*"(\.{1,2}\/[^"]*)"\s*\)/gm
 
 interface Edge {
   to: string
@@ -40,13 +41,17 @@ test("the scan sees every module and its imports", () => {
 })
 
 test("lib/ imports nothing in src outside lib/", () => {
-  const bad = [...deps].flatMap(([f, es]) => (folderOf(f) === "lib" ? es.filter((e) => folderOf(e.to) !== "lib").map((e) => `${f} → ${e.to}`) : []))
+  const bad = [...deps].flatMap(([f, es]) =>
+    folderOf(f) === "lib" ? es.filter((e) => folderOf(e.to) !== "lib").map((e) => `${f} → ${e.to}`) : [],
+  )
   expect(bad).toEqual([])
 })
 
 test("markdown/, ai/, notes/, ui/, theme/ and system/ never import app/ or App", () => {
   const bad = [...deps].flatMap(([f, es]) =>
-    DOMAINS.includes(folderOf(f)) ? es.filter((e) => folderOf(e.to) === "app" || e.to === "App.tsx").map((e) => `${f} → ${e.to}`) : [],
+    DOMAINS.includes(folderOf(f))
+      ? es.filter((e) => folderOf(e.to) === "app" || e.to === "App.tsx").map((e) => `${f} → ${e.to}`)
+      : [],
   )
   expect(bad).toEqual([])
 })

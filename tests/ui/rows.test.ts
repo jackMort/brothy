@@ -72,14 +72,29 @@ test("switchItem: a header is a muted bold title with its count, a note row puts
 })
 
 test("switchItem: heading and text rows lead with the note name, an alias shows after ←, ask notes are never stops", () => {
-  const heading = switchItem({ kind: "heading", path: "/v/b.md", name: "b", folder: "", heading: 1, text: "Install", hits: [0, 1] }, t, 40)
+  const heading = switchItem(
+    { kind: "heading", path: "/v/b.md", name: "b", folder: "", heading: 1, text: "Install", hits: [0, 1] },
+    t,
+    40,
+  )
   expect(heading.spans.map((s) => s.text).join("")).toBe("b › Install")
-  const text = switchItem({ kind: "text", path: "/v/b.md", name: "b", folder: "x", heading: null, line: 3, context: "some words", hits: [5] }, t, 40)
+  const text = switchItem(
+    { kind: "text", path: "/v/b.md", name: "b", folder: "x", heading: null, line: 3, context: "some words", hits: [5] },
+    t,
+    40,
+  )
   expect(text.spans.map((s) => s.text).join("")).toBe("b  some words")
   expect(text.right).toBeUndefined()
-  const alias = switchItem({ kind: "note", path: "/v/b.md", name: "b", folder: "", hits: [], alias: { text: "bee", hits: [0] } }, t, 40)
+  const alias = switchItem(
+    { kind: "note", path: "/v/b.md", name: "b", folder: "", hits: [], alias: { text: "bee", hits: [0] } },
+    t,
+    40,
+  )
   expect(alias.spans.map((s) => s.text).join("")).toBe("b  ← bee")
-  expect(switchItem({ kind: "askNote", text: "searched: x" }, t)).toEqual({ header: true, spans: [{ text: "searched: x", fg: t.textMuted }] })
+  expect(switchItem({ kind: "askNote", text: "searched: x" }, t)).toEqual({
+    header: true,
+    spans: [{ text: "searched: x", fg: t.textMuted }],
+  })
 })
 
 test("switchItem: a narrow row keeps the match in view and the note name within a quarter", () => {

@@ -42,9 +42,11 @@ export function pickZen(raw: unknown): Partial<ZenConfig> {
     const v = raw[k]
     if (typeof v === "boolean") out[k] = v
   }
-  if (typeof raw.wpm === "number" && Number.isFinite(raw.wpm)) out.wpm = clamp(Math.round(raw.wpm), ZEN_WPM.min, ZEN_WPM.max)
+  if (typeof raw.wpm === "number" && Number.isFinite(raw.wpm))
+    out.wpm = clamp(Math.round(raw.wpm), ZEN_WPM.min, ZEN_WPM.max)
   if (raw.measure === "full") out.measure = "full"
-  else if (typeof raw.measure === "number" && Number.isFinite(raw.measure)) out.measure = clamp(Math.round(raw.measure), ZEN_MEASURE.min, ZEN_MEASURE.max)
+  else if (typeof raw.measure === "number" && Number.isFinite(raw.measure))
+    out.measure = clamp(Math.round(raw.measure), ZEN_MEASURE.min, ZEN_MEASURE.max)
   return out
 }
 

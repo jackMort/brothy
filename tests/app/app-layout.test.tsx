@@ -4,7 +4,20 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { mix, themeByName } from "../../src/theme/theme"
 import { hex } from "../helpers/theme"
-import { B, keys, numbered, onBg, openHelp, panelShown, parts, sections, sleep, spansOf, topLine, useAppHarness } from "./helpers"
+import {
+  B,
+  keys,
+  numbered,
+  onBg,
+  openHelp,
+  panelShown,
+  parts,
+  sections,
+  sleep,
+  spansOf,
+  topLine,
+  useAppHarness,
+} from "./helpers"
 
 const { cfgDir, tmp, mount, unmount, zenConfig, savedConfig } = useAppHarness()
 
@@ -49,7 +62,10 @@ test("the top line names the folder, the title and the section; the position is 
 })
 
 test("the top line uses the front-matter title and drops an H1 that repeats it", async () => {
-  const s = await mount(tmp({ "calm.md": "---\ntitle: Calm Tech\n---\n# Calm Tech\n\n## One\n\n" + "text\n\n".repeat(40) }), "calm.md")
+  const s = await mount(
+    tmp({ "calm.md": "---\ntitle: Calm Tech\n---\n# Calm Tech\n\n## One\n\n" + "text\n\n".repeat(40) }),
+    "calm.md",
+  )
   expect((await keys(s, "]")).split("\n")[0]).toMatch(/^󰘗 \S+\s+Calm Tech › One/) // vault name over the panel
 })
 

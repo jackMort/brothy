@@ -22,13 +22,15 @@ function inkedColumns(line: string, per: number, dots: number): boolean[] {
   const on = Array<boolean>(dots).fill(false)
   if (/^[\x20-\x7e]*$/.test(line)) {
     // printable ASCII, the common case: one cell per character, no segmenting
-    for (let c = 0; c < line.length && c / per < dots; c++) if (line.charCodeAt(c) !== 32) on[Math.floor(c / per)] = true
+    for (let c = 0; c < line.length && c / per < dots; c++)
+      if (line.charCodeAt(c) !== 32) on[Math.floor(c / per)] = true
     return on
   }
   let col = 0
   for (const { segment } of segmenter.segment(line)) {
     const w = width(segment)
-    if (segment.trim() !== "") for (let c = col; c < col + Math.max(1, w); c++) if (c / per < dots) on[Math.floor(c / per)] = true
+    if (segment.trim() !== "")
+      for (let c = col; c < col + Math.max(1, w); c++) if (c / per < dots) on[Math.floor(c / per)] = true
     col += w
   }
   return on
@@ -44,7 +46,13 @@ export interface MiniInk {
   scale: number
 }
 
-export function miniInk(plain: readonly string[], fills: readonly boolean[], textW: number, maxRows: number, cols = MINI_COLS): MiniInk {
+export function miniInk(
+  plain: readonly string[],
+  fills: readonly boolean[],
+  textW: number,
+  maxRows: number,
+  cols = MINI_COLS,
+): MiniInk {
   const n = plain.length
   const scale = Math.max(1, Math.ceil(n / (4 * Math.max(1, maxRows))))
   const rows = Math.ceil(n / (4 * scale))
@@ -96,7 +104,10 @@ export function miniCells(
     const b = Math.min(o.total, a + span)
     const band = a < o.top + o.h && b > o.top
     const kind: MiniKind = heads.has(cy) ? "head" : band ? "view" : "rest"
-    const row = Array.from({ length: cols }, (_, cx): MiniCell => ({ ch: braille(ink.bits[cy * cols + cx]!), kind, band }))
+    const row = Array.from(
+      { length: cols },
+      (_, cx): MiniCell => ({ ch: braille(ink.bits[cy * cols + cx]!), kind, band }),
+    )
     if (o.lane) row.push({ ch: braille(lane[cy]!), kind: "lane", band })
     out.push(row)
   }
@@ -104,7 +115,8 @@ export function miniCells(
 }
 
 /** The top that centres the first line of cell row `row`, clamped to [0, maxTop]. */
-export const miniJump = (row: number, ink: MiniInk, h: number, maxTop: number) => clamp(row * 4 * ink.scale - Math.floor(h / 2), 0, maxTop)
+export const miniJump = (row: number, ink: MiniInk, h: number, maxTop: number) =>
+  clamp(row * 4 * ink.scale - Math.floor(h / 2), 0, maxTop)
 
 /** Theme roles only: headings as H1s, text on screen muted on the band, the rest as faint as a rule, hits as find marks them. */
 export const miniColors = (t: Theme): Record<MiniKind, string> => ({

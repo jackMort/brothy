@@ -180,7 +180,13 @@ function makeVaultIndex(c: AppCtx) {
     const live = () => vault.current === v
     const tree = ui.current.linkTree
     set({ indexing: [0, folderCounts(tree).get(tree.path) ?? 0] })
-    refreshIndex(v.ix, tree, fsIO, (done, total) => live() && set({ indexing: [done, total], ixVer: ui.current.ixVer + 1 }), live)
+    refreshIndex(
+      v.ix,
+      tree,
+      fsIO,
+      (done, total) => live() && set({ indexing: [done, total], ixVer: ui.current.ixVer + 1 }),
+      live,
+    )
       .catch((e) => live() && flash(`index failed · ${errText(e)}`, "error")) // a throwing note scan or progress callback; unreadable files never get here
       .finally(() => {
         v.running = false
@@ -266,7 +272,11 @@ function makeActivate(
     if (!at) return flash("heading gone")
     const heading = at.heading < 0 ? null : at.heading
     if (at.line !== null)
-      return jumpToText({ kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] }, row.query, doc)
+      return jumpToText(
+        { kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] },
+        row.query,
+        doc,
+      )
     if (heading === null) return
     const h = derive().view.headings[heading]
     return h ? setTop(h.line) : flash("heading gone")
@@ -381,7 +391,9 @@ export function hitRows(view: Rendered, source: boolean, row: TextHit) {
 
 /** A cached TL;DR for the peek, only while fresh for the note as read. */
 function freshTldr(saved: Summary | undefined, note: { hash: string } | null) {
-  return saved && note && isFresh(saved, note.hash) ? { text: saved.summary, model: shortModel(saved.model) } : undefined
+  return saved && note && isFresh(saved, note.hash)
+    ? { text: saved.summary, model: shortModel(saved.model) }
+    : undefined
 }
 
 /** What `makeSwitcher` gives App and the other factories. */

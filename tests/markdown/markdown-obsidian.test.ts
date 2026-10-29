@@ -4,7 +4,13 @@ import { width } from "../../src/lib/text"
 import { parseFrontMatter } from "../../src/markdown/frontmatter"
 import { scanComments, stripComments } from "../../src/markdown/lexer"
 import { CALLOUT_KINDS, render, stripTags } from "../../src/markdown/render"
-import { needsLexer, renderSource, sourceScan, sourceStructureLexed, sourceStructureLines } from "../../src/markdown/source"
+import {
+  needsLexer,
+  renderSource,
+  sourceScan,
+  sourceStructureLexed,
+  sourceStructureLines,
+} from "../../src/markdown/source"
 import { stats } from "../../src/markdown/stats"
 import { contrast, themes } from "../../src/theme/theme"
 import { brothy } from "../helpers/theme"
@@ -232,7 +238,21 @@ describe("callouts", () => {
   })
   test("readable in every theme", () =>
     readable(
-      ["note", "abstract", "info", "todo", "tip", "success", "question", "warning", "failure", "danger", "bug", "example", "quote"]
+      [
+        "note",
+        "abstract",
+        "info",
+        "todo",
+        "tip",
+        "success",
+        "question",
+        "warning",
+        "failure",
+        "danger",
+        "bug",
+        "example",
+        "quote",
+      ]
         .map((k) => `> [!${k}] Title\n> body text`)
         .join("\n\n"),
     ))
@@ -478,7 +498,8 @@ describe("Source outline: line-based path vs lexer", () => {
   test("notes the line-based path accepts get the lexer's outline", () => {
     let seed = 42
     const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
-    const blankish = (kept: string[], s: Set<number>) => [...s].filter((i) => !/^[ >]*$/.test(kept[i] ?? "")).sort((a, b) => a - b)
+    const blankish = (kept: string[], s: Set<number>) =>
+      [...s].filter((i) => !/^[ >]*$/.test(kept[i] ?? "")).sort((a, b) => a - b)
     let used = 0
     for (let n = 0; n < 4000; n++) {
       const lines = Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => frags[Math.floor(rnd() * frags.length)]!)

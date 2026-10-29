@@ -108,7 +108,11 @@ describe("wikilinks in the preview", () => {
     expect(rows.join(" ").replace(/\s+/g, " ").trim()).toBe("one two three four")
   })
   test("links inside tables, headings, lists and callout titles get ids", () => {
-    const r = render("## About [[x|the X]]\n\n- [[li]]\n\n> [!note] see [[t]]\n\n| a |\n|---|\n| [[cell\\|C]] |\n", 80, t)
+    const r = render(
+      "## About [[x|the X]]\n\n- [[li]]\n\n> [!note] see [[t]]\n\n| a |\n|---|\n| [[cell\\|C]] |\n",
+      80,
+      t,
+    )
     expect(r.links!.map((l) => (l.kind === "wiki" ? l.target : ""))).toEqual(["x", "li", "t", "cell"])
   })
   test("glyphs are one column", () => {

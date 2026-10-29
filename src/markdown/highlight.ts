@@ -215,10 +215,17 @@ const FAMILIES: Record<Family, string> = {
   data: "json",
 }
 const FAMILY_OF = new Map<string, Family>(
-  (Object.entries(FAMILIES) as [Family, string][]).flatMap(([f, names]) => names.split(" ").map((n) => [n, f] as const)),
+  (Object.entries(FAMILIES) as [Family, string][]).flatMap(([f, names]) =>
+    names.split(" ").map((n) => [n, f] as const),
+  ),
 )
 /** each family's line comment, as a regex source (JSON has none) */
-const COMMENT: Record<Family, string | null> = { slash: "\\/\\/.*$", hash: "(?<![^\\s])#.*$", dash: "--.*$", data: null }
+const COMMENT: Record<Family, string | null> = {
+  slash: "\\/\\/.*$",
+  hash: "(?<![^\\s])#.*$",
+  dash: "--.*$",
+  data: null,
+}
 const QUOTED = { double: `"(?:\\\\.|[^"\\\\])*"`, single: `'(?:\\\\.|[^'\\\\])*'`, back: "`(?:\\\\.|[^`\\\\])*`" }
 /** each family's string literals: JSON only double-quotes, the slash family also has template literals */
 const STRING: Record<Family, string> = {

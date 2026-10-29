@@ -115,7 +115,11 @@ export function fmtTokens(n: number): string {
   return `~${k < 10 ? k.toFixed(1).replace(/\.0$/, "") : Math.round(k)}k tokens`
 }
 
-export type AIEvent = { kind: "text"; text: string } | { kind: "error"; message: string } | { kind: "finish"; reason: string } | { kind: "done" }
+export type AIEvent =
+  | { kind: "text"; text: string }
+  | { kind: "error"; message: string }
+  | { kind: "finish"; reason: string }
+  | { kind: "done" }
 
 /** `error.message`, `error` as a string, or `message`; Gemini wraps errors in an array. */
 export function errMessage(body: unknown): string | undefined {
@@ -169,7 +173,8 @@ export function sseParser() {
     return parts.flatMap(line)
   }
   return {
-    push: (chunk: Uint8Array | string) => feed(typeof chunk === "string" ? chunk : dec.decode(chunk, { stream: true }), false),
+    push: (chunk: Uint8Array | string) =>
+      feed(typeof chunk === "string" ? chunk : dec.decode(chunk, { stream: true }), false),
     end: () => feed(dec.decode(), true),
   }
 }
@@ -209,7 +214,8 @@ function serverText(m: string, ctx: ErrCtx): string {
 
 /** The toast text for an HTTP status failure: the well-known codes by name, else the server's message, else the bare status. */
 function statusError(f: Extract<Failure, { kind: "status" }>, ctx: ErrCtx): string {
-  if (f.status === 401 || f.status === 403) return ctx.key ? `key rejected (${ctx.keyEnv})` : "unauthorized · set keyEnv"
+  if (f.status === 401 || f.status === 403)
+    return ctx.key ? `key rejected (${ctx.keyEnv})` : "unauthorized · set keyEnv"
   if (f.status === 404) return "model or endpoint not found"
   if (f.status === 429) return "rate limited"
   return f.message?.trim() ? serverText(f.message, ctx) : `${f.status} from ${ctx.host}`
@@ -273,14 +279,24 @@ export interface ChatReq {
   clean: (raw: string) => string
 }
 /** `raw` is the reply as received, for callers that parse structure (`extractJSON`). */
-export type ChatResult = { ok: true; text: string; raw: string } | { ok: false; failure: Failure } | { ok: false; cancelled: true }
+export type ChatResult =
+  | { ok: true; text: string; raw: string }
+  | { ok: false; failure: Failure }
+  | { ok: false; cancelled: true }
 /** `ChatResult` without `raw`. */
-export type SummaryResult = { ok: true; text: string } | { ok: false; failure: Failure } | { ok: false; cancelled: true }
+export type SummaryResult =
+  | { ok: true; text: string }
+  | { ok: false; failure: Failure }
+  | { ok: false; cancelled: true }
 
 const fail = (failure: Failure): ChatResult => ({ ok: false, failure })
 const finish = (raw: string, req: ChatReq): ChatResult => {
   const text = req.clean(raw)
-  return !text ? fail({ kind: "empty" }) : text.length > req.maxOut ? fail({ kind: "tooLong" }) : { ok: true, text, raw }
+  return !text
+    ? fail({ kind: "empty" })
+    : text.length > req.maxOut
+      ? fail({ kind: "tooLong" })
+      : { ok: true, text, raw }
 }
 
 /** Shortest key or header value scrubbed from a message: a shorter one would shred ordinary words. */
@@ -298,7 +314,8 @@ export async function chat(t: AITarget, req: ChatReq, o: ChatOpts = {}): Promise
   if (!text) return r
   // a server may echo a secret back: the key and every custom header value never reach a message
   let out = text
-  for (const v of [t.key, ...Object.values(t.headers)]) if (v && v.length >= MIN_SECRET && v !== "application/json") out = out.replaceAll(v, "…")
+  for (const v of [t.key, ...Object.values(t.headers)])
+    if (v && v.length >= MIN_SECRET && v !== "application/json") out = out.replaceAll(v, "…")
   return out === text ? r : { ok: false, failure: { ...f, message: out } as Failure }
 }
 
@@ -328,7 +345,9 @@ function guard(o: ChatOpts): Guard {
   const total = setTimeout(() => stop("total"), o.totalMs ?? TOTAL_MS)
   const onAbort = () => ctl.abort()
   o.signal?.addEventListener("abort", onAbort)
-  const aborted = new Promise<never>((_, reject) => ctl.signal.addEventListener("abort", () => reject(new Error("aborted"))))
+  const aborted = new Promise<never>((_, reject) =>
+    ctl.signal.addEventListener("abort", () => reject(new Error("aborted"))),
+  )
   aborted.catch(() => {})
   return {
     signal: ctl.signal,
@@ -389,7 +408,12 @@ function takeEvents(evs: AIEvent[], acc: { raw: string }, req: ChatReq, o: ChatO
 }
 
 /** An SSE body, read until its end marker or its end; any bytes re-arm the idle timer. */
-async function streamResult(body: NonNullable<Response["body"]>, req: ChatReq, o: ChatOpts, g: Guard): Promise<ChatResult> {
+async function streamResult(
+  body: NonNullable<Response["body"]>,
+  req: ChatReq,
+  o: ChatOpts,
+  g: Guard,
+): Promise<ChatResult> {
   const reader = body.getReader()
   // a body that ignores the fetch signal still ends: a cancelled read resolves done
   g.signal.addEventListener("abort", () => void reader.cancel().catch(() => {}))

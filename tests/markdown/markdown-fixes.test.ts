@@ -237,7 +237,8 @@ describe("entity safety", () => {
   })
   test("raw control characters in the file are neutralised in both views", () => {
     const src = "x \u001b[31m `a\u001bb` y\n\n```\nc\u001bd\n```\n"
-    for (const r of [render(src, 60, t), renderSource(src, 60, t)]) for (const l of r.lines) for (const s of l.spans) expect(s.text).not.toContain("\u001b")
+    for (const r of [render(src, 60, t), renderSource(src, 60, t)])
+      for (const l of r.lines) for (const s of l.spans) expect(s.text).not.toContain("\u001b")
   })
 })
 

@@ -12,7 +12,10 @@ export const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typ
  * What reading a JSON file found: its value, no file, or a file that can't be read or parsed. Never throws; only the
  * read and the parse are inside the try. `lenient` is for files people edit: a BOM is dropped and a blank file reads as `{}`.
  */
-export function readJSON(file: string, o: { lenient?: boolean } = {}): { kind: "ok"; value: unknown } | { kind: "missing" } | { kind: "invalid" } {
+export function readJSON(
+  file: string,
+  o: { lenient?: boolean } = {},
+): { kind: "ok"; value: unknown } | { kind: "missing" } | { kind: "invalid" } {
   let text: string
   try {
     text = readFileSync(file, "utf8")

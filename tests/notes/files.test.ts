@@ -114,7 +114,8 @@ describe("scan cap", () => {
 describe("visibleRows", () => {
   test("folders start closed; expanded ones show their children", () => {
     const tree = scanTree(fixture(["a/b/c.md", "a/d.md", "e.md"]))
-    const show = (exp: string[]) => visibleRows(tree, new Set(exp.map((p) => join(tree.path, p)))).map((r) => `${r.depth}:${r.node.rel}`)
+    const show = (exp: string[]) =>
+      visibleRows(tree, new Set(exp.map((p) => join(tree.path, p)))).map((r) => `${r.depth}:${r.node.rel}`)
     expect(show([])).toEqual(["0:a", "0:e.md"])
     expect(show(["a"])).toEqual(["0:a", "1:a/b", "1:a/d.md", "0:e.md"])
     expect(show(["a", "a/b"])).toEqual(["0:a", "1:a/b", "2:a/b/c.md", "1:a/d.md", "0:e.md"])
@@ -186,7 +187,14 @@ describe("rankNotes", () => {
   })
   test("substring > tight subsequence > loose subsequence > folder-only; ties by length, then name", () => {
     const tree = scanTree(fixture(["poc.md", "zz/porch.md", "p-o-c.md", "poc/notes.md", "spoc.md", "pocket.md"]))
-    expect(rankNotes(tree, "poc").rows.map((r) => r.node.rel)).toEqual(["poc.md", "pocket.md", "spoc.md", "zz/porch.md", "p-o-c.md", "poc/notes.md"])
+    expect(rankNotes(tree, "poc").rows.map((r) => r.node.rel)).toEqual([
+      "poc.md",
+      "pocket.md",
+      "spoc.md",
+      "zz/porch.md",
+      "p-o-c.md",
+      "poc/notes.md",
+    ])
   })
   test("hits index the name without extension; limit caps the rows, total counts all", () => {
     const tree = scanTree(fixture(["Alpha.md", "alps.md", "b/alpine.md"]))
