@@ -1,11 +1,10 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { MouseButton, type KeyEvent, type MouseEvent } from "@opentui/core"
-import { closeSync, existsSync, openSync, statSync } from "node:fs"
+import { closeSync, openSync } from "node:fs"
 import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ancestorsOf, folderCounts, scanTree, stem, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
-import { startHistory } from "./history"
 import { HEADING_STYLES, parseFrontMatter, sourceScan, pendingHighlights, wrap, type Line, type Rendered } from "./markdown"
 import { A, lineText, type Span } from "./spans"
 import { clamp, fmtNum, plural, spanWidth, truncate, truncateLeft, width } from "./text"
@@ -17,18 +16,18 @@ import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
 import { labelGeo, makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
+import { makeWorkspace } from "./app/workspace"
 import { MAX_DEPTH, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
-import { STDIN, projectRoot, workspace } from "./workspace"
+import { STDIN } from "./workspace"
 import { DRAWER_BELOW } from "./layout"
 import { contrastOn, mix, surface, themes } from "./theme"
 import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemePicker, Welcome, ZenSettings, usePointer } from "./overlay"
 import { fitHits, hitSpans as markHits, type PickerItem } from "./rows"
 import { helpLayout } from "./help"
-import { STEAM_MS, STILL_TICK, welcomeFit } from "./welcome"
-import { INK_MS, INK_STEPS } from "./chrome"
-import { loadProjects, projectName, remember as rememberProject, saveProjects, tildify, type OpenRow } from "./projects"
-import { emptyIndex, firstHit, nextSection, stepRow, type VaultIndex } from "./vault"
+import { STILL_TICK } from "./welcome"
+import { INK_STEPS } from "./chrome"
+import { emptyIndex, nextSection, stepRow, type VaultIndex } from "./vault"
 import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniJump } from "./minimap"
 import { filterFamilies, onlyMode, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, themeSplit, type ThemePick } from "./themepick"
 import { loadConfig, type View } from "./config"
@@ -144,7 +143,9 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const { ensureLinks, openLink, liveLabels, startLabels, histMove, labelType } = links
   const { startRolling, pokeGhost, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = makeZen(ctx, aiJobs)
   const switcher = makeSwitcher(ctx, links)
-  const { dropAsk, closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane } = switcher
+  const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate, peekPane } = switcher
+  const workspaceControl = makeWorkspace(ctx, switcher, aiJobs)
+  const { recordProject, leave, opType, opGo, openOpener, opComplete, opOpen, welcomeRows, welcomeOpen, welcomeKey, stopWelcome, animateWelcome } = workspaceControl
 
   // ---------------------------------------------------- actions
 
@@ -271,153 +272,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     if (ui.current.prompt) set({ prompt: null, query: "", matchLine: null })
   }
 
-  /**
-   * Write the workspace to the recents: the open note and its Preview top with the geometry it was
-   * taken at, so a reopen at another width remaps it (best effort). Zen not moved in still holds
-   * the Preview's own spot in `zenBack`.
-   */
-  const recordProject = () => {
-    const s = ui.current
-    if (s.piped) return
-    const key = `${s.openPath}:preview`
-    const spot = !s.openPath ? undefined : zenBack.current?.key === key ? zenBack.current : scrolls.current.get(key)
-    const pos = spot ? { top: spot.top, geo: spot.geo } : { top: 0 }
-    saveProjects(rememberProject(loadProjects(), { root: projectRoot(s), lastNote: s.openPath, ...pos, at: Date.now() }))
-  }
-  /** The last record, on the way out: `q`, C-c and the renderer's end (OpenTUI's exit signals) all come here, once. */
-  const leave = () => {
-    if (left.current) return
-    left.current = true
-    recordProject()
-  }
-
-  /**
-   * Make `root` the workspace, opening `note` (when it still exists) at Preview line `top`; a
-   * `single` note (opened on its own, as from the CLI) links through its vault. Every workspace
-   * rebuild goes through here: tree, link tree, switcher index, watcher, history.
-   */
-  const switchWorkspace = (root: string, note?: string | null, top = 0, single = false, geo?: Geometry) => {
-    try {
-      if (!statSync(root).isDirectory()) return flash(`not a folder: ${tildify(root)}`, "error")
-    } catch (e) {
-      return flash(`cannot open ${tildify(root)}: ${errText(e)}`, "error")
-    }
-    const keepNote = note && existsSync(note) ? note : null
-    dropAsk() // the big set below closes the switcher
-    recordProject()
-    clearTimeout(timers.current.open)
-    stopRolling()
-    zenBack.current = null
-    dropIndex() // a build still running sees it is stale and stops
-    dropDelta() // even when `o` reopens the same note: the effect takes a fresh baseline
-    sidebarSeen.current = { rows: null, cursorPath: null }
-    const w = workspace(root, keepNote, single && !!keepNote)
-    const s = ui.current
-    set({
-      ...w,
-      filter: "",
-      filterTyping: false,
-      cursor: 0,
-      listTop: { files: 0, outline: 0, info: 0 },
-      infoSeen: "",
-      outlineFilter: "",
-      outlineCur: 0,
-      infoCur: 0,
-      query: "",
-      matchLine: null,
-      labels: null,
-      prompt: null,
-      switcher: null,
-      opener: null,
-      focus: "doc",
-      drawerOpen: false,
-      reloadedAt: null,
-      recent: w.openPath ? [w.openPath] : [],
-      history: startHistory(w.openPath),
-      reload: s.reload + 1,
-      watchGen: s.watchGen + 1,
-    })
-    if (w.openPath && keepNote && top > 0) {
-      // the Preview entry, whatever is shown: derive clamps it and remaps it from the recorded geometry
-      scrolls.current.set(`${w.openPath}:preview`, { top, geo: geo ?? memo.geo(derive().doc) })
-      bump((x) => x + 1)
-    }
-    recordProject()
-    flash(`opened ${projectName(projectRoot(ui.current))}`)
-  }
-
-  /** New query: the highlight goes back to the first row. */
-  const opType = (q: string) => {
-    const op = ui.current.opener
-    if (!op) return
-    set({ opener: { ...op, q, hl: 0, top: 0 } })
-    set({ opener: { ...ui.current.opener!, hl: Math.max(0, firstHit(derive().opRows)) } })
-  }
-  const opGo = (hl: number) => {
-    const op = ui.current.opener
-    if (!op) return
-    const { opRows: rows, L } = derive()
-    const head = rows[hl - 1]?.kind === "header" ? hl - 1 : hl
-    set({ opener: { ...op, hl, top: keepVisible(keepVisible(op.top, head, L.PH, rows.length), hl, L.PH, rows.length) } })
-  }
-  const openOpener = () => {
-    set({ labels: null, opener: { q: "", hl: 0, top: 0, list: loadProjects() } })
-    opType("")
-  }
-  /** `tab`: a path row's completion (a recent's folder) becomes the query. */
-  const opComplete = () => {
-    const { opRows, opHl } = derive()
-    const r = opRows[opHl]
-    if (r?.kind === "path") opType(r.completion)
-    else if (r?.kind === "recent") opType(tildify(r.entry.root) + "/")
-  }
-  /** Open a row: a recent at its last note, a folder as the workspace, a note as a single note. */
-  const opOpen = (r: OpenRow | undefined) => {
-    const op = ui.current.opener
-    if (!op || !r || r.kind === "header") return
-    if (r.kind === "recent") {
-      if (r.missing) {
-        const list = op.list.filter((e) => e.root !== r.entry.root)
-        saveProjects(loadProjects().filter((e) => e.root !== r.entry.root))
-        set({ opener: { ...op, list } })
-        opType(op.q)
-        return flash(`“${r.name}” is gone`, "error")
-      }
-      return switchWorkspace(r.entry.root, r.entry.lastNote, r.entry.top, false, r.entry.geo)
-    }
-    if (r.dir) return switchWorkspace(r.path)
-    switchWorkspace(dirname(r.path), r.path, 0, true)
-  }
-
-  /** The welcome page's recent rows (header first) and how many of them are on screen. */
-  const welcomeRows = () => {
-    const rows = memo.recents(ui.current.root, welcome.current.gen, ui.current.watchGen)
-    const { L } = derive()
-    return { rows, shown: rows.length ? welcomeFit(L.CW, L.CH, rows.length - 1).recents : 0 }
-  }
-  /** Welcome: open recent row `i` (row 0 is the header); a missing folder is dropped from the list instead. */
-  const welcomeOpen = (i: number) => {
-    const r = welcomeRows().rows[i]
-    if (!r || r.kind !== "recent") return
-    if (r.missing) {
-      saveProjects(loadProjects().filter((e) => e.root !== r.entry.root))
-      welcome.current.gen++
-      return flash(`“${r.name}” is gone`, "error")
-    }
-    switchWorkspace(r.entry.root, r.entry.lastNote, r.entry.top, false, r.entry.geo)
-  }
-  /** Welcome keys: ↑ ↓ move the selection over the rows on screen, ⏎ opens it. */
-  const welcomeKey = (k: KeyEvent) => {
-    const { shown } = welcomeRows()
-    if (!shown) return false
-    const w = welcome.current
-    if (k.name === "up" || k.name === "down") w.hl = Math.max(1, Math.min(shown, w.hl + (k.name === "down" ? 1 : -1)))
-    else if (k.name === "return" || k.name === "enter") welcomeOpen(w.hl)
-    else return false
-    bump((x) => x + 1)
-    return true
-  }
-
   const helpGo = (n: number) => {
     const l = helpLayout(HELP_GROUPS, dims.current.W, dims.current.H)
     set({ helpTop: Math.max(0, Math.min(l.rows - l.vis, n)) })
@@ -496,34 +350,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   }, [])
   useEffect(() => () => void (alive.current = false), [])
 
-  // welcome: the wordmark and bowl ink in once (INK_MS frames) and the steam rises every STEAM_MS, until a key,
-  // a resize or a note opening stops it for good (`stopWelcome`); with motion off it is drawn still and inked
-  const stopWelcome = () => {
-    const w = welcome.current
-    if (w.run !== "live") return
-    w.run = "done"
-    w.ink = INK_STEPS - 1
-    clearTimeout(timers.current.steam)
-    timers.current.steam = undefined
-    bump((x) => x + 1) // a key that changes nothing else still shows the inked art
-  }
-  useEffect(() => {
-    const w = welcome.current
-    if (ui.current.openPath || (w.run === "live" && (w.W !== W || w.H !== H))) return stopWelcome()
-    if (w.run !== "idle" || !ui.current.motion) return
-    Object.assign(w, { run: "live", tick: 0, ink: 0, at: Date.now(), W, H })
-    bump((x) => x + 1) // the first frame, in border
-    const step = () => {
-      timers.current.steam = undefined
-      if (!alive.current || w.run !== "live") return
-      const ms = Date.now() - w.at
-      w.ink = Math.min(INK_STEPS - 1, Math.floor(ms / INK_MS))
-      w.tick = Math.floor(ms / STEAM_MS)
-      bump((x) => x + 1)
-      timers.current.steam = setTimeout(step, w.ink < INK_STEPS - 1 ? INK_MS : STEAM_MS)
-    }
-    timers.current.steam = setTimeout(step, INK_MS)
-  })
+  useEffect(animateWelcome)
   // code blocks render plain first; once their parser results land, re-render the document
   useEffect(() => {
     const doc = derive().doc
