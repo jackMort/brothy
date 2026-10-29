@@ -24,7 +24,7 @@ export const AI_OFF = `AI off · set "ai" in config.json`
 const AI_BUSY = `AI busy · ${MAX_JOBS} requests running`
 
 /** How `startJob` runs a request. */
-export interface JobRun {
+interface JobRun {
   /** each delta lands in `job.raw` and redraws at most every AI_FRAME */
   stream?: boolean
   /** runs once the job is registered, before the request goes out */
@@ -35,12 +35,9 @@ export interface JobRun {
 
 // ------------------------------------------------------------- lifecycle
 
-/**
- * What every AI action shares: re-reading the `ai` block, the gate, starting and cancelling a job, the failure toast.
- * `makeAIJobs` and `makeSwitcher` each build one; its state lives in the context's refs (`jobs`, `timers`).
- */
-export function makeJobs(c: AppCtx) {
-  const { set, bump, jobs, timers, alive, fetchImpl, flash } = c
+/** Starting and cancelling jobs, which live in the context's refs (`jobs`, `timers`). */
+function makeRunner(c: AppCtx) {
+  const { jobs, timers, bump, alive, fetchImpl } = c
 
   /** one redraw per AI_FRAME while text streams in */
   const aiRedraw = () => {
@@ -51,13 +48,6 @@ export function makeJobs(c: AppCtx) {
     }, AI_FRAME)
   }
 
-  /** Re-read the `ai` block into the store (editing config.json applies without a restart); null: AI off. */
-  const reloadAI = () => {
-    const ai = loadConfig().ai ?? null
-    set({ ai })
-    return ai
-  }
-
   /** Abort job `key` and forget it; false when none runs. */
   const cancelJob = (key: string) => {
     const job = jobs.current.get(key)
@@ -66,23 +56,6 @@ export function makeJobs(c: AppCtx) {
     jobs.current.delete(key)
     return true
   }
-
-  /** Room for one more request and the target `ai` resolves to; else its toast (`busy` also hears the busy one) and null. */
-  const aiGate = (ai: AIConfig, busy?: (msg: string) => void): AITarget | null => {
-    if (jobs.current.size >= MAX_JOBS) {
-      flash(AI_BUSY)
-      busy?.(AI_BUSY)
-      return null
-    }
-    const target = resolveAI(ai, process.env)
-    if (!("error" in target)) return target
-    flash(target.error, "error")
-    return null
-  }
-
-  /** The toast for failure `f` of a request to `target`: what it was for (`noun`), and the note or heading when it is not the current one. */
-  const failText = (target: AITarget, f: Failure, noun?: ErrCtx["noun"], note?: string) =>
-    aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun, note })
 
   /** Send `req` to `target` as job `<kind>:<id>` (`jobKey`); `run` says whether it streams and what follows. */
   const startJob = (kind: JobKind, id: string | undefined, target: AITarget, req: ChatReq, run: JobRun) => {
@@ -103,15 +76,50 @@ export function makeJobs(c: AppCtx) {
     })
   }
 
-  return { reloadAI, cancelJob, aiGate, failText, startJob }
+  return { cancelJob, startJob }
 }
+
+/**
+ * What every AI action shares: re-reading the `ai` block, the gate, starting and cancelling a job, the failure toast.
+ * `makeAIJobs` and `makeSwitcher` each build one; its state lives in the context's refs (`jobs`, `timers`).
+ */
+export function makeJobs(c: AppCtx) {
+  const { set, jobs, flash } = c
+
+  /** Re-read the `ai` block into the store (editing config.json applies without a restart); null: AI off. */
+  const reloadAI = () => {
+    const ai = loadConfig().ai ?? null
+    set({ ai })
+    return ai
+  }
+
+  /** Room for one more request and the target `ai` resolves to; else its toast (`busy` also hears the busy one) and null. */
+  const aiGate = (ai: AIConfig, busy?: (msg: string) => void): AITarget | null => {
+    if (jobs.current.size >= MAX_JOBS) {
+      flash(AI_BUSY)
+      busy?.(AI_BUSY)
+      return null
+    }
+    const target = resolveAI(ai, process.env)
+    if (!("error" in target)) return target
+    flash(target.error, "error")
+    return null
+  }
+
+  /** The toast for failure `f` of a request to `target`: what it was for (`noun`), and the note or heading when it is not the current one. */
+  const failText = (target: AITarget, f: Failure, noun?: ErrCtx["noun"], note?: string) =>
+    aiError(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun, note })
+
+  return { reloadAI, aiGate, failText, ...makeRunner(c) }
+}
+
+export type Jobs = ReturnType<typeof makeJobs>
 
 // ------------------------------------------------------------- jobs
 
-/** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */
-export function makeAIJobs(c: AppCtx) {
-  const { ui, set, bump, derive, memo, jobs, flash, runFade, focusPanel } = c
-  const { reloadAI, cancelJob, aiGate, failText, startJob } = makeJobs(c)
+/** The zen gloss sheet: the cache read once, fading out, showing a fresh or streaming gloss when the reading line enters its section. */
+function makeGlossSheet(c: AppCtx) {
+  const { ui, set, derive, jobs, runFade } = c
 
   /** glosses.json is read once, and only when zen meets an `ai` block (auto-show needs it). */
   const ensureGlosses = () => {
@@ -143,6 +151,13 @@ export function makeAIJobs(c: AppCtx) {
       set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
   }
 
+  return { ensureGlosses, glossEntered }
+}
+
+/** Send one section to the AI as a gloss and cache the reply. */
+function makeStartGloss(c: AppCtx, { failText, startJob }: Pick<Jobs, "failText" | "startJob">) {
+  const { ui, set, bump, derive, flash } = c
+
   /** Send section `g` in `style`; the result is cached under its own section and style whatever is under the reading line by then. */
   const startGloss = (g: GlossTarget, style: GlossStyle, title: string, target: AITarget, model: string) => {
     const hash = textHash(g.text) // taken now: a section edited meanwhile shows the result as outdated
@@ -167,6 +182,49 @@ export function makeAIJobs(c: AppCtx) {
     })
   }
 
+  return startGloss
+}
+
+/** zen `a`: gloss the section under the reading line. */
+function makeZenGloss(c: AppCtx, jobs: Jobs, { ensureGlosses }: Pick<ReturnType<typeof makeGlossSheet>, "ensureGlosses">) {
+  const { ui, set, bump, derive, flash } = c
+  const { reloadAI, cancelJob, aiGate } = jobs
+  const startGloss = makeStartGloss(c, jobs)
+
+  /** Cancel the gloss running for section `id` and close its sheet; false when none runs. */
+  const cancelGloss = (id: string) => {
+    if (!cancelJob(jobKey("gloss", id))) return false
+    if (ui.current.gloss?.id === id) set({ gloss: null })
+    bump((x) => x + 1)
+    return true
+  }
+
+  /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
+  const zenGloss = () => {
+    const ai = reloadAI()
+    const section = derive().gHere
+    // cancel first: a request stays cancellable after its `ai` block goes
+    if (section && cancelGloss(section.id)) return flash("gloss cancelled")
+    if (!ai) return flash(AI_OFF)
+    ensureGlosses()
+    const { s, gHere, gHash, gStyle, title } = derive()
+    if (!gHere) return flash("nothing to gloss here")
+    const key = glossKey(gHere.id, gStyle)
+    const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
+    // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
+    if (!shown && freshGloss(s, key, gHash)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+    // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
+    const target = aiGate(ai)
+    if (target) startGloss(gHere, gStyle, title, target, ai.model)
+  }
+
+  return { zenGloss }
+}
+
+/** `a`: the TL;DR request for the open note. */
+function makeSummary(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJob }: Jobs) {
+  const { ui, set, bump, memo, flash, focusPanel } = c
+
   /** Send `text` for `path`; the result is cached for that path whatever note is current by then. */
   const startSummary = (path: string, text: string, target: AITarget, model: string) => {
     const hash = textHash(text) // taken now: a note edited meanwhile shows the result as outdated
@@ -186,6 +244,32 @@ export function makeAIJobs(c: AppCtx) {
       },
     })
   }
+
+  /** `a`: summarize the open note into Info's TL;DR; a running summary is cancelled instead. */
+  const summarizeNote = () => {
+    const ai = reloadAI()
+    focusPanel("info")
+    const s = ui.current
+    const path = s.openPath
+    if (path && cancelJob(jobKey("tldr", path))) {
+      // a running request is cancelled first, whatever the config or the note now say
+      bump((x) => x + 1)
+      return flash("summary cancelled")
+    }
+    if (!ai) return flash(AI_OFF)
+    const file = path ? memo.read(path, s.reload) : null
+    const text = file && !file.error ? noteText(file.src) : ""
+    if (!path || !text) return flash("nothing to summarize")
+    const target = aiGate(ai)
+    if (target) startSummary(path, text, target, ai.model) // a fresh summary is regenerated too: `a` is the explicit ask
+  }
+
+  return { summarizeNote }
+}
+
+/** `D`: the reload-explain request for the open note's changes. */
+function makeReloadExplain(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJob }: Jobs) {
+  const { ui, set, bump, derive, flash, focusPanel } = c
 
   /** Forget the open note's baseline and explanation; a `D` still running for it is cancelled. */
   const dropDelta = () => {
@@ -217,25 +301,6 @@ export function makeAIJobs(c: AppCtx) {
     })
   }
 
-  /** `a`: summarize the open note into Info's TL;DR; a running summary is cancelled instead. */
-  const summarizeNote = () => {
-    const ai = reloadAI()
-    focusPanel("info")
-    const s = ui.current
-    const path = s.openPath
-    if (path && cancelJob(jobKey("tldr", path))) {
-      // a running request is cancelled first, whatever the config or the note now say
-      bump((x) => x + 1)
-      return flash("summary cancelled")
-    }
-    if (!ai) return flash(AI_OFF)
-    const file = path ? memo.read(path, s.reload) : null
-    const text = file && !file.error ? noteText(file.src) : ""
-    if (!path || !text) return flash("nothing to summarize")
-    const target = aiGate(ai)
-    if (target) startSummary(path, text, target, ai.model) // a fresh summary is regenerated too: `a` is the explicit ask
-  }
-
   /** `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. */
   const explainChange = () => {
     const ai = reloadAI()
@@ -256,35 +321,16 @@ export function makeAIJobs(c: AppCtx) {
     startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
   }
 
-  /** Cancel the gloss running for section `id` and close its sheet; false when none runs. */
-  const cancelGloss = (id: string) => {
-    if (!cancelJob(jobKey("gloss", id))) return false
-    if (ui.current.gloss?.id === id) set({ gloss: null })
-    bump((x) => x + 1)
-    return true
-  }
-
-  /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
-  const zenGloss = () => {
-    const ai = reloadAI()
-    const section = derive().gHere
-    // cancel first: a request stays cancellable after its `ai` block goes
-    if (section && cancelGloss(section.id)) return flash("gloss cancelled")
-    if (!ai) return flash(AI_OFF)
-    ensureGlosses()
-    const { s, gHere, gHash, gStyle, title } = derive()
-    if (!gHere) return flash("nothing to gloss here")
-    const key = glossKey(gHere.id, gStyle)
-    const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
-    // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
-    if (!shown && freshGloss(s, key, gHash)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
-    // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
-    const target = aiGate(ai)
-    if (target) startGloss(gHere, gStyle, title, target, ai.model)
-  }
-
-  return { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss }
+  return { dropDelta, explainChange }
 }
+
+/** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */
+export function makeAIJobs(c: AppCtx) {
+  const jobs = makeJobs(c)
+  const { ensureGlosses, glossEntered } = makeGlossSheet(c)
+  return { ensureGlosses, glossEntered, ...makeReloadExplain(c, jobs), ...makeSummary(c, jobs), ...makeZenGloss(c, jobs, { ensureGlosses }) }
+}
+
 /** Whether the cache holds a gloss under `key` that is fresh for section text hashed `hash`. */
 function freshGloss(s: UI, key: string, hash: string) {
   const e = s.glosses?.[key]
