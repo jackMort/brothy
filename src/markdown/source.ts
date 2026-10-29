@@ -139,6 +139,10 @@ export function sourceStructureLines(lines: string[], from: number, t: Theme, hi
 /** Deepest list indent (spaces) the line-based reader follows; past it a marker may be code, so the lexer decides. */
 const MAX_LIST_INDENT = 8
 
+/** A line that opens neither an item nor a quote: indented, right under a quote or an item (it may be its lazy continuation), or a rule or underline under text in a note with lists (`underlines`). */
+const plainNeedsLexer = (line: string, prevQuote: boolean, underlines: boolean) =>
+  /^ /.test(line) || prevQuote || (underlines && /^(?:=+|-+|\*{3,}|_{3,})[ \t]*$/.test(line))
+
 /**
  * Whether `live` (the lines Preview lexes) has anything the line-based reader cannot follow, so
  * the lexer must read the note. The line-based path (several times faster on big notes, which
@@ -169,10 +173,7 @@ export function needsLexer(live: string[]): boolean {
       if (!/^[\p{L}]$/u.test(quote[1]!)) return true
       prevQuote = true
     } else {
-      if (/^ /.test(line)) return true
-      // a line right under a quote or an item may be its lazy continuation
-      if (prevQuote) return true
-      if (!prevBlank && lists && /^(?:=+|-+|\*{3,}|_{3,})[ \t]*$/.test(line)) return true
+      if (plainNeedsLexer(line, prevQuote, !prevBlank && lists)) return true
       prevQuote = false
     }
     prevBlank = false
