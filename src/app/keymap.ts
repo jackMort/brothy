@@ -2,6 +2,7 @@
 import type { KeyEvent } from "@opentui/core"
 import type { View } from "../config"
 import type { HelpGroup } from "../help"
+import type { HintItem } from "../status"
 
 // One table drives key dispatch, the `?` help popup and the footer hints, so they
 // cannot drift apart. Specs are matched by `matchKey` (`S-g` is G, `C-d` is ^d).
@@ -22,43 +23,61 @@ export interface KeyDef {
   short?: string
   /** footer word */
   hint?: string
+  /** footer: dropped before the other hints when they don't all fit */
+  spare?: boolean
+  /** footer: shown only while this holds */
+  when?: keyof FooterState
   /** help group, when not the one its first mode puts it in (`HELP_SECTIONS`) */
   group?: string
 }
 
+/** What a footer hint can wait for (`KeyDef.when`). */
+export interface FooterState {
+  /** a find query is set */
+  query: boolean
+  /** Preview: link labels are Preview only */
+  preview: boolean
+  /** the note is on disk: a piped document has nothing to edit */
+  disk: boolean
+  /** an `ai` block is configured: AI is off until then */
+  ai: boolean
+  /** an `ai` block and changes still to explain */
+  changes: boolean
+}
+
 export const KEYMAP = {
-  views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", short: "1 2 3", desc: "Files · Outline · Info (piped: 1 2 only)", hint: "files/outline/info" },
-  source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview", hint: "source" },
-  width: { modes: ["global"], keys: ["w"], label: "w", desc: "full width / measure", hint: "width" },
+  views: { modes: ["global"], keys: ["1", "2", "3"], label: "1 2 3", desc: "Files · Outline · Info (piped: 1 2 only)" },
+  source: { modes: ["global"], keys: ["s"], label: "s", desc: "toggle Source / Preview" },
+  width: { modes: ["global"], keys: ["w"], label: "w", desc: "full width / measure" },
   minimap: { modes: ["global"], keys: ["m"], label: "m", desc: "minimap on / off (saved)", group: "Global" },
   headings: { modes: ["global"], keys: ["#"], label: "#", desc: "heading style: classic · bars · ladder · rules (saved)", group: "Document" },
   transparent: { modes: ["global"], keys: ["S-t"], label: "T", desc: "transparent background (saved)" },
-  zen: { modes: ["global"], keys: ["z"], label: "z", desc: "zen mode: only the text (esc leaves)", hint: "zen" },
+  zen: { modes: ["global"], keys: ["z"], label: "z", desc: "zen mode: only the text (esc leaves)" },
   zenSettings: { modes: ["global"], keys: ["S-z"], label: "Z", desc: "zen settings (live preview)", hint: "settings" },
-  sidebar: { modes: ["global"], keys: ["C-b"], label: "^b", desc: "hide / show the panel (drawer below 100 columns)", hint: "panel" },
+  sidebar: { modes: ["global"], keys: ["C-b"], label: "^b", desc: "hide / show the panel (drawer below 100 columns)" },
   slash: { modes: ["global"], keys: ["/"], label: "/", desc: "find in document · filter the panel list (panel focused)", hint: "find" },
-  switcher: { modes: ["global"], keys: ["C-p"], label: "^p", desc: "go to a note, heading or text (the whole vault)", hint: "go to" },
-  open: { modes: ["global"], keys: ["o"], label: "o", desc: "open a recent project or any path (folder or note)", hint: "open" },
-  focus: { modes: ["global"], keys: ["tab"], label: "tab", desc: "panel ⇄ document", hint: "focus" },
-  theme: { modes: ["global"], keys: ["t"], label: "t", desc: "pick theme · ←→ dark / light", hint: "theme" },
+  switcher: { modes: ["global"], keys: ["C-p"], label: "^p", desc: "go to a note, heading or text (the whole vault)" },
+  open: { modes: ["global"], keys: ["o"], label: "o", desc: "open a recent project or any path (folder or note)" },
+  focus: { modes: ["global"], keys: ["tab"], label: "tab", desc: "panel ⇄ document" },
+  theme: { modes: ["global"], keys: ["t"], label: "t", desc: "pick theme · ←→ dark / light" },
   reload: { modes: ["global"], keys: ["r"], label: "r", desc: "reload files and AI config" },
   clear: { modes: ["global"], keys: ["escape"], label: "esc", desc: "clear find · hide gloss · leave zen · panel: clear filter, else back to the document" },
   help: { modes: ["global"], keys: ["?"], label: "?", desc: "key hints · twice: all keys", hint: "keys" },
-  quit: { modes: ["global"], keys: ["q", "C-c"], label: "q", desc: "quit", hint: "quit" },
-  histBack: { modes: ["global"], keys: ["S-h"], label: "H", short: "H L", desc: "back to the previous note", hint: "history" },
+  quit: { modes: ["global"], keys: ["q", "C-c"], label: "q", desc: "quit" },
+  histBack: { modes: ["global"], keys: ["S-h"], label: "H", short: "H L", desc: "back to the previous note", hint: "history", spare: true },
   histForward: { modes: ["global"], keys: ["S-l"], label: "L", desc: "forward to the next note" },
-  summarize: { modes: ["global"], keys: ["a"], label: "a", desc: "summarize the note (Info tab)", hint: "summarize", group: "AI" },
-  explainChange: { modes: ["global"], keys: ["S-d"], label: "D", desc: "explain what changed on disk", hint: "changes", group: "AI" },
-  edit: { modes: ["global"], keys: ["e"], label: "e", desc: "edit the note in $EDITOR at the top line", hint: "edit" },
+  summarize: { modes: ["global"], keys: ["a"], label: "a", desc: "summarize the note (Info tab)", hint: "summarize", group: "AI", spare: true, when: "ai" },
+  explainChange: { modes: ["global"], keys: ["S-d"], label: "D", desc: "explain what changed on disk", hint: "changes", group: "AI", spare: true, when: "changes" },
+  edit: { modes: ["global"], keys: ["e"], label: "e", desc: "edit the note in $EDITOR at the top line", hint: "edit", spare: true, when: "disk" },
 
   docLine: { modes: ["doc"], keys: ["j", "down", "k", "up"], label: "j k ↑ ↓", short: "j k", desc: "scroll a line", hint: "scroll" },
-  docHalf: { modes: ["doc"], keys: ["d", "C-d", "u", "C-u"], label: "d u", short: "d/u", desc: "half page down / up", hint: "half page" },
+  docHalf: { modes: ["doc"], keys: ["d", "C-d", "u", "C-u"], label: "d u", short: "d/u", desc: "half page down / up" },
   docPage: { modes: ["doc"], keys: ["space", "pagedown", "C-f", "b", "pageup"], label: "space b", short: "␣ b", desc: "page down / up", hint: "page" },
   docEnds: { modes: ["doc"], keys: ["g", "home", "S-g", "end"], label: "g G", desc: "top / bottom" },
   docHeading: { modes: ["doc"], keys: ["]", "}", "[", "{"], label: "[ ]", desc: "previous / next heading", hint: "section" },
-  docMatch: { modes: ["doc"], keys: ["n", "S-n"], label: "n N", short: "n N", desc: "next / previous match", hint: "match" },
+  docMatch: { modes: ["doc"], keys: ["n", "S-n"], label: "n N", desc: "next / previous match", hint: "match", when: "query" },
   back: { modes: ["doc"], keys: ["h", "left"], label: "h", desc: "focus the panel" },
-  links: { modes: ["doc"], keys: ["f"], label: "f", desc: "label the links on screen to follow one", hint: "links" },
+  links: { modes: ["doc"], keys: ["f"], label: "f", desc: "label the links on screen to follow one", hint: "links", spare: true, when: "preview" },
 
   zenLine: { modes: ["zen"], keys: ["j", "down", "k", "up"], label: "j k ↑ ↓", short: "j k", desc: "scroll a line", hint: "scroll" },
   zenHalf: { modes: ["zen"], keys: ["d", "C-d", "u", "C-u"], label: "d u", desc: "half page down / up" },
@@ -67,7 +86,7 @@ export const KEYMAP = {
   zenSection: { modes: ["zen"], keys: ["]", "}", "[", "{"], label: "[ ]", desc: "previous / next section", hint: "section" },
   zenMeasure: { modes: ["zen"], keys: ["<", ">"], label: "< >", desc: "narrower / wider text (saved)" },
   zenSpeed: { modes: ["zen"], keys: ["+", "-"], label: "+ -", desc: "teleprompter faster / slower (saved)" },
-  zenGloss: { modes: ["zen"], keys: ["a"], label: "a", desc: "gloss: explain the section you're reading (AI)", hint: "gloss" },
+  zenGloss: { modes: ["zen"], keys: ["a"], label: "a", desc: "gloss: explain the section you're reading (AI)", hint: "gloss", spare: true, when: "ai" },
 
   outlineMove: { modes: ["outline"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Outline: move", hint: "move" },
   outlineJump: { modes: ["outline"], keys: ["return", "enter"], label: "⏎", desc: "Outline: jump to heading and read", hint: "jump" },
@@ -84,13 +103,13 @@ export const KEYMAP = {
     desc: "Files: move",
     hint: "move",
   },
-  filesOpen: { modes: ["files"], keys: ["return", "enter"], label: "⏎", short: "⏎", desc: "Files: read note · toggle folder", hint: "open" },
+  filesOpen: { modes: ["files"], keys: ["return", "enter"], label: "⏎", desc: "Files: read note · toggle folder", hint: "open" },
   filesPeek: { modes: ["files"], keys: ["l", "right"], label: "l", desc: "Files: open note, keep focus · expand folder" },
   filesUp: { modes: ["files"], keys: ["h", "left"], label: "h", short: "h l", desc: "Files: collapse folder · go to parent", hint: "fold" },
   filesTidy: { modes: ["files"], keys: ["-"], label: "-", desc: "Files: fold all but the open note's path", hint: "tidy" },
 
-  filterType: { modes: ["filter"], keys: [], label: "type", desc: "Filter: type to narrow the list (⌫ erases)", hint: "" },
-  filterMove: { modes: ["filter"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", desc: "Filter: move", hint: "" },
+  filterType: { modes: ["filter"], keys: [], label: "type", desc: "Filter: type to narrow the list (⌫ erases)" },
+  filterMove: { modes: ["filter"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", desc: "Filter: move" },
   filterOpen: { modes: ["filter"], keys: ["return", "enter"], label: "⏎", desc: "Filter: open the result", hint: "open" },
   filterClear: { modes: ["filter"], keys: ["escape"], label: "esc", desc: "Filter: clear and stop typing", hint: "clear" },
   filterLeave: { modes: ["filter"], keys: ["tab"], label: "tab", desc: "Filter: keep it, back to the document" },
@@ -125,7 +144,7 @@ export const KEYMAP = {
   labelErase: { modes: ["label"], keys: ["backspace"], label: "⌫", hint: "erase" },
   labelCancel: { modes: ["label"], keys: ["escape"], label: "esc", hint: "cancel" },
 
-  themeType: { modes: ["theme"], keys: [], label: "type", hint: "filter" },
+  themeType: { modes: ["theme"], keys: [], label: "type", hint: "filter", spare: true },
   themeMove: { modes: ["theme"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
   themeMode: { modes: ["theme"], keys: ["tab", "left", "right"], label: "←→", hint: "dark/light" },
   themeApply: { modes: ["theme"], keys: ["return", "enter"], label: "⏎", hint: "apply" },
@@ -149,7 +168,7 @@ export const WELCOME_KEYS: [KeyId, string][] = [["open", "open a project"], ["th
 /** Footer hints per context: a binding, optionally with a context-specific word. */
 export type Hint = KeyId | [KeyId, string]
 export const FOOTERS: Record<Ctx, Hint[]> = {
-  doc: ["docLine", "docPage", "docHeading", ["slash", "find"], "docMatch", "links", "histBack", "edit", ["focus", "panel"], "help"],
+  doc: ["docLine", "docPage", "docHeading", "slash", "docMatch", "links", "histBack", "edit", ["focus", "panel"], "help"],
   "panel:files": ["filesMove", "filesOpen", "filesUp", ["slash", "filter"], ["views", "view"], ["focus", "document"], "help"],
   "panel:outline": ["outlineMove", "outlineJump", "outlinePeek", ["slash", "filter"], ["focus", "document"], "help"],
   "panel:info": ["infoMove", "infoOpen", "summarize", "explainChange", ["focus", "document"], "help"],
@@ -162,6 +181,18 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
   label: ["labelType", "labelErase", "labelCancel"],
   switch: ["swType", "swMove", "swSection", "swOpen", "swClose"],
   open: ["opType", "opMove", "opComplete", "opOpen", "opClose"],
+}
+
+/** Contexts whose hints stay at full colour instead of fading: the popups and typing. */
+export const PINNED: readonly Ctx[] = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"]
+
+/** Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. */
+export function footerHints(c: Ctx, on: FooterState): HintItem[] {
+  return FOOTERS[c].flatMap((h) => {
+    const [id, word] = Array.isArray(h) ? h : [h, undefined]
+    const def = keyDef(id)
+    return def.when && !on[def.when] ? [] : [{ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: def.spare }]
+  })
 }
 
 /** Help sections by mode, in sheet order; `AI` collects bindings that name it as their `group`. */
