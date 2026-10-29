@@ -1,3 +1,4 @@
+// config.json under $XDG_CONFIG_HOME/brothy: validated load, merge-on-save that refuses to overwrite a file that does not parse.
 import { join } from "node:path"
 import { normalizeAI, type AIConfig } from "./ai-config"
 import { configHome, isRecord, readJSON, writeFileAtomic } from "./json"

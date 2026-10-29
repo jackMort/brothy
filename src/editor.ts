@@ -1,3 +1,5 @@
+// `e`: the editor command for the open note ($VISUAL, $EDITOR, else vi), the source line it opens at, and the suspend / spawn / resume
+// around it. Pure apart from `runEditor`, which goes through an injectable `EditorIO`.
 import { basename } from "node:path"
 import type { Heading } from "./markdown"
 import { clamp } from "./text"

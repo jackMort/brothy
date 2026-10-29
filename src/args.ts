@@ -1,3 +1,4 @@
+// The command line: `parseArgs` turns argv into `Args` or an error message. Pure; cli.tsx prints the errors and `--help`.
 import { FAMILIES, resolveTheme } from "./themepick"
 
 export interface Args {

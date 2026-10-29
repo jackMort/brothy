@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// The CLI entry: parse args, stat the path, check the TTY, read a piped document, create the renderer and mount <App>.
 import { createCliRenderer } from "@opentui/core"
 import { createRoot } from "@opentui/react"
 import { openSync, readdirSync, statSync } from "node:fs"
