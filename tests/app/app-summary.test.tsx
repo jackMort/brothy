@@ -88,7 +88,7 @@ test("help lists a in the AI group, not under Global", async () => {
   const s = await mount(d, "a.md", { size: { width: 120, height: 40 } })
   const lines = (await openHelp(s)).split("\n")
   const at = lines.findIndex((l) => l.includes("summarize the note (Info tab)"))
-  const ai = lines.findIndex((l) => /  AI  /.test(l))
+  const ai = lines.findIndex((l) => / {2}AI {2}/.test(l))
   expect(ai).toBeGreaterThan(0)
   expect(at).toBe(ai + 1)
   expect(lines[at]!.slice(lines[ai]!.indexOf("AI"))).toStartWith("a ") // the key under the chip, whatever the left column holds

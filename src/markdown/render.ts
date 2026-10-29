@@ -48,10 +48,7 @@ export interface Geometry {
 /** Blocks `r` is still waiting on: `await ensureHighlights(...)`, then re-render if it returns true. */
 export const pendingHighlights = (r: Rendered): HighlightRequest[] => r.pending ?? []
 
-export type LinkTarget =
-  | { kind: "wiki"; target: string; heading?: string; embed: boolean }
-  | { kind: "md"; href: string }
-  | { kind: "url"; href: string }
+export type LinkTarget = { kind: "wiki"; target: string; heading?: string; embed: boolean } | { kind: "md"; href: string } | { kind: "url"; href: string }
 
 /** Where `inline()` records link targets while rendering; absent for outline titles. */
 interface LinkSink {
@@ -66,14 +63,41 @@ export interface RenderOpts {
   exists?: (target: string) => boolean
 }
 
+// biome-ignore lint/complexity/useMathMinMax: a NaN width must leave the running maximum alone, which Math.max would not
 const maxOf = (xs: number[], init = 0) => xs.reduce((m, x) => (x > m ? x : m), init)
 
 // ---------------------------------------------------------------- inline
 
 /** HTML tags brothy strips (their text stays); anything else is shown literally, so `Promise<void>` survives. */
 const HTML_TAGS = new Set([
-  "div", "span", "p", "img", "br", "kbd", "sup", "sub", "u", "mark", "small", "b", "i", "em", "strong", "a",
-  "center", "font", "details", "summary", "iframe", "video", "audio", "picture", "source", "figure", "figcaption", "hr",
+  "div",
+  "span",
+  "p",
+  "img",
+  "br",
+  "kbd",
+  "sup",
+  "sub",
+  "u",
+  "mark",
+  "small",
+  "b",
+  "i",
+  "em",
+  "strong",
+  "a",
+  "center",
+  "font",
+  "details",
+  "summary",
+  "iframe",
+  "video",
+  "audio",
+  "picture",
+  "source",
+  "figure",
+  "figcaption",
+  "hr",
 ])
 /** Closing these ends a line. */
 const HTML_BLOCKS = new Set(["div", "p", "figure", "figcaption", "details", "summary", "center"])
@@ -99,7 +123,7 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
       case "text":
       case "escape": {
         const tt = tokenOf(tok, "text") // an escape is a text token without `tokens`
-        if (tt.tokens && tt.tokens.length) out.push(...inline(tt.tokens, t, cur, sink))
+        if (tt.tokens?.length) out.push(...inline(tt.tokens, t, cur, sink))
         else out.push({ ...cur, text: decode(tt.text) })
         break
       }
@@ -159,8 +183,8 @@ export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "
         const raw = tokenOf(tok, "html").text
         if (/^\s*<!--/.test(raw)) break
         const m = /^\s*<(\/?)([a-zA-Z][\w-]*)\b[^>]*>\s*$/.exec(raw)
-        const name = m?.[2]!.toLowerCase()
-        if (!m || !HTML_TAGS.has(name!)) {
+        const name = m?.[2]?.toLowerCase()
+        if (!m || !name || !HTML_TAGS.has(name)) {
           out.push({ text: safe(raw), fg: t.textMuted })
           break
         }
@@ -219,9 +243,20 @@ export const CALLOUT_KINDS: Record<string, CalloutKind> = {
 }
 
 const CALLOUT_ALIASES: Record<string, string> = {
-  summary: "abstract", tldr: "abstract", hint: "tip", important: "tip", check: "success", done: "success",
-  help: "question", faq: "question", caution: "warning", attention: "warning", fail: "failure", missing: "failure",
-  error: "danger", cite: "quote",
+  summary: "abstract",
+  tldr: "abstract",
+  hint: "tip",
+  important: "tip",
+  check: "success",
+  done: "success",
+  help: "question",
+  faq: "question",
+  caution: "warning",
+  attention: "warning",
+  fail: "failure",
+  missing: "failure",
+  error: "danger",
+  cite: "quote",
 }
 
 /** The kind a `[!type]` draws as: case-insensitive, aliases folded, unknown types are notes. */
@@ -329,11 +364,7 @@ function headingRows(ctx: Ctx, depth: number, styled: Span[], fg: string, idx: n
   emit(rows)
   const tw = Math.max(0, Math.min(max - spanWidth(rest), maxOf(rows.map((r) => spanWidth(r) - spanWidth(rest)))))
   ctx.lines.push({
-    spans: [
-      ...rest,
-      { text: "━".repeat(tw), fg },
-      { text: "─".repeat(Math.max(0, max - spanWidth(rest) - tw)), fg: t.border },
-    ],
+    spans: [...rest, { text: "━".repeat(tw), fg }, { text: "─".repeat(Math.max(0, max - spanWidth(rest) - tw)), fg: t.border }],
   })
 }
 
@@ -427,11 +458,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
             if (task) marker.push({ text: " " })
           }
           if (task) {
-            marker.push(
-              checked
-                ? { text: "[x]", fg: t.success, attr: A.BOLD }
-                : { text: "[ ]", fg: t.textMuted },
-            )
+            marker.push(checked ? { text: "[x]", fg: t.success, attr: A.BOLD } : { text: "[ ]", fg: t.textMuted })
           } else if (!l.ordered) {
             marker.push({ text: ["•", "◦", "▪"][depth % 3]!, fg: t.primary })
           }
@@ -443,8 +470,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
           if (bare) ctx.lines.push({ spans: itemFirst.map((s) => ({ ...s })) })
           else blocks(ctx, body, max, itemFirst, itemRest, depth + 1)
           if (checked) {
-            for (let k = startLine; k < ctx.lines.length; k++)
-              for (const s of ctx.lines[k]!.spans) if (s.fg === t.text) s.fg = t.textMuted
+            for (let k = startLine; k < ctx.lines.length; k++) for (const s of ctx.lines[k]!.spans) if (s.fg === t.text) s.fg = t.textMuted
           }
           if (!l.loose) trimTrailingBlank(ctx, startLine, rest)
         })
@@ -464,7 +490,11 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
           const gap = avail - width(label) - width(hint)
           const body: Span[] =
             gap >= 2
-              ? [{ text: label, fg: t.textMuted, bg: fill }, { text: pad(gap), bg: fill }, { text: hint, fg: t.textMuted, bg: fill }]
+              ? [
+                  { text: label, fg: t.textMuted, bg: fill },
+                  { text: pad(gap), bg: fill },
+                  { text: hint, fg: t.textMuted, bg: fill },
+                ]
               : truncate([{ text: label, fg: t.textMuted, bg: fill }], Math.max(1, avail))
           const row: Span[] = [...p0, { text: "  ", bg: fill }, ...body]
           row.push({ text: pad(max - spanWidth(row)), bg: fill })
@@ -626,9 +656,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   const rows = tb.rows.map((r) => r.slice(0, cols).map((c) => inline(c.tokens, t, undefined, ctx.sink)))
   // cell room: the measure less the prefix, a border per column plus one, 2 cells of padding per column, the `…` column
   const avail = max - prefixW - (cols + 1 + more.length) - (cols + more.length) * 2 - more.length
-  const natural = Array.from({ length: cols }, (_, i) =>
-    Math.max(3, spanWidth(header[i] ?? []), maxOf(rows.map((r) => spanWidth(r[i] ?? [])))),
-  )
+  const natural = Array.from({ length: cols }, (_, i) => Math.max(3, spanWidth(header[i] ?? []), maxOf(rows.map((r) => spanWidth(r[i] ?? [])))))
   const widths = [...fitWidths(natural, avail), ...more.map(() => 1)]
   const B = t.border
   const rule = (l: string, m: string, r: string, p: Span[]) => ({
@@ -637,7 +665,10 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   // one table row: every cell wrapped (or truncated) to its width, as many rows as its tallest cell, aligned per column
   const row = (cells: Span[][], p: Span[]) => {
     const wrapped = widths.map((cw, i) => (cw < MIN_WRAP_COL ? [truncate(cells[i] ?? [], cw)] : wrap(cells[i] ?? [], cw)))
-    const h = maxOf(wrapped.map((w) => w.length), 1)
+    const h = maxOf(
+      wrapped.map((w) => w.length),
+      1,
+    )
     for (let k = 0; k < h; k++) {
       const spans: Span[] = [...(k === 0 ? p : rest), { text: "│", fg: B }]
       wrapped.forEach((w, i) => {
@@ -675,7 +706,11 @@ export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}
   return {
     lines: ctx.lines,
     headings: ctx.headings,
-    plain: ctx.lines.map((l) => plainOf(l.spans).replace(/\u00a0/g, " ").toLowerCase()),
+    plain: ctx.lines.map((l) =>
+      plainOf(l.spans)
+        .replace(/\u00a0/g, " ")
+        .toLowerCase(),
+    ),
     pending: ctx.pending,
     links: ctx.sink.links,
   }

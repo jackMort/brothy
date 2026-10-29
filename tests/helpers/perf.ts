@@ -19,8 +19,14 @@ export function expectLinear(label: string, f: (big: boolean) => unknown) {
   let a = Infinity
   let b = Infinity
   for (let i = 0; i < 3; i++) {
-    a = Math.min(a, time(() => f(false)))
-    b = Math.min(b, time(() => f(true)))
+    a = Math.min(
+      a,
+      time(() => f(false)),
+    )
+    b = Math.min(
+      b,
+      time(() => f(true)),
+    )
   }
   if (b > 20) expect(b / Math.max(a, 1), `${label}: ${b.toFixed(0)} ms vs ${a.toFixed(1)} ms at 1/${SCALE}`).toBeLessThan(MAX_RATIO)
 }

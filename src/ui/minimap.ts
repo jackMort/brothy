@@ -9,7 +9,12 @@ export const MINI_COLS = 2
 export const MINI_W = MINI_COLS + 2
 export const MINI_MIN_W = 110
 
-const BIT = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]] as const
+const BIT = [
+  [0x01, 0x08],
+  [0x02, 0x10],
+  [0x04, 0x20],
+  [0x40, 0x80],
+] as const
 const braille = (v: number) => (v ? String.fromCharCode(0x2800 + v) : " ")
 
 /** Dot columns `0 … dots − 1` with ink in `line`: each grapheme covers its display width in cells, `per` cells a dot column. */
@@ -99,8 +104,7 @@ export function miniCells(
 }
 
 /** The top that centres the first line of cell row `row`, clamped to [0, maxTop]. */
-export const miniJump = (row: number, ink: MiniInk, h: number, maxTop: number) =>
-  clamp(row * 4 * ink.scale - Math.floor(h / 2), 0, maxTop)
+export const miniJump = (row: number, ink: MiniInk, h: number, maxTop: number) => clamp(row * 4 * ink.scale - Math.floor(h / 2), 0, maxTop)
 
 /** Theme roles only: headings as H1s, text on screen muted on the band, the rest as faint as a rule, hits as find marks them. */
 export const miniColors = (t: Theme): Record<MiniKind, string> => ({

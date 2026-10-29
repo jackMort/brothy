@@ -26,7 +26,12 @@ export const SMALL: WelcomeSize = { steamW: 16, steamH: 2, bowlW: 18, bowlH: 3, 
 export const artWidth = (size: WelcomeSize) => Math.max(size.bowlW + 2, WORDMARK_W)
 
 /** braille dot bits by [row][column] inside a cell */
-const BRAILLE = [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]] as const
+const BRAILLE = [
+  [0x01, 0x08],
+  [0x02, 0x10],
+  [0x04, 0x20],
+  [0x40, 0x80],
+] as const
 /** quadrant blocks by bits: 1 top-left, 2 top-right, 4 bottom-left, 8 bottom-right */
 const QUAD = [" ", "▘", "▝", "▀", "▖", "▌", "▞", "▛", "▗", "▚", "▐", "▜", "▄", "▙", "▟", "█"]
 
@@ -107,7 +112,7 @@ export function welcomeArt(size: WelcomeSize, tick: number, o: { steam?: boolean
     }
   if (size.foot) {
     const fw = Math.round(w * 0.4)
-    ;[..."▝" + "▀".repeat(fw - 2) + "▘"].forEach((ch, i) => put(cx - (fw >> 1) + i, rim + 1 + size.bowlH, { ch, role: "body" }))
+    ;[...("▝" + "▀".repeat(fw - 2) + "▘")].forEach((ch, i) => put(cx - (fw >> 1) + i, rim + 1 + size.bowlH, { ch, role: "body" }))
   }
   // chopsticks: two steep diagonals resting in the broth, right of the steam
   if (size.sticks) {
@@ -143,7 +148,7 @@ const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) =>
 function pageHeight(f: Omit<WelcomeFit, "top" | "height" | "hint">, hint: boolean) {
   const art = artHeight(f)
   const list = f.recents ? 2 + f.recents : 0
-  return art + (art ? 1 : 0) + 3 + list + (hint ? (f.size === BIG && f.mark && f.bowl) || !f.recents ? 2 : 1 : 0)
+  return art + (art ? 1 : 0) + 3 + list + (hint ? ((f.size === BIG && f.mark && f.bowl) || !f.recents ? 2 : 1) : 0)
 }
 
 /** What fits a `CW`×`CH` area. In order the page gives up: the big bowl, the steam, recent rows, the bowl, the wordmark, the hint. */

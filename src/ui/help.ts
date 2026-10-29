@@ -35,7 +35,10 @@ export const HELP_KEY_W = 16
 /** description cells a column keeps before its key padding shrinks */
 const DESC_MIN = 33
 /** Two-column placement by group title; a group not named here joins the shorter column. */
-export const HELP_COLUMNS: readonly (readonly string[])[] = [["Global", "Panel"], ["Document", "AI", "Zen"]]
+export const HELP_COLUMNS: readonly (readonly string[])[] = [
+  ["Global", "Panel"],
+  ["Document", "AI", "Zen"],
+]
 const COL_GAP = 4
 
 const groupLines = (g: HelpGroup): HelpLine[] => [{ kind: "chip", title: g.title }, ...g.entries.map((e) => ({ kind: "key" as const, ...e }))]

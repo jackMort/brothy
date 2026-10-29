@@ -60,8 +60,7 @@ describe("noteTitle", () => {
 })
 
 describe("locationParts", () => {
-  const at = (room: number, section = "Status") =>
-    locationParts("Reading/Calm", "Calm Technology", ["Calm Technology", "The periphery", section], room)
+  const at = (room: number, section = "Status") => locationParts("Reading/Calm", "Calm Technology", ["Calm Technology", "The periphery", section], room)
   test("everything fits; a first heading equal to the title is dropped", () => {
     expect(at(200)).toEqual({ folder: "Reading/Calm", title: "Calm Technology", ancestors: ["The periphery"], section: "Status" })
   })
@@ -224,9 +223,22 @@ describe("headerLayout", () => {
     const CW = Math.max(20, Math.min(80, areaW - 4))
     const textLeft = 1 + (inline ? SW + 1 : 0) + Math.floor((areaW - CW) / 2)
     return headerLayout({
-      inline, SW, textLeft, textWidth: CW, zen: false, gap: true, vault: "My Vault", folder: deep,
-      title: "Onion Gratin (Stovetop Steps)", trail: ["Flavour base — how flavours build"],
-      query: "", matchIdx: null, count: 0, source: false, wide: false, ...o,
+      inline,
+      SW,
+      textLeft,
+      textWidth: CW,
+      zen: false,
+      gap: true,
+      vault: "My Vault",
+      folder: deep,
+      title: "Onion Gratin (Stovetop Steps)",
+      trail: ["Flavour base — how flavours build"],
+      query: "",
+      matchIdx: null,
+      count: 0,
+      source: false,
+      wide: false,
+      ...o,
     })
   }
   const head = (l: ReturnType<typeof headerLayout>) => {
@@ -319,7 +331,13 @@ describe("wordmark", () => {
 
 describe("tooSmall", () => {
   test("whole words only, each line within W, always names the minimum", () => {
-    for (const [W, H] of [[10, 3], [20, 5], [40, 10], [5, 2], [59, 20]] as const) {
+    for (const [W, H] of [
+      [10, 3],
+      [20, 5],
+      [40, 10],
+      [5, 2],
+      [59, 20],
+    ] as const) {
       const lines = tooSmall(W, H)
       expect(lines.join(" ")).toContain("60×14")
       for (const l of lines) expect(sw(l)).toBeLessThanOrEqual(W)
@@ -358,7 +376,23 @@ describe("row spans", () => {
   })
 
   test("topLineSpans: the folder over the panel, the title at the text's edge, the cluster at its right edge", () => {
-    const o = { inline: true, SW: 20, textLeft: 25, textWidth: 50, zen: false, gap: true, vault: "vault", folder: "notes", title: "Title", trail: ["Part"], query: "x", matchIdx: 1, count: 3, source: true, wide: false }
+    const o = {
+      inline: true,
+      SW: 20,
+      textLeft: 25,
+      textWidth: 50,
+      zen: false,
+      gap: true,
+      vault: "vault",
+      folder: "notes",
+      title: "Title",
+      trail: ["Part"],
+      query: "x",
+      matchIdx: 1,
+      count: 3,
+      source: true,
+      wide: false,
+    }
     const h = headerLayout(o)
     const line = text(topLineSpans(t, "watching", h, false))
     const col = (s: string) => sw(line.slice(0, line.indexOf(s)))
@@ -383,14 +417,24 @@ describe("row spans", () => {
     expect(text(spans).endsWith(" 50% · 3 min left")).toBe(true)
     expect(spans[0]!.fg).toBe(t.primary)
     expect(spans[0]!.text.length).toBe(fillWidth(5, 10, 40 - 17))
-    expect(progressSpans(t, null, 0, 0, 6)).toEqual([{ text: "", fg: t.primary }, { text: "──────", fg: t.border }])
+    expect(progressSpans(t, null, 0, 0, 6)).toEqual([
+      { text: "", fg: t.primary },
+      { text: "──────", fg: t.border },
+    ])
   })
 
   test("hintSpans: keys in text, words muted, 3-space gaps, spare hints dropped first", () => {
-    const items = [{ key: "j", word: "down" }, { key: "f", word: "links", spare: true }, { key: "q", word: "" }]
+    const items = [
+      { key: "j", word: "down" },
+      { key: "f", word: "links", spare: true },
+      { key: "q", word: "" },
+    ]
     expect(text(hintSpans(t, items, 40))).toBe("j down   f links   q")
     expect(text(hintSpans(t, items, 12))).toBe("j down   q")
-    expect(hintSpans(t, items, 40).slice(0, 2)).toEqual([{ text: "j", fg: t.text }, { text: " down", fg: t.textMuted }])
+    expect(hintSpans(t, items, 40).slice(0, 2)).toEqual([
+      { text: "j", fg: t.text },
+      { text: " down", fg: t.textMuted },
+    ])
   })
 
   test("toastSpans: icon and message in the kind's colour, faded once the hold is over, gone after", () => {

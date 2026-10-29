@@ -1,6 +1,32 @@
 import { describe, expect, test } from "bun:test"
 import { cleanReply, fmtTokens, tokens } from "../../src/ai/client"
-import { ASK_MEMO, ASK_PROMPT, EXCERPT, MAX_ASK, MAX_CANDIDATES, MAX_QUERIES, MAX_RERANK, QUESTION_MAX, RERANK_PROMPT, WHY_W, askCandidates, askLocate, askRequest, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, rerankRequest, type AskState, type AskView } from "../../src/ai/ask"
+import {
+  ASK_MEMO,
+  ASK_PROMPT,
+  EXCERPT,
+  MAX_ASK,
+  MAX_CANDIDATES,
+  MAX_QUERIES,
+  MAX_RERANK,
+  QUESTION_MAX,
+  RERANK_PROMPT,
+  WHY_W,
+  askCandidates,
+  askLocate,
+  askRequest,
+  askRows,
+  askSection,
+  askTitleNote,
+  parseQueries,
+  parseRerank,
+  putNewest,
+  questionOf,
+  rerankCost,
+  rerankMessage,
+  rerankRequest,
+  type AskState,
+  type AskView,
+} from "../../src/ai/ask"
 import { truncate } from "../../src/lib/text"
 import type { FileNode } from "../../src/notes/files"
 import { noteSections, sectionId } from "../../src/markdown/sections"
@@ -83,7 +109,8 @@ function vault(files: [string, string][]): { ix: VaultIndex; tree: FileNode } {
   return { ix, tree }
 }
 // source lines: 0 lead-in · 2 # Getting started · 6 ## Open a folder · 8 text · 10 ## Open a single file · 12, 13 text
-const GS = "Lead-in about brothy.\n\n# Getting started\n\nInstall it.\n\n## Open a folder\n\nPass a folder path.\n\n## Open a single file\n\nPass a file path.\nA single file opens alone.\n"
+const GS =
+  "Lead-in about brothy.\n\n# Getting started\n\nInstall it.\n\n## Open a folder\n\nPass a folder path.\n\n## Open a single file\n\nPass a file path.\nA single file opens alone.\n"
 const V = vault([
   ["README.md", "# README\n\n## Quick start\n\nbrothy path\n"],
   ["guides/getting-started.md", GS],
@@ -139,10 +166,20 @@ test("ids equal sectionId: the lead-in and a heading whose key is empty stay apa
   // a rerank keeps each answer once, with its own why
   const ids = c.map((x) => x.id)
   const picked = parseRerank('{"answers":[{"id":"c2","why":"star"},{"id":"c1","why":"intro"}]}', ids.length)!
-  const state: AskState = { question: "alpha?", phase: "reranked", queries: ["alpha"], order: picked.map((p) => ids[p.i]!), why: Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why])) }
+  const state: AskState = {
+    question: "alpha?",
+    phase: "reranked",
+    queries: ["alpha"],
+    order: picked.map((p) => ids[p.i]!),
+    why: Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why])),
+  }
   const rows = askRows({ question: "alpha?", cut: false, target: { host: "h" }, state, cands: c, cost: "", indexing: false })
   const answers = rows.filter((r): r is AnswerRow => r.kind === "answer")
-  expect(answers.map((r) => [r.heading, r.right])).toEqual([[0, "star"], [-1, "intro"], [1, "1/1"]])
+  expect(answers.map((r) => [r.heading, r.right])).toEqual([
+    [0, "star"],
+    [-1, "intro"],
+    [1, "1/1"],
+  ])
 })
 
 describe("askLocate", () => {
@@ -200,23 +237,34 @@ describe("rerank", () => {
     ])
   })
   test("parseRerank: no valid id → null", () => {
-    for (const raw of ["", "nope", '{"answers": []}', '{"answers": [{"id": "c0"}, {"id": "c5"}]}', '{"queries": ["x"]}'])
-      expect(parseRerank(raw, 4)).toBeNull()
+    for (const raw of ["", "nope", '{"answers": []}', '{"answers": [{"id": "c0"}, {"id": "c5"}]}', '{"queries": ["x"]}']) expect(parseRerank(raw, 4)).toBeNull()
   })
 })
 
 describe("askRows", () => {
   const C = askCandidates(V.ix, V.tree, ["single file", "path", "open"])
   const Q = ["single file", "path", "open"]
-  const base: AskView = { question: "how do I open one file", cut: false, target: { host: "openrouter.ai" }, state: undefined, cands: [], cost: "~1.3k tokens", indexing: false }
+  const base: AskView = {
+    question: "how do I open one file",
+    cut: false,
+    target: { host: "openrouter.ai" },
+    state: undefined,
+    cands: [],
+    cost: "~1.3k tokens",
+    indexing: false,
+  }
   const result: AskState = { question: base.question, phase: "result", queries: Q, model: "anthropic/claude-haiku-5-5" }
   const show = (rows: SwitchRow[]) =>
     rows.map((r) =>
-      r.kind === "header" ? `# ${r.title} ${r.count}`
-      : r.kind === "askNote" ? `~ ${r.text}`
-      : r.kind === "askAction" ? `${r.act}${r.error ? " ✗" : ""}: ${r.text}${r.note}`
-      : r.kind === "answer" ? `${r.name}${r.heading < 0 ? "" : " › " + r.text} | ${r.right}`
-      : "?",
+      r.kind === "header"
+        ? `# ${r.title} ${r.count}`
+        : r.kind === "askNote"
+          ? `~ ${r.text}`
+          : r.kind === "askAction"
+            ? `${r.act}${r.error ? " ✗" : ""}: ${r.text}${r.note}`
+            : r.kind === "answer"
+              ? `${r.name}${r.heading < 0 ? "" : " › " + r.text} | ${r.right}`
+              : "?",
     )
   const SEARCHED = "~ searched: single file · path · open"
 

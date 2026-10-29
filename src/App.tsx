@@ -52,7 +52,17 @@ export interface AppProps {
 
 // ------------------------------------------------------------- app
 
-export function App({ root: startRoot, initialFile, themeName, transparent, fetch: fetchImpl = globalThis.fetch, edit: editImpl, stdin, linkScanDelay = 0, motion }: AppProps) {
+export function App({
+  root: startRoot,
+  initialFile,
+  themeName,
+  transparent,
+  fetch: fetchImpl = globalThis.fetch,
+  edit: editImpl,
+  stdin,
+  linkScanDelay = 0,
+  motion,
+}: AppProps) {
   const renderer = useRenderer()
   const pointer = usePointer()
   const { width: W, height: H } = useTerminalDimensions()
@@ -111,8 +121,31 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   // the app context and the feature factories over it, rebuilt every render: handlers close over this render's size and
   // props, and read the store at call time
   const ctx = makeCtx({
-    ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer,
-    fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome,
+    ui,
+    set,
+    bump,
+    derive,
+    dims,
+    memo,
+    vault,
+    jobs,
+    sidebarSeen,
+    scrolls,
+    matchSeen,
+    W,
+    H,
+    renderer,
+    fetchImpl,
+    themeName,
+    linkScanDelay,
+    zenBack,
+    timers,
+    askMemo,
+    rerankMemo,
+    alive,
+    hlSeen,
+    left,
+    welcome,
   })
   const aiJobs = makeAIJobs(ctx)
   const links = makeLinks(ctx)
@@ -156,7 +189,13 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   })
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
-  const footer: FooterState = { query: !!s.query, preview: !s.source, disk: s.openPath !== STDIN, ai: !!s.ai, changes: !!s.ai && !!d.cv && d.cv.state !== "result" }
+  const footer: FooterState = {
+    query: !!s.query,
+    preview: !s.source,
+    disk: s.openPath !== STDIN,
+    ai: !!s.ai,
+    changes: !!s.ai && !!d.cv && d.cv.state !== "result",
+  }
   const ghostEl = ghostLine(ctx, d, { ctx: ctxNow, pinned: PINNED.includes(ctxNow), hints: (c) => footerHints(c, footer) })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo: popups.helpGo })

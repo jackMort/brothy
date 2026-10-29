@@ -91,11 +91,19 @@ describe("wikilinks in the preview", () => {
   })
   test("adjacent links never merge into one span", () => {
     const ls = linkSpans(render("[[a]][[b]]", 80, t))
-    expect(ls.map((s) => [s.text, s.link])).toEqual([["a", 0], ["b", 1]])
+    expect(ls.map((s) => [s.text, s.link])).toEqual([
+      ["a", 0],
+      ["b", 1],
+    ])
   })
   test("a link wrapped across rows keeps its id on both rows", () => {
     const r = render("xxxxxxxx [[n|one two three four]]", 14, t)
-    const rows = r.lines.map((l) => l.spans.filter((s) => s.link === 0).map((s) => s.text).join(""))
+    const rows = r.lines.map((l) =>
+      l.spans
+        .filter((s) => s.link === 0)
+        .map((s) => s.text)
+        .join(""),
+    )
     expect(rows.filter(Boolean).length).toBeGreaterThan(1)
     expect(rows.join(" ").replace(/\s+/g, " ").trim()).toBe("one two three four")
   })

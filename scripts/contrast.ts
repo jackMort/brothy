@@ -41,7 +41,11 @@ function oklab(hex: string): [number, number, number] {
   const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
   const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
   const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
-  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s]
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ]
 }
 
 /** the two accent roles that look most alike and their OKLab distance ×100 */
@@ -50,7 +54,8 @@ export function closestPair(t: Theme): { pair: [keyof Theme, keyof Theme]; dE: n
   let best = { pair: [roles[0], roles[1]] as [keyof Theme, keyof Theme], dE: Infinity }
   for (const [i, a] of roles.entries())
     for (const b of roles.slice(i + 1)) {
-      const x = oklab(t[a]), y = oklab(t[b])
+      const x = oklab(t[a]),
+        y = oklab(t[b])
       const dE = Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) * 100
       if (dE < best.dE) best = { pair: [a, b], dE }
     }
@@ -61,7 +66,10 @@ if (import.meta.main) {
   const names = process.argv.slice(2)
   for (const name of names.length ? names : ["brothy", "brothy-light"]) {
     const t = themeByName(name)
-    if (t.name !== name) { console.error(`contrast: unknown theme "${name}" (${themes.map((x) => x.name).join(", ")})`); process.exit(1) }
+    if (t.name !== name) {
+      console.error(`contrast: unknown theme "${name}" (${themes.map((x) => x.name).join(", ")})`)
+      process.exit(1)
+    }
     const s = surfaces(t)
     console.log(`\n${t.name}  page ${s.bg}  panel ${s.side}  code ${s.el}`)
     for (const [k, use, floor] of HOUSE) {

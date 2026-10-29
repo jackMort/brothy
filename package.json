@@ -19,14 +19,7 @@
   "engines": {
     "bun": ">=1.4"
   },
-  "files": [
-    "src",
-    "README.md",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "LICENSE",
-    "NOTICE"
-  ],
+  "files": ["src", "README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE", "NOTICE"],
   "bin": {
     "brothy": "src/cli.tsx"
   },
@@ -36,7 +29,10 @@
     "snapshot": "bun scripts/snapshot.tsx",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
-    "build": "bun build --compile src/cli.tsx --outfile brothy"
+    "build": "bun build --compile src/cli.tsx --outfile brothy",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "knip": "knip"
   },
   "dependencies": {
     "@opentui/core": "0.5.17",
@@ -45,8 +41,10 @@
     "react": "^19.3.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.4",
     "@types/react": "^19.3.0",
     "bun-types": "^1.4.3",
+    "knip": "6.43.0",
     "typescript": "^7.0.2"
   }
 }

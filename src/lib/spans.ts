@@ -30,6 +30,7 @@ export interface Span {
  * orthography), else mapped.
  */
 const UNSAFE =
+  // biome-ignore lint/suspicious/noMisleadingCharacterClass: the combining marks and ZWJ are matched on purpose (see above)
   /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]|(?<![\p{L}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\ufe0f])\u200d|(?<![\p{L}\p{M}])\u200d(?!\p{Extended_Pictographic})|(?<![\p{L}\p{M}])\u200c|\u200c(?![\p{L}\p{M}])/gu
 
 /** Replace the characters above with U+FFFD so text can never inject escape sequences, reorder or hide itself. */

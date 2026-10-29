@@ -103,7 +103,13 @@ if (piped) {
 try {
   const renderer = await createCliRenderer({ exitOnCtrlC: true, useMouse: true, targetFps: 30, ...(keys && { stdin: keys }) })
   createRoot(renderer).render(
-    <App root={root} initialFile={isFile ? abs : undefined} stdin={stdinText} themeName={args.theme ?? loadConfig().theme} transparent={args.transparent || undefined} />,
+    <App
+      root={root}
+      initialFile={isFile ? abs : undefined}
+      stdin={stdinText}
+      themeName={args.theme ?? loadConfig().theme}
+      transparent={args.transparent || undefined}
+    />,
   )
 } catch (e) {
   die(`failed to start the terminal UI: ${reason(e)}`)

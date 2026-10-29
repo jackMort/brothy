@@ -11,7 +11,6 @@ import { stripComments } from "../markdown/lexer"
 import { safeLine } from "../lib/spans"
 import { truncate } from "../lib/text"
 
-
 /** What is summarized and hashed: the body without front matter and `%%comments%%`. */
 export function noteText(src: string): string {
   return stripComments(parseFrontMatter(src).body).trim()
@@ -129,7 +128,8 @@ export function errMessage(body: unknown): string | undefined {
   return undefined
 }
 
-const firstChoice = (o: Record<string, unknown>): Record<string, unknown> | undefined => (Array.isArray(o.choices) && isRecord(o.choices[0]) ? o.choices[0] : undefined)
+const firstChoice = (o: Record<string, unknown>): Record<string, unknown> | undefined =>
+  Array.isArray(o.choices) && isRecord(o.choices[0]) ? o.choices[0] : undefined
 
 function chunkEvents(obj: unknown): AIEvent[] {
   if (!isRecord(obj)) return []

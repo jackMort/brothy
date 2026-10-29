@@ -116,7 +116,10 @@ function anchorRow(r: SwitchRow, doc: NoteDoc, view: Rendered, base: number): nu
   const from = (heads[k]?.line ?? -1) + 1
   if (r.kind !== "text") return from
   const end = heads[k + 1]?.line ?? view.lines.length
-  const needle = doc.text.slice(doc.starts[r.line] ?? 0, (doc.starts[r.line + 1] ?? doc.text.length + 1) - 1).trim().slice(0, NEEDLE_CHARS)
+  const needle = doc.text
+    .slice(doc.starts[r.line] ?? 0, (doc.starts[r.line + 1] ?? doc.text.length + 1) - 1)
+    .trim()
+    .slice(0, NEEDLE_CHARS)
   return findQuote(view.plain, from, end, needle) ?? from
 }
 
@@ -144,7 +147,10 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
   const kids = hs.map((x, i) => ({ ...x, i })).filter((x) => x.i !== title && x.depth <= 3)
   if (kids.length) {
     const pre = treePrefixes(kids.map((x) => x.depth))
-    const at = Math.max(0, kids.findIndex((x) => x.i === cur))
+    const at = Math.max(
+      0,
+      kids.findIndex((x) => x.i === cur),
+    )
     const from = clamp(at - Math.floor(PEEK_OUTLINE / 2), 0, kids.length - PEEK_OUTLINE)
     const to = Math.min(kids.length, from + PEEK_OUTLINE)
     if (from > 0) out.push([{ text: "   " }, muted("…")])
@@ -181,7 +187,9 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
     const blank = !l.fill && !view.plain[i]!.trim()
     if (blank && prevBlank) continue
     prevBlank = blank
-    const spans = l.fill ? [...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - width(rowText(l.spans)))), bg: l.fill }] : l.spans
+    const spans = l.fill
+      ? [...l.spans.map((s) => ({ ...s, bg: s.bg ?? l.fill })), { text: " ".repeat(Math.max(0, w - width(rowText(l.spans)))), bg: l.fill }]
+      : l.spans
     out.push(spans)
   }
   return out.slice(0, h)

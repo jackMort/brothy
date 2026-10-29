@@ -9,6 +9,7 @@ Requires [Bun](https://bun.sh) 1.4 or newer. macOS and Linux only.
 bun install
 bun test
 bun run typecheck
+bun run lint                # biome check . (`bun run format` fixes the formatting); `bun run knip` finds unused code
 bun run dev                 # run against ./examples (needs a real TTY)
 bun run snapshot examples --size 100x30 --keys "tab j s"   # headless frame dump
 bun run build               # compile a single binary ./brothy (delete it after checking)
@@ -19,7 +20,7 @@ bun run build               # compile a single binary ./brothy (delete it after 
 1. Open an issue before a large change.
 2. Fork, branch from `main`, keep PRs focused.
 3. Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat(app): …`, `fix(overlay): …`, `docs: …`).
-4. Keep `bun test` and `bun run typecheck` green; add a test for new behavior. CI runs both on Linux and macOS.
+4. Keep `bun test`, `bun run typecheck`, `bun run lint` and `bun run knip` green; add a test for new behavior. CI runs them on Linux and macOS.
 5. Check UI changes with the snapshot script. `CLAUDE.md` describes the architecture and gotchas.
 6. Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes.
 

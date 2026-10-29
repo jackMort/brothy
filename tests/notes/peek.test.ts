@@ -9,13 +9,27 @@ import { indexNote, type SwitchRow } from "../../src/notes/vault"
 
 const t = brothy
 const W = 40
-const SRC = "---\ntitle: x\n---\n# Simmering notes\n\nA ==slow read== beats a fast scroll.\n\n\n\nSecond line.\n\n## A tiny stock\n\nStock body.\n\n## Heat levels\n\nHeat body.\n\n## Later\n\nLater body.\n"
+const SRC =
+  "---\ntitle: x\n---\n# Simmering notes\n\nA ==slow read== beats a fast scroll.\n\n\n\nSecond line.\n\n## A tiny stock\n\nStock body.\n\n## Heat levels\n\nHeat body.\n\n## Later\n\nLater body.\n"
 const doc = indexNote(SRC, 2000, SRC.length)
 const view = render(parseFrontMatter(SRC).body, W, t)
 const base = { path: "/v/notes/simmering.md", name: "simmering", folder: "notes" }
 const note: SwitchRow = { kind: "note", ...base, hits: [] }
-const input = (row: SwitchRow | undefined, more: Partial<PeekInput> = {}): PeekInput => ({ row, rel: "notes/simmering.md", doc, view, words: 58, minutes: 1, summary: undefined, ...more })
-const text = (r: Span[]) => r.map((s) => s.text).join("").trimEnd()
+const input = (row: SwitchRow | undefined, more: Partial<PeekInput> = {}): PeekInput => ({
+  row,
+  rel: "notes/simmering.md",
+  doc,
+  view,
+  words: 58,
+  minutes: 1,
+  summary: undefined,
+  ...more,
+})
+const text = (r: Span[]) =>
+  r
+    .map((s) => s.text)
+    .join("")
+    .trimEnd()
 const texts = (rs: Span[][]) => rs.map(text)
 /** the body: the rows after the rule */
 const body = (rs: Span[][]) => texts(rs.slice(rs.findIndex((r) => text(r) === "─".repeat(W)) + 1))
@@ -57,7 +71,18 @@ test("peekLines: a text hit starts at its line", () => {
   const row: SwitchRow = { kind: "text", ...base, heading: 0, line: 9, context: "Second line.", hits: [] }
   const rs = peekLines(input(row), t, W, 30)
   expect(body(rs)[0]).toBe("Second line.")
-  const answer: SwitchRow = { kind: "answer", ...base, heading: 1, text: "A tiny stock", key: "a tiny stock", ord: 0, id: "x", query: "stock", hits: [], right: "" }
+  const answer: SwitchRow = {
+    kind: "answer",
+    ...base,
+    heading: 1,
+    text: "A tiny stock",
+    key: "a tiny stock",
+    ord: 0,
+    id: "x",
+    query: "stock",
+    hits: [],
+    right: "",
+  }
   expect(body(peekLines(input(answer), t, W, 30))[0]).toBe("Stock body.")
 })
 

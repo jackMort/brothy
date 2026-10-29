@@ -27,7 +27,8 @@ export default defineConfig({
     brothyThemes(),
     starlight({
       title: "brothy",
-      description: "A calm terminal Markdown reader: browse a folder of notes, jump anywhere with ctrl+p, read in zen. Obsidian-flavored, live reload, 42 themes.",
+      description:
+        "A calm terminal Markdown reader: browse a folder of notes, jump anywhere with ctrl+p, read in zen. Obsidian-flavored, live reload, 42 themes.",
       logo: { dark: "./src/assets/brothy-mark-dark.svg", light: "./src/assets/brothy-mark-light.svg" },
       favicon: "/favicon.svg",
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/jackMort/brothy" }],
@@ -54,16 +55,31 @@ export default defineConfig({
         // code blocks as brothy draws them: a flat fill, no frame, the language at the top right (brothy.css)
         defaultProps: { frame: "none" },
         styleOverrides: {
-          codeFontFamily: "var(--sl-font-mono)", uiFontFamily: "var(--sl-font-mono)", codeFontSize: "0.9em", codeLineHeight: "1.6",
-          borderRadius: "0", borderWidth: "0", codeBackground: "var(--b-element)", frames: { frameBoxShadowCssValue: "none" },
+          codeFontFamily: "var(--sl-font-mono)",
+          uiFontFamily: "var(--sl-font-mono)",
+          codeFontSize: "0.9em",
+          codeLineHeight: "1.6",
+          borderRadius: "0",
+          borderWidth: "0",
+          codeBackground: "var(--b-element)",
+          frames: { frameBoxShadowCssValue: "none" },
         },
       },
       head: [
         { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" } },
         { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" } },
         // IBM Plex Mono for everything; the few symbols it lacks come from a Fira Code subset of just those glyphs
-        { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" } },
-        { tag: "link", attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&text=%E2%96%B8%E2%96%BE%E2%97%8F%E2%94%81%E2%94%80%E2%94%82%E2%96%8C%E2%94%83%E2%80%BA%E2%8F%8E%C2%B7%E2%80%A2%E2%97%A6%E2%86%97%E2%89%A1%E2%97%90%E2%98%85%E2%87%84%E2%86%AA%E2%86%BB%E2%8C%AB%E2%90%A3%E2%97%A1&display=swap" } },
+        {
+          tag: "link",
+          attrs: { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&text=%E2%96%B8%E2%96%BE%E2%97%8F%E2%94%81%E2%94%80%E2%94%82%E2%96%8C%E2%94%83%E2%80%BA%E2%8F%8E%C2%B7%E2%80%A2%E2%97%A6%E2%86%97%E2%89%A1%E2%97%90%E2%98%85%E2%87%84%E2%86%AA%E2%86%BB%E2%8C%AB%E2%90%A3%E2%97%A1&display=swap",
+          },
+        },
       ],
       sidebar: [
         { label: "Getting started", items: ["getting-started/install", "getting-started/quick-start", "getting-started/the-screen"] },
@@ -73,11 +89,7 @@ export default defineConfig({
         { label: "Config", items: ["config/config-json", "config/zen-settings", "config/recent-projects"] },
         {
           label: "AI",
-          items: [
-            "ai/setup",
-            { label: "Features", items: ["ai/tldr", "ai/zen-gloss", "ai/what-changed", "ai/ask-your-vault"] },
-            "ai/what-is-sent",
-          ],
+          items: ["ai/setup", { label: "Features", items: ["ai/tldr", "ai/zen-gloss", "ai/what-changed", "ai/ask-your-vault"] }, "ai/what-is-sent"],
         },
         "faq",
         "changelog",

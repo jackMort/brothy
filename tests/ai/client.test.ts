@@ -1,5 +1,26 @@
 import { describe, expect, test } from "bun:test"
-import { MAX_SUMMARY, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanReply, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, shortModel, sseParser, stripThink, summarize, summaryRequest, tokens, type AIEvent } from "../../src/ai/client"
+import {
+  MAX_SUMMARY,
+  SYSTEM_PROMPT,
+  aiError,
+  buildRequest,
+  chat,
+  cleanReply,
+  cleanSummary,
+  clip,
+  errMessage,
+  extractJSON,
+  fmtTokens,
+  jsonReply,
+  noteText,
+  shortModel,
+  sseParser,
+  stripThink,
+  summarize,
+  summaryRequest,
+  tokens,
+  type AIEvent,
+} from "../../src/ai/client"
 import { PRESETS, PROMPTS, PROMPT_V, normalizeAI, parseGlossStyle, resolveAI, type AITarget } from "../../src/ai/config"
 import { IDLE_MS, TOTAL_MS } from "../../src/ai/client"
 import * as aiConfig from "../../src/ai/config"
@@ -11,7 +32,10 @@ const ok = (r: ReturnType<typeof resolveAI>) => {
 
 describe("normalizeAI", () => {
   test("keeps a valid block", () => {
-    expect(normalizeAI({ provider: "openrouter", model: "anthropic/claude-haiku-5-5" })).toEqual({ provider: "openrouter", model: "anthropic/claude-haiku-5-5" })
+    expect(normalizeAI({ provider: "openrouter", model: "anthropic/claude-haiku-5-5" })).toEqual({
+      provider: "openrouter",
+      model: "anthropic/claude-haiku-5-5",
+    })
   })
   test("drops the block without provider, model, or a known provider", () => {
     expect(normalizeAI({ model: "m" })).toBeUndefined()
@@ -27,9 +51,17 @@ describe("normalizeAI", () => {
     expect(normalizeAI({ provider: "custom", model: "m", baseURL: "http://host:8080/v1" })?.baseURL).toBe("http://host:8080/v1")
   })
   test("a bad optional field is dropped alone", () => {
-    expect(normalizeAI({ provider: "openai", model: "m", baseURL: "nope", keyEnv: "1BAD", maxChars: 999, headers: [] })).toEqual({ provider: "openai", model: "m" })
+    expect(normalizeAI({ provider: "openai", model: "m", baseURL: "nope", keyEnv: "1BAD", maxChars: 999, headers: [] })).toEqual({
+      provider: "openai",
+      model: "m",
+    })
     expect(normalizeAI({ provider: "openai", model: "m", maxChars: 1500.5 })?.maxChars).toBeUndefined()
-    expect(normalizeAI({ provider: "openai", model: "m", maxChars: 1000, keyEnv: "MY_KEY" })).toEqual({ provider: "openai", model: "m", maxChars: 1000, keyEnv: "MY_KEY" })
+    expect(normalizeAI({ provider: "openai", model: "m", maxChars: 1000, keyEnv: "MY_KEY" })).toEqual({
+      provider: "openai",
+      model: "m",
+      maxChars: 1000,
+      keyEnv: "MY_KEY",
+    })
   })
   test("headers keep only valid string pairs and never Authorization", () => {
     const h = normalizeAI({
@@ -44,7 +76,20 @@ describe("normalizeAI", () => {
       expect(normalizeAI({ provider: "openai", model: "m", gloss: g })?.gloss as string).toBe(g)
       expect(parseGlossStyle(g) as string).toBe(g)
     }
-    for (const g of ["Explain", "translate:", "translate:p", "translate:polish", "translate:pl_PL", "translate:pl-", "translate:en-x", "translate:pl\n", "summarize", 3, null, ["explain"]]) {
+    for (const g of [
+      "Explain",
+      "translate:",
+      "translate:p",
+      "translate:polish",
+      "translate:pl_PL",
+      "translate:pl-",
+      "translate:en-x",
+      "translate:pl\n",
+      "summarize",
+      3,
+      null,
+      ["explain"],
+    ]) {
       expect(normalizeAI({ provider: "openai", model: "m", gloss: g })).toEqual({ provider: "openai", model: "m" })
       expect(parseGlossStyle(g)).toBeUndefined()
     }
@@ -69,7 +114,9 @@ describe("resolveAI", () => {
     expect("error" in resolveAI({ ...cfg, headers: undefined }, {})).toBe(false)
   })
   test("overrides: baseURL (trailing slash), keyEnv, maxChars, headers", () => {
-    const t = ok(resolveAI({ provider: "openai", model: "m", baseURL: "https://proxy.example/v1/", keyEnv: "K", maxChars: 2000, headers: { "X-A": "1" } }, { K: "k" }))
+    const t = ok(
+      resolveAI({ provider: "openai", model: "m", baseURL: "https://proxy.example/v1/", keyEnv: "K", maxChars: 2000, headers: { "X-A": "1" } }, { K: "k" }),
+    )
     expect(t.url).toBe("https://proxy.example/v1/chat/completions")
     expect(t.headers).toEqual({ "Content-Type": "application/json", "X-A": "1", Authorization: "Bearer k" })
     expect(t.maxChars).toBe(2000)
@@ -103,7 +150,13 @@ describe("resolveAI", () => {
 })
 
 describe("request", () => {
-  const T = { url: "http://localhost:11434/v1/chat/completions", host: "localhost:11434", headers: { "Content-Type": "application/json" }, model: "llama3.2", maxChars: 1000 }
+  const T = {
+    url: "http://localhost:11434/v1/chat/completions",
+    host: "localhost:11434",
+    headers: { "Content-Type": "application/json" },
+    model: "llama3.2",
+    maxChars: 1000,
+  }
   test("noteText drops front matter and comments", () => {
     expect(noteText("---\ntitle: x\n---\n# Hi\n\nkeep %%secret%% this\n%%\nhidden\n%%\n")).toBe("# Hi\n\nkeep  this")
     expect(noteText("---\ntitle: x\n---\n\n%%only%%\n")).toBe("")
@@ -117,7 +170,11 @@ describe("request", () => {
     expect(buildRequest(T, "s", "u").init.redirect).toBe("manual")
     let hits = 0
     const other = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => (hits++, new Response("{}")) })
-    const first = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response(null, { status: 307, headers: { location: `http://127.0.0.1:${other.port}/x` } }) })
+    const first = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => new Response(null, { status: 307, headers: { location: `http://127.0.0.1:${other.port}/x` } }),
+    })
     try {
       const t = { ...T, url: `http://127.0.0.1:${first.port}/v1/chat/completions` }
       expect(await chat(t, { system: "s", user: "u", maxOut: 10, clean: (r) => r }, {})).toEqual({ ok: false, failure: { kind: "redirect" } })
@@ -180,7 +237,9 @@ describe("extractJSON", () => {
     ['<think>[1]</think>```json\n{"answers": []}\n```', { answers: [] }],
     ['  [ {"id": "c3"} ] trailing', [{ id: "c3" }]],
   ] as const)("%p", (raw, want) => expect(extractJSON(raw)).toEqual(want))
-  test.each(["", "no json here", '{"a": ', '<think>{"a": 1}', "{broken}", "] backwards ["])("garbage %p → undefined", (raw) => expect(extractJSON(raw)).toBeUndefined())
+  test.each(["", "no json here", '{"a": ', '<think>{"a": 1}', "{broken}", "] backwards ["])("garbage %p → undefined", (raw) =>
+    expect(extractJSON(raw)).toBeUndefined(),
+  )
 })
 
 describe("tokens", () => {
@@ -203,7 +262,13 @@ describe("tokens", () => {
 const enc = new TextEncoder()
 const delta = (content: string) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`
 const texts = (evs: AIEvent[]) => evs.flatMap((e) => (e.kind === "text" ? [e.text] : [])).join("")
-const T = { url: "http://localhost:11434/v1/chat/completions", host: "localhost:11434", headers: { "Content-Type": "application/json" }, model: "m", maxChars: 8000 }
+const T = {
+  url: "http://localhost:11434/v1/chat/completions",
+  host: "localhost:11434",
+  headers: { "Content-Type": "application/json" },
+  model: "m",
+  maxChars: 8000,
+}
 const reply = (body: BodyInit | null, init: ResponseInit = { headers: { "content-type": "text/event-stream" } }) =>
   (async () => new Response(body, init)) as unknown as typeof fetch
 const stream = (chunks: (string | Uint8Array)[], close = true) =>
@@ -239,7 +304,9 @@ describe("sseParser", () => {
   })
   test("mid-stream error chunk and finish reasons", () => {
     const p = sseParser()
-    expect(p.push(`data: {"error":{"message":"Provider overloaded"},"choices":[{"delta":{},"finish_reason":"error"}]}\n\n`)).toEqual([{ kind: "error", message: "Provider overloaded" }])
+    expect(p.push(`data: {"error":{"message":"Provider overloaded"},"choices":[{"delta":{},"finish_reason":"error"}]}\n\n`)).toEqual([
+      { kind: "error", message: "Provider overloaded" },
+    ])
     expect(p.push(`data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n`)).toEqual([{ kind: "finish", reason: "length" }])
   })
   test("reasoning deltas and junk yield no text", () => {
@@ -297,7 +364,12 @@ describe("aiError", () => {
   })
   test("Gemini bad key: 400 with an array body", () => {
     const body = [{ error: { code: 400, message: "Please pass a valid API key", status: "INVALID_ARGUMENT" } }]
-    expect(aiError({ kind: "status", status: 400, message: errMessage(body) }, { host: "generativelanguage.googleapis.com", keyEnv: "GEMINI_API_KEY", key: "AIza-secret" })).toBe("AI: Please pass a valid API key")
+    expect(
+      aiError(
+        { kind: "status", status: 400, message: errMessage(body) },
+        { host: "generativelanguage.googleapis.com", keyEnv: "GEMINI_API_KEY", key: "AIza-secret" },
+      ),
+    ).toBe("AI: Please pass a valid API key")
   })
   test("a background note is named", () => {
     expect(aiError({ kind: "status", status: 429 }, { ...C, note: "groceries" })).toBe("AI · groceries: rate limited")
@@ -320,10 +392,12 @@ describe("aiError", () => {
 })
 
 describe("chat · transport (through summarize)", () => {
-
   test("streams deltas and returns the cleaned text", async () => {
     const seen: string[] = []
-    const r = await summarize(T, "note", { fetch: reply(stream([delta("TL;DR: "), delta("**Short** note."), "data: [DONE]\n\n"])), onDelta: (raw) => seen.push(raw) })
+    const r = await summarize(T, "note", {
+      fetch: reply(stream([delta("TL;DR: "), delta("**Short** note."), "data: [DONE]\n\n"])),
+      onDelta: (raw) => seen.push(raw),
+    })
     expect(r).toEqual({ ok: true, text: "Short note." })
     expect(seen).toEqual(["TL;DR: ", "TL;DR: **Short** note."])
   })
@@ -334,13 +408,17 @@ describe("chat · transport (through summarize)", () => {
   })
   test("sends the built request with the signal", async () => {
     let got: RequestInit | undefined
-    const f = (async (_u: unknown, init: RequestInit) => ((got = init), new Response(stream(["data: [DONE]\n\n"]), { headers: { "content-type": "text/event-stream" } }))) as unknown as typeof fetch
+    const f = (async (_u: unknown, init: RequestInit) => (
+      (got = init), new Response(stream(["data: [DONE]\n\n"]), { headers: { "content-type": "text/event-stream" } })
+    )) as unknown as typeof fetch
     await summarize(T, "note", { fetch: f })
     expect(JSON.parse(String(got!.body)).messages[1].content).toBe("note")
     expect(got!.signal).toBeInstanceOf(AbortSignal)
   })
   test("a JSON 200 body (stream ignored)", async () => {
-    const r = await summarize(T, "n", { fetch: reply(JSON.stringify({ choices: [{ message: { content: "Whole." } }] }), { headers: { "content-type": "application/json" } }) })
+    const r = await summarize(T, "n", {
+      fetch: reply(JSON.stringify({ choices: [{ message: { content: "Whole." } }] }), { headers: { "content-type": "application/json" } }),
+    })
     expect(r).toEqual({ ok: true, text: "Whole." })
   })
   test("unexpected content type", async () => {
@@ -348,13 +426,28 @@ describe("chat · transport (through summarize)", () => {
     expect(r).toEqual({ ok: false, failure: { kind: "unexpected" } })
   })
   test("error statuses carry the server message, HTML bodies don't", async () => {
-    expect(await summarize(T, "n", { fetch: reply(JSON.stringify([{ error: { message: "API key not valid" } }]), { status: 400 }) })).toEqual({ ok: false, failure: { kind: "status", status: 400, message: "API key not valid" } })
-    expect(await summarize(T, "n", { fetch: reply("<html>bad gateway</html>", { status: 502 }) })).toEqual({ ok: false, failure: { kind: "status", status: 502, message: undefined } })
+    expect(await summarize(T, "n", { fetch: reply(JSON.stringify([{ error: { message: "API key not valid" } }]), { status: 400 }) })).toEqual({
+      ok: false,
+      failure: { kind: "status", status: 400, message: "API key not valid" },
+    })
+    expect(await summarize(T, "n", { fetch: reply("<html>bad gateway</html>", { status: 502 }) })).toEqual({
+      ok: false,
+      failure: { kind: "status", status: 502, message: undefined },
+    })
   })
   test("mid-stream error, finish length, empty, too long", async () => {
-    expect(await summarize(T, "n", { fetch: reply(stream([delta("par"), `data: {"error":{"message":"boom"}}\n\n`])) })).toEqual({ ok: false, failure: { kind: "message", message: "boom" } })
-    expect(await summarize(T, "n", { fetch: reply(stream([delta("par"), `data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n`])) })).toEqual({ ok: false, failure: { kind: "length" } })
-    expect(await summarize(T, "n", { fetch: reply(stream([delta("<think>only thoughts</think>"), "data: [DONE]\n\n"])) })).toEqual({ ok: false, failure: { kind: "empty" } })
+    expect(await summarize(T, "n", { fetch: reply(stream([delta("par"), `data: {"error":{"message":"boom"}}\n\n`])) })).toEqual({
+      ok: false,
+      failure: { kind: "message", message: "boom" },
+    })
+    expect(await summarize(T, "n", { fetch: reply(stream([delta("par"), `data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n`])) })).toEqual({
+      ok: false,
+      failure: { kind: "length" },
+    })
+    expect(await summarize(T, "n", { fetch: reply(stream([delta("<think>only thoughts</think>"), "data: [DONE]\n\n"])) })).toEqual({
+      ok: false,
+      failure: { kind: "empty" },
+    })
     expect(await summarize(T, "n", { fetch: reply(stream([delta("x ".repeat(MAX_SUMMARY))], false)) })).toEqual({ ok: false, failure: { kind: "tooLong" } })
   })
   test("network failure", async () => {
@@ -432,7 +525,9 @@ describe("chat", () => {
   const sse = { headers: { "content-type": "text/event-stream" } }
   const capture = () => {
     const sent: { body?: { messages: { role: string; content: string }[] } } = {}
-    const f = (async (_u: unknown, init: RequestInit) => ((sent.body = JSON.parse(String(init.body))), new Response(stream([delta(' {"a": 1} '), "data: [DONE]\n\n"]), sse))) as unknown as typeof fetch
+    const f = (async (_u: unknown, init: RequestInit) => (
+      (sent.body = JSON.parse(String(init.body))), new Response(stream([delta(' {"a": 1} '), "data: [DONE]\n\n"]), sse)
+    )) as unknown as typeof fetch
     return { sent, f }
   }
 
@@ -448,7 +543,11 @@ describe("chat", () => {
     const think = "<think>" + "x".repeat(300) + "</think>"
     const body = () => [delta(think.slice(0, 150)), delta(think.slice(150)), delta('{"queries":["a"]}'), "data: [DONE]\n\n"]
     const clean = (r: string) => stripThink(r).trim()
-    expect(await chat(T, { ...REQ, maxOut: 40, clean }, { fetch: reply(stream(body())) })).toEqual({ ok: true, text: '{"queries":["a"]}', raw: think + '{"queries":["a"]}' })
+    expect(await chat(T, { ...REQ, maxOut: 40, clean }, { fetch: reply(stream(body())) })).toEqual({
+      ok: true,
+      text: '{"queries":["a"]}',
+      raw: think + '{"queries":["a"]}',
+    })
     // a plain trim fails on the same reply
     expect(await chat(T, { ...REQ, maxOut: 40 }, { fetch: reply(stream(body())) })).toEqual({ ok: false, failure: { kind: "tooLong" } })
   })
@@ -478,13 +577,22 @@ describe("chat", () => {
   test("maxOut caps the cleaned text, per call, mid-stream", async () => {
     // the stream never closes: only the cap can end it
     expect(await chat(T, { ...REQ, maxOut: 5 }, { fetch: reply(stream([delta("123456")], false)) })).toEqual({ ok: false, failure: { kind: "tooLong" } })
-    expect(await chat(T, { ...REQ, maxOut: 5, clean: (r) => r.slice(0, 3) }, { fetch: reply(stream([delta("123456"), "data: [DONE]\n\n"])) })).toEqual({ ok: true, text: "123", raw: "123456" })
+    expect(await chat(T, { ...REQ, maxOut: 5, clean: (r) => r.slice(0, 3) }, { fetch: reply(stream([delta("123456"), "data: [DONE]\n\n"])) })).toEqual({
+      ok: true,
+      text: "123",
+      raw: "123456",
+    })
   })
   test("empty is judged on the cleaned text", async () => {
-    expect(await chat(T, { ...REQ, clean: () => "" }, { fetch: reply(stream([delta("words"), "data: [DONE]\n\n"])) })).toEqual({ ok: false, failure: { kind: "empty" } })
+    expect(await chat(T, { ...REQ, clean: () => "" }, { fetch: reply(stream([delta("words"), "data: [DONE]\n\n"])) })).toEqual({
+      ok: false,
+      failure: { kind: "empty" },
+    })
   })
   test("a JSON 200 body returns raw too", async () => {
-    const r = await chat(T, REQ, { fetch: reply(JSON.stringify({ choices: [{ message: { content: " [1] " } }] }), { headers: { "content-type": "application/json" } }) })
+    const r = await chat(T, REQ, {
+      fetch: reply(JSON.stringify({ choices: [{ message: { content: " [1] " } }] }), { headers: { "content-type": "application/json" } }),
+    })
     expect(r).toEqual({ ok: true, text: "[1]", raw: " [1] " })
   })
   test("onDelta gets the raw accumulated text", async () => {

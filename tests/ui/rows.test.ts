@@ -17,7 +17,6 @@ test("scrim is a dark wash over dark themes and a light wash over light themes",
   }
 })
 
-
 test("fitHits: the end is cut first; a late match gets a window; wide characters count double", () => {
   expect(fitHits("short", [0], 10)).toEqual({ text: "short", hits: [0] })
   expect(fitHits("abcdefghij", [1, 2], 6)).toEqual({ text: "abcde…", hits: [1, 2] })
@@ -29,7 +28,6 @@ test("fitHits: the end is cut first; a late match gets a window; wide characters
   expect(cjk.hits.map((h) => [...cjk.text][h]).join("")).toBe("検索")
   expect(Bun.stringWidth(cjk.text)).toBeLessThanOrEqual(9)
 })
-
 
 test("modeSwitch: the active side is a primary chip on backgroundElement, the other muted", () => {
   const segs = modeSwitch(t, "light")
@@ -61,7 +59,11 @@ test("padTo fills to the width by display width and never cuts", () => {
 })
 
 test("switchItem: a header is a muted bold title with its count, a note row puts the folder on the right", () => {
-  expect(switchItem({ kind: "header", title: "Notes", count: "2" }, t)).toEqual({ header: true, spans: [{ text: "Notes", fg: t.textMuted, attr: A.BOLD }], right: "2" })
+  expect(switchItem({ kind: "header", title: "Notes", count: "2" }, t)).toEqual({
+    header: true,
+    spans: [{ text: "Notes", fg: t.textMuted, attr: A.BOLD }],
+    right: "2",
+  })
   const note = switchItem({ kind: "note", path: "/v/a/b.md", name: "b", folder: "a", hits: [0] }, t, 40)
   expect(note.right).toBe("a")
   expect(note.header).toBeUndefined()
@@ -82,7 +84,19 @@ test("switchItem: heading and text rows lead with the note name, an alias shows 
 
 test("switchItem: a narrow row keeps the match in view and the note name within a quarter", () => {
   const w = 30
-  const it = switchItem({ kind: "heading", path: "/v/n.md", name: "a-very-long-note-name-indeed", folder: "", heading: 0, text: "x".repeat(50) + "MATCH", hits: [50, 51, 52, 53, 54] }, t, w)
+  const it = switchItem(
+    {
+      kind: "heading",
+      path: "/v/n.md",
+      name: "a-very-long-note-name-indeed",
+      folder: "",
+      heading: 0,
+      text: "x".repeat(50) + "MATCH",
+      hits: [50, 51, 52, 53, 54],
+    },
+    t,
+    w,
+  )
   const line = it.spans.map((s) => s.text).join("")
   expect(Bun.stringWidth(line)).toBeLessThanOrEqual(w)
   expect(line).toContain("MATCH")
@@ -115,5 +129,14 @@ test("artSpans: neighbouring cells with the same look share a span; ink 0 and 3 
     expect(spans.map((s) => s.text).join("")).toBe(row.map((c) => c.ch).join(""))
     expect(spans.length).toBeLessThan(row.length)
   }
-  expect(artSpans(t, [{ ch: "x", role: "none" }, { ch: "y", role: "none" }], 3)).toEqual([{ text: "xy", fg: undefined, bg: undefined }])
+  expect(
+    artSpans(
+      t,
+      [
+        { ch: "x", role: "none" },
+        { ch: "y", role: "none" },
+      ],
+      3,
+    ),
+  ).toEqual([{ text: "xy", fg: undefined, bg: undefined }])
 })

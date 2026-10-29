@@ -10,8 +10,12 @@ const { cfgDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 const TWO = "# A\n\n## One\n\nfirst\n\n## Two\n\nsecond\n"
 const EDITED = "# A\n\n## One\n\nfirst, edited\n\n## Two\n\nsecond\n\n## Three\n\nthird\n"
 
-const LONG = "# A\n\n## One\n\n" + Array.from({ length: 60 }, (_, i) => `row ${i}`).join("\n\n") + "\n\n## Two\n\nsecond\n\n## Three\n\nthird\n\n" +
-  Array.from({ length: 30 }, (_, i) => `tail ${i}`).join("\n\n") + "\n" // room below Three, so its heading can reach the top
+const LONG =
+  "# A\n\n## One\n\n" +
+  Array.from({ length: 60 }, (_, i) => `row ${i}`).join("\n\n") +
+  "\n\n## Two\n\nsecond\n\n## Three\n\nthird\n\n" +
+  Array.from({ length: 30 }, (_, i) => `tail ${i}`).join("\n\n") +
+  "\n" // room below Three, so its heading can reach the top
 
 test("a live reload lists the changed sections in Info and counts them in the toast", async () => {
   const d = tmp({ "a.md": TWO })
@@ -127,14 +131,20 @@ test("an explanation goes once a reload is too large to compare", async () => {
     Array.from({ length: 5 }, (_, k) => `## S${k}\n\n` + Array.from({ length: 1000 }, (_, i) => v(k, i)).join("\n") + "\n").join("\n")
   const d = tmp({ "a.md": big((k, i) => `a${k}-${i}`) })
   const { s, ai } = await mountAI(d, "a.md", { size: W120 })
-  writeFileSync(join(d, "a.md"), big((k, i) => (k === 0 && i === 5 ? "edited" : `a${k}-${i}`)))
+  writeFileSync(
+    join(d, "a.md"),
+    big((k, i) => (k === 0 && i === 5 ? "edited" : `a${k}-${i}`)),
+  )
   await waitFrame(s, (f) => f.includes("D explains"), 4000)
   await keys(s, "D")
   await waitFor(s, () => ai.calls.length === 1)
   ai.send(0, "Rewords one line.\n§1: one line edited\n")
   ai.end(0)
   await waitFrame(s, (f) => f.includes("Changed · llama3.2") && f.includes("Rewords one line."))
-  writeFileSync(join(d, "a.md"), big((k, i) => `b${k}-${i}`))
+  writeFileSync(
+    join(d, "a.md"),
+    big((k, i) => `b${k}-${i}`),
+  )
   await waitFrame(s, (f) => f.includes("reloaded · too large to compare"), 4000)
   const f = await keys(s)
   expect(f).not.toContain("Rewords one line.")
@@ -221,7 +231,7 @@ test("help lists D in the AI group; the Info footer shows D changes only with ch
   const s = await mount(d, "a.md", { size: { width: 120, height: 40 } })
   const help = (await openHelp(s)).split("\n")
   const at = help.findIndex((l) => l.includes("explain what changed on disk"))
-  const ai = help.findIndex((l) => /  AI  /.test(l))
+  const ai = help.findIndex((l) => / {2}AI {2}/.test(l))
   expect(ai).toBeGreaterThan(help.findIndex((l) => l.includes("Document")))
   expect(at).toBeGreaterThan(ai)
   expect(help[at]!.indexOf("D ")).toBe(help[ai]!.indexOf("AI"))
@@ -229,7 +239,8 @@ test("help lists D in the AI group; the Info footer shows D changes only with ch
   expect((await keys(s, "3")).split("\n")[38]).not.toContain("D changes")
   writeFileSync(join(d, "a.md"), EDITED)
   await waitFrame(s, (f) => f.includes("D explains"), 4000)
-  await withClock(new Date(Date.now() + 10_000), async () => { // past the toast, so the hints get the whole line
+  await withClock(new Date(Date.now() + 10_000), async () => {
+    // past the toast, so the hints get the whole line
     expect((await keys(s, "tab", "3")).split("\n")[38]).toContain("D changes")
   })
 })

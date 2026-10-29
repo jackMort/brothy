@@ -61,7 +61,7 @@ test("? ? at 120 columns: five chip groups in two columns, Global and Panel left
   expect(after[top]).not.toContain("1 2 3")
   expect(after[top - 1]).toContain("1 2 3")
   expect(after.join("\n")).toContain("Keybindings")
-  expect(after.some((r) => /  AI  /.test(r))).toBe(true)
+  expect(after.some((r) => / {2}AI {2}/.test(r))).toBe(true)
   expect(after.join("\n")).toContain("ask: a ? query finds the section")
   const end = (await keys(s, "G")).split("\n")
   const panel = end.findIndex((r) => r.includes(" Panel "))
@@ -81,7 +81,8 @@ test("? ? below 100 columns: one 70-column sheet with the five chips in order", 
 
 test("? shows the hints first; a second ? opens the Keybindings popup", async () => {
   const s = await mount(tmp({ "a.md": "# a" }), "a.md")
-  await withClock(PAST_HINTS(), async () => { // let the startup hints go
+  await withClock(PAST_HINTS(), async () => {
+    // let the startup hints go
     const f = await keys(s, "?")
     expect(f).not.toContain("Keybindings")
     expect(f.split("\n")[HINT_ROW]).toContain("? keys")
@@ -217,7 +218,11 @@ test("zen: 󰘗 rides the top line and fades with it", async () => {
 
 test("popups leave the footer hint row and progress line visible", async () => {
   const root = tmp({ "a.md": "# Alpha\n\nbody\n", "b.md": "# Beta\n" })
-  for (const [width, height] of [[100, 30], [100, 20], [60, 14]] as const) {
+  for (const [width, height] of [
+    [100, 30],
+    [100, 20],
+    [60, 14],
+  ] as const) {
     for (const k of [["t"], ["?"], ["C-p"], ["o"], ["/"]]) {
       const s = await mount(root, "a.md", { size: { width, height } })
       const f = await keys(s, ...k)
@@ -246,9 +251,18 @@ test("find rows show a match near the line end", async () => {
 })
 
 test("too-small screen keeps the requirement and never wraps mid-word", async () => {
-  for (const [width, height] of [[10, 3], [20, 5], [40, 10]] as const) {
+  for (const [width, height] of [
+    [10, 3],
+    [20, 5],
+    [40, 10],
+  ] as const) {
     const s = await mount(tmp({ "a.md": "# Alpha\n" }), "a.md", { size: { width, height } })
-    const text = s.captureCharFrame().split("\n").map((r) => r.trim()).filter(Boolean).join(" ")
+    const text = s
+      .captureCharFrame()
+      .split("\n")
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .join(" ")
     expect(text).toContain("60×14")
     expect(text).not.toMatch(/\bneed\b.*\bne\b/)
     s.renderer.destroy()

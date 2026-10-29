@@ -17,11 +17,17 @@ test("helpLayout: one column below 100 columns, 70 wide, groups in their order w
 })
 
 test("helpLayout: two columns from 100 columns: Global and Panel left, Document, AI and Zen right", () => {
-  expect(HELP_COLUMNS).toEqual([["Global", "Panel"], ["Document", "AI", "Zen"]])
+  expect(HELP_COLUMNS).toEqual([
+    ["Global", "Panel"],
+    ["Document", "AI", "Zen"],
+  ])
   const l = helpLayout(GROUPS, 120, 34)
   expect(l.width).toBe(112)
   expect(l.colW).toBe(49)
-  expect(l.cols.map(chips)).toEqual([["Global", "Panel"], ["Document", "AI", "Zen"]])
+  expect(l.cols.map(chips)).toEqual([
+    ["Global", "Panel"],
+    ["Document", "AI", "Zen"],
+  ])
   expect(l.rows).toBe(21 + 1 + 16)
   expect(l.cols[1]!.length).toBe(9 + 1 + 4 + 1 + 9)
   const narrow = helpLayout(GROUPS, 100, 30)
@@ -34,7 +40,10 @@ test("helpLayout: two columns from 100 columns: Global and Panel left, Document,
 
 test("helpLayout: a group no column names goes to the shorter one; an empty group is left out", () => {
   const l = helpLayout([...GROUPS, g("Extra", 2), g("Empty", 0)], 120, 34)
-  expect(l.cols.map(chips)).toEqual([["Global", "Panel"], ["Document", "AI", "Zen", "Extra"]])
+  expect(l.cols.map(chips)).toEqual([
+    ["Global", "Panel"],
+    ["Document", "AI", "Zen", "Extra"],
+  ])
   expect(chips(helpLayout([g("Global", 1), g("Empty", 0)], 99, 34).cols[0]!)).toEqual(["Global"])
 })
 

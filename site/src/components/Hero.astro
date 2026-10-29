@@ -13,7 +13,10 @@ const start = await Promise.all(
   START.map(async (id) => {
     const e = await getEntry("docs", id)
     if (!e) throw new Error(`Hero: no docs page ${id}`)
-    const words = (e.body ?? "").replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length
+    const words = (e.body ?? "")
+      .replace(/```[\s\S]*?```/g, " ")
+      .split(/\s+/)
+      .filter(Boolean).length
     return { id, title: e.data.title, href: `${base}/${id}/`, min: Math.max(1, Math.round(words / 220)) }
   }),
 )

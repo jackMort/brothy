@@ -67,7 +67,10 @@ describe("%% comments", () => {
   })
   test("a heading inside a comment is in neither outline", () => {
     const [p, s] = outlines("# A\n\n%%\n## Hidden\n%%\n\n## B\n")
-    expect(p).toEqual([[1, "A"], [2, "B"]])
+    expect(p).toEqual([
+      [1, "A"],
+      [2, "B"],
+    ])
     expect(s).toEqual(p)
   })
   test("%% inside code spans and fences stays", () => {
@@ -131,12 +134,35 @@ describe("callouts", () => {
     expect(l.spans.find((s) => s.text.includes("Mind"))!.fg).toBe(t.warning)
   })
   const cases: [string, string][] = [
-    ["note", "note"], ["summary", "abstract"], ["tldr", "abstract"], ["abstract", "abstract"], ["info", "info"],
-    ["todo", "todo"], ["tip", "tip"], ["hint", "tip"], ["important", "tip"], ["success", "success"],
-    ["check", "success"], ["done", "success"], ["question", "question"], ["help", "question"], ["faq", "question"],
-    ["warning", "warning"], ["caution", "warning"], ["attention", "warning"], ["failure", "failure"], ["fail", "failure"],
-    ["missing", "failure"], ["danger", "danger"], ["error", "danger"], ["bug", "bug"], ["example", "example"],
-    ["quote", "quote"], ["cite", "quote"], ["Warning", "warning"], ["whatever", "note"],
+    ["note", "note"],
+    ["summary", "abstract"],
+    ["tldr", "abstract"],
+    ["abstract", "abstract"],
+    ["info", "info"],
+    ["todo", "todo"],
+    ["tip", "tip"],
+    ["hint", "tip"],
+    ["important", "tip"],
+    ["success", "success"],
+    ["check", "success"],
+    ["done", "success"],
+    ["question", "question"],
+    ["help", "question"],
+    ["faq", "question"],
+    ["warning", "warning"],
+    ["caution", "warning"],
+    ["attention", "warning"],
+    ["failure", "failure"],
+    ["fail", "failure"],
+    ["missing", "failure"],
+    ["danger", "danger"],
+    ["error", "danger"],
+    ["bug", "bug"],
+    ["example", "example"],
+    ["quote", "quote"],
+    ["cite", "quote"],
+    ["Warning", "warning"],
+    ["whatever", "note"],
   ]
   for (const [type, kind] of cases)
     test(`[!${type}] draws as ${kind}`, () => {
@@ -226,7 +252,10 @@ describe("outline parity inside quotes", () => {
     ]
     for (const [src, want] of cases) {
       const [p, s] = outlines(src)
-      expect(p.map((h) => h[1]), JSON.stringify(src)).toEqual(want)
+      expect(
+        p.map((h) => h[1]),
+        JSON.stringify(src),
+      ).toEqual(want)
       expect(s, JSON.stringify(src)).toEqual(p)
     }
   })
@@ -241,7 +270,10 @@ describe("outline parity inside quotes", () => {
     const src = "> [!note] T\n> text\n> ---\n\n# After\n"
     expect(text(render(src, 60, t))[0]).toContain("T")
     const [p, s] = outlines(src)
-    expect(p).toEqual([[2, "text"], [1, "After"]])
+    expect(p).toEqual([
+      [2, "text"],
+      [1, "After"],
+    ])
     expect(s).toEqual(p)
   })
   test("a comment-only line between a paragraph and its underline is gone in both", () => {
@@ -398,19 +430,60 @@ describe("outline parity: structure the lexer sees", () => {
   test("heading lines point at the source", () => {
     const src = "# Intro\n\n<!--\n# Draft\n-->\n\n- # Item\n\n> Foo\n> # Q\n\nSetext\n===\n"
     const lines = src.split("\n")
-    expect(sourceScan(src, t).headings.map((h) => lines.slice(h.line, h.end + 1).join("\n").replace(/^[\s>\-#]+/, ""))).toEqual(["Intro", "Item", "Q", "Setext\n==="])
+    expect(
+      sourceScan(src, t).headings.map((h) =>
+        lines
+          .slice(h.line, h.end + 1)
+          .join("\n")
+          .replace(/^[\s>\-#]+/, ""),
+      ),
+    ).toEqual(["Intro", "Item", "Q", "Setext\n==="])
   })
 })
 
 describe("Source outline: line-based path vs lexer", () => {
-  const frags = ["# AA", "## BB", "text", "more text", "", "===", "---", "```", "~~~", "***", "Setext", "# J #", "#K", "\\# esc", "```js", "%% x %%", "<!--", "-->", "- item", "  - nested", "1. num", "> quote", "> more", "lazy", "- a\nlazy", "> a\nlazy", "text\n===", "- a\n---", "-- ", "-", "text\n-"]
+  const frags = [
+    "# AA",
+    "## BB",
+    "text",
+    "more text",
+    "",
+    "===",
+    "---",
+    "```",
+    "~~~",
+    "***",
+    "Setext",
+    "# J #",
+    "#K",
+    "\\# esc",
+    "```js",
+    "%% x %%",
+    "<!--",
+    "-->",
+    "- item",
+    "  - nested",
+    "1. num",
+    "> quote",
+    "> more",
+    "lazy",
+    "- a\nlazy",
+    "> a\nlazy",
+    "text\n===",
+    "- a\n---",
+    "-- ",
+    "-",
+    "text\n-",
+  ]
   test("notes the line-based path accepts get the lexer's outline", () => {
     let seed = 42
     const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
     const blankish = (kept: string[], s: Set<number>) => [...s].filter((i) => !/^[ >]*$/.test(kept[i] ?? "")).sort((a, b) => a - b)
     let used = 0
     for (let n = 0; n < 4000; n++) {
-      const lines = Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => frags[Math.floor(rnd() * frags.length)]!).join("\n").split("\n")
+      const lines = Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => frags[Math.floor(rnd() * frags.length)]!)
+        .join("\n")
+        .split("\n")
       const { kept, hidden } = scanComments(lines, 0)
       if (needsLexer(kept.filter((_, i) => !hidden[i]))) continue
       used++
@@ -424,7 +497,24 @@ describe("Source outline: line-based path vs lexer", () => {
   })
 
   test("lists, indentation, HTML, tables and link definitions go to the lexer", () => {
-    for (const s of ["> # q", "> [!note] T", "- # a", "- [ ] t", "- a\n  more", "  # x", "\tcode", "<div>", "| a |", "[x]: http://a", "text\n  ---", "- a\n---", "> q\nlazy", "- - a"]) expect(needsLexer(s.split("\n")), s).toBe(true)
-    for (const s of ["# A\n\ntext *x*\n\n```\ncode\n```\n", "- one\n  - two\n- three\n\n> quoted words\n\n---"]) expect(needsLexer(s.split("\n")), s).toBe(false)
+    for (const s of [
+      "> # q",
+      "> [!note] T",
+      "- # a",
+      "- [ ] t",
+      "- a\n  more",
+      "  # x",
+      "\tcode",
+      "<div>",
+      "| a |",
+      "[x]: http://a",
+      "text\n  ---",
+      "- a\n---",
+      "> q\nlazy",
+      "- - a",
+    ])
+      expect(needsLexer(s.split("\n")), s).toBe(true)
+    for (const s of ["# A\n\ntext *x*\n\n```\ncode\n```\n", "- one\n  - two\n- three\n\n> quoted words\n\n---"])
+      expect(needsLexer(s.split("\n")), s).toBe(false)
   })
 })

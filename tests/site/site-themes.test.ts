@@ -12,7 +12,22 @@ const block = (sel: string) => {
 test("every theme gets a [data-family][data-theme] block carrying its own palette", () => {
   for (const t of themes) {
     const b = block(`:root[data-family="${t.name.replace(/-(dark|light)$/, "")}"][data-theme="${t.mode}"]`)
-    for (const hex of [t.primary, t.secondary, t.accent, t.error, t.warning, t.success, t.info, t.text, t.textMuted, t.background, t.backgroundElement, t.border, t.borderSubtle]) expect(b).toContain(hex)
+    for (const hex of [
+      t.primary,
+      t.secondary,
+      t.accent,
+      t.error,
+      t.warning,
+      t.success,
+      t.info,
+      t.text,
+      t.textMuted,
+      t.background,
+      t.backgroundElement,
+      t.border,
+      t.borderSubtle,
+    ])
+      expect(b).toContain(hex)
     expect(b).toContain(`color-scheme: ${t.mode}`)
   }
   expect(css.match(/data-family=/g)).toHaveLength(themes.length)
@@ -26,7 +41,7 @@ test("brothy is the default: its blocks also answer :root and data-theme=light w
 test("the glass, edge and shadow derive from the palette: the background and text at fixed alphas", () => {
   const dark = themes.find((t) => t.name === "brothy")!
   const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(", ")
-  const b = block(":root,\n:root[data-family=\"brothy\"][data-theme=\"dark\"]")
+  const b = block(':root,\n:root[data-family="brothy"][data-theme="dark"]')
   expect(b).toContain(`--b-glass: rgba(${rgb(dark.background)}, 0.74)`)
   expect(b).toContain(`--b-glass-edge: rgba(${rgb(dark.text)}, 0.1)`)
   expect(b).toContain("--b-shadow: rgba(0, 0, 0, 0.55)")

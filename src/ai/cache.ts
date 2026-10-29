@@ -39,7 +39,11 @@ export function loadCache<T extends Stamped>(name: string, isEntry: IsEntry<T>):
 
 /** The newest `cap` entries by `at`. */
 function pruneCache<T extends Stamped>(all: Record<string, T>, cap: number): Record<string, T> {
-  return Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, cap))
+  return Object.fromEntries(
+    Object.entries(all)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, cap),
+  )
 }
 
 /**

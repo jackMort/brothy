@@ -3,7 +3,23 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, write
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { PROMPT_V } from "../../src/ai/config"
-import { CACHE_CAP, GLOSS_CAP, loadGlosses, saveGlosses, type Gloss, cacheFile, cachePath, isFresh, loadCache, loadSummaries, pruneSummaries, saveCache, saveSummaries, textHash, type Summary } from "../../src/ai/cache"
+import {
+  CACHE_CAP,
+  GLOSS_CAP,
+  loadGlosses,
+  saveGlosses,
+  type Gloss,
+  cacheFile,
+  cachePath,
+  isFresh,
+  loadCache,
+  loadSummaries,
+  pruneSummaries,
+  saveCache,
+  saveSummaries,
+  textHash,
+  type Summary,
+} from "../../src/ai/cache"
 import { useXdgDir } from "../helpers/env"
 
 const cache = useXdgDir("XDG_CACHE_HOME")
@@ -177,11 +193,17 @@ test("summaries.json and glosses.json: compact JSON with a newline, the fields a
 
 test("a summary and a gloss are told apart by their own text field", () => {
   mkdirSync(join(cache(), "brothy"), { recursive: true })
-  const both = { "/a.md": { hash: "h", v: 1, summary: "s", gloss: "g", model: "m", at: 1 }, "/b.md": { hash: "h", v: 1, summary: "s", model: "m", at: 1, extra: true } }
+  const both = {
+    "/a.md": { hash: "h", v: 1, summary: "s", gloss: "g", model: "m", at: 1 },
+    "/b.md": { hash: "h", v: 1, summary: "s", model: "m", at: 1, extra: true },
+  }
   writeFileSync(cachePath(), JSON.stringify(both))
   expect(Object.keys(loadSummaries())).toEqual(["/a.md", "/b.md"])
   writeFileSync(join(cache(), "brothy", "glosses.json"), JSON.stringify(both))
   expect(Object.keys(loadGlosses())).toEqual(["/a.md"])
-  writeFileSync(cachePath(), JSON.stringify({ "/c.md": { hash: "h", v: 1, summary: "s", model: "m", at: "1" }, "/d.md": { hash: "h", v: 1, summary: "s", model: "m", at: null } }))
+  writeFileSync(
+    cachePath(),
+    JSON.stringify({ "/c.md": { hash: "h", v: 1, summary: "s", model: "m", at: "1" }, "/d.md": { hash: "h", v: 1, summary: "s", model: "m", at: null } }),
+  )
   expect(loadSummaries()).toEqual({})
 })

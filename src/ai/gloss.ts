@@ -27,8 +27,7 @@ const SAME = "Write in the same language as the section."
 /** Bump `PROMPTS.gloss` (ai/config.ts) whenever one of these changes. */
 export function glossSystem(style: GlossStyle): string {
   if (style === "simplify") return `Restate this section in plain, simple words in 1–2 sentences, at most 35 words. ${PLAIN} ${SAME}`
-  if (style.startsWith("translate:"))
-    return `Give the gist of this section in ${style.slice("translate:".length)} in 1–2 sentences, at most 35 words. ${PLAIN}`
+  if (style.startsWith("translate:")) return `Give the gist of this section in ${style.slice("translate:".length)} in 1–2 sentences, at most 35 words. ${PLAIN}`
   return `Explain this section of a note to its reader in 1–2 sentences, at most 35 words: what it says and why it matters. ${PLAIN} ${SAME}`
 }
 
@@ -86,7 +85,15 @@ export function glossRows(text: string, width_: number, max = GLOSS_ROWS): strin
   const t = safeLine(text).trim()
   if (!t) return []
   // truncate guards a single token wider than the row
-  const rows = wrap([{ text: t }], width_).map((r) => truncate(r.map((x) => x.text).join("").trimEnd(), width_))
+  const rows = wrap([{ text: t }], width_).map((r) =>
+    truncate(
+      r
+        .map((x) => x.text)
+        .join("")
+        .trimEnd(),
+      width_,
+    ),
+  )
   if (rows.length <= max) return rows
   return [...rows.slice(0, max - 1), truncate(rows[max - 1]! + " …", width_)]
 }

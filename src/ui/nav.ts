@@ -83,9 +83,7 @@ export function stepMatch(matches: number[], cur: number | null, top: number, h:
   const onScreen = cur !== null && matches.includes(cur) && cur >= top && cur < top + h
   const after = (m: number) => (onScreen ? m > cur! : m >= top)
   const before = (m: number) => m < (onScreen ? cur! : top)
-  return dir === 1
-    ? (matches.find(after) ?? matches[0])
-    : (matches.findLast(before) ?? matches[matches.length - 1])
+  return dir === 1 ? (matches.find(after) ?? matches[0]) : (matches.findLast(before) ?? matches[matches.length - 1])
 }
 
 /** 1-based position of `matchLine` among `matches`; null when it is unset or no longer a match. */
@@ -103,10 +101,8 @@ export function matchIndex(matches: number[], matchLine: number | null): number 
  * the headings no longer line up.
  */
 export function remapTop(top: number, from: Geometry, to: Geometry): number {
-  if (from.total === to.total && from.heads.length === to.heads.length && from.heads.every((h, i) => h === to.heads[i]))
-    return top
-  if (from.heads.length !== to.heads.length || !from.total)
-    return from.total ? Math.round((top / from.total) * to.total) : 0
+  if (from.total === to.total && from.heads.length === to.heads.length && from.heads.every((h, i) => h === to.heads[i])) return top
+  if (from.heads.length !== to.heads.length || !from.total) return from.total ? Math.round((top / from.total) * to.total) : 0
   const bounds = (g: Geometry, i: number) => [i < 0 ? 0 : g.heads[i]!, g.heads[i + 1] ?? g.total] as const
   const i = from.heads.findLastIndex((h) => h <= top)
   const [a, b] = bounds(from, i)

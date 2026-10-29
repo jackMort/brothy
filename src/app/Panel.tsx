@@ -40,11 +40,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
   const AW = PNW - 2
   const thumbFg = mix(t.borderSubtle, t.textMuted, 0.25)
   /** One panel row, `PNW` wide: col 0 padding (`lead`), text, then the thumb column. `sel` fills the row as the cursor. */
-  const panelRow = (
-    key: string,
-    spans: Span[],
-    o: { sel?: boolean; lead?: boolean; thumb?: boolean; onDown?: (e: MouseEvent) => void } = {},
-  ) => {
+  const panelRow = (key: string, spans: Span[], o: { sel?: boolean; lead?: boolean; thumb?: boolean; onDown?: (e: MouseEvent) => void } = {}) => {
     const body: Span[] = o.lead === false ? [...spans] : [{ text: " " }, ...spans]
     body.push({ text: " ".repeat(Math.max(0, PNW - 1 - spanWidth(body))) })
     const cells = o.sel ? body.map((sp) => ({ ...sp, fg: selFg, bg: t.primary })) : body
@@ -87,7 +83,10 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
 
   /** The filter row: `/ query▏` (caret while typing), with `right` aligned to the text edge. */
   const filterRowEl = (value: string, typing: boolean, right: string) => {
-    const left: Span[] = [{ text: "/ ", fg: t.primary, attr: 1 }, { text: truncate(value, Math.max(1, AW - 4 - width(right))), fg: t.text }]
+    const left: Span[] = [
+      { text: "/ ", fg: t.primary, attr: 1 },
+      { text: truncate(value, Math.max(1, AW - 4 - width(right))), fg: t.text },
+    ]
     if (typing) left.push({ text: "▏", fg: t.primary })
     return panelRow("filter", [...left, { text: " ".repeat(Math.max(1, AW - spanWidth(left) - width(right))) }, { text: right, fg: t.textMuted }])
   }
@@ -96,8 +95,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
   const listEls: ReactNode[] = []
   if (s.view === "files") {
     const fTop = topOf("files", rows.length)
-    if (rows.length === 0)
-      listEls.push(panelRow("files-empty", [{ text: filter ? "no matching notes" : "no Markdown files here", fg: t.textMuted }]))
+    if (rows.length === 0) listEls.push(panelRow("files-empty", [{ text: filter ? "no matching notes" : "no Markdown files here", fg: t.textMuted }]))
     const counts = folderCounts(s.tree)
     const on = thumbRows(fTop, rows.length)
     rows.slice(fTop, fTop + LH).forEach((r, i) => {
@@ -123,7 +121,10 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
     if (!openPath) listEls.push(panelRow("outline-empty", [{ text: "no note open", fg: t.textMuted }]))
     else if (!n) listEls.push(panelRow("outline-empty", [{ text: s.outlineFilter ? "no matching headings" : "no headings", fg: t.textMuted }]))
     // unfocused, the list keeps the reading heading in view; focused, the cursor
-    const reading = Math.max(0, d.oRows.findIndex((r) => r.current))
+    const reading = Math.max(
+      0,
+      d.oRows.findIndex((r) => r.current),
+    )
     const oTop = keepVisible(s.listTop.outline, sideFocus === "outline" ? outlineCur : reading, LH, n)
     s.listTop.outline = oTop
     const on = thumbRows(oTop, n)
@@ -181,13 +182,20 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
   }
   const cur = rows[cursor]
   // two results with the same name and folder: show the cursor row's full folder instead of the count
-  const dup =
-    filtered && cur && rows.some((r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node))
+  const dup = filtered && cur && rows.some((r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node))
   const filesRight = dup ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
   const panelRows = [
     panelRow("strip", stripSpans, { onDown: onStrip }),
     panelRow("rule", stripRule, { lead: false }),
-    ...(filterRow ? [filterRowEl(s.view === "outline" ? s.outlineFilter : filter, s.filterTyping && !!sideFocus, s.view === "outline" ? String(d.oRows.length) : filesRight)] : []),
+    ...(filterRow
+      ? [
+          filterRowEl(
+            s.view === "outline" ? s.outlineFilter : filter,
+            s.filterTyping && !!sideFocus,
+            s.view === "outline" ? String(d.oRows.length) : filesRight,
+          ),
+        ]
+      : []),
     ...listEls,
   ]
   // distinct keys: the reconciler does not clear style props between the two boxes
@@ -196,14 +204,8 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
       {panelRows}
     </box>
   ) : (
-    <box
-      key="side-drawer"
-      style={{ position: "absolute", left: 0, top: 1 + L.gap, zIndex: 5, width: PNW + 1, height: bodyH, flexDirection: "row" }}
-    >
-      <box
-        style={{ width: PNW, height: bodyH, flexDirection: "column", backgroundColor: t.backgroundElement }}
-        onMouseScroll={scrollList}
-      >
+    <box key="side-drawer" style={{ position: "absolute", left: 0, top: 1 + L.gap, zIndex: 5, width: PNW + 1, height: bodyH, flexDirection: "row" }}>
+      <box style={{ width: PNW, height: bodyH, flexDirection: "column", backgroundColor: t.backgroundElement }} onMouseScroll={scrollList}>
         {panelRows}
       </box>
       <box style={{ width: 1, height: bodyH, flexDirection: "column", backgroundColor: t.background }}>

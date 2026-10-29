@@ -21,8 +21,21 @@ test("mix blends two colors channel by channel", () => {
 })
 
 const SLOTS = [
-  "primary", "secondary", "accent", "error", "warning", "success", "info", "text", "textMuted",
-  "background", "backgroundPanel", "backgroundElement", "border", "borderActive", "borderSubtle",
+  "primary",
+  "secondary",
+  "accent",
+  "error",
+  "warning",
+  "success",
+  "info",
+  "text",
+  "textMuted",
+  "background",
+  "backgroundPanel",
+  "backgroundElement",
+  "border",
+  "borderActive",
+  "borderSubtle",
 ] as const
 
 test("themes: 22 families: 20 a dark theme plus a '-light' twin, 2 dark-only, darks listed first", () => {
@@ -56,13 +69,19 @@ test("themes: light themes have a lighter background than text, dark the opposit
 
 test("themes: contrast floors on background and backgroundPanel", () => {
   const floors: [(typeof SLOTS)[number], number][] = [
-    ["text", 4.5], ["textMuted", 4.5], ["primary", 4.5], ["secondary", 4.5], ["accent", 4.5],
-    ["error", 3], ["warning", 3], ["success", 3], ["info", 3],
+    ["text", 4.5],
+    ["textMuted", 4.5],
+    ["primary", 4.5],
+    ["secondary", 4.5],
+    ["accent", 4.5],
+    ["error", 3],
+    ["warning", 3],
+    ["success", 3],
+    ["info", 3],
   ]
   for (const t of themes)
     for (const [k, min] of floors)
-      for (const bg of ["background", "backgroundPanel"] as const)
-        expect(contrast(t[k], t[bg]), `${t.name} ${k} on ${bg}`).toBeGreaterThanOrEqual(min)
+      for (const bg of ["background", "backgroundPanel"] as const) expect(contrast(t[k], t[bg]), `${t.name} ${k} on ${bg}`).toBeGreaterThanOrEqual(min)
 })
 
 test("the house themes: body text about 14:1, every content role 4.5:1 on page, panel and code fill, visible borders, no two accents alike", () => {
@@ -81,8 +100,15 @@ test("themeByName falls back to brothy", () => {
 
 test("themes: content colors stay readable on backgroundElement (code blocks, find match)", () => {
   const floors: [(typeof SLOTS)[number], number][] = [
-    ["text", 4.5], ["textMuted", 3], ["primary", 3], ["secondary", 3], ["accent", 3],
-    ["error", 3], ["warning", 3], ["success", 3], ["info", 3],
+    ["text", 4.5],
+    ["textMuted", 3],
+    ["primary", 3],
+    ["secondary", 3],
+    ["accent", 3],
+    ["error", 3],
+    ["warning", 3],
+    ["success", 3],
+    ["info", 3],
   ]
   for (const t of themes)
     for (const [k, min] of floors) expect(contrast(t[k], t.backgroundElement), `${t.name} ${k} on backgroundElement`).toBeGreaterThanOrEqual(min)

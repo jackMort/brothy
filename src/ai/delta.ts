@@ -169,7 +169,8 @@ export function diffSections(before: string, after: string): Change[] | null {
   const out: Change[] = []
   let budget = DIFF_BUDGET
   const pushRemoved = (list: Sec[] | undefined) => {
-    for (const o of list ?? []) out.push(change("removed", o, { plus: 0, minus: o.lines.length, hunks: [{ ops: all("-", o.lines) }], rewritten: false, newText: "" }))
+    for (const o of list ?? [])
+      out.push(change("removed", o, { plus: 0, minus: o.lines.length, hunks: [{ ops: all("-", o.lines) }], rewritten: false, newText: "" }))
   }
   pushRemoved(removedAfter.get(null))
   for (const n of news) {
@@ -182,7 +183,13 @@ export function diffSections(before: string, after: string): Change[] | null {
       const ops = cells <= DIFF_CELLS ? lineDiff(o.lines, n.lines) : null
       out.push(
         ops
-          ? change("edited", n, { plus: ops.filter((x) => x.op === "+").length, minus: ops.filter((x) => x.op === "-").length, hunks: hunks(ops), rewritten: false, newText })
+          ? change("edited", n, {
+              plus: ops.filter((x) => x.op === "+").length,
+              minus: ops.filter((x) => x.op === "-").length,
+              hunks: hunks(ops),
+              rewritten: false,
+              newText,
+            })
           : change("edited", n, { plus: n.lines.length, minus: o.lines.length, hunks: [], rewritten: true, newText }),
       )
     }
@@ -336,5 +343,4 @@ export const hhmm = (at: number) => {
 }
 
 /** What `findQuote` looks for: Source rows show the Markdown as written; Preview drops list/task markers and inline marks. */
-export const quoteNeedle = (quote: string, source: boolean) =>
-  source ? quote : plainLine(quote.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, ""))
+export const quoteNeedle = (quote: string, source: boolean) => (source ? quote : plainLine(quote.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, "")))

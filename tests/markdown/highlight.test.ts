@@ -24,8 +24,7 @@ afterAll(() => shutdownHighlighter())
 
 const fenced = (lang: string, code: string) => "```" + lang + "\n" + code + "\n```"
 const kinds = (toks: { text: string; kind?: Kind }[]) => toks.filter((k) => k.kind).map((k) => [k.text, k.kind])
-const fg = (r: ReturnType<typeof render>, text: string) =>
-  r.lines.flatMap((l) => l.spans).find((s) => s.text.includes(text))?.fg
+const fg = (r: ReturnType<typeof render>, text: string) => r.lines.flatMap((l) => l.spans).find((s) => s.text.includes(text))?.fg
 
 describe("languages", () => {
   test("info strings map to parser filetypes", () => {
@@ -76,17 +75,31 @@ describe("tokenize", () => {
       [7, 11, "spell"],
       [7, 11, "comment.documentation"],
     ])
-    expect(kinds(toks[0]!)).toEqual([["foo", "function"], ["1", "number"], ["// c", "comment"]])
+    expect(kinds(toks[0]!)).toEqual([
+      ["foo", "function"],
+      ["1", "number"],
+      ["// c", "comment"],
+    ])
     expect(toks[0]!.map((k) => k.text).join("")).toBe(code)
   })
   test("predicate-less identifier captures are re-checked against the text", () => {
     const code = "a Foo FOO"
-    const both = (s: number, e: number): [number, number, string][] => [[s, e, "variable"], [s, e, "type"], [s, e, "constant"]]
+    const both = (s: number, e: number): [number, number, string][] => [
+      [s, e, "variable"],
+      [s, e, "type"],
+      [s, e, "constant"],
+    ]
     const toks = tokenize(code, [...both(0, 1), ...both(2, 5), ...both(6, 9)])
-    expect(kinds(toks[0]!)).toEqual([["Foo", "type"], ["FOO", "constant"]])
+    expect(kinds(toks[0]!)).toEqual([
+      ["Foo", "type"],
+      ["FOO", "constant"],
+    ])
   })
   test("splits into one token list per source line", () => {
-    const toks = tokenize("a\n\nb", [[0, 1, "keyword"], [3, 4, "string"]])
+    const toks = tokenize("a\n\nb", [
+      [0, 1, "keyword"],
+      [3, 4, "string"],
+    ])
     expect(toks.length).toBe(3)
     expect(toks[1]).toEqual([])
     expect(kinds(toks[2]!)).toEqual([["b", "string"]])
@@ -109,6 +122,7 @@ describe("theme colors", () => {
 })
 
 describe("cache and rendering", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: the fixture is TypeScript source with a template literal
   const src = fenced("ts", "const a = 1 // hi\nfunction f(n: number) {\n  return `x${n}`\n}")
 
   test("miss -> pending request -> hit, and a hit is not re-parsed", async () => {
@@ -221,15 +235,38 @@ describe("languages without a parser", () => {
     expect(comment("echo a #b", "bash")).toBe(true)
   })
   test("comment markers inside strings are not comments", () => {
-    expect(kinds(fallbackTokens('s = "a # b" # c', "python"))).toEqual([['"a # b"', "string"], ["# c", "comment"]])
-    expect(kinds(fallbackTokens('let u = "http://x" // c', "rust"))).toEqual([['"http://x"', "string"], ["// c", "comment"]])
+    expect(kinds(fallbackTokens('s = "a # b" # c', "python"))).toEqual([
+      ['"a # b"', "string"],
+      ["# c", "comment"],
+    ])
+    expect(kinds(fallbackTokens('let u = "http://x" // c', "rust"))).toEqual([
+      ['"http://x"', "string"],
+      ["// c", "comment"],
+    ])
   })
   test("numbers and literals in the fallback", () => {
-    expect(kinds(fallbackTokens("x = [1, 0xFF, 2.5e3, None]", "python"))).toEqual([["1", "number"], ["0xFF", "number"], ["2.5e3", "number"], ["None", "constant"]])
-    expect(kinds(fallbackTokens('{"a": true}', "json"))).toEqual([['"a"', "string"], ["true", "constant"]])
+    expect(kinds(fallbackTokens("x = [1, 0xFF, 2.5e3, None]", "python"))).toEqual([
+      ["1", "number"],
+      ["0xFF", "number"],
+      ["2.5e3", "number"],
+      ["None", "constant"],
+    ])
+    expect(kinds(fallbackTokens('{"a": true}', "json"))).toEqual([
+      ['"a"', "string"],
+      ["true", "constant"],
+    ])
   })
   test("fallback tokens always reassemble the line", () => {
-    for (const [line, lang] of [["a 'b' # c", "python"], ["", "rust"], ["`x` // y", "go"], ["\t  spaced   out", "sql"]] as const)
-      expect(fallbackTokens(line, lang).map((k) => k.text).join("")).toBe(line)
+    for (const [line, lang] of [
+      ["a 'b' # c", "python"],
+      ["", "rust"],
+      ["`x` // y", "go"],
+      ["\t  spaced   out", "sql"],
+    ] as const)
+      expect(
+        fallbackTokens(line, lang)
+          .map((k) => k.text)
+          .join(""),
+      ).toBe(line)
   })
 })

@@ -46,7 +46,8 @@ export async function waitFor(s: Setup, pred: () => boolean, ms = 2000) {
   throw new Error("never matched:\n" + s.captureCharFrame())
 }
 /** Resolves with the frame that matched. */
-export const waitFrame = (s: Setup, pred: (f: string) => boolean, ms = 2000) => waitFor(s, () => pred(s.captureCharFrame()), ms).then(() => s.captureCharFrame())
+export const waitFrame = (s: Setup, pred: (f: string) => boolean, ms = 2000) =>
+  waitFor(s, () => pred(s.captureCharFrame()), ms).then(() => s.captureCharFrame())
 
 /**
  * OpenTUI's stdin parser holds a lone ESC for 20 ms (it may start a sequence) before it becomes a
@@ -63,8 +64,7 @@ export async function keys(s: Setup, ...ks: string[]) {
     else if (k === "esc") {
       s.mockInput.pressEscape()
       await sleep(ESC_HOLD)
-    }
-    else if (k === "down" || k === "up" || k === "left" || k === "right") s.mockInput.pressArrow(k)
+    } else if (k === "down" || k === "up" || k === "left" || k === "right") s.mockInput.pressArrow(k)
     else if (k === "space") s.mockInput.pressKey(" ")
     else if (k === "backspace") s.mockInput.pressBackspace()
     else if (k.startsWith("type:")) await s.mockInput.typeText(k.slice(5))
@@ -109,7 +109,12 @@ export const PRIMARY = B.primary
 export function onBg(s: Setup, bg = PRIMARY) {
   return s
     .captureSpans()
-    .lines.map((l) => l.spans.filter((sp) => hex(sp.bg) === bg).map((sp) => sp.text).join(""))
+    .lines.map((l) =>
+      l.spans
+        .filter((sp) => hex(sp.bg) === bg)
+        .map((sp) => sp.text)
+        .join(""),
+    )
     .filter(Boolean)
 }
 /** Rows of the frame as colored spans, flattened. */
@@ -238,7 +243,8 @@ export function useAppHarness() {
     const s = quietAct(await testRender(<App root={root} initialFile={file ? join(root, file) : undefined} themeName={theme} {...props} />, size))
     const destroy = s.renderer.destroy
     let gone = false
-    s.renderer.destroy = () => { // a test may end an app early (a restart, a signal); the teardown must not destroy it twice
+    s.renderer.destroy = () => {
+      // a test may end an app early (a restart, a signal); the teardown must not destroy it twice
       if (gone) return
       gone = true
       destroy()
@@ -310,9 +316,28 @@ export function useAppHarness() {
     })
 
   return {
-    cfgDir, cacheDir, tmp, mount, mountAI, unmount, vault, openNote,
-    configFile, writeConfig, aiConfig, zenConfig, savedConfig,
-    projectsFile, writeProjects, seedProjects, readProjects,
-    cacheFile, cached, seedSummary, glossFile, glossCache, seedGloss,
+    cfgDir,
+    cacheDir,
+    tmp,
+    mount,
+    mountAI,
+    unmount,
+    vault,
+    openNote,
+    configFile,
+    writeConfig,
+    aiConfig,
+    zenConfig,
+    savedConfig,
+    projectsFile,
+    writeProjects,
+    seedProjects,
+    readProjects,
+    cacheFile,
+    cached,
+    seedSummary,
+    glossFile,
+    glossCache,
+    seedGloss,
   }
 }

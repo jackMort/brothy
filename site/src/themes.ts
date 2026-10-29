@@ -13,7 +13,7 @@ export interface Family {
   light?: Specimen
 }
 /** What the picker draws for a theme: its own background and the roles of its ` Aa ●●● ` specimen. */
-export interface Specimen {
+interface Specimen {
   theme: string
   bg: string
   text: string

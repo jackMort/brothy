@@ -6,13 +6,24 @@ const root = document.documentElement
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)
 const $$ = <T extends Element = HTMLElement>(s: string) => [...document.querySelectorAll<T>(s)]
 const store = {
-  get: (k: string) => { try { return localStorage.getItem(k) } catch { return null } },
-  set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch {} },
+  get: (k: string) => {
+    try {
+      return localStorage.getItem(k)
+    } catch {
+      return null
+    }
+  },
+  set: (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v)
+    } catch {}
+  },
 }
 
 // ---------- headings: the running head, [ ] and the Outline marker ----------
 const heads = () => $$("[data-head], .sl-markdown-content h2")
-const section = $("[data-section]"), sep = $("[data-section-sep]")
+const section = $("[data-section]"),
+  sep = $("[data-section-sep]")
 const outline = $$<HTMLAnchorElement>("[data-panel='outline'] a")
 const NAV = () => ($(".top")?.getBoundingClientRect().height ?? 48) + 16
 
@@ -24,7 +35,9 @@ function readingAt() {
 }
 
 // ---------- progress line ----------
-const read = $("[data-read]"), prog = $(".prog i"), minutes = Number($(".foot")?.dataset.minutes ?? 0)
+const read = $("[data-read]"),
+  prog = $(".prog i"),
+  minutes = Number($(".foot")?.dataset.minutes ?? 0)
 
 function onScroll() {
   const cur = readingAt()
@@ -83,21 +96,34 @@ const panelToggle = () => {
 }
 $$("[data-drawer]").forEach((b) => b.addEventListener("click", () => drawer()))
 $(".scrim")?.addEventListener("click", () => drawer(false))
-$(".panel")?.addEventListener("click", (e) => { if ((e.target as HTMLElement).closest("a") && narrow.matches) drawer(false) })
-const syncNarrow = () => { if (!narrow.matches) drawer(false); else $(".panel")?.toggleAttribute("inert", !root.classList.contains("drawer-open")) }
+$(".panel")?.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("a") && narrow.matches) drawer(false)
+})
+const syncNarrow = () => {
+  if (!narrow.matches) drawer(false)
+  else $(".panel")?.toggleAttribute("inert", !root.classList.contains("drawer-open"))
+}
 narrow.addEventListener("change", syncNarrow)
 syncNarrow()
 
 // ---------- the welcome page's "Start here" rows ----------
 const rows = $$<HTMLAnchorElement>("[data-start] a")
 let sel = 0
-const pick = (i: number) => { sel = (i + rows.length) % rows.length; rows.forEach((r, k) => r.classList.toggle("on", k === sel)) }
+const pick = (i: number) => {
+  sel = (i + rows.length) % rows.length
+  rows.forEach((r, k) => r.classList.toggle("on", k === sel))
+}
 rows.forEach((r, i) => r.addEventListener("pointermove", () => pick(i)))
-const startVisible = () => { const r = $("[data-start]")?.getBoundingClientRect(); return !!r && r.top < innerHeight && r.bottom > 0 }
+const startVisible = () => {
+  const r = $("[data-start]")?.getBoundingClientRect()
+  return !!r && r.top < innerHeight && r.bottom > 0
+}
 
 // ---------- the keys sheet ----------
 const sheet = $<HTMLDialogElement>("dialog.sheet")
-sheet?.addEventListener("click", (e) => { if (e.target === sheet) sheet.close() })
+sheet?.addEventListener("click", (e) => {
+  if (e.target === sheet) sheet.close()
+})
 
 // ---------- keys ----------
 function typing(t: EventTarget | null) {
@@ -105,12 +131,21 @@ function typing(t: EventTarget | null) {
   return !!el?.closest?.("input, textarea, select, [contenteditable=''], [contenteditable='true']")
 }
 const tour = () => $<HTMLElement & { toggle?: () => void }>("[data-cast]")
-const tourVisible = () => { const r = tour()?.getBoundingClientRect(); return !!r && r.top < innerHeight * 0.75 && r.bottom > innerHeight * 0.25 }
+const tourVisible = () => {
+  const r = tour()?.getBoundingClientRect()
+  return !!r && r.top < innerHeight * 0.75 && r.bottom > innerHeight * 0.25
+}
 
 addEventListener("keydown", (e) => {
   if (e.defaultPrevented || e.altKey || e.metaKey || typing(e.target)) return
   if (document.querySelector("dialog[open]:not(.sheet)")) return // the search dialog owns the keys
-  if (sheet?.open) { if (!e.ctrlKey && e.key !== "Tab") { e.preventDefault(); sheet.close() } return } // any key closes, as in brothy
+  if (sheet?.open) {
+    if (!e.ctrlKey && e.key !== "Tab") {
+      e.preventDefault()
+      sheet.close()
+    }
+    return
+  } // any key closes, as in brothy
   if ((e.target as HTMLElement).closest?.("[data-cast]") && [" ", "Enter", "ArrowLeft", "ArrowRight"].includes(e.key)) return
   const k = e.ctrlKey ? `C-${e.key.toLowerCase()}` : e.key
   const onLink = (e.target as HTMLElement).closest?.("a, button")
@@ -121,9 +156,18 @@ addEventListener("keydown", (e) => {
     G: () => scrollTo({ top: root.scrollHeight }),
     "]": () => jump(1),
     "[": () => jump(-1),
-    "1": () => { view("files"); if (narrow.matches) drawer(true) },
-    "2": () => { view("outline"); if (narrow.matches) drawer(true) },
-    "3": () => { view("info"); if (narrow.matches) drawer(true) },
+    "1": () => {
+      view("files")
+      if (narrow.matches) drawer(true)
+    },
+    "2": () => {
+      view("outline")
+      if (narrow.matches) drawer(true)
+    },
+    "3": () => {
+      view("info")
+      if (narrow.matches) drawer(true)
+    },
     t: () => $("[data-theme-open]")?.click(),
     "C-b": panelToggle,
     "/": () => $("site-search button[data-open-modal]")?.click(),

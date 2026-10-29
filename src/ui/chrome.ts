@@ -42,8 +42,7 @@ export const keycaps = (t: Theme, items: readonly (readonly [string, string])[])
 /** Ink-in frames: border, the role faded 2/5, 1/5, then the role. */
 export const INK_STEPS = 4
 export const INK_MS = 100
-export const inkAt = (t: Theme, step: number, c: string) =>
-  step <= 0 ? t.border : step === 1 ? fade(t, c, 2 / 5) : step === 2 ? fade(t, c, 1 / 5) : c
+export const inkAt = (t: Theme, step: number, c: string) => (step <= 0 ? t.border : step === 1 ? fade(t, c, 2 / 5) : step === 2 ? fade(t, c, 1 / 5) : c)
 
 /** Steam is decorative: every row stays at least this far from the background. */
 export const STEAM_FLOOR = 1.5

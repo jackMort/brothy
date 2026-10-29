@@ -123,7 +123,12 @@ test("Info shows properties with tag chips, resolved and unresolved links, and s
   expect(f).toMatch(/\d+ words · \d+ min read/)
   expect(hex(spansOf(s).find((sp) => sp.text.includes("#focus"))!.fg)).toBe(B.secondary) // secondary
   // the document also shows `[[nowhere]]`, so look only at the panel's link row
-  const linkRow = s.captureSpans().lines.find((l) => l.spans.map((sp) => sp.text).join("").includes("→ nowhere"))!
+  const linkRow = s.captureSpans().lines.find((l) =>
+    l.spans
+      .map((sp) => sp.text)
+      .join("")
+      .includes("→ nowhere"),
+  )!
   expect(linkRow.spans.some((sp) => sp.text.includes("nowhere") && hex(sp.fg) === B.textMuted)).toBe(true) // textMuted
 })
 

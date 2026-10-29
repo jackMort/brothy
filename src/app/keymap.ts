@@ -5,7 +5,21 @@ import type { HelpGroup } from "../ui/help"
 import type { HintItem } from "../ui/status"
 
 /** A group of bindings: global, the document, a panel view or a popup; dispatch tries them in order. */
-export type Mode = "global" | "files" | "doc" | "outline" | "info" | "filter" | "help" | "prompt" | "theme" | "zen" | "zenSettings" | "label" | "switch" | "open"
+export type Mode =
+  | "global"
+  | "files"
+  | "doc"
+  | "outline"
+  | "info"
+  | "filter"
+  | "help"
+  | "prompt"
+  | "theme"
+  | "zen"
+  | "zenSettings"
+  | "label"
+  | "switch"
+  | "open"
 /** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus). */
 export type Ctx = "doc" | `panel:${View}` | "filter" | "zen" | "help" | "prompt" | "theme" | "zenSettings" | "label" | "switch" | "open"
 /** One binding: its keys, how help and the footer show it. */
@@ -68,7 +82,16 @@ const KEYMAP = {
   histBack: { modes: ["global"], keys: ["S-h"], label: "H", short: "H L", desc: "back to the previous note", hint: "history", spare: true },
   histForward: { modes: ["global"], keys: ["S-l"], label: "L", desc: "forward to the next note" },
   summarize: { modes: ["global"], keys: ["a"], label: "a", desc: "summarize the note (Info tab)", hint: "summarize", group: "AI", spare: true, when: "ai" },
-  explainChange: { modes: ["global"], keys: ["S-d"], label: "D", desc: "explain what changed on disk", hint: "changes", group: "AI", spare: true, when: "changes" },
+  explainChange: {
+    modes: ["global"],
+    keys: ["S-d"],
+    label: "D",
+    desc: "explain what changed on disk",
+    hint: "changes",
+    group: "AI",
+    spare: true,
+    when: "changes",
+  },
   edit: { modes: ["global"], keys: ["e"], label: "e", desc: "edit the note in $EDITOR at the top line", hint: "edit", spare: true, when: "disk" },
 
   docLine: { modes: ["doc"], keys: ["j", "down", "k", "up"], label: "j k ↑ ↓", short: "j k", desc: "scroll a line", hint: "scroll" },
@@ -93,7 +116,14 @@ const KEYMAP = {
   outlineJump: { modes: ["outline"], keys: ["return", "enter"], label: "⏎", desc: "Outline: jump to heading and read", hint: "jump" },
   outlinePeek: { modes: ["outline"], keys: ["l", "right"], label: "l", desc: "Outline: jump, keep the panel focused", hint: "peek" },
 
-  infoMove: { modes: ["info"], keys: ["j", "down", "k", "up", "g", "S-g"], label: "j k g G", short: "↑↓", desc: "Info: move between links and changes (scroll without them)", hint: "links" },
+  infoMove: {
+    modes: ["info"],
+    keys: ["j", "down", "k", "up", "g", "S-g"],
+    label: "j k g G",
+    short: "↑↓",
+    desc: "Info: move between links and changes (scroll without them)",
+    hint: "links",
+  },
   infoOpen: { modes: ["info"], keys: ["return", "enter"], label: "⏎", desc: "Info: open the link · jump to the change", hint: "open" },
 
   filesMove: {
@@ -165,7 +195,12 @@ export const KEY_IDS = Object.keys(KEYMAP) as KeyId[]
 /** The binding `id`, typed as the general `KeyDef`. */
 export const keyDef = (id: KeyId): KeyDef => KEYMAP[id]
 /** The welcome page's keycaps: [binding, word]. */
-export const WELCOME_KEYS: [KeyId, string][] = [["open", "open a project"], ["theme", "theme"], ["help", "keys"], ["quit", "quit"]]
+export const WELCOME_KEYS: [KeyId, string][] = [
+  ["open", "open a project"],
+  ["theme", "theme"],
+  ["help", "keys"],
+  ["quit", "quit"],
+]
 
 /** A footer hint: a binding, optionally with a context-specific word. */
 export type Hint = KeyId | [KeyId, string]

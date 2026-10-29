@@ -3,14 +3,38 @@
 // app context.
 import { relative } from "node:path"
 import { shortModel, type Failure } from "../ai/client"
-import { ASK_MEMO, ASK_MIN, RERANK_MEMO, askLocate, askRequest, parseQueries, parseRerank, putNewest, questionOf, rerankRequest, type AskState } from "../ai/ask"
+import {
+  ASK_MEMO,
+  ASK_MIN,
+  RERANK_MEMO,
+  askLocate,
+  askRequest,
+  parseQueries,
+  parseRerank,
+  putNewest,
+  questionOf,
+  rerankRequest,
+  type AskState,
+} from "../ai/ask"
 import { folderCounts } from "../notes/files"
 import { keepHitVisible } from "../ui/nav"
 import { peekLines, peekWindow, switchSplit } from "../notes/peek"
 import { PEEK_MIN_W } from "../ui/geometry"
 import { errText } from "../ui/status"
 import { isFresh, textHash } from "../ai/cache"
-import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, refreshIndex, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit } from "../notes/vault"
+import {
+  emptyIndex,
+  firstHit,
+  foldSame,
+  fsIO,
+  hitOrdinal,
+  indexNote,
+  refreshIndex,
+  type AnswerRow,
+  type NoteDoc,
+  type SwitchRow,
+  type TextHit,
+} from "../notes/vault"
 import { AI_OFF, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
@@ -111,7 +135,12 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
         if (now?.q !== asked || !now.ask) return
         const back: AskState = { ...now.ask, phase: "result" }
         // the index changed under the request: these ids are no longer the list on screen
-        if (derive().askCands.map((c) => c.id).join("\n") !== ids.join("\n")) return setAsk(back)
+        if (
+          derive()
+            .askCands.map((c) => c.id)
+            .join("\n") !== ids.join("\n")
+        )
+          return setAsk(back)
         if (!r.ok) {
           setAsk(back)
           if ("failure" in r) flash(failText(target, r.failure, "answer"), "error")

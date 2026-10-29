@@ -11,6 +11,8 @@ bun run dev                       # run against ./examples
 bun test                          # all tests (bun:test, tests/**/*.test.ts[x])
 bun test tests/markdown/markdown-fixes.test.ts -t "tables"   # single file / test by name
 bun run typecheck                 # bunx tsc --noEmit (covers src, scripts, tests)
+bun run lint                      # biome check . (format + recommended lint rules; biome.jsonc says why each deviation is off); `bun run format` rewrites
+bun run knip                      # unused files, exports and dependencies (knip.jsonc; tests and scripts count as entries)
 bun run build                     # compile single binary ./brothy (tree-sitter parsers are embedded); delete it after checking
 bun run snapshot examples --size 100x30 --keys "tab j s"   # headless frame dump
 # media tooling (docs screenshots, site casts, demo videos) lives in the private brothy-studio repo: it imports `scripts/session.tsx` (keep its exports: `mount`, `press`, `frame`, `frameKey`, `settle`, `sleep`, `Frame`) and `src/*` from a checkout of this repo and writes docs/*.{svg,png,mp4,gif} and site/public/casts/*.cast into it; they are committed here by hand, with the brothy commit they were rendered from in the message
@@ -19,7 +21,7 @@ bun scripts/contrast.ts [theme…]  # WCAG table of each role on page / panel / 
 bun scripts/site-art.ts           # site/src/art.json: the site's wordmark, welcome bowl and steam frames as SVG data from WORDMARK / welcomeArt / steamRows (committed: the site build has no root deps; tests/site/site-art.test.ts fails when stale)
 ```
 
-There is no linter. `scripts/snapshot.tsx` renders `<App>` via OpenTUI's `testRender` and prints the frame; keys are space-separated (`tab`, `enter`, `esc`, `up`/`down`, `type:<text>` — `\s` types a space, so single-quote `--keys` — `wait:<ms>`, `C-<key>` for ctrl, or any single key). Also takes `--theme`, `--json out.json` (colored spans) and `--config <dir>`; by default config (theme, sidebar) lives in a throwaway temp dir, so snapshots never read or write `~/.config/brothy`. It runs with `motion` off (welcome drawn still and inked), waits for code-block highlighting to land before capturing (`settle`: the frame unchanged for 600 ms, at most 5 s) and calls `shutdownHighlighter()` at the end. Use it to check UI changes, since the TUI can't be driven interactively.
+Biome is the formatter and linter (CI runs `biome ci .` and `knip`; `git config blame.ignoreRevsFile .git-blame-ignore-revs` hides the formatting commit from blame). `scripts/snapshot.tsx` renders `<App>` via OpenTUI's `testRender` and prints the frame; keys are space-separated (`tab`, `enter`, `esc`, `up`/`down`, `type:<text>` — `\s` types a space, so single-quote `--keys` — `wait:<ms>`, `C-<key>` for ctrl, or any single key). Also takes `--theme`, `--json out.json` (colored spans) and `--config <dir>`; by default config (theme, sidebar) lives in a throwaway temp dir, so snapshots never read or write `~/.config/brothy`. It runs with `motion` off (welcome drawn still and inked), waits for code-block highlighting to land before capturing (`settle`: the frame unchanged for 600 ms, at most 5 s) and calls `shutdownHighlighter()` at the end. Use it to check UI changes, since the TUI can't be driven interactively.
 
 ## Architecture
 

@@ -4,7 +4,26 @@ import { scanTree } from "../../src/notes/files"
 import { headingKey } from "../../src/markdown/sections"
 import type { Stats } from "../../src/markdown/stats"
 import type { Change } from "../../src/ai/delta"
-import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, fileRowSpans, findHeading, fmtAge, infoItems, infoSpans, linkDest, noteIndex, outlineRowSpans, outlineRows, resolveLink, tldrItems, wrapProperty, type ChangeView, type InfoItem } from "../../src/ui/panel"
+import {
+  MAX_CHANGE_ROWS,
+  SUMMARY_ROWS,
+  changeItems,
+  extractLinks,
+  fileRowSpans,
+  findHeading,
+  fmtAge,
+  infoItems,
+  infoSpans,
+  linkDest,
+  noteIndex,
+  outlineRowSpans,
+  outlineRows,
+  resolveLink,
+  tldrItems,
+  wrapProperty,
+  type ChangeView,
+  type InfoItem,
+} from "../../src/ui/panel"
 import { mix, themeByName } from "../../src/theme/theme"
 import { width } from "../../src/lib/text"
 import type { FileNode } from "../../src/notes/files"
@@ -77,7 +96,18 @@ describe("infoItems", () => {
     ])
   })
   test("property order: title, aliases, tags, date, created, modified, then file order", () => {
-    const items = infoItems([["zeta", "z"], ["date", "d"], ["alpha", "a"], ["title", "t"]], STATS, [], 40, null)
+    const items = infoItems(
+      [
+        ["zeta", "z"],
+        ["date", "d"],
+        ["alpha", "a"],
+        ["title", "t"],
+      ],
+      STATS,
+      [],
+      40,
+      null,
+    )
     expect(items.filter((i) => i.kind === "prop" && i.key).map((i) => (i as { key: string }).key)).toEqual(["title", "date", "zeta", "alpha"])
   })
 })
@@ -172,11 +202,16 @@ describe("findHeading", () => {
 })
 
 describe("TL;DR block", () => {
-  const TEXT = "A tour of brothy, a terminal Markdown reader with Files, Outline and Info beside a calm text column. It covers live reload, find, themes and installing with bun."
-  const rows = (items: ReturnType<typeof tldrItems>) => items.map((it) => (it.kind === "tldr" ? "TL;DR" + it.status : it.kind === "summary" ? it.text : `<${it.kind}>`))
+  const TEXT =
+    "A tour of brothy, a terminal Markdown reader with Files, Outline and Info beside a calm text column. It covers live reload, find, themes and installing with bun."
+  const rows = (items: ReturnType<typeof tldrItems>) =>
+    items.map((it) => (it.kind === "tldr" ? "TL;DR" + it.status : it.kind === "summary" ? it.text : `<${it.kind}>`))
 
   test("none: label and a muted hint", () => {
-    expect(tldrItems({ text: "", state: "none", model: "" }, 30)).toEqual([{ kind: "tldr", status: "" }, { kind: "summary", text: "a to summarize", muted: true }])
+    expect(tldrItems({ text: "", state: "none", model: "" }, 30)).toEqual([
+      { kind: "tldr", status: "" },
+      { kind: "summary", text: "a to summarize", muted: true },
+    ])
   })
   test("fresh at 30 columns matches the mockup", () => {
     expect(rows(tldrItems({ text: TEXT, state: "fresh", model: "claude-haiku-5-5" }, 30))).toEqual([
@@ -207,7 +242,10 @@ describe("TL;DR block", () => {
   })
   test("streaming label; fresh text not muted", () => {
     const items = tldrItems({ text: "Partial", state: "streaming", model: "" }, 30)
-    expect(items).toEqual([{ kind: "tldr", status: " · summarizing…" }, { kind: "summary", text: "Partial", muted: false }])
+    expect(items).toEqual([
+      { kind: "tldr", status: " · summarizing…" },
+      { kind: "summary", text: "Partial", muted: false },
+    ])
   })
   test("a long model name is cut to the width", () => {
     const [label] = tldrItems({ text: "x", state: "fresh", model: "a-very-long-model-name-that-overflows" }, 30)
@@ -233,12 +271,27 @@ describe("TL;DR block", () => {
 })
 
 const chg = (status: Change["status"], name: string, plus: number, minus: number, index = 0): Change => ({
-  status, index, path: index < 0 ? [] : ["Doc", name], key: headingKey(name), ord: 0, plus, minus, hunks: [], rewritten: false, newText: "",
+  status,
+  index,
+  path: index < 0 ? [] : ["Doc", name],
+  key: headingKey(name),
+  ord: 0,
+  plus,
+  minus,
+  hunks: [],
+  rewritten: false,
+  newText: "",
 })
 const SAMPLE = [chg("edited", "Why another reader?", 2, 1), chg("added", "Install on macOS", 9, 0, 1), chg("removed", "Pager notes", 0, 14, 2)]
 const idle: ChangeView = { state: "idle", label: "14:02", changes: SAMPLE, summary: "", notes: [] }
 const rowOf = (it: InfoItem) =>
-  it.kind === "changes" ? "Changed" + it.status : it.kind === "change" ? it.mark + " " + it.text + it.counts : it.kind === "summary" || it.kind === "stat" ? it.text : it.kind
+  it.kind === "changes"
+    ? "Changed" + it.status
+    : it.kind === "change"
+      ? it.mark + " " + it.text + it.counts
+      : it.kind === "summary" || it.kind === "stat"
+        ? it.text
+        : it.kind
 
 describe("changeItems", () => {
   test("idle: label with the baseline time, one row per change, counts right-aligned", () => {
@@ -258,12 +311,28 @@ describe("changeItems", () => {
   })
   test("result: model name, summary at most 3 rows, one muted line under each explained change", () => {
     const long = "Adds macOS install steps and drops the old pager notes, then rewrites the intro twice over and again."
-    const items = changeItems({ state: "result", label: "claude-haiku-5-5", changes: SAMPLE, summary: long, notes: [{ what: "feature list trimmed" }, { what: "brew and bun steps" }, undefined] }, "Welcome", 30)
+    const items = changeItems(
+      {
+        state: "result",
+        label: "claude-haiku-5-5",
+        changes: SAMPLE,
+        summary: long,
+        notes: [{ what: "feature list trimmed" }, { what: "brew and bun steps" }, undefined],
+      },
+      "Welcome",
+      30,
+    )
     const rows = items.map(rowOf)
     expect(rows[0]).toBe("Changed · claude-haiku-5-5")
     expect(items.slice(1, 4).every((i) => i.kind === "summary" && i.muted)).toBe(true)
     expect(rows[3]!.endsWith("…")).toBe(true)
-    expect(rows.slice(4)).toEqual(["~ Why another reader?    +2 −1", "    feature list trimmed", "+ Install on macOS          +9", "    brew and bun steps", "− Pager notes              −14"])
+    expect(rows.slice(4)).toEqual([
+      "~ Why another reader?    +2 −1",
+      "    feature list trimmed",
+      "+ Install on macOS          +9",
+      "    brew and bun steps",
+      "− Pager notes              −14",
+    ])
   })
   test("the lead-in is named by the note title", () => {
     expect(changeItems({ ...idle, changes: [chg("edited", "", 1, 0, -1)] }, "Welcome", 30).map(rowOf)[1]).toBe("~ Welcome" + " ".repeat(19) + "+1")
@@ -333,7 +402,10 @@ describe("row spans", () => {
   })
 
   test("infoSpans: keys padded, unresolved links marked ?, tags cut to the room", () => {
-    expect(infoSpans({ kind: "prop", key: "tags", keyW: 6, text: "x" }, t, 20)).toEqual([{ text: "tags  ", fg: t.textMuted }, { text: "x", fg: t.text }])
+    expect(infoSpans({ kind: "prop", key: "tags", keyW: 6, text: "x" }, t, 20)).toEqual([
+      { text: "tags  ", fg: t.textMuted },
+      { text: "x", fg: t.text },
+    ])
     expect(infoSpans({ kind: "link", target: "Gone", path: null }, t, 20)).toEqual([
       { text: "→ ", fg: t.textMuted },
       { text: "Gone", fg: t.textMuted },

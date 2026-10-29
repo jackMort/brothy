@@ -213,7 +213,11 @@ describe("saveConfig file handling", () => {
     saveConfig({ wide: true })
     expect(statSync(file()).mode & 0o777).toBe(0o600)
   })
-  for (const [name, text] of [["empty", ""], ["whitespace", " \n\t"], ["BOM", '\uFEFF{"theme":"old"}']] as const) {
+  for (const [name, text] of [
+    ["empty", ""],
+    ["whitespace", " \n\t"],
+    ["BOM", '\uFEFF{"theme":"old"}'],
+  ] as const) {
     test(`${name} file is saved over, not refused`, () => {
       writeFileSync(file(), text)
       expect(saveConfig({ wide: true })).toBe(true)
@@ -300,7 +304,8 @@ describe("minimap", () => {
 
 describe("file format", () => {
   test("a hand-edited file round-trips byte for byte: unknown keys stay, a patch changes only its own key", () => {
-    const text = JSON.stringify({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, zen: { measure: 60 }, wide: true, extra: { a: [1, 2] } }, null, 2) + "\n"
+    const text =
+      JSON.stringify({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, zen: { measure: 60 }, wide: true, extra: { a: [1, 2] } }, null, 2) + "\n"
     writeFileSync(file(), text)
     expect(loadConfig()).toMatchObject({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, wide: true })
     expect(saveConfig({ theme: "gruvbox" })).toBe(true)

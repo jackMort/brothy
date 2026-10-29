@@ -9,7 +9,8 @@ import { WORDMARK } from "../src/ui/status"
 import { BIG, STILL_TICK, artWidth, steamRows, welcomeArt } from "../src/ui/welcome"
 
 /** a cell in SVG units: the terminal's 1:2 cell */
-const CW = 10, CH = 20
+const CW = 10,
+  CH = 20
 export const STEAM_FRAMES = 120
 
 /** the half-block glyphs the wordmark uses: which halves of the cell are ink (top, bottom) */
@@ -34,13 +35,20 @@ export function siteArt() {
   )
   // the bowl alone: the art is as wide as the wordmark, the bowl sits centred in it
   const ox = (artWidth(BIG) - (BIG.bowlW + 2)) >> 1
-  const art = welcomeArt(BIG, STILL_TICK, { steam: false }).slice(WORDMARK.length).map((r) => r.slice(ox, ox + BIG.bowlW + 2))
+  const art = welcomeArt(BIG, STILL_TICK, { steam: false })
+    .slice(WORDMARK.length)
+    .map((r) => r.slice(ox, ox + BIG.bowlW + 2))
   const paths = { body: "", edge: "", broth: "" }
   art.forEach((row, y) =>
     row.forEach((c, x) => {
       if (c.role !== "body" && c.role !== "edge") return
       const bits = QUAD.indexOf(c.ch)
-      for (const [dx, dy, b] of [[0, 0, 1], [1, 0, 2], [0, 1, 4], [1, 1, 8]] as const)
+      for (const [dx, dy, b] of [
+        [0, 0, 1],
+        [1, 0, 2],
+        [0, 1, 4],
+        [1, 1, 8],
+      ] as const)
         if (bits & b) paths[c.role] += rect(x * CW + (dx * CW) / 2, y * CH + (dy * CH) / 2, CW / 2, CH / 2)
       if (c.broth) paths.broth += rect(x * CW, y * CH, CW, CH / 2)
     }),

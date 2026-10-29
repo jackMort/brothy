@@ -70,11 +70,17 @@ test("themeFamilies: 22 families in the darks' order, one-dark and one-light as 
   }
   expect(FAMILIES.find((f) => f.name === "one")).toMatchObject({ dark: { name: "one-dark" }, light: { name: "one-light" } })
   expect(familyOf(themeByName("gruvbox-light"))?.name).toBe("gruvbox")
-  expect(FAMILIES.filter((f) => onlyMode(f)).map((f) => [f.name, onlyMode(f)])).toEqual([["synthwave84", "dark"], ["vesper", "dark"]])
+  expect(FAMILIES.filter((f) => onlyMode(f)).map((f) => [f.name, onlyMode(f)])).toEqual([
+    ["synthwave84", "dark"],
+    ["vesper", "dark"],
+  ])
   expect(familyOf(themeByName("vesper"))).toEqual({ name: "vesper", dark: themeByName("vesper") })
   // a palette without its twin is a single-mode family of its own, light-only too
   const fams = themeFamilies([themeByName("nord"), themeByName("dracula-light"), themeByName("nord-light")])
-  expect(fams.map((f) => [f.name, onlyMode(f)])).toEqual([["nord", undefined], ["dracula", "light"]])
+  expect(fams.map((f) => [f.name, onlyMode(f)])).toEqual([
+    ["nord", undefined],
+    ["dracula", "light"],
+  ])
   expect(familyTheme(fams[1]!, "dark").name).toBe("dracula-light")
   expect(familyTheme(fams[0]!, "light").name).toBe("nord-light")
   expect(NAME_W).toBe(13) // synthwave84
@@ -220,7 +226,17 @@ test("listTop keeps the highlight centred inside the list", () => {
 test("roleWords: every content role in its own colour, shortened to fit", () => {
   const t = themeByName("dracula")
   const full = roleWords(t, 63)
-  expect(full.filter((s) => s.text.trim()).map((s) => s.fg)).toEqual([t.text, t.textMuted, t.primary, t.secondary, t.accent, t.error, t.warning, t.success, t.info])
+  expect(full.filter((s) => s.text.trim()).map((s) => s.fg)).toEqual([
+    t.text,
+    t.textMuted,
+    t.primary,
+    t.secondary,
+    t.accent,
+    t.error,
+    t.warning,
+    t.success,
+    t.info,
+  ])
   expect(text(roleWords(t, 63))).toBe("text muted primary secondary accent error warning success info")
   expect(text(roleWords(t, 80))).toBe("text  muted  primary  secondary  accent  error  warning  success  info")
   expect(text(roleWords(t, 57))).toBe("text muted primary second accent error warn success info")

@@ -50,7 +50,7 @@ describe("load / save", () => {
     saveProjects(list)
     expect(loadProjects()).toEqual(list)
   })
-  test("the file is {\"projects\": [...]} in two-space JSON with a trailing newline, and a stored file reads back", () => {
+  test('the file is {"projects": [...]} in two-space JSON with a trailing newline, and a stored file reads back', () => {
     const list = [{ root: "/a", lastNote: "/a/n.md", top: 12, geo: { heads: [0, 5], total: 30 }, at: 5 }, entry("/b", 4)]
     saveProjects(list)
     const text = readFileSync(projectsPath(), "utf8")
@@ -226,7 +226,11 @@ describe("openRows", () => {
     const rows = openRows(mine, "~/Doc", o)
     expect(rows.map((r) => (r.kind === "header" ? r.title : r.kind === "recent" ? r.name : r.name))).toEqual(["Path", "Docs", "Recent", "vault"])
     // "~/" fuzzily matches every path under home, but only a prefix counts
-    expect(openRows(mine, "~/", o).filter((r) => r.kind === "recent").map((r) => r.kind === "recent" && r.name)).toEqual(["vault", "x"])
+    expect(
+      openRows(mine, "~/", o)
+        .filter((r) => r.kind === "recent")
+        .map((r) => r.kind === "recent" && r.name),
+    ).toEqual(["vault", "x"])
     expect(openRows(mine, "~/", o)[1]).toMatchObject({ kind: "path", self: true })
   })
   test("nothing matching: no rows", () => {
@@ -240,7 +244,9 @@ describe("openRows path filters", () => {
     const list = [entry("/w/proj", 2), entry("/w/project-other", 1), entry("/w/proj/sub", 0)]
     const io: DirIO = { list: () => [] }
     for (const q of ["/w/proj", "/w/proj/"]) {
-      const roots = openRows(list, q, o(io)).filter((r) => r.kind === "recent").map((r) => (r as { entry: ProjectEntry }).entry.root)
+      const roots = openRows(list, q, o(io))
+        .filter((r) => r.kind === "recent")
+        .map((r) => (r as { entry: ProjectEntry }).entry.root)
       expect(roots, q).toEqual(["/w/proj", "/w/proj/sub"])
     }
   })

@@ -24,7 +24,11 @@ import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
 /** The document box: borderless, wrapped at the reading measure and centered; a click focuses it, the wheel scrolls it. */
-export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScroll }: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">): ReactNode {
+export function docBox(
+  c: AppCtx,
+  d: Derived,
+  { welcomeRows, welcomeOpen, zenScroll }: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">,
+): ReactNode {
   const { welcome, bump, focusDoc, scrollBy } = c
   const { s, L, t, file, view, top, tw, spot, win, sheet } = d
   const { bodyH, CW, CH, padL } = L
@@ -59,7 +63,12 @@ export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScr
   } else if (file?.error) {
     content = (
       <box key="error" style={{ flexDirection: "column", paddingLeft: L.zen ? 2 : 0 }}>
-        <Row spans={[{ text: "Could not open ", fg: t.error, attr: 1 }, { text: rel, fg: t.text }]} />
+        <Row
+          spans={[
+            { text: "Could not open ", fg: t.error, attr: 1 },
+            { text: rel, fg: t.text },
+          ]}
+        />
         <Row spans={[]} />
         <Row spans={[{ text: truncate(file.error, CW), fg: t.textMuted }]} />
       </box>
@@ -80,7 +89,11 @@ export function docBox(c: AppCtx, d: Derived, { welcomeRows, welcomeOpen, zenScr
             const r = i - sheetAt
             const spans: Span[] = r
               ? [{ text: glossed[r - 1] ?? "", fg: ink(t.textMuted) }]
-              : [{ text: sheetRule[0], fg: ink(t.border) }, { text: sheetRule[1], fg: ink(t.textMuted) }, { text: sheetRule[2], fg: ink(t.border) }]
+              : [
+                  { text: sheetRule[0], fg: ink(t.border) },
+                  { text: sheetRule[1], fg: ink(t.textMuted) },
+                  { text: sheetRule[2], fg: ink(t.border) },
+                ]
             return <Row key={"gloss" + r} spans={[{ text: "  " }, ...spans]} />
           }
           const n = win.first + i

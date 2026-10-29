@@ -35,7 +35,19 @@ export function helpOverlay(c: AppCtx, d: Derived, { version, helpGo }: { versio
   const titleRoom = Math.min(layout.width, W - 2) - 2 - 8 - 2 - 3 - (helpNote ? helpNote.length + 2 : 0)
   const helpFull = `Keybindings · brothy v${version} · ${t.name}`
   const helpTitle = truncate(helpFull.length <= titleRoom ? helpFull : `Keybindings · brothy v${version}`, Math.max(1, titleRoom))
-  return <HelpSheet t={t} W={W} H={H} layout={layout} top={helpTopC} title={helpTitle} note={helpNote} onClose={() => set({ help: false })} onScroll={(dir) => helpGo(helpTopC + dir * WHEEL_ROWS)} />
+  return (
+    <HelpSheet
+      t={t}
+      W={W}
+      H={H}
+      layout={layout}
+      top={helpTopC}
+      title={helpTitle}
+      note={helpNote}
+      onClose={() => set({ help: false })}
+      onScroll={(dir) => helpGo(helpTopC + dir * WHEEL_ROWS)}
+    />
+  )
 }
 
 /** Hover: row `i` becomes popup `key`'s highlight (with `top`, for Find), unless it already is or the popup has closed. */
@@ -47,7 +59,11 @@ function hoverRow({ ui, set }: AppCtx, key: "switcher" | "opener" | "prompt", hl
 }
 
 /** The `C-p` switcher (Go to, or Ask for a `?` query), with the peek pane where it fits. */
-export function switchOverlay(c: AppCtx, d: Derived, { closeSwitcher, swGo, swActivate, peekPane }: Pick<SwitcherControl, "closeSwitcher" | "swGo" | "swActivate" | "peekPane">): ReactNode {
+export function switchOverlay(
+  c: AppCtx,
+  d: Derived,
+  { closeSwitcher, swGo, swActivate, peekPane }: Pick<SwitcherControl, "closeSwitcher" | "swGo" | "swActivate" | "peekPane">,
+): ReactNode {
   const { W, H } = c
   const { s, L, t, swRows, swHl, question } = d
   const notesLabel = s.indexing ? `indexing ${s.indexing[0]}/${s.indexing[1]}` : plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note")
@@ -96,7 +112,11 @@ export function openOverlay(c: AppCtx, d: Derived, { opGo, opOpen }: Pick<Worksp
 }
 
 /** The `/` picker: find in the document, one row per matching line. */
-export function findOverlay(c: AppCtx, d: Derived, { promptDefault, promptHighlight, promptSubmit, promptClose }: Pick<Popups, "promptDefault" | "promptHighlight" | "promptSubmit" | "promptClose">): ReactNode {
+export function findOverlay(
+  c: AppCtx,
+  d: Derived,
+  { promptDefault, promptHighlight, promptSubmit, promptClose }: Pick<Popups, "promptDefault" | "promptHighlight" | "promptSubmit" | "promptClose">,
+): ReactNode {
   const { W, H } = c
   const { s, L, t, view, matches } = d
   const { prompt } = s
@@ -108,15 +128,7 @@ export function findOverlay(c: AppCtx, d: Derived, { promptDefault, promptHighli
   const ptop = keepVisible(prompt.hl >= 0 ? prompt.top : 0, Math.max(0, hl), height, items.length)
   const note = prompt.value ? `${matches.length} match${matches.length === 1 ? "" : "es"}` : undefined
   return (
-    <Overlay
-      t={t}
-      W={W}
-      H={H}
-      width={popupW}
-      title="Find in Document"
-      onClose={promptClose}
-      onScroll={(dir) => items.length && promptHighlight(hl + dir)}
-    >
+    <Overlay t={t} W={W} H={H} width={popupW} title="Find in Document" onClose={promptClose} onScroll={(dir) => items.length && promptHighlight(hl + dir)}>
       <PickerInput t={t} value={prompt.value} placeholder="Find in document..." note={note} width={popupW} />
       <PickerList
         t={t}
@@ -165,7 +177,12 @@ export function themePickView(c: AppCtx, d: Derived): ThemePickView | null {
 }
 
 /** The `t` picker drawn from `view` (null: closed). */
-export function themeOverlay(c: AppCtx, d: Derived, view: ThemePickView | null, { closeTheme, themeSet, applyTheme }: Pick<Popups, "closeTheme" | "themeSet" | "applyTheme">): ReactNode {
+export function themeOverlay(
+  c: AppCtx,
+  d: Derived,
+  view: ThemePickView | null,
+  { closeTheme, themeSet, applyTheme }: Pick<Popups, "closeTheme" | "themeSet" | "applyTheme">,
+): ReactNode {
   const { ui, memo, W, H } = c
   if (!view) return null
   const { pick, rows, geo, hl, top, cand, sample } = view

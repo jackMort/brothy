@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      // src/cli.tsx is the package.json `bin`, so knip already knows it; tests and scripts reach the exports that only they use
+      "entry": ["tests/**/*.{ts,tsx}", "scripts/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "scripts/*.{ts,tsx}"],
+      // tests/cli.test.ts builds a FIFO with the system mkfifo
+      "ignoreBinaries": ["mkfifo"]
+    },
+    "site": {
+      "entry": ["src/**/*.astro"],
+      "project": ["src/**/*.{ts,mjs,astro,mdx}"]
+    }
+  }
+}

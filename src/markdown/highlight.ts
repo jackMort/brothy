@@ -110,38 +110,40 @@ const hasParser = (lang: string) => PARSER_FILETYPES.includes(lang)
 // ------------------------------------------------------------ capture names
 
 /** Longest matching prefix wins. Groups that map to nothing (spell, conceal, ...) are ignored. */
-const GROUP_KIND = new Map<string, Kind>(Object.entries<Kind>({
-  comment: "comment",
-  string: "string",
-  "string.escape": "escape",
-  "string.special": "escape",
-  character: "string",
-  number: "number",
-  float: "number",
-  boolean: "constant",
-  constant: "constant",
-  keyword: "keyword",
-  conditional: "keyword",
-  repeat: "keyword",
-  include: "keyword",
-  exception: "keyword",
-  storageclass: "keyword",
-  "variable.builtin": "keyword",
-  function: "function",
-  method: "function",
-  type: "type",
-  class: "type",
-  module: "type",
-  namespace: "type",
-  property: "property",
-  field: "property",
-  "variable.member": "property",
-  variable: "variable",
-  operator: "operator",
-  punctuation: "punctuation",
-  tag: "tag",
-  attribute: "attribute",
-}))
+const GROUP_KIND = new Map<string, Kind>(
+  Object.entries<Kind>({
+    comment: "comment",
+    string: "string",
+    "string.escape": "escape",
+    "string.special": "escape",
+    character: "string",
+    number: "number",
+    float: "number",
+    boolean: "constant",
+    constant: "constant",
+    keyword: "keyword",
+    conditional: "keyword",
+    repeat: "keyword",
+    include: "keyword",
+    exception: "keyword",
+    storageclass: "keyword",
+    "variable.builtin": "keyword",
+    function: "function",
+    method: "function",
+    type: "type",
+    class: "type",
+    module: "type",
+    namespace: "type",
+    property: "property",
+    field: "property",
+    "variable.member": "property",
+    variable: "variable",
+    operator: "operator",
+    punctuation: "punctuation",
+    tag: "tag",
+    attribute: "attribute",
+  }),
+)
 GROUP_KIND.set("constructor", "type") // not a literal key: it collides with Object.prototype typing
 
 export function groupKind(group: string): Kind | undefined {
@@ -220,7 +222,8 @@ export function fallbackTokens(line: string, lang: string): Tok[] {
   const family = FAMILY_OF.get(lang)
   if (!family) return line ? [{ text: line }] : []
   const comment = family === "slash" ? "\\/\\/.*$" : family === "hash" ? "(?<![^\\s])#.*$" : family === "dash" ? "--.*$" : null
-  const string = family === "data" ? `"(?:\\\\.|[^"\\\\])*"` : `"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'` + (family === "slash" ? "|`(?:\\\\.|[^`\\\\])*`" : "")
+  const string =
+    family === "data" ? `"(?:\\\\.|[^"\\\\])*"` : `"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'` + (family === "slash" ? "|`(?:\\\\.|[^`\\\\])*`" : "")
   const re = new RegExp(
     `${comment ? `(${comment})` : "((?!))"}|(${string})|(\\b(?:0[xX][\\da-fA-F_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b)|(\\b(?:true|false|null|nil|None|True|False|undefined)\\b)|([\\s\\S])`,
     "gm",

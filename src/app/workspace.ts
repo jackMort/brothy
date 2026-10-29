@@ -154,7 +154,7 @@ export function makeWorkspace(c: AppCtx, { dropAsk, dropIndex }: Pick<SwitcherCo
   /** Welcome: open recent row `i` (row 0 is the header); a missing folder is dropped from the list instead. */
   const welcomeOpen = (i: number) => {
     const r = welcomeRows().rows[i]
-    if (!r || r.kind !== "recent") return
+    if (r?.kind !== "recent") return
     if (r.missing) {
       saveProjects(loadProjects().filter((e) => e.root !== r.entry.root))
       welcome.current.gen++

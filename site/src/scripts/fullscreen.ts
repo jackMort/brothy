@@ -33,7 +33,9 @@ export function mountFullscreen(stage: HTMLElement) {
     document.documentElement.classList.remove("demo-full")
     close?.setAttribute("hidden", "")
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-    try { screen.orientation.unlock?.() } catch {}
+    try {
+      screen.orientation.unlock?.()
+    } catch {}
     if (!fromHistory && history.state?.demoFull) history.back()
   }
 
@@ -49,7 +51,9 @@ export function mountFullscreen(stage: HTMLElement) {
   )
   close?.addEventListener("click", () => shut())
   addEventListener("popstate", () => shut(true))
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) shut() })
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement) shut()
+  })
   addEventListener(
     "keydown",
     (e) => {

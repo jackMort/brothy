@@ -25,7 +25,11 @@ test("welcome: the wordmark over a bowl, today's message, keycaps, recent projec
   const t = themeByName("brothy")
   const other = tmp({ "x.md": "# X\n" })
   // three recents, as in v3's frame
-  seedProjects([{ root: other, at: Date.now() - 3600_000, lastNote: join(other, "x.md") }, { root: tmp({}), at: 2 }, { root: tmp({}), at: 1 }])
+  seedProjects([
+    { root: other, at: Date.now() - 3600_000, lastNote: join(other, "x.md") },
+    { root: tmp({}), at: 2 },
+    { root: tmp({}), at: 1 },
+  ])
   const empty = tmp({ "notes.txt": "" })
   const s = await mount(empty, undefined, { size: WELCOME })
   const f = await keys(s)
@@ -64,7 +68,11 @@ test("welcome: no recent projects leaves out the list, the hint stays", async ()
 })
 
 test("welcome at 80×24: the small bowl, no chopsticks, v3's rows", async () => {
-  seedProjects([{ root: tmp({}), at: 3 }, { root: tmp({}), at: 2 }, { root: tmp({}), at: 1 }])
+  seedProjects([
+    { root: tmp({}), at: 3 },
+    { root: tmp({}), at: 2 },
+    { root: tmp({}), at: 1 },
+  ])
   const s = await mount(tmp({ "notes.txt": "" }), undefined, { size: { width: 80, height: 24 } })
   const rows = (await keys(s)).split("\n")
   expect(rows[2]).toContain("▄▄▄▄  ▄▄▄▄")
@@ -87,7 +95,10 @@ test("welcome: a click on a recent project opens it", async () => {
 test("welcome: ↑ ↓ move the selection and ⏎ opens it; pointing moves it too", async () => {
   const a = tmp({ "a.md": "# Alpha note\n" })
   const b = tmp({ "b.md": "# Bravo note\n" })
-  seedProjects([{ root: a, at: Date.now() }, { root: b, at: Date.now() - 1000 }])
+  seedProjects([
+    { root: a, at: Date.now() },
+    { root: b, at: Date.now() - 1000 },
+  ])
   const s = await mount(tmp({ "notes.txt": "" }), undefined, { size: WELCOME })
   await keys(s)
   const sel = () => onBg(s, PRIMARY).join("")
@@ -127,7 +138,13 @@ test("welcome with motion: the wordmark and bowl ink in from border; the steam r
   const s = await mount(d, undefined, { size: WELCOME, motion: true })
   const markFg = () => hex(spansOf(s).find((x) => x.text.includes("▄▄▄▄"))!.fg)
   expect(markFg()).toBe(t.border)
-  const steam = () => s.captureCharFrame().split("\n").slice(7, 12).map((r) => r.replace(/▞/g, " ")).join("\n")
+  const steam = () =>
+    s
+      .captureCharFrame()
+      .split("\n")
+      .slice(7, 12)
+      .map((r) => r.replace(/▞/g, " "))
+      .join("\n")
   const first = steam()
   await waitFor(s, () => markFg() === t.primary)
   await waitFor(s, () => steam() !== first)
@@ -154,7 +171,12 @@ test("welcome with motion: a resize stops the steam for good, and so does openin
   const other = tmp({ "x.md": "# Xylophone\n" })
   seedProjects([{ root: other, at: Date.now() }])
   const s = await mount(tmp({ "notes.txt": "" }), undefined, { size: WELCOME, motion: true })
-  const steam = () => s.captureCharFrame().split("\n").filter((r) => /[⠁-⣿]/.test(r)).join("\n")
+  const steam = () =>
+    s
+      .captureCharFrame()
+      .split("\n")
+      .filter((r) => /[⠁-⣿]/.test(r))
+      .join("\n")
   const first = steam()
   await waitFor(s, () => steam() !== first)
   s.resize(118, 34)
@@ -166,7 +188,12 @@ test("welcome with motion: a resize stops the steam for good, and so does openin
   expect(steam()).toBe(still)
   await keys(s, "enter")
   const opened = await waitFrame(s, (f) => f.includes("Xylophone"))
-  expect(opened.split("\n").map((r) => [...r].slice(0, 118 - MINI_W).join("")).join("\n")).not.toMatch(/[⠁-⣿]/) // the minimap keeps its braille
+  expect(
+    opened
+      .split("\n")
+      .map((r) => [...r].slice(0, 118 - MINI_W).join(""))
+      .join("\n"),
+  ).not.toMatch(/[⠁-⣿]/) // the minimap keeps its braille
 })
 
 test("welcome keys act only on the rows on screen: none listed, ⏎ opens nothing; a short list stops at its last row", async () => {
@@ -216,7 +243,10 @@ test("welcome at 60 columns: recent rows stay inside the measure and the hint li
   const head = rows.findIndex((r) => /Recent\s+1/.test(r))
   const y = head + 1
   expect(rows.find((r) => r.includes("⏎ open"))!.indexOf("⏎")).toBe(rows[head]!.indexOf("Recent"))
-  const fill = s.captureSpans().lines[y]!.spans.filter((sp) => hex(sp.bg) === PRIMARY).reduce((n, sp) => n + sp.text.length, 0)
+  const fill = s
+    .captureSpans()
+    .lines[y]!.spans.filter((sp) => hex(sp.bg) === PRIMARY)
+    .reduce((n, sp) => n + sp.text.length, 0)
   expect(fill).toBeLessThanOrEqual(54) // the measure at 60 columns
 })
 

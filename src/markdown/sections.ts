@@ -10,7 +10,13 @@ import { sourceScan } from "./source"
 
 /** Heading text as a lenient key: lowercase, `#` dropped, dashes and runs of spaces as one space, punctuation removed. */
 export const headingKey = (s: string) =>
-  s.normalize("NFC").toLowerCase().replace(/#/g, " ").replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/[\s-]+/g, " ").trim()
+  s
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/#/g, " ")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/[\s-]+/g, " ")
+    .trim()
 
 /** Ranges are `[from, to)` source lines; `line`…`end` is the heading itself (two lines for setext). */
 export interface NoteSection {

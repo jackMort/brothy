@@ -92,7 +92,9 @@ describe("outline parity", () => {
   ]
   test("section i is heading i in Preview and Source", () => {
     for (const src of fixtures) {
-      const sections = noteSections(src).slice(1).map((s) => [s.depth, s.text])
+      const sections = noteSections(src)
+        .slice(1)
+        .map((s) => [s.depth, s.text])
       expect(sections).toEqual(render(parseFrontMatter(src).body, 60, t).headings.map((h) => [h.depth, h.text]))
       expect(sections).toEqual(renderSource(src, 60, t).headings.map((h) => [h.depth, h.text]))
     }

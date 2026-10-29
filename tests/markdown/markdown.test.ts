@@ -122,7 +122,10 @@ describe("render", () => {
 describe("source + stats", () => {
   test("front matter is parsed and offset counted", () => {
     const fm = parseFrontMatter("---\ntitle: Hi\ntags: a\n---\n# Body")
-    expect(fm.entries).toEqual([["title", "Hi"], ["tags", "a"]])
+    expect(fm.entries).toEqual([
+      ["title", "Hi"],
+      ["tags", "a"],
+    ])
     expect(fm.body).toBe("# Body")
     expect(fm.offset).toBe(4)
   })
@@ -171,7 +174,10 @@ describe("parseProperties", () => {
     ])
   })
   test("an empty block is an empty value; no front matter means no properties", () => {
-    expect(parseProperties("---\ntags:\nnext: 1\n---\n")).toEqual([["tags", ""], ["next", "1"]])
+    expect(parseProperties("---\ntags:\nnext: 1\n---\n")).toEqual([
+      ["tags", ""],
+      ["next", "1"],
+    ])
     expect(parseProperties("# just text")).toEqual([])
   })
 })
@@ -193,9 +199,13 @@ describe("stripCode", () => {
 })
 
 describe("document text stays readable in every theme", () => {
-  const doc = "---\ntitle: T\ntags: [a]\n---\n\n# Heading\n\n## Sub heading\n\nSetext\n======\n\n> quote\n> next\n\n- item\n\n```ts\nconst a = 1\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n[link](https://x.y) and `code`\n\n---\n"
+  const doc =
+    "---\ntitle: T\ntags: [a]\n---\n\n# Heading\n\n## Sub heading\n\nSetext\n======\n\n> quote\n> next\n\n- item\n\n```ts\nconst a = 1\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n[link](https://x.y) and `code`\n\n---\n"
   const BOX = /^[\s─━│┌┐└┘├┤┬┴┼═▎]*$/
-  for (const [label, draw] of [["preview", render], ["source", renderSource]] as const) {
+  for (const [label, draw] of [
+    ["preview", render],
+    ["source", renderSource],
+  ] as const) {
     test(`${label}: every non-rule glyph reaches 3:1 on its own background`, () => {
       for (const th of themes)
         for (const l of draw(doc, 80, th).lines)
@@ -208,7 +218,9 @@ describe("document text stays readable in every theme", () => {
 })
 
 test("wordStats: the same words and minutes as stats, without lexing", () => {
-  const src = "# Title\n\nSome words here, don't count `code` twice.\n\n```js\nconst skipped = 1\n```\n\n- [x] done task\n\n%%hidden comment%%\n" + "more words ".repeat(300)
+  const src =
+    "# Title\n\nSome words here, don't count `code` twice.\n\n```js\nconst skipped = 1\n```\n\n- [x] done task\n\n%%hidden comment%%\n" +
+    "more words ".repeat(300)
   const st = stats(src)
   expect(wordStats(src)).toEqual({ words: st.words, minutes: st.minutes })
   expect(st.minutes).toBe(3)

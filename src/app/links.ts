@@ -78,7 +78,8 @@ export function makeLinks(c: AppCtx) {
     const name = (p: string) => stem(basename(p))
     for (let i = stepTo(h, dir); i !== null; i = stepTo(h, dir)) {
       const e = h.entries[i]!
-      if (e.path !== STDIN && !existsSync(e.path)) { // the piped document is relative, never on disk
+      if (e.path !== STDIN && !existsSync(e.path)) {
+        // the piped document is relative, never on disk
         gone.push(`“${name(e.path)}” is gone`)
         h = drop(h, i)
         continue

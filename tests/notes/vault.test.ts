@@ -64,7 +64,10 @@ describe("indexNote", () => {
     const src = "---\naliases: [Kafka, Streams]\n---\n# Top\nbody line\n```\nsecret code\n```\n## Sub\n%% hidden %%\nend\n"
     const d = indexNote(src, 5, src.length)
     expect(d.aliases).toEqual(["Kafka", "Streams"])
-    expect(d.headings).toEqual([{ text: "Top", line: 3, depth: 1 }, { text: "Sub", line: 8, depth: 2 }])
+    expect(d.headings).toEqual([
+      { text: "Top", line: 3, depth: 1 },
+      { text: "Sub", line: 8, depth: 2 },
+    ])
     expect(d.text).not.toContain("secret")
     expect(d.text).not.toContain("hidden")
     expect(d.text).not.toContain("aliases")
@@ -121,10 +124,16 @@ describe("refreshIndex", () => {
     const ix = emptyIndex()
     let alive = true
     const seen: [number, number][] = []
-    const ok = await refreshIndex(ix, treeOf(rels), memIO(files).io, (d, n) => {
-      seen.push([d, n])
-      alive = false
-    }, () => alive)
+    const ok = await refreshIndex(
+      ix,
+      treeOf(rels),
+      memIO(files).io,
+      (d, n) => {
+        seen.push([d, n])
+        alive = false
+      },
+      () => alive,
+    )
     expect(ok).toBe(false)
     expect(seen).toEqual([[CHUNK, CHUNK + 5]])
     expect(ix.docs.size).toBe(CHUNK)

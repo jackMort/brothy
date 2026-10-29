@@ -16,7 +16,14 @@ const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 /** The note's name: front-matter `title` (quotes, `*`, `_` and backticks stripped), else the file name without extension. */
 export function noteTitle(props: readonly (readonly [string, string | string[]])[], path: string): string {
   const v = props.find(([k]) => k.toLowerCase() === "title")?.[1]
-  const title = typeof v === "string" ? v.trim().replace(/^(["'])(.*)\1$/, "$2").replace(/[*_`]/g, "").trim() : ""
+  const title =
+    typeof v === "string"
+      ? v
+          .trim()
+          .replace(/^(["'])(.*)\1$/, "$2")
+          .replace(/[*_`]/g, "")
+          .trim()
+      : ""
   if (title) return title
   const name = basename(path)
   return stem(name) || name
@@ -40,10 +47,7 @@ const TITLE_MIN = 12
 /** Column of the text after the logo: the logo and a space. */
 const AFTER_LOGO = 2
 const locWidth = (l: Location) =>
-  (l.folder ? width(l.folder) + SEP : 0) +
-  width(l.title) +
-  l.ancestors.reduce((n, a) => n + SEP + width(a), 0) +
-  (l.section ? SEP + width(l.section) : 0)
+  (l.folder ? width(l.folder) + SEP : 0) + width(l.title) + l.ancestors.reduce((n, a) => n + SEP + width(a), 0) + (l.section ? SEP + width(l.section) : 0)
 
 /**
  * The top line's `folder / Title › ancestors › section`, fitted to `room` columns. `trail` is
@@ -70,10 +74,7 @@ export function locationParts(dir: string, title: string, trail: string[], room:
   return l
 }
 
-export type ClusterItem =
-  | { kind: "search"; query: string; idx: number | null; count: number }
-  | { kind: "source" }
-  | { kind: "wide" }
+export type ClusterItem = { kind: "search"; query: string; idx: number | null; count: number } | { kind: "source" } | { kind: "wide" }
 
 /** columns between the cluster's items and between footer hints */
 const GAP = 3
@@ -197,10 +198,7 @@ export function headerLayout(o: {
   wide: boolean
 }): HeaderLayout {
   const root = o.folder === "." || o.folder === ""
-  const panel =
-    o.inline && !o.zen
-      ? { col: AFTER_LOGO, text: root ? truncate(o.vault, o.SW - AFTER_LOGO) : shrinkFolder(o.folder, o.SW - AFTER_LOGO) }
-      : null
+  const panel = o.inline && !o.zen ? { col: AFTER_LOGO, text: root ? truncate(o.vault, o.SW - AFTER_LOGO) : shrinkFolder(o.folder, o.SW - AFTER_LOGO) } : null
   const cluster = stateCluster(
     { query: o.query, matchIdx: o.matchIdx, count: o.count, source: o.source, wide: o.wide, zen: o.zen },
     Math.max(0, o.textWidth - SEP - Math.min(width(o.title), TITLE_MIN)),
@@ -245,7 +243,10 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
   }
   if (h.panel) {
     const parts = h.panel.text.split(" / ")
-    at(h.panel.col, parts.flatMap((p, i) => (i ? [{ text: " / ", fg: t.borderSubtle }] : []).concat({ text: p, fg: t.textMuted })))
+    at(
+      h.panel.col,
+      parts.flatMap((p, i) => (i ? [{ text: " / ", fg: t.borderSubtle }] : []).concat({ text: p, fg: t.textMuted })),
+    )
   }
   const loc = h.head
   const left: Span[] = []
@@ -261,10 +262,11 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
     right.push({ text: `/${it.query} `, fg: t.accent })
     if (!it.count) right.push({ text: "no match", fg: t.error, attr: A.BOLD })
     else
-      right.push(
-        it.idx === null ? { text: "–", fg: t.textMuted } : { text: String(it.idx), fg: t.text, attr: A.BOLD },
-        { text: `/${it.count}`, fg: t.text, attr: A.BOLD },
-      )
+      right.push(it.idx === null ? { text: "–", fg: t.textMuted } : { text: String(it.idx), fg: t.text, attr: A.BOLD }, {
+        text: `/${it.count}`,
+        fg: t.text,
+        attr: A.BOLD,
+      })
   })
   at(h.clusterCol, right)
   return out
@@ -281,13 +283,11 @@ const fraction = (top: number, maxTop: number) => (maxTop === 0 ? 1 : Math.max(0
 export const fillWidth = (top: number, maxTop: number, cols: number) => Math.round(Math.max(0, cols) * fraction(top, maxTop))
 
 /** Progress label parts: `pre` (teleprompter), `main` (percentage or page), `rest` (time left). App colors them. */
-export function progressLabel(o: {
-  top: number
-  maxTop: number
-  minutes: number
-  page?: { index: number; count: number }
-  wpm?: number
-}): { pre: string; main: string; rest: string } {
+export function progressLabel(o: { top: number; maxTop: number; minutes: number; page?: { index: number; count: number }; wpm?: number }): {
+  pre: string
+  main: string
+  rest: string
+} {
   const pre = o.wpm !== undefined ? `▶ ${o.wpm} wpm · ` : ""
   const rest = o.minutes > 0 ? ` · ${o.minutes} min left` : ""
   if (o.page) return { pre, main: `page ${o.page.index + 1} of ${o.page.count}`, rest }
@@ -299,7 +299,11 @@ export function progressLabel(o: {
 /** The progress line, `cols` wide: the read part in primary, the rest in border, then label `pl` (none: the line alone). */
 export function progressSpans(t: Theme, pl: { pre: string; main: string; rest: string } | null, top: number, maxTop: number, cols: number): Span[] {
   const label: Span[] = pl
-    ? [{ text: pl.pre, fg: t.textMuted }, { text: pl.main, fg: t.text }, { text: pl.rest, fg: t.textMuted }].filter((x) => x.text)
+    ? [
+        { text: pl.pre, fg: t.textMuted },
+        { text: pl.main, fg: t.text },
+        { text: pl.rest, fg: t.textMuted },
+      ].filter((x) => x.text)
     : []
   const lineW = Math.max(0, cols - (label.length ? spanWidth(label) + 1 : 0))
   const fill = pl ? fillWidth(top, maxTop, lineW) : 0
@@ -347,7 +351,11 @@ export function fitHints(items: HintItem[], room: number): HintItem[] {
 
 /** The hints of `items` that fit in `room` columns (`fitHints`), keys in text and words in textMuted. */
 export const hintSpans = (t: Theme, items: HintItem[], room: number): Span[] =>
-  fitHints(items, room).flatMap((h, i): Span[] => [...(i ? [{ text: "   " }] : []), { text: h.key, fg: t.text }, ...(h.word ? [{ text: " " + h.word, fg: t.textMuted }] : [])])
+  fitHints(items, room).flatMap((h, i): Span[] => [
+    ...(i ? [{ text: "   " }] : []),
+    { text: h.key, fg: t.text },
+    ...(h.word ? [{ text: " " + h.word, fg: t.textMuted }] : []),
+  ])
 
 export type ToastKind = "ok" | "info" | "error"
 export interface Toast {
@@ -383,7 +391,11 @@ export function toastSpans(t: Theme, toast: Toast | null, now: number, cols: num
   const step = toast ? toastStep(toast, now) : null
   if (!toast || step === null) return []
   const fg = toast.kind === "ok" ? t.success : toast.kind === "error" ? t.error : t.info
-  return fadeSpans(t, [{ text: truncate(`${toastIcon(toast)} ${toast.msg}`, cols), fg, attr: toast.kind === "error" ? A.BOLD : A.NONE }], step / (GHOST_STEPS + 1))
+  return fadeSpans(
+    t,
+    [{ text: truncate(`${toastIcon(toast)} ${toast.msg}`, cols), fg, attr: toast.kind === "error" ? A.BOLD : A.NONE }],
+    step / (GHOST_STEPS + 1),
+  )
 }
 
 /** The too-small-terminal message as lines that each fit `W` columns, whole words only; the longest form that fits wins. */

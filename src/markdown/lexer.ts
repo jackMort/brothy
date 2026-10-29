@@ -50,7 +50,10 @@ export function parseWikilink(inner: string): Wikilink {
 /** What a wikilink shows: the alias, else the note's name (`Note › Heading` for heading links). */
 export function wikiLabel(w: Wikilink): string {
   if (w.alias) return w.alias
-  const name = w.target.split("/").at(-1)!.replace(/\.(md|markdown|mdx)$/i, "")
+  const name = w.target
+    .split("/")
+    .at(-1)!
+    .replace(/\.(md|markdown|mdx)$/i, "")
   if (w.heading) return name ? `${name} › ${w.heading}` : w.heading
   return name || (w.block ? `^${w.block}` : "")
 }
@@ -74,7 +77,7 @@ const wikilinkExt: TokenizerExtension = {
     return i < 0 ? undefined : i
   },
   tokenizer(src) {
-    const m = /^(!?)\[\[([^\[\]\n]+)\]\]/.exec(src)
+    const m = /^(!?)\[\[([^[\]\n]+)\]\]/.exec(src)
     if (!m) return undefined
     return { type: "wikilink", raw: m[0], embed: m[1] === "!", ...parseWikilink(m[2]!) } satisfies WikilinkToken
   },

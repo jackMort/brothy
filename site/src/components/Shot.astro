@@ -4,7 +4,10 @@
 import { Image } from "astro:assets"
 import type { ImageMetadata } from "astro"
 
-interface Props { name: string; alt: string }
+interface Props {
+  name: string
+  alt: string
+}
 const { name, alt } = Astro.props
 const shots = import.meta.glob<{ default: ImageMetadata }>("../assets/docs/*.png", { eager: true })
 const dark = shots[`../assets/docs/${name}.png`]?.default

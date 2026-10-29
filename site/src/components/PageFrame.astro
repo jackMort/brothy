@@ -4,16 +4,34 @@
 // sheet of the keys the site understands.
 const { hasSidebar, entry } = Astro.locals.starlightRoute
 const hero = Boolean(entry.data.hero)
-const words = (entry.body ?? "").replace(/```[\s\S]*?```/g, " ").split(/\s+/).filter(Boolean).length
+const words = (entry.body ?? "")
+  .replace(/```[\s\S]*?```/g, " ")
+  .split(/\s+/)
+  .filter(Boolean).length
 const minutes = Math.max(1, Math.round(words / 220))
 
 const HINTS: [string, string, string?][] = hero
   ? [["↑ ↓ ⏎", "start"], ...(entry.id === "404" ? [] : [["space", "tour"] as [string, string]]), ["/", "search"], ["t", "theme"], ["?", "keys", "spare"]]
-  : [["j k", "scroll"], ["[ ]", "section"], ["/", "search"], ["1 2 3", "panel", "spare"], ["^b", "panel", "spare2"], ["t", "theme"], ["?", "keys", "spare"]]
+  : [
+      ["j k", "scroll"],
+      ["[ ]", "section"],
+      ["/", "search"],
+      ["1 2 3", "panel", "spare"],
+      ["^b", "panel", "spare2"],
+      ["t", "theme"],
+      ["?", "keys", "spare"],
+    ]
 const SHEET: [string, string][] = [
-  ["j k", "scroll"], ["g G", "top · bottom"], ["[ ]", "previous · next section"], ["/", "search the docs"],
-  ["1 2 3", "Files · Outline · Info"], ["ctrl+b", "hide / show the panel"], ["t", "theme picker"],
-  ["space", "play / pause the tour (front page)"], ["esc", "close the drawer"], ["?", "this sheet"],
+  ["j k", "scroll"],
+  ["g G", "top · bottom"],
+  ["[ ]", "previous · next section"],
+  ["/", "search the docs"],
+  ["1 2 3", "Files · Outline · Info"],
+  ["ctrl+b", "hide / show the panel"],
+  ["t", "theme picker"],
+  ["space", "play / pause the tour (front page)"],
+  ["esc", "close the drawer"],
+  ["?", "this sheet"],
 ]
 ---
 
