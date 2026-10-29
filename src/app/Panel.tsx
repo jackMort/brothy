@@ -73,7 +73,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
     stripSpans.push({ text: lb.text, fg: active ? (sideFocus ? t.primary : t.text) : t.textMuted, attr: active ? 1 : 0 })
   }
   const activeLabel = strip.labels.find((lb) => lb.view === s.view) ?? strip.labels[0]!
-  const rule: Span[] = [
+  const stripRule: Span[] = [
     { text: "─".repeat(activeLabel.lx), fg: t.border },
     { text: "━".repeat(activeLabel.x1 - activeLabel.lx), fg: sideFocus ? t.accent : t.textMuted },
     { text: "─".repeat(Math.max(0, PNW - 1 - activeLabel.x1)), fg: t.border },
@@ -187,7 +187,7 @@ export function panelBox(c: AppCtx, d: Derived, { outlineGo, jumpChange, openLin
   const filesRight = dup ? truncateLeft(dirname(cur!.node.rel), Math.max(4, AW - 8)) : filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
   const panelRows = [
     panelRow("strip", stripSpans, { onDown: onStrip }),
-    panelRow("rule", rule, { lead: false }),
+    panelRow("rule", stripRule, { lead: false }),
     ...(filterRow ? [filterRowEl(s.view === "outline" ? s.outlineFilter : filter, s.filterTyping && !!sideFocus, s.view === "outline" ? String(d.oRows.length) : filesRight)] : []),
     ...listEls,
   ]

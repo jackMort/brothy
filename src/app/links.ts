@@ -17,7 +17,7 @@ export const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: numb
 
 /** Links, labels and history over the app context. */
 export function makeLinks(c: AppCtx) {
-  const { ui, set, derive, flash, scrolls, here, openFile, focusDoc, setTop } = c
+  const { ui, set, derive, flash, scrolls, currentSpot, openFile, focusDoc, setTop } = c
 
   /** A piped document scans the working folder for links the first time one is used. */
   const ensureLinks = () => {
@@ -83,7 +83,7 @@ export function makeLinks(c: AppCtx) {
         h = drop(h, i)
         continue
       }
-      const history = go(h, i, here())
+      const history = go(h, i, currentSpot())
       if (e.pos) scrolls.current.set(e.pos.key, { top: e.pos.top, geo: e.pos.geo })
       openFile(e.path, "history")
       set({ history: derive().sideFocus ? history : keep(history) }) // reached with document focus: read, not previewed
