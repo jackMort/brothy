@@ -19,7 +19,6 @@ export type { Span }
 export { HEADING_STYLES, type HeadingStyle } from "./heading-style"
 export { normalize, parseWikilink, scanComments, stripComments, wikiLabel, type Wikilink } from "./lexer"
 export { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "./frontmatter"
-export { needsLexer, renderSource, sourceScan, sourceStructureLexed, sourceStructureLines, type SourceScan } from "./source"
 export { stats, stripCode, wordStats, type Stats } from "./stats"
 
 export interface Line {

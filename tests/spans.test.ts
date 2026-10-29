@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { render, renderSource } from "../src/markdown"
+import { render } from "../src/markdown"
+import { renderSource } from "../src/source"
 import { lineText, safe, safeLine } from "../src/spans"
 import { width } from "../src/text"
 import { brothy } from "./helpers/theme"

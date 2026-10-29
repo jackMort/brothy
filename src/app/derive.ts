@@ -2,7 +2,8 @@
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
 import { existsSync } from "node:fs"
 import { rankNotes, SCAN_LIMIT, visibleRows, type FileNode } from "../files"
-import { normalize, parseFrontMatter, parseProperties, render, renderSource, stats, wordStats, type FrontMatter, type HeadingStyle, type Property, type Rendered, type Stats } from "../markdown"
+import { normalize, parseFrontMatter, parseProperties, render, stats, wordStats, type FrontMatter, type HeadingStyle, type Property, type Rendered, type Stats } from "../markdown"
+import { renderSource } from "../source"
 import { lineText } from "../spans"
 import { clamp, wrap } from "../text"
 import { readDoc, type DocFile } from "../doc"

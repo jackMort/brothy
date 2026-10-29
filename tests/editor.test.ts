@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { editorCommand, runEditor, sourceLineAt, type EditorIO } from "../src/editor"
-import { render, renderSource, sourceScan, parseFrontMatter } from "../src/markdown"
+import { render, parseFrontMatter } from "../src/markdown"
+import { renderSource, sourceScan } from "../src/source"
 import { brothy } from "./helpers/theme"
 
 const t = brothy
