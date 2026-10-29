@@ -1,5 +1,6 @@
 import { basename } from "node:path"
 import type { Heading } from "./markdown"
+import { clamp } from "./text"
 
 interface SourceLineAt {
   source: boolean
@@ -32,7 +33,7 @@ export function sourceLineAt(v: SourceLineAt): number {
   if (k < 0 || !scan[k]) return (v.offset ?? 0) + 1 + v.top
   const want = scan[k]!.line + 1 + (v.top - heads[k]!.line)
   const next = scan[k + 1]
-  return next ? Math.max(scan[k]!.line + 1, Math.min(want, next.line)) : want
+  return next ? clamp(want, scan[k]!.line + 1, next.line) : want
 }
 
 /** Editors that take `-g path:line` (VS Code and its forks); a `+N` would open as a second file. */

@@ -159,7 +159,7 @@ export interface BoardLayout {
  */
 export function boardLayout(textW: number): BoardLayout {
   const gap = textW >= NAME_W + 2 * SLOT_W + 2 ? 2 : 1
-  const nameW = Math.max(1, Math.min(NAME_W, textW - 2 * SLOT_W - gap))
+  const nameW = clamp(textW - 2 * SLOT_W - gap, 1, NAME_W)
   return { nameW, gap, x: [nameW, nameW + SLOT_W + gap] }
 }
 
