@@ -454,8 +454,8 @@ describe("ThemeBoard and ThemePicker", () => {
     )
     await setup.renderOnce()
     const f = setup.captureCharFrame().split("\n")
-    expect(f[2]).toMatch(/Themes\s+22 families  esc/)
-    expect(f[4]).toMatch(/▏Theme…\s+dark   light/)
+    expect(f[2]).toMatch(/Themes\s+22 families {2}esc/)
+    expect(f[4]).toMatch(/▏Theme…\s+dark {3}light/)
     const row = f.find((r) => /^\s+rosepine\s/.test(r))!
     expect([...row].indexOf("r")).toBe(11) // popup at 6, padding 5, as in the switcher
     expect([...row][48]).toBe("│") // 6 + 1 + 41

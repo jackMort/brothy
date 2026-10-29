@@ -231,7 +231,7 @@ test("help lists D in the AI group; the Info footer shows D changes only with ch
   const s = await mount(d, "a.md", { size: { width: 120, height: 40 } })
   const help = (await openHelp(s)).split("\n")
   const at = help.findIndex((l) => l.includes("explain what changed on disk"))
-  const ai = help.findIndex((l) => /  AI  /.test(l))
+  const ai = help.findIndex((l) => / {2}AI {2}/.test(l))
   expect(ai).toBeGreaterThan(help.findIndex((l) => l.includes("Document")))
   expect(at).toBeGreaterThan(ai)
   expect(help[at]!.indexOf("D ")).toBe(help[ai]!.indexOf("AI"))

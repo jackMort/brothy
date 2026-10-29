@@ -77,7 +77,7 @@ const wikilinkExt: TokenizerExtension = {
     return i < 0 ? undefined : i
   },
   tokenizer(src) {
-    const m = /^(!?)\[\[([^\[\]\n]+)\]\]/.exec(src)
+    const m = /^(!?)\[\[([^[\]\n]+)\]\]/.exec(src)
     if (!m) return undefined
     return { type: "wikilink", raw: m[0], embed: m[1] === "!", ...parseWikilink(m[2]!) } satisfies WikilinkToken
   },

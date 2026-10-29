@@ -39,7 +39,7 @@ describe("code blocks keep whitespace", () => {
   test("long lines are chopped without dropping characters", () => {
     const code = "a b ".repeat(20).trimEnd()
     const lines = text(render("```\n" + code + "\n```", 20, t))
-    const body = lines.slice(1, -1).map((l) => l.replace(/^(  |↪ )/, ""))
+    const body = lines.slice(1, -1).map((l) => l.replace(/^( {2}|↪ )/, ""))
     expect(body.length).toBeGreaterThan(1)
     expect(body[0]).toStartWith("a b a b")
     expect(body.join("").replace(/ /g, "")).toBe(code.replace(/ /g, ""))
@@ -105,7 +105,7 @@ describe("graphemes", () => {
     for (const r of rowText(rows)) expect(width(r)).toBeLessThanOrEqual(10)
     expect(
       rowText(rows)
-        .map((r) => r.replace(/^(• |    )/, ""))
+        .map((r) => r.replace(/^(• | {4})/, ""))
         .join(""),
     ).toBe("x".repeat(20))
   })

@@ -63,7 +63,7 @@ export function stats(src: string): Stats {
   walk(tokens)
   Object.assign(s, countWords(src))
   // wikilinks (`[[note]]`, `![[embed]]`) are links too; marked leaves them as text
-  s.links += (stripCode(src).match(/!?\[\[[^\[\]\n]+\]\]/g) ?? []).length
+  s.links += (stripCode(src).match(/!?\[\[[^[\]\n]+\]\]/g) ?? []).length
   return s
 }
 

@@ -127,7 +127,7 @@ export function needsLexer(live: string[]): boolean {
       prevQuote = false
       continue
     }
-    if (/\t|\||^ {0,3}[<\[]/.test(line)) return true
+    if (/\t|\||^ {0,3}[<[]/.test(line)) return true
     const item = /^( *)(?:[-*+]|\d{1,9}[.)])[ \t]+(.?)/.exec(line)
     const quote = /^ {0,3}>[ \t]?(.?)/.exec(line)
     if (item) {
@@ -277,7 +277,7 @@ function tintWikilinks(spans: Span[], t: Theme, exists?: (target: string) => boo
   }
   return spans.flatMap((s) =>
     s.text
-      .split(/(!?\[\[[^\[\]\n]+\]\])/)
+      .split(/(!?\[\[[^[\]\n]+\]\])/)
       .filter(Boolean)
       .map((part) => (/^!?\[\[/.test(part) && part.endsWith("]]") ? { ...s, text: part, fg: tint(part) } : { ...s, text: part })),
   )
