@@ -5,8 +5,8 @@ import { basename, dirname, relative, resolve, sep } from "node:path"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ancestorsOf, folderCounts, scanTree, stem, type FileNode } from "./files"
 import { ensureHighlights } from "./highlight"
-import { drop, go, keep, startHistory, stepTo } from "./history"
-import { HEADING_STYLES, parseFrontMatter, sourceScan, pendingHighlights, wrap, type Line, type LinkTarget, type Rendered } from "./markdown"
+import { startHistory } from "./history"
+import { HEADING_STYLES, parseFrontMatter, sourceScan, pendingHighlights, wrap, type Line, type Rendered } from "./markdown"
 import { A, lineText, type Span } from "./spans"
 import { clamp, fmtNum, plural, spanWidth, truncate, truncateLeft, width } from "./text"
 import { headingKey } from "./sections"
@@ -14,6 +14,7 @@ import { Row } from "./app/Row"
 import { MAX_JOBS, jobKey, makeAIJobs, type Job } from "./app/ai-jobs"
 import { makeDerive, makeMemo } from "./app/derive"
 import { makeCore, makeNav, type Timers, type WelcomeState } from "./app/ctx"
+import { labelGeo, makeLinks } from "./app/links"
 import { MAX_DEPTH, SCRIM_DIM, ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
 import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_KEYS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
 import { STDIN, projectRoot, workspace } from "./workspace"
@@ -30,7 +31,7 @@ import { MINI_MIN_W, MINI_W, miniCells, miniColors, miniJump } from "./minimap"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "./peek"
 import { filterFamilies, onlyMode, pickIndex, pickMode, pickMove, pickQuery, pickShown, pickStart, pickTheme, pickTop, resolveTheme, themeSplit, type ThemePick } from "./themepick"
 import { loadConfig, type View } from "./config"
-import { copiedCount, findQuote, keepVisible, linkLabels, markMatches, matchRanges, matchKey, narrowLabels, overlayAt, selectedText, stepMatch, stripLayout, thumb, visibleLinks, type Geometry } from "./nav"
+import { copiedCount, findQuote, keepVisible, markMatches, matchRanges, matchKey, overlayAt, selectedText, stepMatch, stripLayout, thumb, type Geometry } from "./nav"
 import { watchPath } from "./watch"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
 import { aiError, chat, shortModel, stripThink, type Failure } from "./ai"
@@ -39,7 +40,7 @@ import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askLocate, a
 import { isFresh, textHash } from "./summaries"
 import { GLOSS_ROWS, glossRows, glossRule } from "./gloss"
 import { GHOST_HOLD, GHOST_STEPS, HINT_HOLD, LOGO, LOGO_HOLD, errText, fadeStep, tooSmall, fillWidth, fitHints, headerLayout, logoState, mainHeadingVisible, progressLabel, toastIcon, toastStep, type HintItem } from "./status"
-import { findHeading, linkDest, resolveLink, type InfoItem } from "./panel"
+import { findHeading, type InfoItem } from "./panel"
 import { quoteNeedle, reloadToast } from "./delta"
 import { SPOT_DIM, ZEN_ROWS, ZEN_WPM, dimSpans, headingPath, minutesLeft, normalizeZen, prompterRate, stepMeasure, zenAdjust, zenRows, type ZenConfig } from "./zen"
 
@@ -65,9 +66,6 @@ export interface AppProps {
 
 // ------------------------------------------------------------- helpers
 
-/** What the label spots depend on: a highlight re-render keeps it, a reload, the mode, the width or the scroll changes it. */
-const labelGeo = (s: Pick<UI, "openPath" | "source" | "reload">, CW: number, rows: number, top: number) =>
-  [s.openPath, s.source, s.reload, CW, rows, top].join("\0")
 
 // ------------------------------------------------------------- app
 
@@ -142,9 +140,11 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   }
 
   const ctx = makeNav(makeCore({ ui, set, bump, derive, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen, W, H, renderer, fetchImpl, themeName, linkScanDelay, zenBack, timers, askMemo, rerankMemo, alive, hlSeen, left, welcome }))
-  const { runFade, flash, persist, setTop, scrollBy, stopRolling, here, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch } = ctx
+  const { runFade, flash, persist, setTop, scrollBy, stopRolling, openFile, selectRow, toggleDir, saveSidebar, selectView, panelViews, focusPanel, focusDoc, showMatch } = ctx
   const aiJobs = makeAIJobs(ctx)
   const { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss } = aiJobs
+  const links = makeLinks(ctx)
+  const { ensureLinks, openLink, liveLabels, startLabels, histMove, labelType } = links
 
   // ---------------------------------------------------- actions
 
@@ -163,95 +163,6 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
       timers.current.roll = setTimeout(tick, 1000 / prompterRate(next.view.plain, next.s.zenCfg.wpm))
     }
     timers.current.roll = setTimeout(tick, 1000 / prompterRate(d0.view.plain, d0.s.zenCfg.wpm))
-  }
-
-  /** Open a resolved Info link and read it; an unresolved one only says so, and Info keeps focus. */
-  /** A piped document scans the working folder for links the first time one is used. */
-  const ensureLinks = () => {
-    const s = ui.current
-    if (s.linkLazy) set({ linkTree: scanTree(s.root), linkLazy: false })
-  }
-
-  const openLink = (it: Extract<InfoItem, { kind: "link" }>) => {
-    ensureLinks()
-    const path = it.path ?? resolveLink(it.target, ui.current.linkTree, ui.current.openPath)
-    if (!path) return flash(`no note named “${it.target}”`)
-    set({ history: keep(ui.current.history) }) // a note followed from stays in history
-    openFile(path)
-    focusDoc()
-  }
-
-  /** Labels still match what is drawn: same note, mode, width, length and scroll position. */
-  const liveLabels = () => {
-    const lb = ui.current.labels
-    if (!lb) return null
-    const d = derive()
-    return lb.geo === labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) ? lb : null
-  }
-
-  const startLabels = () => {
-    ensureLinks()
-    const d = derive()
-    if (d.s.source) return flash("links: preview only (s)")
-    const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
-    if (!spots.length) return flash("no links on screen")
-    const labels = linkLabels(spots.length)
-    set({ labels: { spots: spots.slice(0, labels.length), labels, typed: "", geo: labelGeo(ui.current, d.L.CW, d.view.lines.length, d.top) } })
-  }
-
-  /** Open where `l` leads: the note, then its heading; a URL or a missing target only says so. */
-  const followLink = (l: LinkTarget) => {
-    ensureLinks()
-    const s = ui.current
-    const dest = linkDest(l, s.openPath, s.linkTree)
-    if (dest.url) return flash(dest.url)
-    if (!dest.path) return flash(`no note named “${dest.label}”`)
-    set({ history: keep(s.history) }) // a note followed from stays in history
-    openFile(dest.path)
-    focusDoc()
-    if (!dest.heading) return
-    const d = derive()
-    const i = findHeading(d.view.headings, dest.heading)
-    // a missing heading leaves the note at its remembered position
-    if (i === null) flash(`no heading “${dest.heading}”`)
-    else setTop(d.view.headings[i]!.line)
-  }
-
-  /** `H` / `L`: the note one step back / forward, where it was left; notes gone from disk are dropped. */
-  const histMove = (dir: -1 | 1) => {
-    let h = ui.current.history
-    const gone: string[] = []
-    const name = (p: string) => stem(basename(p))
-    for (let i = stepTo(h, dir); i !== null; i = stepTo(h, dir)) {
-      const e = h.entries[i]!
-      if (e.path !== STDIN && !existsSync(e.path)) { // the piped document is relative, never on disk
-        gone.push(`“${name(e.path)}” is gone`)
-        h = drop(h, i)
-        continue
-      }
-      const history = go(h, i, here())
-      if (e.pos) scrolls.current.set(e.pos.key, { top: e.pos.top, geo: e.pos.geo })
-      openFile(e.path, "history")
-      set({ history: derive().sideFocus ? history : keep(history) }) // reached with document focus: read, not previewed
-      return flash([...gone, `${dir < 0 ? "back" : "forward"} · ${name(e.path)}`].join(" · "))
-    }
-    set({ history: h })
-    flash(gone.length ? gone.join(" · ") : dir < 0 ? "no earlier note" : "no later note")
-  }
-
-  const labelType = (ch: string) => {
-    const lb = liveLabels()
-    if (!lb) return set({ labels: null })
-    const typed = lb.typed + ch
-    const left = narrowLabels(lb.labels, typed)
-    if (!left.length) return set({ labels: null })
-    if (left.length === 1 && lb.labels[left[0]!] === typed) {
-      const link = derive().view.links?.[lb.spots[left[0]!]!.link]
-      set({ labels: null })
-      if (link) followLink(link)
-      return
-    }
-    set({ labels: { ...lb, typed } })
   }
 
   const startFilter = () => set({ filterTyping: true })
