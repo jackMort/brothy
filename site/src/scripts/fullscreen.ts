@@ -11,17 +11,35 @@ export function mountFullscreen(stage: HTMLElement) {
   if (!win) return
   let full = false
 
-  async function open() {
-    if (full) return
-    full = true
-    stage.classList.add("is-full")
-    document.documentElement.classList.add("demo-full")
-    close?.removeAttribute("hidden")
-    history.pushState({ demoFull: true }, "")
+  /** the overlay's classes and the close button, on or off */
+  function showOverlay(on: boolean) {
+    stage.classList.toggle("is-full", on)
+    document.documentElement.classList.toggle("demo-full", on)
+    if (on) close?.removeAttribute("hidden")
+    else close?.setAttribute("hidden", "")
+  }
+
+  /** the Fullscreen API and the landscape lock, where there are any */
+  async function enterFullscreen() {
     try {
       await stage.requestFullscreen?.({ navigationUI: "hide" })
       await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.("landscape")
     } catch {} // no API, or refused: the overlay (rotated in portrait) stands in
+  }
+
+  function leaveFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    try {
+      screen.orientation.unlock?.()
+    } catch {}
+  }
+
+  async function open() {
+    if (full) return
+    full = true
+    showOverlay(true)
+    history.pushState({ demoFull: true }, "")
+    await enterFullscreen()
     if (!win!.classList.contains("is-playing")) win!.toggle?.()
     win!.focus({ preventScroll: true })
   }
@@ -29,13 +47,8 @@ export function mountFullscreen(stage: HTMLElement) {
   function shut(fromHistory = false) {
     if (!full) return
     full = false
-    stage.classList.remove("is-full")
-    document.documentElement.classList.remove("demo-full")
-    close?.setAttribute("hidden", "")
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-    try {
-      screen.orientation.unlock?.()
-    } catch {}
+    showOverlay(false)
+    leaveFullscreen()
     if (!fromHistory && history.state?.demoFull) history.back()
   }
 
