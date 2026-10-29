@@ -130,6 +130,9 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     return s.hintAt !== null && s.hintCtx === currentCtx() && fadeStep(Date.now() - s.hintAt, HINT_HOLD) !== null
   }
 
+  /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
+  const typing = () => {}
+
   const actions: Record<KeyId, (k: KeyEvent) => void> = {
     views: (k) => {
       const v = panelViews()[Number(k.name) - 1]
@@ -260,7 +263,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
     back: () => focusPanel(),
     links: startLabels,
-    labelType: () => {},
+    labelType: typing,
     labelErase: () => {
       const lb = ui.current.labels
       if (lb) set({ labels: { ...lb, typed: erase(lb.typed) } })
@@ -374,7 +377,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       set({ expanded: new Set(s.openPath ? ancestorsOf(s.tree, s.openPath) : []) })
     },
 
-    filterType: () => {},
+    filterType: typing,
     filterMove: (k) => {
       const dn = k.name === "down" || k.name === "n"
       if (ui.current.view === "outline") {
@@ -427,7 +430,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     promptApply: () => promptSubmit(),
     promptClear: promptClose,
     promptErase: () => promptType(erase(ui.current.prompt!.value)),
-    swType: () => {},
+    swType: typing,
     swMove: (k) => {
       const { swRows, swHl } = derive()
       swGo(stepRow(swRows, swHl, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1))
@@ -441,8 +444,8 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     swErase: () => {
       if (ui.current.switcher) swType(erase(ui.current.switcher.q))
     },
-    swAsk: () => {}, // help only: a `?` query is typed like any other
-    opType: () => {},
+    swAsk: typing, // a `?` query is typed like any other
+    opType: typing,
     opMove: (k) => {
       const { opRows, opHl } = derive()
       opGo(stepRow(opRows, opHl, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1))
@@ -457,7 +460,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
       if (ui.current.opener) opType(erase(ui.current.opener.q))
     },
 
-    themeType: () => {},
+    themeType: typing,
     themeMove: (k) => themeSet(pickMove(ui.current.themePick!, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
     // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
     themeMode: (k) => themeSet(pickMode(ui.current.themePick!, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
