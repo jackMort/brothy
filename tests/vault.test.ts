@@ -23,7 +23,6 @@ import {
   type IndexIO,
   type SwitchHit,
   type SwitchRow,
-  type VaultIndex,
 } from "../src/vault"
 
 /** An in-memory tree under /v from "dir/name.md" paths (folders created on the way). */
