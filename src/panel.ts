@@ -4,9 +4,11 @@ import { dirname, resolve, sep } from "node:path"
 import type { Change, DeltaNote } from "./delta"
 import { fuzzyHits, isMarkdown, stem, type FileNode } from "./files"
 import { stripCode, wrap, type LinkTarget, type Property, type Stats } from "./markdown"
+import { headingKey } from "./sections"
 import { safeLine } from "./spans"
 import { plural, truncate, width } from "./text"
 
+export { headingKey } from "./sections"
 export { fmtNum, plural } from "./text"
 
 // ------------------------------------------------------------- formatting
@@ -334,10 +336,6 @@ export function linkDest(l: LinkTarget, from: string | null, tree: FileNode): Li
   const path = ix.byPath.has(abs) ? abs : ix.byPath.has(abs + ".md") ? abs + ".md" : null
   return { path, ...h, label: file }
 }
-
-/** Heading text as a lenient key: lowercase, `#` dropped, dashes and runs of spaces as one space, punctuation removed. */
-export const headingKey = (s: string) =>
-  s.normalize("NFC").toLowerCase().replace(/#/g, " ").replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/[\s-]+/g, " ").trim()
 
 /** Index of the first heading matching `wanted` by `headingKey`, else null. */
 export function findHeading(headings: { text: string }[], wanted: string): number | null {

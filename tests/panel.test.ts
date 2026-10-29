@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { scanTree } from "../src/files"
+import { headingKey } from "../src/sections"
 import type { Stats } from "../src/markdown"
 import type { Change } from "../src/delta"
-import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, findHeading, fmtAge, headingKey, infoItems, linkDest, noteIndex, outlineRows, resolveLink, tldrItems, wrapProperty, type ChangeView, type InfoItem } from "../src/panel"
+import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, findHeading, fmtAge, infoItems, linkDest, noteIndex, outlineRows, resolveLink, tldrItems, wrapProperty, type ChangeView, type InfoItem } from "../src/panel"
 
 const made: string[] = []
 afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
