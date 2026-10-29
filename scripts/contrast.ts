@@ -22,7 +22,7 @@ export const HOUSE_TEXT = 13.5
 export const HOUSE_APART = 5
 
 /** the page, the side panel (`surface().side`) and the code-block fill */
-export const surfaces = (t: Theme) => ({ bg: t.background, side: surface(t, false).side, el: t.backgroundElement })
+const surfaces = (t: Theme) => ({ bg: t.background, side: surface(t, false).side, el: t.backgroundElement })
 
 export function ratios(t: Theme, k: keyof Theme) {
   const s = surfaces(t)
