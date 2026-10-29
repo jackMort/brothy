@@ -2,9 +2,9 @@
 // index it searches, opening what a row points at, and the peek pane's data. Not pure: `makeSwitcher` closes over the
 // app context.
 import { relative } from "node:path"
-import { aiError, chat, shortModel, stripThink, type Failure } from "../ai"
+import { aiError, chat, shortModel, type Failure } from "../ai"
 import { resolveAI } from "../ai-config"
-import { ASK_MEMO, ASK_MIN, ASK_PROMPT, RERANK_MEMO, RERANK_PROMPT, askLocate, parseQueries, parseRerank, putNewest, questionOf, rerankMessage, type AskState } from "../ask"
+import { ASK_MEMO, ASK_MIN, RERANK_MEMO, askLocate, askRequest, parseQueries, parseRerank, putNewest, questionOf, rerankRequest, type AskState } from "../ask"
 import { loadConfig } from "../config"
 import { folderCounts } from "../files"
 import { keepVisible } from "../nav"
@@ -75,7 +75,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const job = { kind: "ask" as const, raw: "", abort: new AbortController() }
     jobs.current.set(jobKey("ask"), job)
     setAsk({ question, phase: "asking" })
-    void chat(target, { system: ASK_PROMPT, user: question, maxOut: 1000, clean: (r) => stripThink(r).trim() }, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
+    void chat(target, askRequest(question), { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
       if (jobs.current.get(jobKey("ask")) !== job) return // aborted: edited, closed or asked again
       jobs.current.delete(jobKey("ask"))
       if (!alive.current || ui.current.switcher?.q !== asked) return
@@ -104,9 +104,9 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     if (!sw || !st || (st.phase !== "result" && st.phase !== "reranked")) return
     const { askCands } = derive()
     const ids = askCands.map((c) => c.id)
-    const user = rerankMessage(st.question, askCands, vault.current.ix)
+    const req = rerankRequest(st.question, askCands, vault.current.ix)
     // keyed on exactly what would be sent, so an edited candidate is asked again
-    const memoKey = `${textHash(ids.join("\n"))}\n${textHash(user)}`
+    const memoKey = `${textHash(ids.join("\n"))}\n${textHash(req.user)}`
     const known = rerankMemo.current.get(memoKey)
     if (known) return setAsk({ ...st, phase: "reranked", order: known.order, why: known.why })
     const ai = loadConfig().ai ?? null
@@ -120,7 +120,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     const job = { kind: "ask" as const, raw: "", abort: new AbortController() }
     jobs.current.set(jobKey("ask"), job)
     setAsk({ ...st, phase: "reranking" })
-    void chat(target, { system: RERANK_PROMPT, user, maxOut: 2000, clean: (r) => stripThink(r).trim() }, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
+    void chat(target, req, { fetch: fetchImpl, signal: job.abort.signal }).then((r) => {
       if (jobs.current.get(jobKey("ask")) !== job) return
       jobs.current.delete(jobKey("ask"))
       const now = ui.current.switcher

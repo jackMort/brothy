@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { MAX_SUMMARY, PRESETS, PROMPTS, PROMPT_V, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, normalizeAI, parseGlossStyle, resolveAI, shortModel, sseParser, stripThink, summarize, tokens, type AIEvent, type AITarget } from "../src/ai"
+import { MAX_SUMMARY, PRESETS, PROMPTS, PROMPT_V, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanReply, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, normalizeAI, parseGlossStyle, resolveAI, shortModel, sseParser, stripThink, summarize, summaryRequest, tokens, type AIEvent, type AITarget } from "../src/ai"
 import { IDLE_MS, TOTAL_MS } from "../src/ai"
 import * as aiConfig from "../src/ai-config"
 
@@ -413,6 +413,17 @@ describe("stripThink", () => {
     ["<thi", ""],
     ["a <think>b</think>", "a <think>b</think>"],
   ])("%p", (raw, want) => expect(stripThink(raw)).toBe(want))
+  test("cleanReply: the reply without its think block, trimmed", () => {
+    expect(cleanReply("  <think>a</think> {} \n")).toBe("{}")
+    expect(cleanReply("<thi")).toBe("")
+  })
+})
+
+describe("summaryRequest", () => {
+  test("the note clipped to maxChars under SYSTEM_PROMPT, cleaned by cleanSummary, capped at MAX_SUMMARY", () => {
+    expect(summaryRequest("abcdef", 3)).toEqual({ system: SYSTEM_PROMPT, user: "abc\n[truncated]", maxOut: MAX_SUMMARY, clean: cleanSummary })
+    expect(summaryRequest("note", 1000).user).toBe("note")
+  })
 })
 
 describe("chat", () => {

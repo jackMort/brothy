@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { fmtTokens, tokens } from "../src/ai"
-import { ASK_MEMO, EXCERPT, MAX_CANDIDATES, MAX_QUERIES, QUESTION_MAX, RERANK_PROMPT, WHY_W, askCandidates, askLocate, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, type AskState, type AskView } from "../src/ask"
+import { cleanReply, fmtTokens, tokens } from "../src/ai"
+import { ASK_MEMO, ASK_PROMPT, EXCERPT, MAX_ASK, MAX_CANDIDATES, MAX_QUERIES, MAX_RERANK, QUESTION_MAX, RERANK_PROMPT, WHY_W, askCandidates, askLocate, askRequest, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, rerankRequest, type AskState, type AskView } from "../src/ask"
 import { truncate } from "../src/status"
 import type { FileNode } from "../src/files"
 import { noteSections, sectionId } from "../src/sections"
@@ -25,6 +25,10 @@ describe("questionOf", () => {
     expect(q.text.endsWith("😀")).toBe(true)
     expect(questionOf("?" + "x".repeat(QUESTION_MAX))!.cut).toBe(false)
   })
+})
+
+test("askRequest: ASK_PROMPT and the question alone; cleanReply, at most MAX_ASK", () => {
+  expect(askRequest("how do I open one file")).toEqual({ system: ASK_PROMPT, user: "how do I open one file", maxOut: MAX_ASK, clean: cleanReply })
 })
 
 describe("parseQueries", () => {
@@ -177,6 +181,9 @@ describe("rerank", () => {
     const many = rerankMessage("q", [...C, ...C, ...C, ...C], V.ix)
     expect(many).toContain("c12 · ")
     expect(many).not.toContain("c13 · ")
+  })
+  test("rerankRequest: RERANK_PROMPT and rerankMessage; cleanReply, at most MAX_RERANK", () => {
+    expect(rerankRequest("q", C, V.ix)).toEqual({ system: RERANK_PROMPT, user: rerankMessage("q", C, V.ix), maxOut: MAX_RERANK, clean: cleanReply })
   })
   test("rerankCost is the token estimate of exactly what tier 1 sends", () => {
     const want = fmtTokens(tokens(RERANK_PROMPT) + tokens(rerankMessage("q", C, V.ix)))

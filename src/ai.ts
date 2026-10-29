@@ -54,6 +54,9 @@ export function stripThink(raw: string): string {
   return end < 0 ? "" : s.slice(end + "</think>".length)
 }
 
+/** The `clean` of the structured requests (ask, rerank, `D`): the reply without its think block, trimmed; they parse `raw`. */
+export const cleanReply = (raw: string) => stripThink(raw).trim()
+
 function cleanStep(s: string): string {
   s = stripThink(s.trimStart()) // "" while the tag arrives or the model is still thinking: show nothing yet
   s = s
@@ -381,8 +384,13 @@ async function send(t: AITarget, req: ChatReq, o: ChatOpts): Promise<ChatResult>
   }
 }
 
-/** The TL;DR: the note clipped to the target's limit, cleaned to plain text. Same result shape as before `chat`. */
+/** The TL;DR request: the note clipped to `maxChars` (the target's), cleaned to plain text, at most MAX_SUMMARY. */
+export function summaryRequest(text: string, maxChars: number): ChatReq {
+  return { system: SYSTEM_PROMPT, user: clip(text, maxChars), maxOut: MAX_SUMMARY, clean: cleanSummary }
+}
+
+/** The TL;DR: `summaryRequest` for the target. Same result shape as before `chat`. */
 export async function summarize(t: AITarget, text: string, o: ChatOpts = {}): Promise<SummaryResult> {
-  const r = await chat(t, { system: SYSTEM_PROMPT, user: clip(text, t.maxChars), maxOut: MAX_SUMMARY, clean: cleanSummary }, o)
+  const r = await chat(t, summaryRequest(text, t.maxChars), o)
   return r.ok ? { ok: true, text: r.text } : r
 }

@@ -1,12 +1,12 @@
 // AI jobs: how many run at once, how they are keyed and how often streamed text redraws; then `makeAIJobs`, the
 // TL;DR, gloss and reload-explain requests and their keys (`a`, `D`, zen `a`). Not pure: it closes over the app context.
 import { basename } from "node:path"
-import { PROMPTS, PROMPT_V, aiError, chat, cleanSummary, noteText, shortModel, stripThink, summarize, type Failure } from "../ai"
+import { PROMPTS, PROMPT_V, aiError, chat, noteText, shortModel, summarize, type Failure } from "../ai"
 import { resolveAI, type AITarget, type GlossStyle } from "../ai-config"
 import { loadConfig } from "../config"
-import { DELTA_MAX, DELTA_PROMPT, MAX_DELTA, deltaMessage, hhmm, parseDelta, type Change } from "../delta"
+import { deltaRequest, hhmm, parseDelta, type Change } from "../delta"
 import { stem } from "../files"
-import { GLOSS_MAX, glossKey, glossRequest, type GlossTarget } from "../gloss"
+import { glossKey, glossRequest, type GlossTarget } from "../gloss"
 import { safeLine } from "../spans"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../summaries"
 import { STDIN } from "../workspace"
@@ -76,8 +76,7 @@ export function makeAIJobs(c: AppCtx) {
     const job = { kind: "gloss" as const, raw: "", abort: new AbortController() }
     jobs.current.set(jk, job)
     set({ gloss: { id: g.id, key, heading: g.heading, hash, fadeAt: null } })
-    const req = glossRequest(style, title, g.trail, g.text, target.maxChars)
-    void chat(target, { ...req, maxOut: GLOSS_MAX, clean: cleanSummary }, {
+    void chat(target, glossRequest(style, title, g.trail, g.text, target.maxChars), {
       fetch: fetchImpl,
       signal: job.abort.signal,
       onDelta: (raw) => {
@@ -150,8 +149,7 @@ export function makeAIJobs(c: AppCtx) {
     const job = { kind: "delta" as const, raw: "", abort: new AbortController() }
     jobs.current.set(key, job)
     set({ delta: { path, changes, text, props, result: null } })
-    const user = deltaMessage(title, changes, Math.min(target.maxChars, DELTA_MAX))
-    void chat(target, { system: DELTA_PROMPT, user, maxOut: MAX_DELTA, clean: (r) => stripThink(r).trim() }, {
+    void chat(target, deltaRequest(title, changes, target.maxChars), {
       fetch: fetchImpl,
       signal: job.abort.signal,
       onDelta: (raw) => {

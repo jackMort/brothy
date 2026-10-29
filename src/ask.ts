@@ -1,7 +1,7 @@
 // Ask → jump (`?` in the `C-p` switcher). The model turns a question into search queries (tier 0)
 // or orders excerpts brothy picked (tier 1); every answer is a place the local index found. Pure.
 
-import { cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./ai"
+import { cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens, type ChatReq } from "./ai"
 import { scoreName, stem, type FileNode } from "./files"
 import { isRecord } from "./json"
 import { headingKey } from "./panel"
@@ -32,6 +32,9 @@ export const WHY_W = 40
 /** Session memos: tier 0 queries per question, tier 1 orders per question and candidate list. */
 export const ASK_MEMO = 50
 export const RERANK_MEMO = 20
+/** `chat`'s `maxOut` for tier 0 (a few queries) and tier 1 (an id and a why per candidate). */
+export const MAX_ASK = 1000
+export const MAX_RERANK = 2000
 
 /** A switcher query whose first non-space character is `?` is a question: the rest, trimmed, cut at QUESTION_MAX. */
 export function questionOf(q: string): { text: string; cut: boolean } | null {
@@ -39,6 +42,11 @@ export function questionOf(q: string): { text: string; cut: boolean } | null {
   if (!s.startsWith("?")) return null
   const cps = [...s.slice(1).trim()]
   return { text: cps.slice(0, QUESTION_MAX).join(""), cut: cps.length > QUESTION_MAX }
+}
+
+/** Tier 0's request: the question alone; the reply is parsed from `raw`. */
+export function askRequest(question: string): ChatReq {
+  return { system: ASK_PROMPT, user: question, maxOut: MAX_ASK, clean: cleanReply }
 }
 
 /** Tier 0's reply: 2–40 code points each, deduped by `foldSame`, at most MAX_QUERIES; null when none is usable. */
@@ -212,6 +220,11 @@ export function rerankMessage(question: string, cands: readonly Candidate[], ix:
     return `c${k + 1} · ${[c.name, ...path].join(" › ")}\n${doc ? excerpt(doc, c.heading) : ""}`
   })
   return `Question: ${question}\n\n${parts.join("\n\n")}`
+}
+
+/** Tier 1's request; its `user` is `rerankMessage`, and the reply is parsed from `raw`. */
+export function rerankRequest(question: string, cands: readonly Candidate[], ix: VaultIndex): ChatReq {
+  return { system: RERANK_PROMPT, user: rerankMessage(question, cands, ix), maxOut: MAX_RERANK, clean: cleanReply }
 }
 
 /** The rerank row's cost: input tokens of exactly what tier 1 would send. */
