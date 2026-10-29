@@ -1,7 +1,7 @@
 // Screen geometry, pure: where the status rows, the panel or drawer, the document column and the minimap go for a
 // terminal size and the store's view state.
-import type { UI } from "../app/store"
 import { MINI_MIN_W, MINI_W } from "./minimap"
+import type { ZenConfig } from "./zen"
 
 /** Reading measure: the document never wraps wider than this. */
 export const MEASURE = 80
@@ -22,6 +22,18 @@ const MAX_LIST_ROWS = 16
 /** Below this width the panel is a drawer over the text instead of a column beside it. */
 export const DRAWER_BELOW = 100
 
+/** The view state `layout` reads (fields of the app's `UI`). */
+export interface LayoutState {
+  hidden: boolean
+  drawerOpen: boolean
+  zen: boolean
+  source: boolean
+  zenCfg: ZenConfig
+  wide: boolean
+  minimap: boolean
+  openPath: string | null
+}
+
 /**
  * Screen rows: top line, gap (H ≥ 28), body (panel + document), ghost line, progress line.
  * At DRAWER_BELOW columns and wider the panel is a column left of the document (unless hidden);
@@ -29,7 +41,7 @@ export const DRAWER_BELOW = 100
  * The document wraps at `CW` = min(available, MEASURE), centered (`wide` / zen "full": the
  * area minus a 2-column margin each side). Zen (unless Source is shown) drops the panel.
  */
-export function layout(W: number, H: number, s: Pick<UI, "hidden" | "drawerOpen" | "zen" | "source" | "zenCfg" | "wide" | "minimap" | "openPath">) {
+export function layout(W: number, H: number, s: LayoutState) {
   const zen = s.zen && !s.source
   const mode: "inline" | "drawer" = W < DRAWER_BELOW ? "drawer" : "inline"
   // the welcome page (no note open) has the whole width: no panel, drawer or minimap; the saved sidebar is left alone

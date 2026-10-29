@@ -2,13 +2,21 @@
 // stand-in. Reads the folder (`scanTree`, `findVault`), otherwise pure.
 import { basename } from "node:path"
 import { ancestorsOf, findVault, firstFile, scanTree, type FileNode } from "./files"
-import type { UI } from "../app/store"
 
 /** The open path of the piped document: relative, so it can never be a file on disk. */
 export const STDIN = "stdin"
 
-/** The store fields a workspace sets; every rebuild replaces all of them. */
-export type Workspace = Pick<UI, "root" | "tree" | "linkTree" | "linkLazy" | "piped" | "linkRoot" | "openPath" | "expanded">
+/** The store fields a workspace sets (the app's `UI` holds them); every rebuild replaces all of them. */
+export interface Workspace {
+  root: string
+  tree: FileNode
+  linkTree: FileNode
+  linkLazy: boolean
+  piped: boolean
+  linkRoot: string | null
+  openPath: string | null
+  expanded: Set<string>
+}
 
 /**
  * What a folder (and optionally a note in it) opens as, by the CLI's rules: a `single` note inside a
@@ -33,4 +41,4 @@ export function stdinWorkspace(root: string): Workspace {
 }
 
 /** The folder a workspace is recorded under: the vault a single note was opened in, else the root. */
-export const projectRoot = (s: Pick<UI, "root" | "linkRoot">) => s.linkRoot ?? s.root
+export const projectRoot = (s: Pick<Workspace, "root" | "linkRoot">) => s.linkRoot ?? s.root
