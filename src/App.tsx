@@ -1,9 +1,8 @@
 // The app's root: the store and refs, the context and feature factories rebuilt every render, the effects that need
 // this render's values, and the screen (zen or main) laid out from the parts in src/app/. Not pure.
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ensureHighlights } from "./markdown/highlight"
-import { pendingHighlights, type Geometry, type Rendered } from "./markdown/render"
+import { useRef, useState, type ReactNode } from "react"
+import type { Geometry, Rendered } from "./markdown/render"
 import { makeAIJobs } from "./app/ai-jobs"
 import { makeDerive, makeMemo, type Derived } from "./app/derive"
 import { makeCtx, type Timers, type WelcomeState } from "./app/ctx"
@@ -11,7 +10,7 @@ import { makeLinks } from "./app/links"
 import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
-import { useAppEffects } from "./app/effects"
+import { useAppEffects, useRenderEffects } from "./app/effects"
 import { makeActions } from "./app/actions"
 import { makePopups } from "./app/popups"
 import { panelBox } from "./app/Panel"
@@ -19,7 +18,7 @@ import { docBox, miniBox } from "./app/Document"
 import { gapRow, ghostLine, progressLine, topRow } from "./app/Chrome"
 import { findOverlay, helpOverlay, openOverlay, switchOverlay, themeOverlay, themePickView, zenOverlay } from "./app/Overlays"
 import { MIN_H, MIN_W, ZEN_DIM, initUI, type FileRow, type Job, type Spot, type UI } from "./app/store"
-import { PINNED, footerHints, type Ctx, type FooterState } from "./app/keymap"
+import { PINNED, footerHints, type FooterState } from "./app/keymap"
 import { STDIN } from "./notes/workspace"
 import { DRAWER_BELOW } from "./ui/layout"
 import { surface } from "./theme/theme"
@@ -77,64 +76,14 @@ export function App({
     bump((x) => x + 1)
   }
 
-  // crossing DRAWER_BELOW: a focused panel becomes an open drawer; widening shows it inline again
-  const modeSeen = useRef<PanelMode | null>(null)
-  crossDrawer(modeSeen, ui.current, W)
+  useDrawerCrossing(ui.current, W)
 
-  // the refs the context carries are documented on `Base` and `DeriveRefs`
-  const vault = useRef<{ ix: VaultIndex; running: boolean }>({ ix: emptyIndex(), running: false })
-  // derived data, memoized so handlers and render can both pull it on demand
-  const memo = useRef(makeMemo(stdin)).current
-  const matchSeen = useRef<{ matches: number[]; query: string }>({ matches: [], query: "" })
-  const scrolls = useRef(new Map<string, { top: number; geo: Geometry }>())
-  const zenBack = useRef<Spot | null>(null)
-  const sidebarSeen = useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null })
-  const timers = useRef<Timers>({})
-  const jobs = useRef(new Map<string, Job>())
-  const askMemo = useRef(new Map<string, { queries: string[]; model: string }>())
-  const rerankMemo = useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>())
-  /** the context the hints were last poked for */
-  const ctxSeen = useRef<Ctx | null>(null)
-  /** the note and section the gloss auto-show last ran for (null: outside zen) */
-  const glossSeen = useRef<string | null>(null)
-  const alive = useRef(true)
-  const hlSeen = useRef<Rendered | null>(null)
-  /** the theme sample whose code highlighting was last asked for */
-  const hlSample = useRef<Rendered | null>(null)
-  const left = useRef(false)
-  const welcome = useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H })
-
-  const derive = makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen })
+  const refs = useAppRefs(stdin, W, H)
+  const derive = makeDerive({ ui, dims, ...refs })
 
   // the app context and the feature factories over it, rebuilt every render: handlers close over this render's size and
   // props, and read the store at call time
-  const ctx = makeCtx({
-    ui,
-    set,
-    bump,
-    derive,
-    dims,
-    memo,
-    vault,
-    jobs,
-    sidebarSeen,
-    scrolls,
-    matchSeen,
-    W,
-    H,
-    renderer,
-    fetchImpl,
-    themeName,
-    linkScanDelay,
-    zenBack,
-    timers,
-    askMemo,
-    rerankMemo,
-    alive,
-    hlSeen,
-    left,
-    welcome,
-  })
+  const ctx = makeCtx({ ui, set, bump, derive, dims, ...refs, W, H, renderer, fetchImpl, themeName, linkScanDelay })
   const aiJobs = makeAIJobs(ctx)
   const links = makeLinks(ctx)
   const zen = makeZen(ctx, aiJobs)
@@ -159,21 +108,7 @@ export function App({
   const miniEl = miniBox(ctx, d)
   const progressEl = progressLine(ctx, d)
 
-  // any context change (focus, view, zen, popup closed, typing ended) shows the new context's hints
   const ctxNow = currentCtx()
-  useEffect(() => {
-    if (ctxNow === ctxSeen.current) return
-    ctxSeen.current = ctxNow
-    pokeHints(ctxNow)
-  })
-
-  // zen gloss: runs when the reading line changes section (not on every scroll tick)
-  const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
-  useEffect(() => {
-    if (glossAt === glossSeen.current) return
-    glossSeen.current = glossAt
-    aiJobs.glossEntered()
-  })
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
   const footer = footerState(d)
@@ -184,17 +119,9 @@ export function App({
   const openEl = openOverlay(ctx, d, workspace)
   const findEl = findOverlay(ctx, d, popups)
   const pickView = themePickView(ctx, d)
-  const pickSample = pickView?.sample ?? null
-  // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
-  useEffect(() => {
-    if (!pickSample || pickSample === hlSample.current) return
-    hlSample.current = pickSample
-    const reqs = pendingHighlights(pickSample)
-    if (reqs.length)
-      ensureHighlights(reqs).then((changed) => {
-        if (changed && alive.current) set({ hl: ui.current.hl + 1 })
-      })
-  })
+  // zen gloss: runs when the reading line changes section (not on every scroll tick)
+  const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
+  useRenderEffects(ctx, { ctxNow, glossAt, sample: pickView?.sample ?? null }, { pokeHints, glossEntered: aiJobs.glossEntered })
   const themeEl = themeOverlay(ctx, d, pickView, popups)
   const zenEl = zenOverlay(ctx, d, zen)
 
@@ -208,8 +135,33 @@ export function App({
 type PanelMode = "inline" | "drawer"
 type Pointer = ReturnType<typeof usePointer>
 
-/** Apply a DRAWER_BELOW crossing to the store before this render draws; `seen` is the panel mode last drawn. */
-function crossDrawer(seen: { current: PanelMode | null }, s: UI, W: number) {
+/** The refs the context carries (documented on `Base` and `DeriveRefs`), made in this order on every render. A hook. */
+function useAppRefs(stdin: string | undefined, W: number, H: number) {
+  return {
+    vault: useRef<{ ix: VaultIndex; running: boolean }>({ ix: emptyIndex(), running: false }),
+    // derived data, memoized so handlers and render can both pull it on demand
+    memo: useRef(makeMemo(stdin)).current,
+    matchSeen: useRef<{ matches: number[]; query: string }>({ matches: [], query: "" }),
+    scrolls: useRef(new Map<string, { top: number; geo: Geometry }>()),
+    zenBack: useRef<Spot | null>(null),
+    sidebarSeen: useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null }),
+    timers: useRef<Timers>({}),
+    jobs: useRef(new Map<string, Job>()),
+    askMemo: useRef(new Map<string, { queries: string[]; model: string }>()),
+    rerankMemo: useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>()),
+    alive: useRef(true),
+    hlSeen: useRef<Rendered | null>(null),
+    left: useRef(false),
+    welcome: useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H }),
+  }
+}
+
+/**
+ * Crossing DRAWER_BELOW: a focused panel becomes an open drawer; widening shows it inline again. Applied to the store
+ * before this render draws. A hook: it remembers the panel mode last drawn.
+ */
+function useDrawerCrossing(s: UI, W: number) {
+  const seen = useRef<PanelMode | null>(null)
   const modeNow = W < DRAWER_BELOW ? "drawer" : "inline"
   if (seen.current === modeNow) return
   if (seen.current === "inline") s.drawerOpen = s.focus === "panel" && !s.hidden && !s.zen

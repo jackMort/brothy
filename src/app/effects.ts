@@ -1,11 +1,12 @@
 // The app's effects, in the order they run: live reload, the change baseline, the project record, the config theme
 // toast, a piped document's link scan, exit and copy-on-select listeners, the unmount cleanups, the welcome animation and
-// code-block highlighting. A hook: App calls it once per render, at the same place, so the hook order holds.
+// code-block highlighting; then, in `useRenderEffects`, the ones that watch what this render drew (the hint context, the
+// zen reading section, the theme sample). Hooks: App calls each once per render, at the same place, so the hook order holds.
 import { basename } from "node:path"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { reloadToast } from "../ai/delta"
 import { ensureHighlights } from "../markdown/highlight"
-import { pendingHighlights } from "../markdown/render"
+import { pendingHighlights, type Rendered } from "../markdown/render"
 import { copiedCount, selectedText } from "../ui/nav"
 import { LOGO_HOLD } from "../ui/status"
 import { plural } from "../lib/text"
@@ -14,6 +15,7 @@ import { watchPath } from "../notes/watch"
 import { STDIN } from "../notes/workspace"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
+import type { Ctx } from "./keymap"
 import type { Links } from "./links"
 import { jobKey } from "./store"
 import type { WorkspaceControl } from "./workspace"
@@ -93,14 +95,54 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
   // the welcome page's ink-in and steam
   useEffect(animateWelcome)
   // code blocks render plain first; once their parser results land, re-render the document
+  useEffect(() => colourIn(c, derive().doc, hlSeen))
+}
+
+/** What the render-time effects watch, as App draws it: the hint context, the zen reading section and the theme sample. */
+export interface RenderWatch {
+  ctxNow: Ctx
+  /** the open note and the reading line's section in zen, else null */
+  glossAt: string | null
+  sample: Rendered | null
+}
+
+/** What the render-time effects call: the hint poke and the gloss auto-show. */
+type RenderDeps = { pokeHints: (ctx: Ctx) => void } & Pick<AIJobs, "glossEntered">
+
+/**
+ * The effects that need this render's values, in order: hints for a new context, the zen gloss on a section change, the
+ * theme sample's highlighting (hooks: call it unconditionally, before any early return).
+ */
+export function useRenderEffects(c: AppCtx, { ctxNow, glossAt, sample }: RenderWatch, { pokeHints, glossEntered }: RenderDeps) {
+  /** the context the hints were last poked for */
+  const ctxSeen = useRef<Ctx | null>(null)
+  /** the note and section the gloss auto-show last ran for (null: outside zen) */
+  const glossSeen = useRef<string | null>(null)
+  /** the theme sample whose code highlighting was last asked for */
+  const hlSample = useRef<Rendered | null>(null)
+  // any context change (focus, view, zen, popup closed, typing ended) shows the new context's hints
   useEffect(() => {
-    const doc = derive().doc
-    if (doc === hlSeen.current) return
-    hlSeen.current = doc
-    const reqs = pendingHighlights(doc)
-    if (!reqs.length) return
-    ensureHighlights(reqs).then((changed) => {
-      if (changed && alive.current) set({ hl: ui.current.hl + 1 })
-    })
+    if (ctxNow === ctxSeen.current) return
+    ctxSeen.current = ctxNow
+    pokeHints(ctxNow)
+  })
+  // zen gloss: runs when the reading line changes section (not on every scroll tick)
+  useEffect(() => {
+    if (glossAt === glossSeen.current) return
+    glossSeen.current = glossAt
+    glossEntered()
+  })
+  // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
+  useEffect(() => colourIn(c, sample, hlSample))
+}
+
+/** Ask for `r`'s code highlights unless `seen` already did; once they land, re-render with them. */
+function colourIn({ ui, set, alive }: AppCtx, r: Rendered | null, seen: { current: Rendered | null }) {
+  if (!r || r === seen.current) return
+  seen.current = r
+  const reqs = pendingHighlights(r)
+  if (!reqs.length) return
+  ensureHighlights(reqs).then((changed) => {
+    if (changed && alive.current) set({ hl: ui.current.hl + 1 })
   })
 }

@@ -74,14 +74,23 @@ function summaryView(s: UI, { file, src }: NoteView, memo: Memo, jobs: Map<strin
 /** The Changed block in Info, null while there is nothing to list or explain. */
 function changeBlock(s: UI, base: UI["baseline"], changes: readonly Change[] | null, memo: Memo, jobs: Map<string, Job>): ChangeView | null {
   const dl = s.delta && s.delta.path === s.openPath ? s.delta : null
-  const dJob = dl ? jobs.get(jobKey("delta", dl.path)) : undefined
-  const live = dl && dJob ? memo.partial(dJob.raw, dl.changes) : null
   // loading, else the reply while nothing changed since the explained text, else the idle list
-  if (dl && dJob) return { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
-  // null: too large to compare, not unchanged
-  if (dl?.result && changes !== null && !changes.length)
-    return { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
+  const explained = dl ? explanationBlock(dl, changes, memo, jobs) : null
+  if (explained) return explained
   if (base && changes?.length) return { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
+  return null
+}
+
+/** `D`'s part of the Changed block: the reply streaming in, or the finished one while nothing changed since the explained text; else null. */
+function explanationBlock(dl: NonNullable<UI["delta"]>, changes: readonly Change[] | null, memo: Memo, jobs: Map<string, Job>): ChangeView | null {
+  const dJob = jobs.get(jobKey("delta", dl.path))
+  if (dJob) {
+    const live = memo.partial(dJob.raw, dl.changes)
+    return { state: "loading", label: "", changes: dl.changes, summary: live?.summary ?? "", notes: live?.notes ?? NO_NOTES }
+  }
+  // null: too large to compare, not unchanged
+  if (dl.result && changes !== null && !changes.length)
+    return { state: "result", label: dl.result.model, changes: dl.changes, summary: dl.result.summary, notes: dl.result.notes }
   return null
 }
 

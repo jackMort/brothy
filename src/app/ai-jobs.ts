@@ -5,14 +5,14 @@ import { basename } from "node:path"
 import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai/client"
 import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai/config"
 import { loadConfig } from "../system/config"
-import { deltaRequest, hhmm, parseDelta, type Change } from "../ai/delta"
+import { deltaRequest, hhmm, parseDelta, type Change, type DeltaParse } from "../ai/delta"
 import { stem } from "../notes/files"
 import { glossKey, glossRequest, type GlossTarget } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
 import { isFresh, loadGlosses, saveGlosses, saveSummaries, textHash, type Gloss } from "../ai/cache"
 import { STDIN } from "../notes/workspace"
 import type { AppCtx } from "./ctx"
-import { jobKey, type Job, type JobKind } from "./store"
+import { jobKey, type Job, type JobKind, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
 const MAX_JOBS = 3
@@ -138,9 +138,8 @@ export function makeAIJobs(c: AppCtx) {
     if (g && g.id !== gHere?.id) fadeGloss()
     if (!gHere || !s.ai || !s.glosses || (g?.id === gHere.id && g.fadeAt === null)) return
     const key = glossKey(gHere.id, gStyle)
-    const e = s.glosses[key]
     // outdated or missing glosses never appear by themselves: they need `a`
-    if (jobs.current.has(jobKey("gloss", gHere.id)) || (e && isFresh(e, gHash, PROMPTS.gloss)))
+    if (jobs.current.has(jobKey("gloss", gHere.id)) || freshGloss(s, key, gHash))
       set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
   }
 
@@ -203,15 +202,13 @@ export function makeAIJobs(c: AppCtx) {
       done: (r, job) => {
         const s = ui.current
         if (s.delta?.path !== path) return bump((x) => x + 1)
-        const fail = (f: Failure) => {
+        const out = deltaOutcome(r, job.raw, changes)
+        if (!out) return set({ delta: null })
+        if ("failure" in out) {
           set({ delta: null })
-          flash(failText(target, f, "explanation"), "error")
+          return flash(failText(target, out.failure, "explanation"), "error")
         }
-        // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
-        const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(job.raw, changes, true) : null
-        if (!r.ok && !cut) return "failure" in r ? fail(r.failure) : set({ delta: null })
-        const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
-        if (!parsed) return fail({ kind: "invalid" })
+        const { parsed } = out
         // edits made during the request now differ from the moved baseline and list as a new idle
         // change set; the reply is kept only when it still describes the note as it is
         const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
@@ -259,25 +256,28 @@ export function makeAIJobs(c: AppCtx) {
     startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
   }
 
+  /** Cancel the gloss running for section `id` and close its sheet; false when none runs. */
+  const cancelGloss = (id: string) => {
+    if (!cancelJob(jobKey("gloss", id))) return false
+    if (ui.current.gloss?.id === id) set({ gloss: null })
+    bump((x) => x + 1)
+    return true
+  }
+
   /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
   const zenGloss = () => {
     const ai = reloadAI()
     const section = derive().gHere
     // cancel first: a request stays cancellable after its `ai` block goes
-    if (section && cancelJob(jobKey("gloss", section.id))) {
-      if (ui.current.gloss?.id === section.id) set({ gloss: null })
-      bump((x) => x + 1)
-      return flash("gloss cancelled")
-    }
+    if (section && cancelGloss(section.id)) return flash("gloss cancelled")
     if (!ai) return flash(AI_OFF)
     ensureGlosses()
     const { s, gHere, gHash, gStyle, title } = derive()
     if (!gHere) return flash("nothing to gloss here")
     const key = glossKey(gHere.id, gStyle)
-    const e = s.glosses?.[key]
     const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
     // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
-    if (e && !shown && isFresh(e, gHash, PROMPTS.gloss)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+    if (!shown && freshGloss(s, key, gHash)) return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
     // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
     const target = aiGate(ai)
     if (target) startGloss(gHere, gStyle, title, target, ai.model)
@@ -285,5 +285,20 @@ export function makeAIJobs(c: AppCtx) {
 
   return { ensureGlosses, glossEntered, dropDelta, summarizeNote, explainChange, zenGloss }
 }
+/** Whether the cache holds a gloss under `key` that is fresh for section text hashed `hash`. */
+function freshGloss(s: UI, key: string, hash: string) {
+  const e = s.glosses?.[key]
+  return !!e && isFresh(e, hash, PROMPTS.gloss)
+}
+
+/** What a finished `D` request leaves: the explanation, a failure to toast, or null when it was cancelled. */
+export function deltaOutcome(r: ChatResult, raw: string, changes: Change[]): { parsed: DeltaParse } | { failure: Failure } | null {
+  // a reply past MAX_DELTA keeps what had arrived: the summary and every finished § line
+  const cut = !r.ok && "failure" in r && r.failure.kind === "tooLong" ? parseDelta(raw, changes, true) : null
+  if (!r.ok && !cut) return "failure" in r ? { failure: r.failure } : null
+  const parsed = cut ?? (r.ok ? parseDelta(r.text, changes) : null)
+  return parsed ? { parsed } : { failure: { kind: "invalid" } }
+}
+
 /** What `makeAIJobs` gives App and the other factories. */
 export type AIJobs = ReturnType<typeof makeAIJobs>

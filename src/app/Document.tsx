@@ -12,7 +12,7 @@ import { Welcome } from "../ui/overlay"
 import { A, type Span } from "../lib/spans"
 import { GHOST_STEPS, fadeStep, notePath } from "../ui/status"
 import { truncate } from "../lib/text"
-import { contrastOn, mix } from "../theme/theme"
+import { contrastOn, mix, type Theme } from "../theme/theme"
 import { SPOT_DIM, dimSpans } from "../ui/zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
@@ -24,112 +24,129 @@ import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
 /** The document box: borderless, wrapped at the reading measure and centered; a click focuses it, the wheel scrolls it. */
-export function docBox(
-  c: AppCtx,
-  d: Derived,
-  { welcomeRows, welcomeOpen, zenScroll }: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">,
-): ReactNode {
-  const { welcome, bump, focusDoc, scrollBy } = c
-  const { s, L, t, file, view, top, tw, spot, win, sheet } = d
-  const { bodyH, CW, CH, padL } = L
-  const { openPath, query } = s
-  // a note reached through a link outside the opened folder is named from its vault's root
-  const rel = notePath(s.root, s.linkRoot, openPath)
-
-  const scrim = L.mode === "drawer" && L.shown
-  let content: ReactNode
-  if (!openPath) {
-    const { rows: recents, shown } = welcomeRows()
-    const w = welcome.current
-    w.hl = Math.max(1, Math.min(shown, w.hl))
-    content = (
-      <Welcome
-        t={t}
-        CW={L.CW}
-        CH={L.CH}
-        root={s.root}
-        recents={recents}
-        hl={w.hl}
-        tick={w.tick}
-        ink={w.ink}
-        keys={WELCOME_KEYS.map(([id, word]) => [keyDef(id).label, word])}
-        onHover={(i) => {
-          w.hl = i
-          bump((x) => x + 1)
-        }}
-        onActivate={welcomeOpen}
-      />
-    )
-  } else if (file?.error) {
-    content = (
-      <box key="error" style={{ flexDirection: "column", paddingLeft: L.zen ? 2 : 0 }}>
-        <Row
-          spans={[
-            { text: "Could not open ", fg: t.error, attr: 1 },
-            { text: rel, fg: t.text },
-          ]}
-        />
-        <Row spans={[]} />
-        <Row spans={[{ text: truncate(file.error, CW), fg: t.textMuted }]} />
-      </box>
-    )
-  } else if (L.zen) {
-    // a 2-column gutter left of the text carries the typewriter marker
-    const gutter = mix(t.textMuted, t.background, 0.4)
-    // the gloss sheet: a rule and GLOSS_ROWS muted rows over the bottom body rows, faded toward the background
-    const sheetK = !sheet || sheet.fadeAt === null ? 0 : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
-    const ink = (color: typeof t.text) => mix(color, t.background, sheetK)
-    const sheetAt = sheet ? CH - 1 - GLOSS_ROWS : CH
-    const sheetRule = sheet ? glossRule(sheet.state, sheet.heading, CW) : null
-    const glossed = sheet ? glossRows(sheet.text, CW) : []
-    content = (
-      <box key="zen-lines" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
-        {Array.from({ length: CH }, (_, i) => {
-          if (sheetRule && i >= sheetAt) {
-            const r = i - sheetAt
-            const spans: Span[] = r
-              ? [{ text: glossed[r - 1] ?? "", fg: ink(t.textMuted) }]
-              : [
-                  { text: sheetRule[0], fg: ink(t.border) },
-                  { text: sheetRule[1], fg: ink(t.textMuted) },
-                  { text: sheetRule[2], fg: ink(t.border) },
-                ]
-            return <Row key={"gloss" + r} spans={[{ text: "  " }, ...spans]} />
-          }
-          const n = win.first + i
-          const l = n >= win.lo && n < win.hi ? view.lines[n] : undefined
-          let spans = l?.spans ?? []
-          const dim = !!l && !!spot && (n < spot[0] || n >= spot[1])
-          if (dim) spans = dimSpans(spans, t, SPOT_DIM)
-          return <Row key={n} spans={[{ text: tw && n === top ? "▸ " : "  ", fg: gutter }, ...markMatches(spans, query, t)]} />
-        })}
-      </box>
-    )
-  } else {
-    const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
-    content = (
-      <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
-        {view.lines.slice(top, top + CH).map((l: Line, i) => {
-          let spans = markMatches(l.spans, query, t)
-          if (lb)
-            lb.spots.forEach((sp, k) => {
-              const label = lb.labels[k]!
-              if (sp.row === top + i && label.startsWith(lb.typed))
-                spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
-            })
-          return <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
-        })}
-      </box>
-    )
-  }
+export function docBox(c: AppCtx, d: Derived, ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">): ReactNode {
+  const { focusDoc, scrollBy } = c
+  const { s, L, file } = d
+  const content = !s.openPath ? welcomePage(c, d, ws) : file?.error ? openError(d, file.error) : L.zen ? zenLines(d) : noteLines(d)
   return (
     <box
       key="doc"
-      style={{ flexDirection: "column", flexGrow: 1, height: bodyH, paddingLeft: L.zen ? padL - 2 : padL }}
+      style={{ flexDirection: "column", flexGrow: 1, height: L.bodyH, paddingLeft: L.zen ? L.padL - 2 : L.padL }}
       onMouseDown={() => focusDoc()}
-      onMouseScroll={(e: MouseEvent) => (L.zen ? zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)}
+      onMouseScroll={(e: MouseEvent) => (L.zen ? ws.zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)}
     >
       {content}
+    </box>
+  )
+}
+
+/** No note open: the welcome page, its highlighted row clamped to the recent rows on screen. */
+function welcomePage(c: AppCtx, { s, L, t }: Derived, { welcomeRows, welcomeOpen }: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen">) {
+  const { welcome, bump } = c
+  const { rows: recents, shown } = welcomeRows()
+  const w = welcome.current
+  w.hl = Math.max(1, Math.min(shown, w.hl))
+  return (
+    <Welcome
+      t={t}
+      CW={L.CW}
+      CH={L.CH}
+      root={s.root}
+      recents={recents}
+      hl={w.hl}
+      tick={w.tick}
+      ink={w.ink}
+      keys={WELCOME_KEYS.map(([id, word]) => [keyDef(id).label, word])}
+      onHover={(i) => {
+        w.hl = i
+        bump((x) => x + 1)
+      }}
+      onActivate={welcomeOpen}
+    />
+  )
+}
+
+/** The open note could not be read: its path and the error. */
+function openError({ s, L, t }: Derived, error: string) {
+  // a note reached through a link outside the opened folder is named from its vault's root
+  const rel = notePath(s.root, s.linkRoot, s.openPath)
+  return (
+    <box key="error" style={{ flexDirection: "column", paddingLeft: L.zen ? 2 : 0 }}>
+      <Row
+        spans={[
+          { text: "Could not open ", fg: t.error, attr: 1 },
+          { text: rel, fg: t.text },
+        ]}
+      />
+      <Row spans={[]} />
+      <Row spans={[{ text: truncate(error, L.CW), fg: t.textMuted }]} />
+    </box>
+  )
+}
+
+/** Zen's lines: a 2-column gutter carrying the typewriter marker, Spotlight dimming, and the gloss sheet over the bottom rows. */
+function zenLines(d: Derived) {
+  const { t, sheet } = d
+  const { CW, CH } = d.L
+  // a 2-column gutter left of the text carries the typewriter marker
+  const gutter = mix(t.textMuted, t.background, 0.4)
+  const sheetRows = sheet ? glossSheet(sheet, t, CW) : []
+  const sheetAt = CH - sheetRows.length
+  return (
+    <box key="zen-lines" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
+      {Array.from({ length: CH }, (_, i) => {
+        const r = i - sheetAt
+        if (r >= 0) return <Row key={"gloss" + r} spans={[{ text: "  " }, ...sheetRows[r]!]} />
+        const n = d.win.first + i
+        return <Row key={n} spans={[{ text: d.tw && n === d.top ? "▸ " : "  ", fg: gutter }, ...zenLine(d, n)]} />
+      })}
+    </box>
+  )
+}
+
+/** The gloss sheet's rows: a rule and GLOSS_ROWS muted rows, faded toward the background as the sheet fades out. */
+function glossSheet(sheet: NonNullable<Derived["sheet"]>, t: Theme, CW: number): Span[][] {
+  const k = sheet.fadeAt === null ? 0 : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
+  const ink = (color: typeof t.text) => mix(color, t.background, k)
+  const rule = glossRule(sheet.state, sheet.heading, CW)
+  const glossed = glossRows(sheet.text, CW)
+  const rows: Span[][] = [
+    [
+      { text: rule[0], fg: ink(t.border) },
+      { text: rule[1], fg: ink(t.textMuted) },
+      { text: rule[2], fg: ink(t.border) },
+    ],
+  ]
+  for (let r = 0; r < GLOSS_ROWS; r++) rows.push([{ text: glossed[r] ?? "", fg: ink(t.textMuted) }])
+  return rows
+}
+
+/** Line `n` of zen's window: blank outside it, dimmed outside the Spotlight, find matches marked. */
+function zenLine({ s, t, view, spot, win }: Derived, n: number) {
+  const l = n >= win.lo && n < win.hi ? view.lines[n] : undefined
+  let spans = l?.spans ?? []
+  const dim = !!l && !!spot && (n < spot[0] || n >= spot[1])
+  if (dim) spans = dimSpans(spans, t, SPOT_DIM)
+  return markMatches(spans, s.query, t)
+}
+
+/** The note's lines on screen: find matches marked, link labels over them, dimmed under the drawer's scrim. */
+function noteLines({ s, L, t, view, top }: Derived) {
+  const { CW, CH } = L
+  const scrim = L.mode === "drawer" && L.shown
+  const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
+  return (
+    <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
+      {view.lines.slice(top, top + CH).map((l: Line, i) => {
+        let spans = markMatches(l.spans, s.query, t)
+        if (lb)
+          lb.spots.forEach((sp, k) => {
+            const label = lb.labels[k]!
+            if (sp.row === top + i && label.startsWith(lb.typed))
+              spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
+          })
+        return <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
+      })}
     </box>
   )
 }

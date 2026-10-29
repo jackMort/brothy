@@ -7,8 +7,10 @@ import { noteText } from "../../src/ai/client"
 import { PROMPT_V } from "../../src/ai/config"
 import type { AppCtx } from "../../src/app/ctx"
 import { makeMemo, type Derived } from "../../src/app/derive"
-import { makeSwitcher } from "../../src/app/switcher"
+import { hitRows, makeSwitcher } from "../../src/app/switcher"
 import type { Job } from "../../src/app/store"
+import { render } from "../../src/markdown/render"
+import { renderSource } from "../../src/markdown/source"
 import { emptyIndex, indexNote, type SwitchRow, type TextHit } from "../../src/notes/vault"
 import type { Span } from "../../src/lib/spans"
 import { brothy } from "../helpers/theme"
@@ -171,5 +173,27 @@ describe("jumpToText (⏎ on a text hit)", () => {
     const calls = activate(hit(1, 8), [2], true)
     expect(calls.setTop).toEqual([8])
     expect(calls.flash).toEqual([["no match for “apple”", "error"]])
+  })
+})
+
+describe("hitRows", () => {
+  const SRC = "lead\n\n# One\n\napple\n\n# Two\n\napple\n"
+  const hit = (heading: number | null, line: number): TextHit => ({ kind: "text", path: "/a.md", name: "a", folder: "", heading, line, context: "", hits: [] })
+
+  test("Preview: the hit's section, from its heading to the next one or the end", () => {
+    const view = render(SRC, 80, brothy)
+    const [one, two] = view.headings
+    expect(hitRows(view, false, hit(0, 4))).toEqual({ from: one!.line, end: two!.line })
+    expect(hitRows(view, false, hit(1, 8))).toEqual({ from: two!.line, end: Infinity })
+  })
+
+  test("Preview: a hit before the first heading runs from the top to it", () => {
+    const view = render(SRC, 80, brothy)
+    expect(hitRows(view, false, hit(null, 0))).toEqual({ from: 0, end: view.headings[0]!.line })
+  })
+
+  test("Source: from the hit's own source row to the end", () => {
+    const view = renderSource(SRC, 80, brothy)
+    expect(hitRows(view, true, hit(1, 8))).toEqual({ from: view.srcRow![8]!, end: Infinity })
   })
 })
