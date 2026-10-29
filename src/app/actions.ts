@@ -1,15 +1,14 @@
 // The key side of the app: the action behind every KEYMAP binding and what decides the context (popup, zen, panel view
-// or document) the keys and hints go by; the key handler is in dispatch.ts. Not pure: `makeActions` closes over the app
-// context and the feature factories.
+// or document) the keys and hints go by. `makeActions` composes one factory per family of bindings: the global ones here,
+// the document, zen, panel and popup ones in view-actions.ts; the key handler is in dispatch.ts. Not pure: the factories
+// close over the app context and the feature factories.
 import type { KeyEvent } from "@opentui/core"
 import { closeSync, openSync } from "node:fs"
-import { basename, dirname } from "node:path"
-import { askSection } from "../ai/ask"
+import { basename } from "node:path"
 import { loadConfig } from "../system/config"
 import { quoteNeedle, type Change } from "../ai/delta"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "../system/editor"
 import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
-import { helpLayout } from "../ui/help"
 import { MEASURE } from "../ui/layout"
 import { HEADING_STYLES } from "../markdown/heading-style"
 import { parseFrontMatter } from "../markdown/frontmatter"
@@ -20,20 +19,25 @@ import { findHeading } from "../ui/panel"
 import { headingKey } from "../markdown/sections"
 import { sourceScan } from "../markdown/source"
 import { HINT_HOLD, errText, fadeStep } from "../ui/status"
-import { clamp } from "../lib/text"
-import { pickMode, pickMove, pickQuery } from "../theme/themepick"
-import { nextSection, stepRow } from "../notes/vault"
 import { STDIN } from "../notes/workspace"
-import { ZEN_ROWS, ZEN_WPM, stepMeasure } from "../ui/zen"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
-import { erase } from "./input"
 import { makeOnKey } from "./dispatch"
-import { HELP_GROUPS, isDown, type Ctx, type KeyId } from "./keymap"
+import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { Popups } from "./popups"
 import type { Focus } from "./store"
 import type { SwitcherControl } from "./switcher"
+import {
+  makeDocActions,
+  makeFilesActions,
+  makeFilterActions,
+  makeInfoActions,
+  makeOutlineActions,
+  makePopupActions,
+  makeSwitcherActions,
+  makeZenActions,
+} from "./view-actions"
 import type { WorkspaceControl } from "./workspace"
 import type { Zen } from "./zen"
 
@@ -48,56 +52,34 @@ export interface Features {
   edit: ((argv: string[], piped: boolean) => EditResult | void) | undefined
 }
 
-/** One action per KEYMAP id. */
+/** One action per KEYMAP id; each family's factory returns its part. */
 export type Actions = Record<KeyId, (k: KeyEvent) => void>
 
 /** The actions over the app context; App registers `onKey` and draws with the rest. */
 export function makeActions(c: AppCtx, f: Features) {
-  const { aiJobs, links, zen, switcher, workspace, popups, edit: editImpl } = f
-  const {
-    ui,
-    set,
-    derive,
-    dims,
-    memo,
-    renderer,
-    runFade,
-    flash,
-    persist,
-    setTop,
-    scrollBy,
-    stopRolling,
-    openFile,
-    selectRow,
-    toggleDir,
-    saveSidebar,
-    selectView,
-    panelViews,
-    focusPanel,
-    focusDoc,
-    showMatch,
-  } = c
-  const { ensureGlosses, summarizeNote, explainChange, zenGloss } = aiJobs
-  const { openLink, liveLabels, startLabels, histMove } = links
-  const { startRolling, toggleZen, setZen, goPage, zenScroll, openZenSettings, revertZen, applyZen, zenEdit } = zen
-  const { closeSwitcher, swType, swGo, dropIndex, openSwitcher, swActivate } = switcher
-  const { leave, opType, opGo, openOpener, opComplete, opOpen } = workspace
-  const {
-    filterText,
-    filterType,
-    filterStop,
-    promptDefault,
-    promptCount,
-    promptHighlight,
-    promptType,
-    promptSubmit,
-    promptClose,
-    openTheme,
-    closeTheme,
-    themeSet,
-    applyTheme,
-    helpGo,
-  } = popups
+  const keys = makeKeyContext(c, f.links)
+  const moves = makeMoves(c)
+  const actions: Actions = {
+    ...makeToggleActions(c, f, keys),
+    ...makeGlobalActions(c, f, keys),
+    ...makeEditAction(c, f),
+    ...makeDocActions(c, f.links, moves),
+    ...makeZenActions(c, f, moves),
+    ...makeOutlineActions(c, moves),
+    ...makeInfoActions(c, f.links, moves),
+    ...makeFilesActions(c),
+    ...makeFilterActions(c, f.popups, moves),
+    ...makePopupActions(c, f),
+    ...makeSwitcherActions(c, f),
+  }
+  const { currentCtx, pokeHints } = keys
+  const { outlineGo, jumpChange } = moves
+  return { currentCtx, pokeHints, outlineGo, jumpChange, onKey: makeOnKey(c, f, actions, keys.docMode) }
+}
+
+/** The context the keys and hints go by, and the key hints' fade. */
+function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
+  const { ui, set, derive, runFade } = c
 
   /** Context id outside popups and zen: the focused panel view, else the document. */
   const docMode = (): Ctx => {
@@ -105,6 +87,42 @@ export function makeActions(c: AppCtx, f: Features) {
     if (v && ui.current.filterTyping) return "filter"
     return v ? `panel:${v}` : "doc"
   }
+
+  /** Show the key hints for context `c` now; they hold HINT_HOLD, then fade. */
+  const pokeHints = (c: Ctx) => {
+    set({ hintAt: Date.now(), hintCtx: c })
+    runFade(
+      "hints",
+      () => ui.current.hintAt,
+      HINT_HOLD,
+      () => set({ hintAt: null }),
+    )
+  }
+
+  /** Context id now: an open popup, else zen, else the panel view or the document. */
+  const currentCtx = (): Ctx => {
+    const s = ui.current
+    if (s.themePick) return "theme"
+    if (s.zenOrig !== null) return "zenSettings"
+    if (s.opener) return "open"
+    if (s.switcher) return "switch"
+    if (s.prompt) return "prompt"
+    if (liveLabels()) return "label"
+    if (s.help) return "help"
+    return derive().L.zen ? "zen" : docMode()
+  }
+  const hintsVisible = () => {
+    const s = ui.current
+    return s.hintAt !== null && s.hintCtx === currentCtx() && fadeStep(Date.now() - s.hintAt, HINT_HOLD) !== null
+  }
+
+  return { docMode, pokeHints, currentCtx, hintsVisible }
+}
+type KeyContext = ReturnType<typeof makeKeyContext>
+
+/** Moves within the note: to a find match, a heading, an Outline heading, a Changed row. */
+function makeMoves(c: AppCtx) {
+  const { set, derive, flash, setTop, focusDoc, showMatch } = c
 
   const jumpMatch = (dir: 1 | -1) => {
     const { matches, win, L, s, pg } = derive()
@@ -145,38 +163,14 @@ export function makeActions(c: AppCtx, f: Features) {
     focusDoc()
   }
 
-  /** Show the key hints for context `c` now; they hold HINT_HOLD, then fade. */
-  const pokeHints = (c: Ctx) => {
-    set({ hintAt: Date.now(), hintCtx: c })
-    runFade(
-      "hints",
-      () => ui.current.hintAt,
-      HINT_HOLD,
-      () => set({ hintAt: null }),
-    )
-  }
+  return { jumpMatch, jumpHeading, outlineGo, jumpChange }
+}
+export type Moves = ReturnType<typeof makeMoves>
 
-  /** Context id now: an open popup, else zen, else the panel view or the document. */
-  const currentCtx = (): Ctx => {
-    const s = ui.current
-    if (s.themePick) return "theme"
-    if (s.zenOrig !== null) return "zenSettings"
-    if (s.opener) return "open"
-    if (s.switcher) return "switch"
-    if (s.prompt) return "prompt"
-    if (liveLabels()) return "label"
-    if (s.help) return "help"
-    return derive().L.zen ? "zen" : docMode()
-  }
-  const hintsVisible = () => {
-    const s = ui.current
-    return s.hintAt !== null && s.hintCtx === currentCtx() && fadeStep(Date.now() - s.hintAt, HINT_HOLD) !== null
-  }
-
-  /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
-  const typing = () => {}
-
-  const actions: Actions = {
+/** The global switches: panel views and visibility, Source, zen, width, minimap, heading style, background. */
+function makeToggleActions(c: AppCtx, { zen }: Features, { pokeHints, currentCtx }: KeyContext) {
+  const { ui, set, derive, dims, flash, persist, saveSidebar, selectView, panelViews, focusPanel, focusDoc } = c
+  return {
     views: (k) => {
       const v = panelViews()[Number(k.name) - 1]
       if (!v) return
@@ -188,8 +182,8 @@ export function makeActions(c: AppCtx, f: Features) {
       pokeHints(currentCtx())
     },
     // the Source shown over zen (`z s`) is not zen on screen: z, w and esc go by the layout
-    zen: () => toggleZen(!derive().L.zen),
-    zenSettings: openZenSettings,
+    zen: () => zen.toggleZen(!derive().L.zen),
+    zenSettings: zen.openZenSettings,
     sidebar: () => {
       const { L, sideFocus, s } = derive()
       if (L.mode === "drawer") return sideFocus ? focusDoc() : focusPanel()
@@ -219,8 +213,15 @@ export function makeActions(c: AppCtx, f: Features) {
       set({ transparent })
       if (persist({ transparent })) flash(transparent ? "transparent background" : "opaque background")
     },
-    switcher: openSwitcher,
-    open: openOpener,
+  } satisfies Partial<Actions>
+}
+
+/** The other global keys: pickers, find, focus, reload, esc, help, history, the AI keys and quit. */
+function makeGlobalActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace, popups }: Features, { pokeHints, currentCtx, hintsVisible }: KeyContext) {
+  const { ui, set, derive, renderer, flash, selectView, focusPanel, focusDoc } = c
+  return {
+    switcher: switcher.openSwitcher,
+    open: workspace.openOpener,
     slash: () => {
       const { sideFocus } = derive()
       if (!sideFocus) return set({ prompt: { value: "", hl: -1, top: 0 } })
@@ -228,7 +229,7 @@ export function makeActions(c: AppCtx, f: Features) {
       set({ filterTyping: true })
     },
     focus: () => (derive().sideFocus ? focusDoc() : focusPanel()),
-    theme: openTheme,
+    theme: popups.openTheme,
     reload: () => {
       const s = ui.current
       const piped = s.piped
@@ -239,8 +240,8 @@ export function makeActions(c: AppCtx, f: Features) {
       if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
       const linkTree = piped ? (s.linkLazy ? s.linkTree : scanTree(s.root)) : s.linkRoot ? scanTree(s.linkRoot) : tree
       set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1, ai: loadConfig().ai ?? null })
-      if (ui.current.zen) ensureGlosses()
-      dropIndex()
+      if (ui.current.zen) aiJobs.ensureGlosses()
+      switcher.dropIndex()
       flash("reloaded")
     },
     clear: () => {
@@ -254,14 +255,26 @@ export function makeActions(c: AppCtx, f: Features) {
       if (sheet && sheet.fadeAt === null) return set({ gloss: null })
       if (s.toast?.kind === "error") set({ toast: null })
       if (s.query) set({ query: "", matchLine: null })
-      else if (derive().L.zen) toggleZen(false)
+      else if (derive().L.zen) zen.toggleZen(false)
     },
     // the welcome page shows no hints, so ? opens the sheet at once
     help: () => (hintsVisible() || !ui.current.openPath ? set({ help: true, helpTop: 0 }) : pokeHints(currentCtx())),
-    histBack: () => histMove(-1),
-    histForward: () => histMove(1),
-    summarize: summarizeNote,
-    explainChange,
+    histBack: () => links.histMove(-1),
+    histForward: () => links.histMove(1),
+    summarize: aiJobs.summarizeNote,
+    explainChange: aiJobs.explainChange,
+    quit: () => {
+      workspace.leave()
+      renderer.destroy()
+      process.exit(0)
+    },
+  } satisfies Partial<Actions>
+}
+
+/** `e`: the note in $EDITOR at the top line, the renderer suspended meanwhile. */
+function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
+  const { ui, set, derive, memo, renderer, flash } = c
+  return {
     edit: () => {
       const s = ui.current
       if (!s.openPath) return flash("no note to edit", "error")
@@ -299,238 +312,7 @@ export function makeActions(c: AppCtx, f: Features) {
       if (res && res.code !== 0) return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")
       flash(`edited · ${basename(s.openPath)}`)
     },
-    quit: () => {
-      leave()
-      renderer.destroy()
-      process.exit(0)
-    },
-
-    docLine: (k) => scrollBy(isDown(k) ? 1 : -1),
-    docHalf: (k) => scrollBy((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
-    docPage: (k) => scrollBy((isDown(k) ? 1 : -1) * (derive().L.CH - 2)),
-    docEnds: (k) => setTop(k.name === "g" && !k.shift ? 0 : k.name === "home" ? 0 : derive().maxTop),
-    docHeading: (k) => jumpHeading(k.sequence === "]" || k.sequence === "}" ? 1 : -1),
-    docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
-    back: () => focusPanel(),
-    links: startLabels,
-    labelType: typing,
-    labelErase: () => {
-      const lb = ui.current.labels
-      if (lb) set({ labels: { ...lb, typed: erase(lb.typed) } })
-    },
-    labelCancel: () => set({ labels: null }),
-
-    zenLine: (k) => zenScroll(isDown(k) ? 1 : -1),
-    zenHalf: (k) => zenScroll((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
-    zenPage: (k) => {
-      const { pg, L, prompter } = derive()
-      if (k.name === "space" && prompter) return ui.current.rolling ? stopRolling() : startRolling()
-      const step = L.CH - 2
-      if (!pg) return zenScroll((isDown(k) ? 1 : -1) * step)
-      // a tall page scrolls to its end first, then the next press flips
-      if (isDown(k)) {
-        if (pg.top < pg.maxTop) zenScroll(step)
-        else goPage(pg.index + 1)
-      } else if (pg.top > pg.start) zenScroll(-step)
-      else goPage(pg.index - 1)
-    },
-    zenEnds: (k) => {
-      stopRolling()
-      const toTop = (k.name === "g" && !k.shift) || k.name === "home"
-      if (derive().pg) return goPage(toTop ? 0 : Infinity)
-      setTop(toTop ? 0 : derive().maxTop)
-    },
-    zenGloss,
-    zenSection: (k) => {
-      stopRolling()
-      const dir = k.sequence === "]" || k.sequence === "}" ? 1 : -1
-      const { pg } = derive()
-      if (pg) goPage(pg.index + dir)
-      else jumpHeading(dir)
-    },
-    zenMeasure: (k) => {
-      if (setZen({ measure: stepMeasure(ui.current.zenCfg.measure, k.sequence === ">" ? 1 : -1) }, true)) flash(`measure ${ui.current.zenCfg.measure}`)
-    },
-    zenSpeed: (k) => {
-      if (setZen({ wpm: ui.current.zenCfg.wpm + (k.sequence === "+" ? 1 : -1) * ZEN_WPM.step }, true)) flash(`${ui.current.zenCfg.wpm} wpm`)
-    },
-
-    outlineMove: (k) => {
-      const { outlineCur, oRows } = derive()
-      const n = oRows.length
-      const next = k.name === "g" ? (k.shift ? n - 1 : 0) : outlineCur + (isDown(k) ? 1 : -1)
-      set({ outlineCur: clamp(next, 0, n - 1) })
-    },
-    outlineJump: () => {
-      const { oRows, outlineCur } = derive()
-      const r = oRows[outlineCur]
-      if (r) outlineGo(r.index)
-    },
-    outlinePeek: () => {
-      const { oRows, outlineCur } = derive()
-      const r = oRows[outlineCur]
-      if (r) outlineGo(r.index, true)
-    },
-
-    infoMove: (k) => {
-      const { linkRows, infoRows, infoCur, LH, s } = derive()
-      const max = Math.max(0, infoRows.length - LH)
-      const dir = isDown(k) ? 1 : -1
-      // g / G go to the first / last link (or row); the other keys step one
-      const jump = k.name === "g"
-      const toEnd = jump ? !!k.shift : dir > 0
-      const scroll = () => set({ listTop: { ...s.listTop, info: Math.max(0, Math.min(max, jump ? (toEnd ? max : 0) : s.listTop.info + dir)) } })
-      const edge = toEnd ? linkRows.length - 1 : 0
-      // without links, or at the first/last one, the keys scroll the rest of the list into view
-      if (!linkRows.length || infoCur === edge) return scroll()
-      set({ infoCur: jump ? edge : clamp(infoCur + dir, 0, linkRows.length - 1) })
-    },
-    infoOpen: () => {
-      const { infoRows, linkRows, infoCur } = derive()
-      const it = infoRows[linkRows[infoCur] ?? -1]
-      if (it?.kind === "link") openLink(it)
-      else if (it?.kind === "change") jumpChange(it.at)
-    },
-
-    filesMove: (k) => {
-      const { s, rows, LH } = derive()
-      const half = Math.max(1, Math.floor(LH / 2))
-      if (k.name === "g") return selectRow(k.shift ? rows.length - 1 : 0)
-      if (k.name === "pagedown" || k.name === "d") return selectRow(s.cursor + half)
-      if (k.name === "pageup" || k.name === "u") return selectRow(s.cursor - half)
-      selectRow(s.cursor + (isDown(k) ? 1 : -1))
-    },
-    filesOpen: () => {
-      const { s, rows } = derive()
-      const row = rows[s.cursor]
-      if (!row) return
-      if (row.node.dir) return toggleDir(row.node)
-      openFile(row.node.path)
-      focusDoc()
-    },
-    filesPeek: () => {
-      const { s, rows } = derive()
-      const row = rows[s.cursor]
-      if (!row) return
-      if (row.node.dir) return toggleDir(row.node, true)
-      openFile(row.node.path)
-    },
-    filesUp: () => {
-      const { s, rows } = derive()
-      const row = rows[s.cursor]
-      if (!row) return
-      if (row.node.dir && s.expanded.has(row.node.path)) return toggleDir(row.node, false)
-      const pi = rows.findIndex((r) => r.node.path === dirname(row.node.path))
-      if (pi >= 0) selectRow(pi, "no")
-    },
-    filesTidy: () => {
-      const s = ui.current
-      set({ expanded: new Set(s.openPath ? ancestorsOf(s.tree, s.openPath) : []) })
-    },
-
-    filterType: typing,
-    filterMove: (k) => {
-      const dn = k.name === "down" || k.name === "n"
-      if (ui.current.view === "outline") {
-        const { oRows, outlineCur } = derive()
-        return set({ outlineCur: clamp(outlineCur + (dn ? 1 : -1), 0, oRows.length - 1) })
-      }
-      selectRow(ui.current.cursor + (dn ? 1 : -1))
-    },
-    filterOpen: () => {
-      if (ui.current.view === "outline") {
-        const { oRows, outlineCur } = derive()
-        const r = oRows[outlineCur]
-        filterStop(true)
-        if (r) outlineGo(r.index)
-        return
-      }
-      const { rows, s } = derive()
-      const row = rows[s.cursor]
-      filterStop(false)
-      if (row && !row.node.dir) {
-        openFile(row.node.path)
-        focusDoc()
-      }
-    },
-    filterClear: () => filterStop(true),
-    filterLeave: () => {
-      filterStop(false)
-      focusDoc()
-    },
-    filterErase: () => {
-      const v = filterText()
-      if (!v) return filterStop(true)
-      filterType(erase(v))
-    },
-
-    helpScroll: (k) => {
-      const vis = helpLayout(HELP_GROUPS, dims.current.W, dims.current.H).vis
-      const top = ui.current.helpTop
-      if (k.name === "g" || k.name === "home") return helpGo(k.shift ? Infinity : 0)
-      if (k.name === "end") return helpGo(Infinity)
-      const page = ["space", "pagedown", "b", "pageup"].includes(k.name) || k.ctrl
-      helpGo(top + (isDown(k) ? 1 : -1) * (page ? vis - 1 : 1))
-    },
-    helpClose: () => set({ help: false }),
-
-    promptMove: (k) => {
-      const pr = ui.current.prompt
-      if (pr && promptCount() > 0) promptHighlight((pr.hl >= 0 ? pr.hl : promptDefault()) + (k.name === "down" ? 1 : -1))
-    },
-    promptApply: () => promptSubmit(),
-    promptClear: promptClose,
-    promptErase: () => {
-      if (ui.current.prompt) promptType(erase(ui.current.prompt.value))
-    },
-    swType: typing,
-    swMove: (k) => {
-      const { swRows, swHl } = derive()
-      swGo(stepRow(swRows, swHl, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1))
-    },
-    swSection: () => {
-      const { swRows, swHl, question } = derive()
-      swGo(question ? askSection(swRows, swHl) : nextSection(swRows, swHl))
-    },
-    swOpen: () => swActivate(derive().swHl),
-    swClose: closeSwitcher,
-    swErase: () => {
-      if (ui.current.switcher) swType(erase(ui.current.switcher.q))
-    },
-    swAsk: typing, // a `?` query is typed like any other
-    opType: typing,
-    opMove: (k) => {
-      const { opRows, opHl } = derive()
-      opGo(stepRow(opRows, opHl, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1))
-    },
-    opComplete,
-    opOpen: () => {
-      const { opRows, opHl } = derive()
-      opOpen(opRows[opHl])
-    },
-    opClose: () => set({ opener: null }),
-    opErase: () => {
-      if (ui.current.opener) opType(erase(ui.current.opener.q))
-    },
-
-    themeType: typing,
-    themeMove: (k) => themeSet((p) => pickMove(p, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
-    // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
-    themeMode: (k) => themeSet((p) => pickMode(p, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
-    themeApply: applyTheme,
-    themeClose: closeTheme,
-    themeErase: () => themeSet((p) => pickQuery(p, erase(p.q))),
-
-    zsMove: (k) => set({ zenRow: clamp(ui.current.zenRow + (isDown(k) ? 1 : -1), 0, ZEN_ROWS.length - 1) }),
-    zsToggle: () => zenEdit(ui.current.zenRow, 0),
-    zsAdjust: (k) => zenEdit(ui.current.zenRow, k.name === "right" || k.name === "l" ? 1 : -1),
-    zsSave: applyZen,
-    zsRevert: revertZen,
-  }
-
-  const onKey = makeOnKey(c, f, actions, docMode)
-
-  return { currentCtx, pokeHints, outlineGo, jumpChange, onKey }
+  } satisfies Partial<Actions>
 }
 
 /** The rows of change `c`'s section in `view`, `to` exclusive (the lead-in before the first heading for none). */
