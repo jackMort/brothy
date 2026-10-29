@@ -292,11 +292,9 @@ export type SummaryResult =
 const fail = (failure: Failure): ChatResult => ({ ok: false, failure })
 const finish = (raw: string, req: ChatReq): ChatResult => {
   const text = req.clean(raw)
-  return !text
-    ? fail({ kind: "empty" })
-    : text.length > req.maxOut
-      ? fail({ kind: "tooLong" })
-      : { ok: true, text, raw }
+  if (!text) return fail({ kind: "empty" })
+  if (text.length > req.maxOut) return fail({ kind: "tooLong" })
+  return { ok: true, text, raw }
 }
 
 /** Shortest key or header value scrubbed from a message: a shorter one would shred ordinary words. */
@@ -310,7 +308,7 @@ export async function chat(t: AITarget, req: ChatReq, o: ChatOpts = {}): Promise
   const r = await send(t, req, o)
   if (r.ok || !("failure" in r)) return r
   const f = r.failure
-  const text = f.kind === "message" ? f.message : f.kind === "status" ? f.message : undefined
+  const text = f.kind === "message" || f.kind === "status" ? f.message : undefined
   if (!text) return r
   // a server may echo a secret back: the key and every custom header value never reach a message
   let out = text
@@ -355,7 +353,10 @@ function guard(o: ChatOpts): Guard {
       clearTimeout(idle)
       idle = setTimeout(() => stop("idle"), o.idleMs ?? IDLE_MS)
     },
-    ended: () => (why ? fail({ kind: why }) : ctl.signal.aborted ? { ok: false, cancelled: true } : null),
+    ended: () => {
+      if (why) return fail({ kind: why })
+      return ctl.signal.aborted ? { ok: false, cancelled: true } : null
+    },
     whole: (p) => Promise.race([p, aborted]),
     close: () => {
       clearTimeout(idle)

@@ -22,10 +22,8 @@ function makeFilter(c: AppCtx) {
   /** Leave typing; `clear` also empties the shown view's filter. */
   const filterStop = (clear: boolean) => {
     clearTimeout(timers.current.open)
-    set({
-      filterTyping: false,
-      ...(clear ? (ui.current.view === "outline" ? { outlineFilter: "" } : { filter: "" }) : {}),
-    })
+    const emptied = ui.current.view === "outline" ? { outlineFilter: "" } : { filter: "" }
+    set({ filterTyping: false, ...(clear ? emptied : {}) })
   }
 
   return { filterText, filterType, filterStop }

@@ -30,7 +30,7 @@ export function makeDocActions(
     docLine: (k) => scrollBy(isDown(k) ? 1 : -1),
     docHalf: (k) => scrollBy((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
     docPage: (k) => scrollBy((isDown(k) ? 1 : -1) * (derive().L.CH - 2)),
-    docEnds: (k) => setTop(k.name === "g" && !k.shift ? 0 : k.name === "home" ? 0 : derive().maxTop),
+    docEnds: (k) => setTop(k.name === "home" || (k.name === "g" && !k.shift) ? 0 : derive().maxTop),
     docHeading: (k) => jumpHeading(k.sequence === "]" || k.sequence === "}" ? 1 : -1),
     docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
     back: () => focusPanel(),
@@ -95,7 +95,8 @@ export function makeOutlineActions(c: AppCtx, { outlineGo }: Moves) {
     outlineMove: (k) => {
       const { outlineCur, oRows } = derive()
       const n = oRows.length
-      const next = k.name === "g" ? (k.shift ? n - 1 : 0) : outlineCur + (isDown(k) ? 1 : -1)
+      let next = outlineCur + (isDown(k) ? 1 : -1)
+      if (k.name === "g") next = k.shift ? n - 1 : 0
       set({ outlineCur: clamp(next, 0, n - 1) })
     },
     outlineJump: () => {
@@ -122,9 +123,10 @@ export function makeInfoActions(c: AppCtx, { openLink }: Pick<Links, "openLink">
       // g / G go to the first / last link (or row); the other keys step one
       const jump = k.name === "g"
       const toEnd = jump ? !!k.shift : dir > 0
+      const edgeTop = toEnd ? max : 0
       const scroll = () =>
         set({
-          listTop: { ...s.listTop, info: Math.max(0, Math.min(max, jump ? (toEnd ? max : 0) : s.listTop.info + dir)) },
+          listTop: { ...s.listTop, info: Math.max(0, Math.min(max, jump ? edgeTop : s.listTop.info + dir)) },
         })
       const edge = toEnd ? linkRows.length - 1 : 0
       // without links, or at the first/last one, the keys scroll the rest of the list into view
@@ -264,8 +266,10 @@ export function makePopupActions(c: AppCtx, { zen, popups }: Features) {
     themeType: typing,
     themeMove: (k) => themeSet((p) => pickMove(p, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
     // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
-    themeMode: (k) =>
-      themeSet((p) => pickMode(p, k.name === "left" ? "dark" : k.name === "right" ? "light" : undefined)),
+    themeMode: (k) => {
+      if (k.name === "left") return themeSet((p) => pickMode(p, "dark"))
+      themeSet((p) => pickMode(p, k.name === "right" ? "light" : undefined))
+    },
     themeApply: applyTheme,
     themeClose: closeTheme,
     themeErase: () => themeSet((p) => pickQuery(p, erase(p.q))),

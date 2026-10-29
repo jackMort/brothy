@@ -255,8 +255,10 @@ function tooSmallScreen({ s, t }: Derived, W: number, H: number) {
 
 /** How far zen's top line has faded, for `topRow` (null: hidden). */
 function zenTopFade(s: UI) {
-  const step = s.zenCfg.ghost ? (s.ghostAt === null ? null : fadeStep(Date.now() - s.ghostAt)) : undefined
-  return step === undefined ? ZEN_DIM : step === null ? null : step / (GHOST_STEPS + 1)
+  if (!s.zenCfg.ghost) return ZEN_DIM
+  if (s.ghostAt === null) return null
+  const step = fadeStep(Date.now() - s.ghostAt)
+  return step === null ? null : step / (GHOST_STEPS + 1)
 }
 
 /** The zen screen: the document alone between the top line and the footer rows. */

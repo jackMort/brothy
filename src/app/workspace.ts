@@ -31,7 +31,8 @@ function makeRecents(c: AppCtx) {
     const s = ui.current
     if (s.piped) return
     const key = `${s.openPath}:preview`
-    const spot = !s.openPath ? undefined : zenBack.current?.key === key ? zenBack.current : scrolls.current.get(key)
+    const remembered = zenBack.current?.key === key ? zenBack.current : scrolls.current.get(key)
+    const spot = s.openPath ? remembered : undefined
     const pos = spot ? { top: spot.top, geo: spot.geo } : { top: 0 }
     saveProjects(remember(loadProjects(), { root: projectRoot(s), lastNote: s.openPath, ...pos, at: Date.now() }))
   }

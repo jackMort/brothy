@@ -201,11 +201,12 @@ export function switcherList(s: UI, memo: Memo, ix: VaultIndex) {
   const askCands =
     question && askState?.queries && !s.indexing ? memo.cands(ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
   const askCost = question && askCands.length ? memo.cost(question.text, askCands, ix, s.ixVer) : ""
-  const swRows: SwitchRow[] = !s.switcher
-    ? []
-    : question
+  let swRows: SwitchRow[] = []
+  if (s.switcher) {
+    swRows = question
       ? memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null)
       : memo.switch(ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
+  }
   // the highlight always sits on a stop (results change under it while typing or indexing)
   const swAt = s.switcher ? swRows[s.switcher.hl] : undefined
   const swHl = s.switcher && swAt && isStop(swAt) ? s.switcher.hl : firstHit(swRows)

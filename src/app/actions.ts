@@ -247,7 +247,9 @@ function makeGlobalActions(
       const folders = folderCounts(tree)
       const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
       if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
-      const linkTree = piped ? (s.linkLazy ? s.linkTree : scanTree(s.root)) : s.linkRoot ? scanTree(s.linkRoot) : tree
+      let linkTree = tree
+      if (piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
+      else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
       set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1, ai: loadConfig().ai ?? null })
       if (ui.current.zen) aiJobs.ensureGlosses()
       switcher.dropIndex()

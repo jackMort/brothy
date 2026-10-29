@@ -130,7 +130,8 @@ function makeHistory(c: AppCtx) {
       return flash([...gone, `${dir < 0 ? "back" : "forward"} · ${name(e.path)}`].join(" · "))
     }
     set({ history: h })
-    flash(gone.length ? gone.join(" · ") : dir < 0 ? "no earlier note" : "no later note")
+    const none = dir < 0 ? "no earlier note" : "no later note"
+    flash(gone.length ? gone.join(" · ") : none)
   }
 
   return { histMove }

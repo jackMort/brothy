@@ -160,7 +160,10 @@ export async function mountCast(el: HTMLElement) {
     paint()
     if (time) time.textContent = `${clock(t)} / ${clock(c.dur)}`
     bar?.style.setProperty("--p", `${(t / c.dur) * 100}%`)
-    if (btn) btn.textContent = playing ? "pause" : t >= c.dur ? "replay" : "play"
+    if (btn) {
+      if (playing) btn.textContent = "pause"
+      else btn.textContent = t >= c.dur ? "replay" : "play"
+    }
     el.classList.toggle("is-playing", playing)
   }
   function tick() {

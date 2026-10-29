@@ -83,9 +83,10 @@ function stripRows({ c, d, PNW, panelRow }: PanelKit): ReactNode[] {
     if (lb.x0 > at) stripSpans.push({ text: " ".repeat(lb.x0 - at) })
     stripSpans.push({ text: lb.digit, fg: t.textMuted })
     const active = lb.view === s.view
+    const activeFg = sideFocus ? t.primary : t.text
     stripSpans.push({
       text: lb.text,
-      fg: active ? (sideFocus ? t.primary : t.text) : t.textMuted,
+      fg: active ? activeFg : t.textMuted,
       attr: active ? 1 : 0,
     })
   }
@@ -252,11 +253,8 @@ function filterRows({ d, AW, panelRow }: PanelKit): ReactNode[] {
     rows.some(
       (r, i) => i !== cursor && stem(r.node.name) === stem(cur.node.name) && folderOf(r.node) === folderOf(cur.node),
     )
-  const filesRight = dup
-    ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8))
-    : filtered
-      ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}`
-      : ""
+  const count = filtered ? `${fmtNum(total)}${s.tree.truncated ? "+" : ""}` : ""
+  const filesRight = dup ? truncateLeft(dirname(cur.node.rel), Math.max(4, AW - 8)) : count
   return [
     filterRowEl(
       s.view === "outline" ? s.outlineFilter : filter,
@@ -278,7 +276,7 @@ export function panelBox(c: AppCtx, d: Derived, acts: PanelActions): ReactNode {
   const listEls = LISTS[s.view](k, acts)
 
   const scrollList = (e: MouseEvent) => {
-    const n = s.view === "files" ? rows.length : s.view === "outline" ? d.oRows.length : infoRows.length
+    const n = { files: rows.length, outline: d.oRows.length, info: infoRows.length }[s.view]
     const dlt = e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS
     set({ listTop: { ...s.listTop, [s.view]: Math.max(0, Math.min(n - LH, k.topOf(s.view, n) + dlt)) } })
   }

@@ -31,13 +31,12 @@ export function docBox(
 ): ReactNode {
   const { focusDoc, scrollBy } = c
   const { s, L, file } = d
-  const content = !s.openPath
-    ? welcomePage(c, d, ws)
-    : file?.error
-      ? openError(d, file.error)
-      : L.zen
-        ? zenLines(d)
-        : noteLines(d)
+  const pageContent = () => {
+    if (!s.openPath) return welcomePage(c, d, ws)
+    if (file?.error) return openError(d, file.error)
+    return L.zen ? zenLines(d) : noteLines(d)
+  }
+  const content = pageContent()
   return (
     <box
       key="doc"

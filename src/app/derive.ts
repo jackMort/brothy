@@ -60,14 +60,13 @@ import type { FileRow, Job, UI } from "./store"
 /** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
 function documentMemo(stdin: string | undefined) {
   return {
-    read: cached(
-      (path: string, nonce: number): DocFile =>
-        path !== STDIN || stdin === undefined
-          ? readDoc(path, nonce)
-          : Buffer.byteLength(stdin) > MAX_BYTES
-            ? { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
-            : { src: stdin, info: null, error: null },
-    ),
+    read: cached((path: string, nonce: number): DocFile => {
+      if (path !== STDIN || stdin === undefined) return readDoc(path, nonce)
+      if (Buffer.byteLength(stdin) > MAX_BYTES) {
+        return { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
+      }
+      return { src: stdin, info: null, error: null }
+    }),
     fm: cached(parseFrontMatter),
     doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) =>
       render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
