@@ -15,7 +15,7 @@ import type { SwitchRow } from "./vault"
 import type { ZenRow } from "./zen"
 import { switchSplit } from "./peek"
 import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, boardSlot, type FamilyHit, type ThemeMode, type themeSplit } from "./themepick"
-import { SWITCH_MODES, artSpans, fitHits, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
+import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
 
 // App and the tests import the row builders from here
 export { SWITCH_MODES, fitHits, hitSpans, modeSwitch, openItem, scrim, switchItem, type PickerItem } from "./rows"
