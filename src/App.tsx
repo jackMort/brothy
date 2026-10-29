@@ -16,6 +16,7 @@ import { makeZen } from "./app/zen"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
 import { useAppEffects } from "./app/effects"
+import { erase, typed } from "./app/input"
 import { panelBox } from "./app/Panel"
 import { docBox, miniBox } from "./app/Document"
 import { gapRow, ghostLine, progressLine, topRow } from "./app/Chrome"
@@ -422,7 +423,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     labelType: () => {},
     labelErase: () => {
       const lb = ui.current.labels
-      if (lb) set({ labels: { ...lb, typed: lb.typed.slice(0, -1) } })
+      if (lb) set({ labels: { ...lb, typed: erase(lb.typed) } })
     },
     labelCancel: () => set({ labels: null }),
 
@@ -566,7 +567,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     filterErase: () => {
       const v = filterText()
       if (!v) return filterStop(true)
-      filterType([...v].slice(0, -1).join(""))
+      filterType(erase(v))
     },
 
     helpScroll: (k) => {
@@ -585,7 +586,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     },
     promptApply: () => promptSubmit(),
     promptClear: promptClose,
-    promptErase: () => promptType([...ui.current.prompt!.value].slice(0, -1).join("")),
+    promptErase: () => promptType(erase(ui.current.prompt!.value)),
     swType: () => {},
     swMove: (k) => {
       const { swRows, swHl } = derive()
@@ -598,8 +599,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     swOpen: () => swActivate(derive().swHl),
     swClose: closeSwitcher,
     swErase: () => {
-      const sw = ui.current.switcher
-      if (sw) swType([...sw.q].slice(0, -1).join(""))
+      if (ui.current.switcher) swType(erase(ui.current.switcher.q))
     },
     swAsk: () => {}, // help only: a `?` query is typed like any other
     opType: () => {},
@@ -614,8 +614,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     },
     opClose: () => set({ opener: null }),
     opErase: () => {
-      const op = ui.current.opener
-      if (op) opType([...op.q].slice(0, -1).join(""))
+      if (ui.current.opener) opType(erase(ui.current.opener.q))
     },
 
     themeType: () => {},
@@ -626,7 +625,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     themeClose: closeTheme,
     themeErase: () => {
       const p = ui.current.themePick!
-      themeSet(pickQuery(p, [...p.q].slice(0, -1).join("")))
+      themeSet(pickQuery(p, erase(p.q)))
     },
 
     zsMove: (k) => set({ zenRow: clamp(ui.current.zenRow + (isDown(k) ? 1 : -1), 0, ZEN_ROWS.length - 1) }),
@@ -656,33 +655,29 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     stopWelcome()
     const s = ui.current
     if (s.zen && s.zenCfg.ghost) pokeGhost()
+    const text = typed(key)
     if (s.themePick) {
-      if (dispatch(["theme"], key)) return
-      if (key.sequence && !key.ctrl && !key.meta && /^[^\x00-\x1f\x7f]+$/.test(key.sequence)) themeSet(pickQuery(s.themePick, s.themePick.q + key.sequence))
+      if (!dispatch(["theme"], key) && text) themeSet(pickQuery(s.themePick, s.themePick.q + text))
       return
     }
     if (s.zenOrig !== null) return void dispatch(["zenSettings"], key)
     if (s.opener) {
-      if (dispatch(["open"], key)) return
-      if (key.sequence && !key.ctrl && !key.meta && /^[^\x00-\x1f\x7f]+$/.test(key.sequence)) opType(s.opener.q + key.sequence)
+      if (!dispatch(["open"], key) && text) opType(s.opener.q + text)
       return
     }
     if (s.switcher) {
-      if (dispatch(["switch"], key)) return
-      if (key.sequence && !key.ctrl && !key.meta && /^[^\x00-\x1f\x7f]+$/.test(key.sequence)) swType(s.switcher.q + key.sequence)
+      if (!dispatch(["switch"], key) && text) swType(s.switcher.q + text)
       return
     }
     if (s.prompt) {
-      if (dispatch(["prompt"], key)) return
-      if (key.sequence && !key.ctrl && !key.meta && /^[^\x00-\x1f\x7f]+$/.test(key.sequence))
-        promptType(s.prompt.value + key.sequence)
+      if (!dispatch(["prompt"], key) && text) promptType(s.prompt.value + text)
       return
     }
     // labels the view has moved out from under (reload, resize, scroll) are dropped and the key is swallowed, like any other that cancels
     if (s.labels && !liveLabels()) return void set({ labels: null })
     if (s.labels) {
       if (dispatch(["label"], key)) return
-      if (key.sequence && !key.ctrl && !key.meta && /^[a-z]$/.test(key.sequence)) return labelType(key.sequence)
+      if (text && /^[a-z]$/.test(text)) return labelType(text)
       return void set({ labels: null }) // any other key cancels
     }
     if (s.help) {
@@ -691,8 +686,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
     }
     // the panel filter row captures typing, j k 1 2 3 / ? included
     if (s.filterTyping && derive().sideFocus) {
-      if (dispatch(["filter"], key)) return
-      if (key.sequence && !key.ctrl && !key.meta && /^[^\x00-\x1f\x7f]+$/.test(key.sequence)) filterType(filterText() + key.sequence)
+      if (!dispatch(["filter"], key) && text) filterType(filterText() + text)
       return
     }
     // zen bindings shadow the document ones; n / N and the global keys fall through
