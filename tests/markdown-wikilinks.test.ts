@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { parseWikilink, wikiLabel } from "../src/lexer"
-import { A, render, renderSource, width } from "../src/markdown"
+import { A, render, width } from "../src/markdown"
+import { renderSource } from "../src/source"
 import { themes } from "../src/theme"
 
 const t = themes[0]!

@@ -6,7 +6,7 @@ import { dirname, sep } from "node:path"
 import { rankNotes, scoreName, stem, type FileNode } from "./files"
 import { parseProperties } from "./frontmatter"
 import { parseWikilink, wikiLabel } from "./lexer"
-import { sourceScan } from "./markdown"
+import { sourceScan } from "./source"
 import { themes } from "./theme"
 
 /** Notes larger than this (bytes) are indexed by name and headings only. */
