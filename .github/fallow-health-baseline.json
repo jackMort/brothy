@@ -67,6 +67,11 @@
         "count": 4
       }
     },
+    "src/app/store.ts": {
+      "crap_high": {
+        "count": 1
+      }
+    },
     "src/app/switcher.ts": {
       "crap_moderate": {
         "count": 1
@@ -365,6 +370,11 @@
         "count": 1
       }
     },
+    "src/app/store.ts\u0000savedSettings": {
+      "crap_high": {
+        "count": 1
+      }
+    },
     "src/app/switcher.ts\u0000peekNote": {
       "crap_moderate": {
         "count": 1
@@ -605,17 +615,16 @@
   },
   "runtime_coverage_findings": [],
   "target_keys": [
+    "src/app/actions.ts:untested risk",
     "src/app/ai-jobs.ts:high impact",
     "src/notes/vault.ts:high impact",
     "src/ui/nav.ts:high impact",
     "src/ai/client.ts:high impact",
     "src/markdown/source.ts:high impact",
-    "src/app/derive.ts:hidden coupling",
     "src/ai/delta.ts:high impact",
     "src/ai/ask.ts:high impact",
     "src/ui/panel.ts:high impact",
     "src/notes/peek.ts:untested risk",
-    "src/app/actions.ts:untested risk",
     "src/notes/projects.ts:high impact",
     "src/ai/config.ts:high impact",
     "src/ui/status.ts:high impact",
