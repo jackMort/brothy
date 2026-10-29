@@ -5,7 +5,7 @@ import { relative } from "node:path"
 import { shortModel, type Failure } from "../ai"
 import { ASK_MEMO, ASK_MIN, RERANK_MEMO, askLocate, askRequest, parseQueries, parseRerank, putNewest, questionOf, rerankRequest, type AskState } from "../ask"
 import { folderCounts } from "../files"
-import { keepVisible } from "../nav"
+import { keepHitVisible } from "../nav"
 import { PEEK_MIN_W, peekLines, peekWindow, switchSplit } from "../peek"
 import { errText } from "../status"
 import { isFresh, textHash } from "../summaries"
@@ -132,9 +132,8 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
   const swGo = (hl: number) => {
     const sw = ui.current.switcher
     if (!sw) return
-    const { swRows: rows, L } = derive()
-    const head = rows[hl - 1]?.kind === "header" ? hl - 1 : hl
-    set({ switcher: { ...sw, hl, top: keepVisible(keepVisible(sw.top, head, L.PH, rows.length), hl, L.PH, rows.length) } })
+    const { swRows, L } = derive()
+    set({ switcher: { ...sw, hl, top: keepHitVisible(sw.top, swRows, hl, L.PH) } })
   }
 
   /** Bring the vault index up to date (one build at a time); progress re-runs the search. */
