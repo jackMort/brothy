@@ -2,7 +2,7 @@
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
 import { existsSync } from "node:fs"
 import { rankNotes, SCAN_LIMIT, visibleRows, type FileNode } from "../notes/files"
-import { render, type Rendered } from "../markdown/render"
+import { render, type Geometry, type Rendered } from "../markdown/render"
 import { normalize } from "../markdown/lexer"
 import { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "../markdown/frontmatter"
 import { stats, wordStats, type Stats } from "../markdown/stats"
@@ -19,7 +19,7 @@ import { fsDirIO, loadProjects, openRows, type OpenRow, type ProjectEntry } from
 import { firstHit, isStop, recentSection, searchVault, switchRows, type SwitchRow, type VaultIndex } from "../notes/vault"
 import { miniInk } from "../ui/minimap"
 import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
-import { cached, findLines, matchIndex, relocate, remapTop, type Geometry } from "../ui/nav"
+import { cached, findLines, matchIndex, relocate, remapTop } from "../ui/nav"
 import { cleanSummary, noteText, shortModel } from "../ai/client"
 import { PROMPTS, resolveAI, type AIConfig, type GlossStyle } from "../ai/config"
 import { askCandidates, askRows, questionOf, rerankCost, type AskState, type Candidate } from "../ai/ask"
@@ -31,8 +31,7 @@ import { diffSections, hhmm, parseDelta, type Change, type DeltaNote } from "../
 import { pageSlice, sectionAt, sectionRanges, typewriterTop, wordSuffix } from "../ui/zen"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import type { View } from "../system/config"
-import { jobKey, type Job } from "./ai-jobs"
-import { NO_CANDS, NO_CHANGES, NO_NOTES, type FileRow, type UI } from "./store"
+import { NO_CANDS, NO_CHANGES, NO_NOTES, jobKey, type FileRow, type Job, type UI } from "./store"
 
 /** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
 export function makeMemo(stdin: string | undefined) {

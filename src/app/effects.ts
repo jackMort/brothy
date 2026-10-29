@@ -12,9 +12,10 @@ import { plural } from "../lib/text"
 import { resolveTheme } from "../theme/themepick"
 import { watchPath } from "../notes/watch"
 import { STDIN } from "../notes/workspace"
-import { jobKey, type AIJobs } from "./ai-jobs"
+import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Links } from "./links"
+import { jobKey } from "./store"
 import type { WorkspaceControl } from "./workspace"
 
 /** What the effects call from the feature factories. */

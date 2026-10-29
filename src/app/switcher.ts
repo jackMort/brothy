@@ -11,10 +11,11 @@ import { PEEK_MIN_W } from "../ui/geometry"
 import { errText } from "../ui/status"
 import { isFresh, textHash } from "../ai/cache"
 import { emptyIndex, firstHit, foldSame, fsIO, hitOrdinal, indexNote, refreshIndex, type AnswerRow, type NoteDoc, type SwitchRow, type TextHit } from "../notes/vault"
-import { AI_OFF, jobKey, makeJobs } from "./ai-jobs"
+import { AI_OFF, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
+import { jobKey } from "./store"
 
 /** The switcher over the app context; opening it scans a piped document's folder first (`ensureLinks`). */
 export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {

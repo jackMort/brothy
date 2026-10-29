@@ -2,6 +2,7 @@
 import { fitHits, hitSpans, type PickerItem } from "./rows"
 import { lineText, type Span } from "../lib/spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "../lib/text"
+import type { Geometry } from "../markdown/render"
 import type { Theme } from "../theme/theme"
 
 // ------------------------------------------------------------- search
@@ -95,12 +96,6 @@ export function matchIndex(matches: number[], matchLine: number | null): number 
 }
 
 // ------------------------------------------------------------- scroll anchoring
-
-/** What a scroll offset was measured against: heading lines and total line count. */
-export interface Geometry {
-  heads: number[]
-  total: number
-}
 
 /**
  * Carry a scroll offset across a re-layout (resize, reload): keep the same relative

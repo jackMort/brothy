@@ -39,6 +39,12 @@ export interface Rendered {
   srcRow?: number[]
 }
 
+/** A rendering's line geometry, which scroll offsets are measured against (`remapTop`): heading lines and total line count. */
+export interface Geometry {
+  heads: number[]
+  total: number
+}
+
 /** Blocks `r` is still waiting on: `await ensureHighlights(...)`, then re-render if it returns true. */
 export const pendingHighlights = (r: Rendered): HighlightRequest[] => r.pending ?? []
 
