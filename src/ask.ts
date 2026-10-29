@@ -3,6 +3,7 @@
 
 import { cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./ai"
 import { scoreName, stem, type FileNode } from "./files"
+import { isRecord } from "./json"
 import { headingKey } from "./panel"
 import { sectionId } from "./sections"
 import { safeLine } from "./spans"
@@ -32,9 +33,6 @@ export const WHY_W = 40
 export const ASK_MEMO = 50
 export const RERANK_MEMO = 20
 
-type Raw = Record<string, unknown>
-const isObj = (v: unknown): v is Raw => !!v && typeof v === "object" && !Array.isArray(v)
-
 /** A switcher query whose first non-space character is `?` is a question: the rest, trimmed, cut at QUESTION_MAX. */
 export function questionOf(q: string): { text: string; cut: boolean } | null {
   const s = q.trimStart()
@@ -46,7 +44,7 @@ export function questionOf(q: string): { text: string; cut: boolean } | null {
 /** Tier 0's reply: 2–40 code points each, deduped by `foldSame`, at most MAX_QUERIES; null when none is usable. */
 export function parseQueries(raw: string): string[] | null {
   const j = extractJSON(raw)
-  if (!isObj(j) || !Array.isArray(j.queries)) return null
+  if (!isRecord(j) || !Array.isArray(j.queries)) return null
   const out: string[] = []
   const seen = new Set<string>()
   for (const q of j.queries) {
@@ -223,11 +221,11 @@ export const rerankCost = (question: string, cands: readonly Candidate[], ix: Va
 /** Tier 1's reply: positions (0-based, from `c1…c<n>`) best first, each with its why; null when none is valid. */
 export function parseRerank(raw: string, n: number): { i: number; why: string }[] | null {
   const j = extractJSON(raw)
-  const list = isObj(j) && Array.isArray(j.answers) ? j.answers : []
+  const list = isRecord(j) && Array.isArray(j.answers) ? j.answers : []
   const out: { i: number; why: string }[] = []
   const seen = new Set<number>()
   for (const it of list) {
-    if (!isObj(it) || typeof it.id !== "string") continue
+    if (!isRecord(it) || typeof it.id !== "string") continue
     const m = /^c(\d{1,2})$/.exec(it.id.trim())
     const i = m ? Number(m[1]) - 1 : -1
     if (i < 0 || i >= n || seen.has(i)) continue

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { MAX_SUMMARY, PRESETS, PROMPTS, PROMPT_V, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, normalizeAI, parseGlossStyle, resolveAI, shortModel, sseParser, stripThink, summarize, tokens, type AIEvent, type AITarget } from "../src/ai"
+import { IDLE_MS, TOTAL_MS } from "../src/ai"
 import * as aiConfig from "../src/ai-config"
 
 const ok = (r: ReturnType<typeof resolveAI>) => {
@@ -499,4 +500,10 @@ describe("ai-config", () => {
       expect(aiConfig.parseGlossStyle(bad, "simplify")).toBe("simplify")
     }
   })
+})
+
+test("the timeout texts are derived from IDLE_MS and TOTAL_MS (60 s and 180 s today)", () => {
+  expect([IDLE_MS, TOTAL_MS]).toEqual([60_000, 180_000])
+  expect(aiError({ kind: "idle" }, { host: "h" })).toBe(`AI: no answer for ${IDLE_MS / 1000} s`)
+  expect(aiError({ kind: "total" }, { host: "h", noun: "gloss" })).toBe(`AI: no gloss after ${TOTAL_MS / 1000} s`)
 })

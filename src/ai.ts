@@ -226,9 +226,9 @@ export function aiError(f: Failure, ctx: ErrCtx): string {
       case "redirect":
         return `${ctx.host} redirects · set baseURL to the final URL`
       case "idle":
-        return "no answer for 60 s"
+        return `no answer for ${IDLE_MS / 1000} s`
       case "total":
-        return `no ${noun} after 180 s`
+        return `no ${noun} after ${TOTAL_MS / 1000} s`
       case "empty":
         return `empty ${noun}`
       case "invalid":
@@ -251,8 +251,6 @@ export interface ChatOpts {
   idleMs?: number
   totalMs?: number
 }
-/** The TL;DR's name for `ChatOpts`. */
-export type SummarizeOpts = ChatOpts
 
 /** One request. The caller builds (and clips) `user`; `clean` turns the reply into what is shown, `maxOut` caps that. */
 export interface ChatReq {
