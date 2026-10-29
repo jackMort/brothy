@@ -264,7 +264,10 @@ describe("TL;DR block", () => {
   const TEXT =
     "A tour of brothy, a terminal Markdown reader with Files, Outline and Info beside a calm text column. It covers live reload, find, themes and installing with bun."
   const rows = (items: ReturnType<typeof tldrItems>) =>
-    items.map((it) => (it.kind === "tldr" ? "TL;DR" + it.status : it.kind === "summary" ? it.text : `<${it.kind}>`))
+    items.map((it) => {
+      if (it.kind === "tldr") return "TL;DR" + it.status
+      return it.kind === "summary" ? it.text : `<${it.kind}>`
+    })
 
   test("none: label and a muted hint", () => {
     expect(tldrItems({ text: "", state: "none", model: "" }, 30)).toEqual([
@@ -353,14 +356,11 @@ const SAMPLE = [
   chg("removed", "Pager notes", 0, 14, 2),
 ]
 const idle: ChangeView = { state: "idle", label: "14:02", changes: SAMPLE, summary: "", notes: [] }
-const rowOf = (it: InfoItem) =>
-  it.kind === "changes"
-    ? "Changed" + it.status
-    : it.kind === "change"
-      ? it.mark + " " + it.text + it.counts
-      : it.kind === "summary" || it.kind === "stat"
-        ? it.text
-        : it.kind
+const rowOf = (it: InfoItem) => {
+  if (it.kind === "changes") return "Changed" + it.status
+  if (it.kind === "change") return it.mark + " " + it.text + it.counts
+  return it.kind === "summary" || it.kind === "stat" ? it.text : it.kind
+}
 
 describe("changeItems", () => {
   test("idle: label with the baseline time, one row per change, counts right-aligned", () => {

@@ -256,13 +256,12 @@ describe("recents and rows", () => {
       { title: "Notes", count: "2", hits: [hit("a"), hit("b")] },
       { title: "Text", count: "1", hits: [hit("c")] },
     ])
-    expect(rows.map((r) => (r.kind === "header" ? "#" + r.title : "path" in r ? r.path : ""))).toEqual([
-      "#Notes",
-      "a",
-      "b",
-      "#Text",
-      "c",
-    ])
+    expect(
+      rows.map((r) => {
+        if (r.kind === "header") return "#" + r.title
+        return "path" in r ? r.path : ""
+      }),
+    ).toEqual(["#Notes", "a", "b", "#Text", "c"])
     expect(firstHit(rows)).toBe(1)
     expect(stepRow(rows, 2, 1)).toBe(4)
     expect(stepRow(rows, 4, 1)).toBe(4)

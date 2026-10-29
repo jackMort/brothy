@@ -235,12 +235,7 @@ describe("openRows", () => {
   test("a path query lists Path first; Recent keeps only projects under that path", () => {
     const mine = [entry("/home/me/Docs/vault", 3), entry("/home/me/dev/x", 2), entry("/w/brothy", 1)]
     const rows = openRows(mine, "~/Doc", o)
-    expect(rows.map((r) => (r.kind === "header" ? r.title : r.kind === "recent" ? r.name : r.name))).toEqual([
-      "Path",
-      "Docs",
-      "Recent",
-      "vault",
-    ])
+    expect(rows.map((r) => (r.kind === "header" ? r.title : r.name))).toEqual(["Path", "Docs", "Recent", "vault"])
     // "~/" fuzzily matches every path under home, but only a prefix counts
     expect(
       openRows(mine, "~/", o)

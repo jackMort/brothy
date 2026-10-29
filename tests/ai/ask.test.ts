@@ -304,17 +304,13 @@ describe("askRows", () => {
   }
   const result: AskState = { question: base.question, phase: "result", queries: Q, model: "anthropic/claude-haiku-5-5" }
   const show = (rows: SwitchRow[]) =>
-    rows.map((r) =>
-      r.kind === "header"
-        ? `# ${r.title} ${r.count}`
-        : r.kind === "askNote"
-          ? `~ ${r.text}`
-          : r.kind === "askAction"
-            ? `${r.act}${r.error ? " ✗" : ""}: ${r.text}${r.note}`
-            : r.kind === "answer"
-              ? `${r.name}${r.heading < 0 ? "" : " › " + r.text} | ${r.right}`
-              : "?",
-    )
+    rows.map((r) => {
+      if (r.kind === "header") return `# ${r.title} ${r.count}`
+      if (r.kind === "askNote") return `~ ${r.text}`
+      if (r.kind === "askAction") return `${r.act}${r.error ? " ✗" : ""}: ${r.text}${r.note}`
+      if (r.kind === "answer") return `${r.name}${r.heading < 0 ? "" : " › " + r.text} | ${r.right}`
+      return "?"
+    })
   const SEARCHED = "~ searched: single file · path · open"
 
   test("AI off, too short, idle, no key", () => {
