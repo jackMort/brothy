@@ -17,10 +17,13 @@ export interface Stats {
   minutes: number
 }
 
+/** Reading pace behind the minutes (zen's default too). */
+const WORDS_PER_MINUTE = 220
+
 /** `stats`' words and reading minutes alone, without lexing (the Ctrl-P peek); `src` already normalized and without comments. */
 function countWords(src: string): { words: number; minutes: number } {
   const words = (src.replace(/```[\s\S]*?```/g, "").replace(/\[[ xX]\]/g, "").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
-  return { words, minutes: Math.max(1, Math.round(words / 220)) }
+  return { words, minutes: Math.max(1, Math.round(words / WORDS_PER_MINUTE)) }
 }
 
 /** The same `words` and `minutes` as `stats(src)`. */
