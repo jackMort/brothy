@@ -1,21 +1,10 @@
-import { afterAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { describe, expect, test } from "bun:test"
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ancestorsOf, findVault, folderCounts, folderOf, fuzzyHits, rankNotes, scanTree, scoreName, stem, visibleRows, type FileNode } from "../src/files"
+import { useTmp } from "./helpers/tmp"
 
-const made: string[] = []
-afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
-function fixture(files: string[]): string {
-  const root = mkdtempSync(join(tmpdir(), "brothy-files-"))
-  made.push(root)
-  for (const f of files) {
-    const p = join(root, f)
-    mkdirSync(join(p, ".."), { recursive: true })
-    writeFileSync(p, "# x\n")
-  }
-  return root
-}
+const fixture = useTmp("brothy-files-")
 const names = (root: string, max?: number) => {
   const out: string[] = []
   const walk = (n: FileNode) => n.children.forEach((c) => (c.dir ? walk(c) : out.push(c.rel)))

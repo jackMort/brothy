@@ -4,12 +4,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
-/** A new folder holding `files`: paths relative to it with the body `# x\n`, or a map from path to body. */
+/** A new folder holding `files`: paths relative to it with the body `# x\n` (a trailing `/` makes an empty folder), or a map from path to body. */
 export function makeTmp(prefix: string, files: string[] | Record<string, string> = []) {
   const root = mkdtempSync(join(tmpdir(), prefix))
   for (const [name, body] of Array.isArray(files) ? files.map((f) => [f, "# x\n"] as const) : Object.entries(files)) {
-    mkdirSync(dirname(join(root, name)), { recursive: true })
-    writeFileSync(join(root, name), body)
+    mkdirSync(name.endsWith("/") ? join(root, name) : dirname(join(root, name)), { recursive: true })
+    if (!name.endsWith("/")) writeFileSync(join(root, name), body)
   }
   return root
 }

@@ -1,25 +1,14 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
-import { homedir, tmpdir } from "node:os"
+import { beforeEach, describe, expect, test } from "bun:test"
+import { chmodSync, lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { configPath, loadConfig, saveConfig, writeFileAtomic } from "../src/config"
 import { ZEN_DEFAULTS } from "../src/zen"
+import { useXdgDir } from "./helpers/env"
 
-const base = mkdtempSync(join(tmpdir(), "brothy-cfg-"))
-afterAll(() => rmSync(base, { recursive: true, force: true }))
-const saved = process.env.XDG_CONFIG_HOME
-let xdg: string
-let n = 0
-beforeEach(() => {
-  xdg = join(base, String(n++))
-  mkdirSync(join(xdg, "brothy"), { recursive: true })
-  process.env.XDG_CONFIG_HOME = xdg
-})
-afterEach(() => {
-  if (saved === undefined) delete process.env.XDG_CONFIG_HOME
-  else process.env.XDG_CONFIG_HOME = saved
-})
-const file = () => join(xdg, "brothy", "config.json")
+const xdg = useXdgDir("XDG_CONFIG_HOME")
+beforeEach(() => mkdirSync(join(xdg(), "brothy"), { recursive: true }))
+const file = () => join(xdg(), "brothy", "config.json")
 
 describe("path", () => {
   test("honors an absolute XDG_CONFIG_HOME, resolved at call time", () => {
@@ -210,7 +199,7 @@ describe("zen", () => {
 
 describe("saveConfig file handling", () => {
   test("a symlinked config stays a symlink and its target is updated", () => {
-    const real = join(base, `real-${n}.json`)
+    const real = join(xdg(), "real.json")
     writeFileSync(real, '{"theme":"old"}')
     symlinkSync(real, file())
     expect(saveConfig({ wide: true })).toBe(true)
@@ -274,12 +263,12 @@ describe("ai", () => {
 
 describe("writeFileAtomic mode", () => {
   test("a new file gets the mode", () => {
-    const f = join(xdg, "new.json")
+    const f = join(xdg(), "new.json")
     writeFileAtomic(f, "{}", 0o600)
     expect(statSync(f).mode & 0o777).toBe(0o600)
   })
   test("an existing file keeps its own mode", () => {
-    const f = join(xdg, "old.json")
+    const f = join(xdg(), "old.json")
     writeFileSync(f, "{}")
     chmodSync(f, 0o644)
     writeFileAtomic(f, "{ }", 0o600)

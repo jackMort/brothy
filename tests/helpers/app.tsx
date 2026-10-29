@@ -2,9 +2,8 @@
 // Nothing here runs at import: a test file calls `useAppHarness()` at its top level, which registers the hooks and
 // returns the helpers bound to that file's temp dirs (bun runs every test file in one process, so import-time env would leak).
 import { afterAll, afterEach, beforeAll, setSystemTime } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { testRender } from "@opentui/react/test-utils"
 import { App, type AppProps } from "../../src/App"
 import { noteText } from "../../src/ai"
@@ -13,6 +12,8 @@ import { shutdownHighlighter } from "../../src/highlight"
 import { themeByName } from "../../src/theme"
 import { textHash } from "../../src/summaries"
 import { quietAct } from "../quiet-act"
+import { setEnv } from "./env"
+import { makeTmp } from "./tmp"
 
 export type Setup = Awaited<ReturnType<typeof testRender>>
 export interface Size {
@@ -80,12 +81,7 @@ export async function keys(s: Setup, ...ks: string[]) {
 /** Run `fn` with `vars` set in `process.env` (`undefined` deletes), then put the previous values back. */
 export async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => T | Promise<T>): Promise<T> {
   const prev = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]))
-  const apply = (v: Record<string, string | undefined>) => {
-    for (const [k, x] of Object.entries(v)) {
-      if (x === undefined) delete process.env[k]
-      else process.env[k] = x
-    }
-  }
+  const apply = (v: Record<string, string | undefined>) => Object.entries(v).forEach(([k, x]) => setEnv(k, x))
   apply(vars)
   try {
     return await fn()
@@ -202,8 +198,8 @@ export function aiStub() {
  * each test, and returns the helpers that touch those dirs.
  */
 export function useAppHarness() {
-  const cfgDir = mkdtempSync(join(tmpdir(), "brothy-cfg-"))
-  const cacheDir = mkdtempSync(join(tmpdir(), "brothy-cache-"))
+  const cfgDir = makeTmp("brothy-cfg-")
+  const cacheDir = makeTmp("brothy-cache-")
   const prevXdg = process.env.XDG_CONFIG_HOME
   const prevCache = process.env.XDG_CACHE_HOME
   const live: Setup[] = []
@@ -214,8 +210,8 @@ export function useAppHarness() {
     for (const s of live.splice(0)) s.renderer.destroy()
   }
   beforeAll(() => {
-    process.env.XDG_CONFIG_HOME = cfgDir // keep the theme picker and the recents from touching the real ~/.config
-    process.env.XDG_CACHE_HOME = cacheDir
+    setEnv("XDG_CONFIG_HOME", cfgDir) // keep the theme picker and the recents from touching the real ~/.config
+    setEnv("XDG_CACHE_HOME", cacheDir)
   })
   afterEach(() => {
     unmount()
@@ -225,22 +221,16 @@ export function useAppHarness() {
   })
   afterAll(async () => {
     await shutdownHighlighter() // the parser worker would otherwise keep the process alive
-    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME
-    else process.env.XDG_CONFIG_HOME = prevXdg
+    setEnv("XDG_CONFIG_HOME", prevXdg)
+    setEnv("XDG_CACHE_HOME", prevCache)
     rmSync(cfgDir, { recursive: true, force: true })
-    if (prevCache === undefined) delete process.env.XDG_CACHE_HOME
-    else process.env.XDG_CACHE_HOME = prevCache
     rmSync(cacheDir, { recursive: true, force: true })
   })
 
   /** A temp folder holding `files` (paths relative to it); removed after the test. */
   function tmp(files: Record<string, string>) {
-    const d = mkdtempSync(join(tmpdir(), "brothy-app-"))
+    const d = makeTmp("brothy-app-", files)
     dirs.push(d)
-    for (const [name, body] of Object.entries(files)) {
-      mkdirSync(dirname(join(d, name)), { recursive: true })
-      writeFileSync(join(d, name), body)
-    }
     return d
   }
 

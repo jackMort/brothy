@@ -1,6 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import { scanTree } from "../src/files"
 import { headingKey } from "../src/sections"
@@ -10,18 +8,9 @@ import { MAX_CHANGE_ROWS, SUMMARY_ROWS, changeItems, extractLinks, fileRowSpans,
 import { mix, themeByName } from "../src/theme"
 import { width } from "../src/text"
 import type { FileNode } from "../src/files"
+import { useTmp } from "./helpers/tmp"
 
-const made: string[] = []
-afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
-function fixture(files: string[]) {
-  const root = mkdtempSync(join(tmpdir(), "brothy-panel-"))
-  made.push(root)
-  for (const f of files) {
-    mkdirSync(join(root, f, ".."), { recursive: true })
-    writeFileSync(join(root, f), "# x\n")
-  }
-  return root
-}
+const fixture = useTmp("brothy-panel-")
 
 const STATS: Stats = { words: 1021, lines: 10, headings: 12, links: 0, codeBlocks: 0, tables: 1, tasks: [2, 5], minutes: 5 }
 
@@ -117,19 +106,9 @@ describe("links", () => {
   })
 })
 
-function vault(files: string[]) {
-  const d = mkdtempSync(join(tmpdir(), "brothy-links-"))
-  made.push(d)
-  for (const f of files) {
-    mkdirSync(join(d, f, ".."), { recursive: true })
-    writeFileSync(join(d, f), "# x\n")
-  }
-  return d
-}
-
 describe("noteIndex / resolveLink", () => {
   test("exact relative path first, else a unique name", () => {
-    const d = vault(["a/index.md", "b/index.md", "a/Note.md", "Top.md", "x/a b.md"])
+    const d = fixture(["a/index.md", "b/index.md", "a/Note.md", "Top.md", "x/a b.md"])
     const tree = scanTree(d)
     expect(resolveLink("a/index", tree)).toBe(join(d, "a/index.md"))
     expect(resolveLink("note", tree)).toBe(join(d, "a/Note.md"))
@@ -138,7 +117,7 @@ describe("noteIndex / resolveLink", () => {
     expect(noteIndex(tree)).toBe(noteIndex(tree)) // cached per tree
   })
   test("ambiguous names resolve like Obsidian: a path suffix narrows, then the linking note's folder, then the shortest path", () => {
-    const d = vault(["plans/x.md", "specs/x.md", "deep/er/x.md", "p/q/take.md", "r/q/take.md", "r/take.md", "s/u/v.md", "t/u/v.md"])
+    const d = fixture(["plans/x.md", "specs/x.md", "deep/er/x.md", "p/q/take.md", "r/q/take.md", "r/take.md", "s/u/v.md", "t/u/v.md"])
     const tree = scanTree(d)
     expect(resolveLink("x", tree, join(d, "specs/other.md"))).toBe(join(d, "specs/x.md"))
     expect(resolveLink("x", tree, join(d, "plans/other.md"))).toBe(join(d, "plans/x.md"))
@@ -152,7 +131,7 @@ describe("noteIndex / resolveLink", () => {
 })
 
 describe("linkDest", () => {
-  const d = vault(["dir/a.md", "dir/b c.md", "up.md", "dir/sub/z.md"])
+  const d = fixture(["dir/a.md", "dir/b c.md", "up.md", "dir/sub/z.md"])
   const tree = scanTree(d)
   const from = join(d, "dir/a.md")
   test("wikilinks resolve by name; same-note heading links stay", () => {
@@ -161,7 +140,7 @@ describe("linkDest", () => {
     expect(linkDest({ kind: "wiki", target: "nope", embed: false }, from, tree).path).toBeNull()
   })
   test("an ambiguous wikilink prefers the linking note's folder", () => {
-    const v = vault(["one/n.md", "two/n.md"])
+    const v = fixture(["one/n.md", "two/n.md"])
     const vt = scanTree(v)
     expect(linkDest({ kind: "wiki", target: "n", embed: false }, join(v, "two/a.md"), vt).path).toBe(join(v, "two/n.md"))
   })

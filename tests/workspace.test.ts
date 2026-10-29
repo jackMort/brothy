@@ -1,24 +1,9 @@
-import { afterAll, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { expect, test } from "bun:test"
 import { basename, join } from "node:path"
 import { STDIN, projectRoot, stdinWorkspace, workspace } from "../src/workspace"
+import { useTmp } from "./helpers/tmp"
 
-const made: string[] = []
-afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })))
-function fixture(files: string[]): string {
-  const root = mkdtempSync(join(tmpdir(), "brothy-workspace-"))
-  made.push(root)
-  for (const f of files) {
-    const p = join(root, f)
-    if (f.endsWith("/")) mkdirSync(p, { recursive: true })
-    else {
-      mkdirSync(join(p, ".."), { recursive: true })
-      writeFileSync(p, "# x\n")
-    }
-  }
-  return root
-}
+const fixture = useTmp("brothy-workspace-")
 
 test("a folder opens its README first, whatever its case", () => {
   const root = fixture(["a.md", "ReadMe.md", "z.md"])

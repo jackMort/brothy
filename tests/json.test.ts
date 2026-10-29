@@ -1,12 +1,13 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test"
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
-import { homedir, tmpdir } from "node:os"
+import { describe, expect, test } from "bun:test"
+import { chmodSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { writeFileAtomic as fromConfig } from "../src/config"
 import { cacheHome, configHome, isRecord, readJSON, writeFileAtomic } from "../src/json"
+import { useEnvRestore } from "./helpers/env"
+import { useTmp } from "./helpers/tmp"
 
-const base = mkdtempSync(join(tmpdir(), "brothy-json-"))
-afterAll(() => rmSync(base, { recursive: true, force: true }))
+const base = useTmp("brothy-json-")()
 const file = (name: string, text: string) => {
   const f = join(base, name)
   writeFileSync(f, text)
@@ -45,13 +46,7 @@ describe("readJSON", () => {
 })
 
 describe("XDG base folders", () => {
-  const saved = { config: process.env.XDG_CONFIG_HOME, cache: process.env.XDG_CACHE_HOME }
-  afterEach(() => {
-    for (const [k, v] of [["XDG_CONFIG_HOME", saved.config], ["XDG_CACHE_HOME", saved.cache]] as const) {
-      if (v === undefined) delete process.env[k]
-      else process.env[k] = v
-    }
-  })
+  useEnvRestore("XDG_CONFIG_HOME", "XDG_CACHE_HOME")
   test("an absolute path wins and is read on every call", () => {
     process.env.XDG_CONFIG_HOME = "/x/config"
     process.env.XDG_CACHE_HOME = "/x/cache"

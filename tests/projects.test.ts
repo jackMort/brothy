@@ -1,6 +1,5 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { describe, expect, test } from "bun:test"
+import { chmodSync, lstatSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   PATH_CAP,
@@ -18,6 +17,7 @@ import {
   type DirIO,
   type ProjectEntry,
 } from "../src/projects"
+import { useXdgDir } from "./helpers/env"
 
 const entry = (root: string, at = 0, lastNote: string | null = null, top = 0): ProjectEntry => ({ root, lastNote, top, at })
 
@@ -39,20 +39,10 @@ describe("remember", () => {
 })
 
 describe("load / save", () => {
-  const base = mkdtempSync(join(tmpdir(), "brothy-proj-"))
-  afterAll(() => rmSync(base, { recursive: true, force: true }))
-  const saved = process.env.XDG_CONFIG_HOME
-  let n = 0
-  beforeEach(() => {
-    process.env.XDG_CONFIG_HOME = join(base, String(n++))
-  })
-  afterEach(() => {
-    if (saved === undefined) delete process.env.XDG_CONFIG_HOME
-    else process.env.XDG_CONFIG_HOME = saved
-  })
+  const config = useXdgDir("XDG_CONFIG_HOME")
 
   test("lives next to config.json", () => {
-    expect(projectsPath()).toBe(join(process.env.XDG_CONFIG_HOME!, "brothy", "projects.json"))
+    expect(projectsPath()).toBe(join(config(), "brothy", "projects.json"))
   })
   test("a missing file is an empty list; a saved list reads back", () => {
     expect(loadProjects()).toEqual([])
@@ -69,21 +59,21 @@ describe("load / save", () => {
     expect(loadProjects()).toEqual(list)
   })
   test("valid JSON that is not an object is an empty list", () => {
-    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
+    mkdirSync(join(config(), "brothy"), { recursive: true })
     for (const text of ["[]", "null", '"x"', '{"projects":"x"}']) {
       writeFileSync(projectsPath(), text)
       expect(loadProjects()).toEqual([])
     }
   })
   test("a corrupt file is an empty list, and the next save replaces it", () => {
-    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
+    mkdirSync(join(config(), "brothy"), { recursive: true })
     writeFileSync(projectsPath(), "{ not json")
     expect(loadProjects()).toEqual([])
     saveProjects([entry("/a")])
     expect(JSON.parse(readFileSync(projectsPath(), "utf8")).projects[0].root).toBe("/a")
   })
   test("bad entries are dropped, bad fields defaulted, duplicates and overflow cut", () => {
-    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
+    mkdirSync(join(config(), "brothy"), { recursive: true })
     const projects = [
       { root: "/a", lastNote: "/a/x.md", top: 3, at: 9 },
       { root: "relative" },
@@ -98,7 +88,7 @@ describe("load / save", () => {
     expect(out).toHaveLength(PROJECTS_CAP)
   })
   test("geometry round-trips; invalid geometry is dropped, old entries load without it", () => {
-    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
+    mkdirSync(join(config(), "brothy"), { recursive: true })
     const geo = { heads: [0, 10, 25], total: 40 }
     writeFileSync(
       projectsPath(),
@@ -120,8 +110,8 @@ describe("load / save", () => {
     expect(loadProjects()[0]!.geo).toEqual(geo)
   })
   test("a symlinked projects.json stays a symlink and its target is updated", () => {
-    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
-    const real = join(process.env.XDG_CONFIG_HOME!, "real-projects.json")
+    mkdirSync(join(config(), "brothy"), { recursive: true })
+    const real = join(config(), "real-projects.json")
     writeFileSync(real, "{}")
     chmodSync(real, 0o600)
     symlinkSync(real, projectsPath())
