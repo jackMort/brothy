@@ -136,6 +136,12 @@ export function Overlay({
   )
 }
 
+/** The list box of PickerList and ThemeBoard: one cell of padding each side. */
+const LIST_BOX = { flexDirection: "column", paddingLeft: 1, paddingRight: 1 } as const
+
+/** A pickable row's frame, shared by PickerList and ThemeBoard: one line, 3 cells of padding, `bg` when highlighted. */
+const rowBox = (bg: string | undefined) => ({ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3, backgroundColor: bg })
+
 /** Rows with paddingX 3; the highlighted row is filled with `primary` and drawn in contrastOn(primary). */
 export function PickerList({
   t,
@@ -165,7 +171,7 @@ export function PickerList({
   const rows = items.slice(top, top + height)
   const textW = innerW - 8
   return (
-    <box key="picker-list" style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1 }}>
+    <box key="picker-list" style={LIST_BOX}>
       {rows.map((it, j) => {
         const sel = top + j === hl && !it.header
         const right = it.right ?? ""
@@ -196,7 +202,7 @@ export function PickerList({
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT && !it.header) onActivate?.(top + j)
             }}
-            style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3, backgroundColor: sel ? t.primary : undefined }}
+            style={rowBox(sel ? t.primary : undefined)}
           >
             <Line spans={spans} />
           </box>
@@ -449,7 +455,7 @@ export function ThemeBoard({
   const L = boardLayout(innerW - 8)
   const pointer = usePointer()
   return (
-    <box key="theme-board" style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1 }}>
+    <box key="theme-board" style={LIST_BOX}>
       {rows.length ? (
         <box key="head" style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3 }}>
           <Line spans={boardHeader(t, shown, L)} />
@@ -470,7 +476,7 @@ export function ThemeBoard({
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT) onActivate?.(i)
             }}
-            style={{ height: 1, flexShrink: 0, flexDirection: "row", paddingLeft: 3, paddingRight: 3, backgroundColor: sel ? t.backgroundElement : undefined }}
+            style={{ ...rowBox(sel ? t.backgroundElement : undefined), flexDirection: "row" }}
           >
             <box style={{ width: L.nameW, height: 1, flexShrink: 0 }}>
               <Line spans={hitSpans(h.family.name, h.hits, t.text, t.primary, sel)} />
