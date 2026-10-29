@@ -1,6 +1,6 @@
 // The terminal side of the demo player, without the DOM: the screen model the casts are replayed into and the glyphs
 // the player draws itself. It understands exactly what brothy-studio's cast tool writes: cursor position (CUP), clear screen
-// (ED 2), the cursor-visibility toggle (ignored) and SGR 0/1/3/4/9 with truecolor 38;2 / 48;2. tests/casts.test.ts
+// (ED 2), the cursor-visibility toggle (ignored) and SGR 0/1/3/4/9 with truecolor 38;2 / 48;2. tests/site/casts.test.ts
 // fails when a committed cast uses anything else, or a box/block glyph the player has no drawing for.
 
 /** box-drawing arms: l r u d; upper case for heavy; "dash" for the light quadruple-dash rule */

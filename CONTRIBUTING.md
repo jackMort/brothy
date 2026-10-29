@@ -23,7 +23,7 @@ bun run build               # compile a single binary ./brothy (delete it after 
 5. Check UI changes with the snapshot script. `CLAUDE.md` describes the architecture and gotchas.
 6. Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes.
 
-New themes must pass the contrast tests in `tests/theme.test.ts`.
+New themes must pass the contrast tests in `tests/theme/theme.test.ts`.
 
 The screenshots, videos and casts in `docs/` and `site/public/casts/` are rendered by the maintainer with private tooling: leave them out of a PR and say in the description if a change needs them re-rendered.
 

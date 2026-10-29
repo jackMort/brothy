@@ -1,6 +1,6 @@
 ---
 // The theme in the top line, in two words: `◐ dark` flips dark / light within the family, the family's name opens the
-// picker (also `t`, from frame.ts), a popup modelled on brothy's `t` picker (src/overlay.tsx ThemePicker): a type-to-filter input, the
+// picker (also `t`, from frame.ts), a popup modelled on brothy's `t` picker (src/ui/overlay.tsx ThemePicker): a type-to-filter input, the
 // 22 families each with a dark and a light specimen in its own colors, and the mode switch. ↑ ↓ move, tab or ← →
 // set the mode, ⏎ applies, esc closes; a click on a name applies the shown mode, on a specimen that one. Moving
 // through the list (keys, or the pointer once it really moves) wears that theme on the whole page at once; ⏎ or a
@@ -251,7 +251,7 @@
     } else choose(name, shown(name))
   })
   // Only a pointer that really moved follows: a list scrolling or redrawing under a resting pointer makes the
-  // browser send moves at the same cell (brothy's usePointer().moved guard, src/overlay.tsx).
+  // browser send moves at the same cell (brothy's usePointer().moved guard, src/ui/overlay.tsx).
   let at = { x: -1, y: -1 }, moved = false
   addEventListener("pointermove", (e) => { moved = e.clientX !== at.x || e.clientY !== at.y; at = { x: e.clientX, y: e.clientY } }, { capture: true, passive: true })
   list.addEventListener("pointermove", (e) => {

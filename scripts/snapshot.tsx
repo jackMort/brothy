@@ -5,7 +5,7 @@ import { resolve, dirname } from "node:path"
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { shutdownHighlighter } from "../src/highlight"
+import { shutdownHighlighter } from "../src/markdown/highlight"
 import { frame, mount, press, settle, sleep } from "./session"
 
 const args = process.argv.slice(2)
@@ -21,7 +21,7 @@ const transparent = args.includes("--transparent") ? (args.splice(args.indexOf("
 const configDir = opt("--config")
 const stdinFile = opt("--stdin") // render that file as the piped document (root = the path argument)
 const tempConfig = configDir ? undefined : mkdtempSync(join(tmpdir(), "brothy-snap-"))
-process.env.XDG_CONFIG_HOME = configDir ? resolve(configDir) : tempConfig // read lazily by src/config.ts
+process.env.XDG_CONFIG_HOME = configDir ? resolve(configDir) : tempConfig // read lazily by src/system/config.ts
 const abs = resolve(args[0] ?? "examples")
 const isFile = !stdinFile && statSync(abs).isFile()
 

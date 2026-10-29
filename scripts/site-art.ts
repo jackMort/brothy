@@ -1,12 +1,12 @@
 // The docs site's art, drawn from the app's own source: bun scripts/site-art.ts writes site/src/art.json.
-//   wordmark: WORDMARK (src/status.ts) as SVG, each half-block glyph turned into rectangles, so no font is needed
-//   bowl:     welcomeArt(BIG) (src/welcome.ts) as SVG, quadrant blocks as rectangles, one path per role
+//   wordmark: WORDMARK (src/ui/status.ts) as SVG, each half-block glyph turned into rectangles, so no font is needed
+//   bowl:     welcomeArt(BIG) (src/ui/welcome.ts) as SVG, quadrant blocks as rectangles, one path per role
 //   steam:    STEAM_FRAMES ticks of steamRows over the bowl, played back by the site (motion allowed only)
-// The site build runs without the root's dependencies, so the output is committed; tests/site-art.test.ts keeps it current.
+// The site build runs without the root's dependencies, so the output is committed; tests/site/site-art.test.ts keeps it current.
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { WORDMARK } from "../src/status"
-import { BIG, STILL_TICK, artWidth, steamRows, welcomeArt } from "../src/welcome"
+import { WORDMARK } from "../src/ui/status"
+import { BIG, STILL_TICK, artWidth, steamRows, welcomeArt } from "../src/ui/welcome"
 
 /** a cell in SVG units: the terminal's 1:2 cell */
 const CW = 10, CH = 20

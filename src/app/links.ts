@@ -2,12 +2,12 @@
 // `H` / `L` back and forward. Not pure: `makeLinks` closes over the app context.
 import { existsSync } from "node:fs"
 import { basename } from "node:path"
-import { scanTree, stem } from "../files"
-import { drop, go, keep, stepTo } from "../history"
-import type { LinkTarget } from "../markdown"
-import { linkLabels, narrowLabels, visibleLinks } from "../nav"
-import { findHeading, linkDest, resolveLink, type InfoItem } from "../panel"
-import { STDIN } from "../workspace"
+import { scanTree, stem } from "../notes/files"
+import { drop, go, keep, stepTo } from "../notes/history"
+import type { LinkTarget } from "../markdown/render"
+import { linkLabels, narrowLabels, visibleLinks } from "../ui/nav"
+import { findHeading, linkDest, resolveLink, type InfoItem } from "../ui/panel"
+import { STDIN } from "../notes/workspace"
 import type { AppCtx } from "./ctx"
 import type { UI } from "./store"
 

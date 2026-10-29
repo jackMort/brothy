@@ -1,8 +1,8 @@
 // WCAG contrast of each theme role against the surfaces it is drawn on, plus the two accent roles that look most alike.
 // Usage: bun scripts/contrast.ts [theme…]   (default: brothy brothy-light; ✗ marks a miss of the house floors in HOUSE)
-import { contrast, surface, themeByName, themes, type Theme } from "../src/theme"
+import { contrast, surface, themeByName, themes, type Theme } from "../src/theme/theme"
 
-/** role, what it draws (markdown.ts, highlight.ts), the house floor; borders are decorative and never sit on the code fill */
+/** role, what it draws (markdown/render.ts, markdown/highlight.ts), the house floor; borders are decorative and never sit on the code fill */
 export const HOUSE: [keyof Theme, string, number][] = [
   ["text", "body text", 7],
   ["textMuted", "muted, comments, punctuation", 4.5],
