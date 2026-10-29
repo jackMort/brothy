@@ -22,7 +22,7 @@ import { docBox, miniBox } from "./app/Document"
 import { gapRow, ghostLine, progressLine, topRow } from "./app/Chrome"
 import { findOverlay, helpOverlay, openOverlay, switchOverlay, themeOverlay, themePickView, zenOverlay } from "./app/Overlays"
 import { ZEN_DIM, initUI, type FileRow, type Focus, type Spot, type UI } from "./app/store"
-import { FOOTERS, HELP_GROUPS, KEY_IDS, WELCOME_OFF, ZEN_OFF, isDown, keyDef, modeOf, type Ctx, type KeyId, type Mode } from "./app/keymap"
+import { HELP_GROUPS, KEY_IDS, PINNED, WELCOME_OFF, ZEN_OFF, footerHints, isDown, keyDef, modeOf, type Ctx, type FooterState, type KeyId, type Mode } from "./app/keymap"
 import { STDIN } from "./workspace"
 import { DRAWER_BELOW } from "./layout"
 import { surface, themes } from "./theme"
@@ -37,7 +37,7 @@ import { loadConfig } from "./config"
 import { findQuote, keepVisible, matchKey, stepMatch, type Geometry } from "./nav"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "./editor"
 import { askSection } from "./ask"
-import { GHOST_STEPS, HINT_HOLD, errText, fadeStep, tooSmall, type HintItem } from "./status"
+import { GHOST_STEPS, HINT_HOLD, errText, fadeStep, tooSmall } from "./status"
 import { findHeading } from "./panel"
 import { quoteNeedle } from "./delta"
 import { ZEN_ROWS, ZEN_WPM, stepMeasure } from "./zen"
@@ -724,23 +724,8 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   })
 
   // ghost line (row H-2): key hints on the left, a toast on the right; blank at rest
-  const pinned = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"].includes(ctxNow)
-  /** Key hints for context `c`, before fitting. */
-  const hintRow = (c: Ctx): HintItem[] => {
-    const items: HintItem[] = []
-    for (const h of FOOTERS[c]) {
-      const [id, word] = Array.isArray(h) ? h : [h, undefined]
-      if (id === "docMatch" && !s.query) continue
-      if (id === "links" && s.source) continue // labels are Preview only
-      if (id === "edit" && s.openPath === STDIN) continue // nothing on disk to edit
-      if ((id === "summarize" || id === "zenGloss") && !s.ai) continue // AI is off until an `ai` block is configured
-      if (id === "explainChange" && (!s.ai || !d.cv || d.cv.state === "result")) continue // only while there are changes to explain
-      const def = keyDef(id)
-      items.push({ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: id === "links" || id === "histBack" || id === "summarize" || id === "zenGloss" || id === "explainChange" || id === "edit" || id === "themeType" })
-    }
-    return items
-  }
-  const ghostEl = ghostLine(ctx, d, { ctx: ctxNow, pinned, hints: hintRow })
+  const footer: FooterState = { query: !!s.query, preview: !s.source, disk: s.openPath !== STDIN, ai: !!s.ai, changes: !!s.ai && !!d.cv && d.cv.state !== "result" }
+  const ghostEl = ghostLine(ctx, d, { ctx: ctxNow, pinned: PINNED.includes(ctxNow), hints: (c) => footerHints(c, footer) })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo })
   const switchEl = switchOverlay(ctx, d, switcher)
