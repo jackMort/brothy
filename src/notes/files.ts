@@ -78,7 +78,7 @@ function readEntries(dir: string): Dirent[] | null {
   }
   entries = decodable(dir, entries)
   // real directories before symlinks, so an alias never claims a subtree first
-  entries.sort((a, b) => +a.isSymbolicLink() - +b.isSymbolicLink() || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  entries.sort((a, b) => +a.isSymbolicLink() - +b.isSymbolicLink() || +(a.name > b.name) - +(a.name < b.name))
   return entries
 }
 

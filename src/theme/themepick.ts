@@ -37,8 +37,10 @@ export function themeFamilies(list: readonly Theme[] = themes): Family[] {
 export const FAMILIES = themeFamilies()
 
 /** The one mode a single-mode family has, undefined for a pair. */
-export const onlyMode = (f: Family): ThemeMode | undefined =>
-  f.dark && f.light ? undefined : f.dark ? "dark" : "light"
+export const onlyMode = (f: Family): ThemeMode | undefined => {
+  if (f.dark && f.light) return undefined
+  return f.dark ? "dark" : "light"
+}
 
 /** The family's theme in `mode`, or its only theme when it lacks that mode. */
 export const familyTheme = (f: Family, mode: ThemeMode): Theme => (f[mode] ?? f.dark ?? f.light)!
@@ -200,8 +202,11 @@ export type SlotFrame = "cursor" | "current" | undefined
  */
 export function boardFrames(f: Family, mode: ThemeMode, orig: string, sel: boolean): Record<ThemeMode, SlotFrame> {
   const shown = familyTheme(f, mode)
-  const frame = (x: Theme | undefined): SlotFrame =>
-    !x ? undefined : sel && x === shown ? "cursor" : x.name === orig ? "current" : undefined
+  const frame = (x: Theme | undefined): SlotFrame => {
+    if (!x) return undefined
+    if (sel && x === shown) return "cursor"
+    return x.name === orig ? "current" : undefined
+  }
   return { dark: frame(f.dark), light: frame(f.light) }
 }
 
@@ -217,18 +222,19 @@ const struckWord = (word: string, w: number, fg: string): Span[] => {
  */
 export function boardSlot(t: Theme, x: Theme | undefined, mode: ThemeMode, frame: SlotFrame): Span[] {
   if (!x) return [{ text: " " }, ...struckWord(mode, CELL_W, t.textMuted), { text: " " }]
-  const [l, r]: [Span, Span] =
-    frame === "cursor"
-      ? [
-          { text: "▐", fg: t.primary },
-          { text: "▌", fg: t.primary },
-        ]
-      : frame === "current"
-        ? [
-            { text: "▕", fg: t.textMuted },
-            { text: "▏", fg: t.textMuted },
-          ]
-        : [{ text: " " }, { text: " " }]
+  let edges: [Span, Span] = [{ text: " " }, { text: " " }]
+  if (frame === "cursor") {
+    edges = [
+      { text: "▐", fg: t.primary },
+      { text: "▌", fg: t.primary },
+    ]
+  } else if (frame === "current") {
+    edges = [
+      { text: "▕", fg: t.textMuted },
+      { text: "▏", fg: t.textMuted },
+    ]
+  }
+  const [l, r] = edges
   return [l, ...specimen(x), r]
 }
 

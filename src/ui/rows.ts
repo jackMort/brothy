@@ -150,16 +150,14 @@ export function openItem(r: OpenRow, t: Theme, w = Infinity, home?: string): Pic
       spans: [...hitSpans(r.name, r.hits, t.text, t.primary), ...(r.dir ? [{ text: "/", fg: t.textMuted }] : [])],
     }
   }
-  const right = r.missing
-    ? "missing"
-    : r.entry.lastNote
-      ? truncate(stem(basename(r.entry.lastNote)), Math.max(8, Math.floor(w / 3)))
-      : ""
+  const lastNote = r.entry.lastNote ? truncate(stem(basename(r.entry.lastNote)), Math.max(8, Math.floor(w / 3))) : ""
+  const right = r.missing ? "missing" : lastNote
   const name = fitHits(r.name, r.hits, Math.max(8, Math.floor(w / 3)))
   const room = w - (right ? width(right) + 1 : 0) - width(name.text) - 2
   // a path too long for the row drops its last segment (the name, already shown), then cuts from the left
   const full = tildify(r.entry.root, home)
-  const path = width(full) <= room ? full : room >= 6 ? truncateLeft(tildify(dirname(r.entry.root), home), room) : ""
+  const parent = room >= 6 ? truncateLeft(tildify(dirname(r.entry.root), home), room) : ""
+  const path = width(full) <= room ? full : parent
   return {
     spans: [
       ...hitSpans(name.text, name.hits, r.missing ? t.textMuted : t.text, t.primary),
@@ -194,14 +192,10 @@ export function artSpans(t: Theme, cells: ArtCell[], ink: number): Span[] {
   const steam = steamColors(t)
   const out: Span[] = []
   for (const c of cells) {
-    const fg =
-      c.role === "mark" || c.role === "body"
-        ? inkAt(t, ink, t.primary)
-        : c.role === "edge"
-          ? inkAt(t, ink, t.text)
-          : c.role === "steam"
-            ? steam[c.row ?? 4]
-            : undefined
+    let fg: string | undefined
+    if (c.role === "mark" || c.role === "body") fg = inkAt(t, ink, t.primary)
+    else if (c.role === "edge") fg = inkAt(t, ink, t.text)
+    else if (c.role === "steam") fg = steam[c.row ?? 4]
     const bg = c.broth ? inkAt(t, ink, t.secondary) : undefined
     const last = out.at(-1)
     if (last && last.fg === fg && last.bg === bg) last.text += c.ch

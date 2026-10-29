@@ -91,8 +91,12 @@ type Put = (x: number, y: number, c: ArtCell) => void
 function drawBowl(put: Put, size: WelcomeSize, rim: number, ox: number, cx: number) {
   const w = size.bowlW
   // rim: one cell wider than the body each side, rounded at the ends; the broth fills the top half of its inner cells
-  for (let i = 0; i < w + 2; i++)
-    put(ox + i, rim, { ch: i === 0 ? "▗" : i === w + 1 ? "▖" : "▄", role: "edge", broth: i >= 2 && i < w })
+  for (let i = 0; i < w + 2; i++) {
+    let ch = "▄"
+    if (i === 0) ch = "▗"
+    else if (i === w + 1) ch = "▖"
+    put(ox + i, rim, { ch, role: "edge", broth: i >= 2 && i < w })
+  }
   // body: a quarter ellipse at 2×2 pixels per cell, so the last row is still about half the rim
   const PH = size.bowlH * 2
   const px = (r: number, c: number) =>
@@ -165,8 +169,10 @@ export interface WelcomeFit {
   height: number
 }
 
-const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) =>
-  !f.mark ? 0 : !f.bowl ? WORDMARK.length : welcomeArt(f.size, 0, { steam: f.steam }).length
+const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) => {
+  if (!f.mark) return 0
+  return f.bowl ? welcomeArt(f.size, 0, { steam: f.steam }).length : WORDMARK.length
+}
 
 /**
  * The page's height: art, a blank, the message, a blank, the keycaps; then a blank, the `Recent` header and its
@@ -175,7 +181,8 @@ const artHeight = (f: Pick<WelcomeFit, "size" | "steam" | "bowl" | "mark">) =>
 function pageHeight(f: Omit<WelcomeFit, "top" | "height" | "hint">, hint: boolean) {
   const art = artHeight(f)
   const list = f.recents ? 2 + f.recents : 0
-  return art + (art ? 1 : 0) + 3 + list + (hint ? ((f.size === BIG && f.mark && f.bowl) || !f.recents ? 2 : 1) : 0)
+  const hintRows = (f.size === BIG && f.mark && f.bowl) || !f.recents ? 2 : 1
+  return art + (art ? 1 : 0) + 3 + list + (hint ? hintRows : 0)
 }
 
 /** What fits a `CW`×`CH` area. In order the page gives up: the big bowl, the steam, recent rows, the bowl, the wordmark, the hint. */

@@ -434,14 +434,17 @@ export function errText(e: unknown): string {
 }
 
 /** `✓`, `✗`, `↻` for a reload, else `·`. */
-export const toastIcon = (t: Toast) =>
-  t.kind === "ok" ? "✓" : t.kind === "error" ? "✗" : /reload/.test(t.msg) ? "↻" : "·"
+export const toastIcon = (t: Toast) => {
+  if (t.kind === "ok") return "✓"
+  if (t.kind === "error") return "✗"
+  return /reload/.test(t.msg) ? "↻" : "·"
+}
 
 /** The toast at `now` in `t`, cut to `cols`: its icon and message in its kind's colour (an error bold), faded as it goes; [] once gone. */
 export function toastSpans(t: Theme, toast: Toast | null, now: number, cols: number): Span[] {
   const step = toast ? toastStep(toast, now) : null
   if (!toast || step === null) return []
-  const fg = toast.kind === "ok" ? t.success : toast.kind === "error" ? t.error : t.info
+  const fg = { ok: t.success, error: t.error, info: t.info }[toast.kind]
   return fadeSpans(
     t,
     [{ text: truncate(`${toastIcon(toast)} ${toast.msg}`, cols), fg, attr: toast.kind === "error" ? A.BOLD : A.NONE }],

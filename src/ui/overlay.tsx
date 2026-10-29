@@ -298,13 +298,27 @@ export function PickerInput({
   width?: number
 }) {
   // a long query shows its end, where the typing is; `width` is the popup's column count
-  const side = note
-    ? sw(note)
-    : right?.length
-      ? right.reduce((n, seg) => n + seg.reduce((m, s) => m + sw(s.text), 0), right.length - 1)
-      : 0
+  const rightW = right?.length
+    ? right.reduce((n, seg) => n + seg.reduce((m, s) => m + sw(s.text), 0), right.length - 1)
+    : 0
+  const side = note ? sw(note) : rightW
   const room = width === undefined ? Infinity : width - POPUP_INSET - BODY_PAD - 1 - (side ? side + 1 : 0)
   const shown = safeLine(value)
+  const rightBox = right?.length ? (
+    <box style={{ flexDirection: "row", gap: 1, height: 1 }}>
+      {right.map((seg, i) => (
+        <box
+          key={i}
+          style={{ height: 1, flexShrink: 0 }}
+          onMouseDown={(e: MouseEvent) => {
+            if (e.button === MouseButton.LEFT) onRight?.(i)
+          }}
+        >
+          <Line spans={seg} />
+        </box>
+      ))}
+    </box>
+  ) : null
   return (
     <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 4, paddingRight: 4, height: 1 }}>
       <text>
@@ -314,23 +328,7 @@ export function PickerInput({
         <span fg={t.primary}>▏</span>
         {value ? null : <span fg={t.textMuted}>{placeholder}</span>}
       </text>
-      {note ? (
-        <text fg={t.textMuted}>{note}</text>
-      ) : right?.length ? (
-        <box style={{ flexDirection: "row", gap: 1, height: 1 }}>
-          {right.map((seg, i) => (
-            <box
-              key={i}
-              style={{ height: 1, flexShrink: 0 }}
-              onMouseDown={(e: MouseEvent) => {
-                if (e.button === MouseButton.LEFT) onRight?.(i)
-              }}
-            >
-              <Line spans={seg} />
-            </box>
-          ))}
-        </box>
-      ) : null}
+      {note ? <text fg={t.textMuted}>{note}</text> : rightBox}
     </box>
   )
 }

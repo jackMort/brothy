@@ -58,11 +58,14 @@ export function outlineRows(headings: { depth: number; text: string }[], current
     const hits = q ? fuzzyHits(h.text, q) : []
     if (!hits) return
     const d = h.depth - min
+    let level: 0 | 1 | 2 = 2
+    if (d === 0) level = 0
+    else if (d === 1) level = 1
     out.push({
       index,
       text: h.text,
       indent: 2 * d,
-      level: d === 0 ? 0 : d === 1 ? 1 : 2,
+      level,
       read: index < current,
       current: index === current,
       hits,
@@ -164,16 +167,10 @@ function clippedRows(text: string, cols: number, max: number): string[] {
 /** The TL;DR label row (muted suffix by state) and the wrapped text (spec: Mockups, Variant A). */
 export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
   const label = "TL;DR"
-  const status =
-    sv.state === "streaming"
-      ? " · summarizing…"
-      : sv.state === "fresh"
-        ? truncate(" · " + sv.model, cols - width(label))
-        : sv.state === "outdated"
-          ? width(label + OUTDATED) <= cols
-            ? OUTDATED
-            : " · outdated · a"
-          : ""
+  let status = ""
+  if (sv.state === "streaming") status = " · summarizing…"
+  else if (sv.state === "fresh") status = truncate(" · " + sv.model, cols - width(label))
+  else if (sv.state === "outdated") status = width(label + OUTDATED) <= cols ? OUTDATED : " · outdated · a"
   const out: InfoItem[] = [{ kind: "tldr", status }]
   if (sv.state === "none") return [...out, { kind: "summary", text: "a to summarize", muted: true }]
   for (const text of clippedRows(sv.text, cols, SUMMARY_ROWS))
@@ -203,12 +200,10 @@ const changeCounts = (c: Pick<Change, "plus" | "minus">) =>
 /** The `Changed` block (spec: Strings): label, summary, then a row per change with its model line under it. */
 export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
   const label = "Changed"
-  const status =
-    cv.state === "loading"
-      ? " · explaining…"
-      : cv.state === "result"
-        ? truncate(" · " + cv.label, cols - width(label))
-        : ` · since ${cv.label}`
+  let status: string
+  if (cv.state === "loading") status = " · explaining…"
+  else if (cv.state === "result") status = truncate(" · " + cv.label, cols - width(label))
+  else status = ` · since ${cv.label}`
   const out: InfoItem[] = [{ kind: "changes", status }]
   if (cv.state !== "idle" && cv.summary) {
     for (const text of clippedRows(cv.summary, cols, CHANGE_SUMMARY_ROWS))
@@ -337,7 +332,8 @@ const READ_FADE = 0.35
 
 /** Outline row `r` in `t`, `cols` text columns wide: the reading heading in primary behind `▸`, headings above it faded. */
 export function outlineRowSpans(r: OutlineRow, t: Theme, cols: number): Span[] {
-  const base = r.current ? t.primary : r.level === 2 ? t.textMuted : t.text
+  const rest = r.level === 2 ? t.textMuted : t.text
+  const base = r.current ? t.primary : rest
   const fg = r.read ? mix(base, t.background, READ_FADE) : base
   const text = truncate(r.text, cols - 2 - r.indent)
   return [
@@ -379,12 +375,14 @@ export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
         { text: "Changed", fg: t.textMuted, attr: A.BOLD },
         { text: it.status, fg: t.textMuted },
       ]
-    case "change":
+    case "change": {
+      const added = it.mark === "+" ? t.success : t.textMuted
       return [
-        { text: it.mark + " ", fg: it.mark === "~" ? t.warning : it.mark === "+" ? t.success : t.textMuted },
+        { text: it.mark + " ", fg: it.mark === "~" ? t.warning : added },
         { text: it.text, fg: it.stop ? t.text : t.textMuted },
         { text: it.counts, fg: t.textMuted },
       ]
+    }
     case "link":
       return [
         { text: "→ ", fg: t.textMuted },
@@ -502,7 +500,7 @@ export function linkDest(l: LinkTarget, from: string | null, tree: FileNode): Li
   if (!from) return { path: null, ...h, label: file }
   const abs = resolve(dirname(from), file)
   const ix = noteIndex(tree)
-  const path = ix.byPath.has(abs) ? abs : ix.byPath.has(abs + ".md") ? abs + ".md" : null
+  const path = [abs, abs + ".md"].find((p) => ix.byPath.has(p)) ?? null
   return { path, ...h, label: file }
 }
 

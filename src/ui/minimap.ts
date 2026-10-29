@@ -103,7 +103,8 @@ export function miniCells(
     const a = cy * span
     const b = Math.min(o.total, a + span)
     const band = a < o.top + o.h && b > o.top
-    const kind: MiniKind = heads.has(cy) ? "head" : band ? "view" : "rest"
+    const inBody: MiniKind = band ? "view" : "rest"
+    const kind: MiniKind = heads.has(cy) ? "head" : inBody
     const row = Array.from(
       { length: cols },
       (_, cx): MiniCell => ({ ch: braille(ink.bits[cy * cols + cx]!), kind, band }),

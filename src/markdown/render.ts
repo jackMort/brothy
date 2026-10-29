@@ -794,7 +794,9 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
         const cell = w[k] ?? []
         const gap = widths[i]! - spanWidth(cell)
         const align = tb.align[i]
-        const left = align === "right" ? gap : align === "center" ? Math.floor(gap / 2) : 0
+        let left = 0
+        if (align === "right") left = gap
+        else if (align === "center") left = Math.floor(gap / 2)
         spans.push({ text: " " + pad(left) }, ...cell, { text: pad(gap - left) + " " }, { text: "│", fg: B })
       })
       ctx.lines.push({ spans })
