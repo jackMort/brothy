@@ -743,6 +743,37 @@ function truncate(spans: Span[], max: number): Span[] {
 /** Columns narrower than this are cut to one line with "…" instead of wrapped. */
 const MIN_WRAP_COL = 4
 
+/** One table row: every cell wrapped (or truncated) to its width, as many lines as its tallest cell, aligned per column. */
+function tableRow(
+  cells: Span[][],
+  widths: number[],
+  align: Tokens.Table["align"],
+  border: string,
+  first: Span[],
+  rest: Span[],
+) {
+  const wrapped = widths.map((cw, i) => (cw < MIN_WRAP_COL ? [truncate(cells[i] ?? [], cw)] : wrap(cells[i] ?? [], cw)))
+  const h = maxOf(
+    wrapped.map((w) => w.length),
+    1,
+  )
+  const lines: Line[] = []
+  for (let k = 0; k < h; k++) {
+    const spans: Span[] = [...(k === 0 ? first : rest), { text: "│", fg: border }]
+    wrapped.forEach((w, i) => {
+      const cell = w[k] ?? []
+      const gap = widths[i]! - spanWidth(cell)
+      const a = align[i]
+      let left = 0
+      if (a === "right") left = gap
+      else if (a === "center") left = Math.floor(gap / 2)
+      spans.push({ text: " " + pad(left) }, ...cell, { text: pad(gap - left) + " " }, { text: "│", fg: border })
+    })
+    lines.push({ spans })
+  }
+  return lines
+}
+
 /**
  * A boxed table that never exceeds `max`: columns shrink (`fitWidths`), narrow ones truncate, and the columns that
  * cannot fit at all become one final `…` column. With no room even for that, the raw table is shown as text.
@@ -779,29 +810,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   const rule = (l: string, m: string, r: string, p: Span[]) => ({
     spans: [...p, { text: l + widths.map((w) => "─".repeat(w + 2)).join(m) + r, fg: B }],
   })
-  // one table row: every cell wrapped (or truncated) to its width, as many rows as its tallest cell, aligned per column
-  const row = (cells: Span[][], p: Span[]) => {
-    const wrapped = widths.map((cw, i) =>
-      cw < MIN_WRAP_COL ? [truncate(cells[i] ?? [], cw)] : wrap(cells[i] ?? [], cw),
-    )
-    const h = maxOf(
-      wrapped.map((w) => w.length),
-      1,
-    )
-    for (let k = 0; k < h; k++) {
-      const spans: Span[] = [...(k === 0 ? p : rest), { text: "│", fg: B }]
-      wrapped.forEach((w, i) => {
-        const cell = w[k] ?? []
-        const gap = widths[i]! - spanWidth(cell)
-        const align = tb.align[i]
-        let left = 0
-        if (align === "right") left = gap
-        else if (align === "center") left = Math.floor(gap / 2)
-        spans.push({ text: " " + pad(left) }, ...cell, { text: pad(gap - left) + " " }, { text: "│", fg: B })
-      })
-      ctx.lines.push({ spans })
-    }
-  }
+  const row = (cells: Span[][], p: Span[]) => ctx.lines.push(...tableRow(cells, widths, tb.align, B, p, rest))
   ctx.lines.push(rule("┌", "┬", "┐", first))
   row([...header, ...more], rest)
   ctx.lines.push(rule("├", "┼", "┤", rest))
