@@ -4,7 +4,7 @@
 import { basename, relative } from "node:path"
 import { fadeSpans } from "./chrome"
 import { stem } from "./files"
-import type { Span } from "./spans"
+import { A, type Span } from "./spans"
 import { spanWidth, truncate, width } from "./text"
 import type { Theme } from "./theme"
 
@@ -39,6 +39,15 @@ export interface Location {
 }
 
 const SEP = 3 // " / " and " › "
+/** Narrowest a section is cut to in the top line; narrower, it is dropped. */
+const SECTION_MIN = 8
+/** The state cluster's query is cut to `QUERY_MAX` columns; it shrinks to `QUERY_MIN` (3 characters and `…`) once the other items are gone. */
+const QUERY_MAX = 20
+const QUERY_MIN = 4
+/** Columns of the title kept when the cluster takes the room. */
+const TITLE_MIN = 12
+/** Column of the text after the logo: the logo and a space. */
+const AFTER_LOGO = 2
 const locWidth = (l: Location) =>
   (l.folder ? width(l.folder) + SEP : 0) +
   width(l.title) +
@@ -64,7 +73,7 @@ export function locationParts(dir: string, title: string, trail: string[], room:
   while (locWidth(l) > room && l.ancestors.length) l.ancestors.shift()
   if (locWidth(l) > room && l.section) {
     const left = room - (locWidth(l) - width(l.section))
-    l.section = left >= 8 ? truncate(l.section, left) : ""
+    l.section = left >= SECTION_MIN ? truncate(l.section, left) : ""
   }
   if (locWidth(l) > room) l.title = truncate(l.title, room)
   return l
@@ -75,6 +84,7 @@ export type ClusterItem =
   | { kind: "source" }
   | { kind: "wide" }
 
+/** columns between the cluster's items and between footer hints */
 const GAP = 3
 
 /** A cluster item's text as drawn (App colors the parts). */
@@ -82,6 +92,8 @@ export function clusterText(it: ClusterItem): string {
   if (it.kind === "search") return `/${it.query} ` + (it.count ? `${it.idx ?? "–"}/${it.count}` : "no match")
   return it.kind
 }
+
+const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
 
 /**
  * The top line's right side, in display order: search (`/q i/n`), `source`, `wide` (not in
@@ -93,13 +105,13 @@ export function stateCluster(
   room: number,
 ): ClusterItem[] {
   const items: ClusterItem[] = []
-  if (o.query) items.push({ kind: "search", query: truncate(o.query, 20), idx: o.matchIdx, count: o.count })
+  if (o.query) items.push({ kind: "search", query: truncate(o.query, QUERY_MAX), idx: o.matchIdx, count: o.count })
   if (o.source) items.push({ kind: "source" })
   if (o.wide && !o.zen) items.push({ kind: "wide" })
-  const total = () => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
+  const total = () => clusterW(items)
   while (total() > room && items.length && items[items.length - 1]!.kind !== "search") items.pop()
   const s = items[0]
-  if (s?.kind === "search") while (total() > room && width(s.query) > 4) s.query = truncate(o.query, width(s.query) - 1)
+  if (s?.kind === "search") while (total() > room && width(s.query) > QUERY_MIN) s.query = truncate(o.query, width(s.query) - 1)
   return items
 }
 
@@ -170,8 +182,6 @@ export interface HeaderLayout {
   rule: { col: number; width: number } | null
 }
 
-const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
-
 /**
  * Row 0 beyond the logo (always column 0): the folder over the panel column (inline panel only),
  * then from the text's left edge `Title › section` with the state cluster right-aligned to the
@@ -198,11 +208,11 @@ export function headerLayout(o: {
   const root = o.folder === "." || o.folder === ""
   const panel =
     o.inline && !o.zen
-      ? { col: 2, text: root ? truncate(o.vault, o.SW - 2) : shrinkFolder(o.folder, o.SW - 2) }
+      ? { col: AFTER_LOGO, text: root ? truncate(o.vault, o.SW - AFTER_LOGO) : shrinkFolder(o.folder, o.SW - AFTER_LOGO) }
       : null
   const cluster = stateCluster(
     { query: o.query, matchIdx: o.matchIdx, count: o.count, source: o.source, wide: o.wide, zen: o.zen },
-    Math.max(0, o.textWidth - SEP - Math.min(width(o.title), 12)),
+    Math.max(0, o.textWidth - SEP - Math.min(width(o.title), TITLE_MIN)),
   )
   const cw = clusterW(cluster)
   const room = o.textWidth - cw - (cluster.length ? SEP : 0)
@@ -237,9 +247,9 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
     out.push(...spans)
     x = Math.max(x, col) + spanWidth(spans)
   }
-  at(0, [logo === "gone" ? { text: " " } : { text: LOGO, fg: logo === "live" ? t.primary : t.textMuted, attr: logo === "live" ? 1 : 0 }])
+  at(0, [logo === "gone" ? { text: " " } : { text: LOGO, fg: logo === "live" ? t.primary : t.textMuted, attr: logo === "live" ? A.BOLD : A.NONE }])
   if (!h) {
-    at(2, [{ text: "no note open", fg: t.textMuted }])
+    at(AFTER_LOGO, [{ text: "no note open", fg: t.textMuted }])
     return out
   }
   if (h.panel) {
@@ -249,7 +259,7 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
   const loc = h.head
   const left: Span[] = []
   if (loc.folder) left.push({ text: loc.folder, fg: t.textMuted }, { text: " / ", fg: t.borderSubtle })
-  left.push(titleDim ? { text: loc.title, fg: t.textMuted } : { text: loc.title, fg: t.text, attr: 1 })
+  left.push(titleDim ? { text: loc.title, fg: t.textMuted } : { text: loc.title, fg: t.text, attr: A.BOLD })
   for (const a of loc.ancestors) left.push({ text: " › ", fg: t.borderSubtle }, { text: a, fg: t.textMuted })
   if (loc.section) left.push({ text: " › ", fg: t.borderSubtle }, { text: loc.section, fg: t.secondary })
   at(loc.col, left)
@@ -258,11 +268,11 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
     if (i) right.push({ text: "   " })
     if (it.kind !== "search") return void right.push({ text: it.kind, fg: it.kind === "source" ? t.info : t.textMuted })
     right.push({ text: `/${it.query} `, fg: t.accent })
-    if (!it.count) right.push({ text: "no match", fg: t.error, attr: 1 })
+    if (!it.count) right.push({ text: "no match", fg: t.error, attr: A.BOLD })
     else
       right.push(
-        it.idx === null ? { text: "–", fg: t.textMuted } : { text: String(it.idx), fg: t.text, attr: 1 },
-        { text: `/${it.count}`, fg: t.text, attr: 1 },
+        it.idx === null ? { text: "–", fg: t.textMuted } : { text: String(it.idx), fg: t.text, attr: A.BOLD },
+        { text: `/${it.count}`, fg: t.text, attr: A.BOLD },
       )
   })
   at(h.clusterCol, right)
@@ -374,6 +384,7 @@ export function errText(e: unknown): string {
   return (e as { code?: unknown })?.code ? msg.replace(/, \w+ '.*'$/s, "") : msg
 }
 
+/** `✓`, `✗`, `↻` for a reload, else `·`. */
 export const toastIcon = (t: Toast) => (t.kind === "ok" ? "✓" : t.kind === "error" ? "✗" : /reload/.test(t.msg) ? "↻" : "·")
 
 /** The toast at `now` in `t`, cut to `cols`: its icon and message in its kind's colour (an error bold), faded as it goes; [] once gone. */
@@ -381,7 +392,7 @@ export function toastSpans(t: Theme, toast: Toast | null, now: number, cols: num
   const step = toast ? toastStep(toast, now) : null
   if (!toast || step === null) return []
   const fg = toast.kind === "ok" ? t.success : toast.kind === "error" ? t.error : t.info
-  return fadeSpans(t, [{ text: truncate(`${toastIcon(toast)} ${toast.msg}`, cols), fg, attr: toast.kind === "error" ? 1 : 0 }], step / (GHOST_STEPS + 1))
+  return fadeSpans(t, [{ text: truncate(`${toastIcon(toast)} ${toast.msg}`, cols), fg, attr: toast.kind === "error" ? A.BOLD : A.NONE }], step / (GHOST_STEPS + 1))
 }
 
 /** The too-small-terminal message as lines that each fit `W` columns, whole words only; the longest form that fits wins. */

@@ -26,6 +26,7 @@ export function clip(text: string, max: number): string {
   return i < text.length ? text.slice(0, i) + "\n[truncated]" : text
 }
 
+/** The TL;DR's system prompt: bump `PROMPTS.tldr` (ai-config.ts) with any change. */
 export const SYSTEM_PROMPT =
   "Summarize the note in 2–3 sentences, at most 60 words. Plain text only: no markdown, no lists, no preamble. Write in the same language as the note."
 
@@ -69,10 +70,13 @@ function cleanStep(s: string): string {
   return s.replace(/\s+/g, " ").trim()
 }
 
+/** Passes of `cleanStep` before giving up on a fixed point (stripping one mark can expose another). */
+const CLEAN_PASSES = 8
+
 /** Model output as plain text; applied to the accumulated stream on every render, so it is idempotent. */
 export function cleanSummary(raw: string): string {
   let s = raw
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < CLEAN_PASSES; i++) {
     const next = cleanStep(s)
     if (next === s) break
     s = next
@@ -153,7 +157,7 @@ export function sseParser() {
   const line = (raw: string): AIEvent[] => {
     const l = raw.endsWith("\r") ? raw.slice(0, -1) : raw
     if (!l.startsWith("data:")) return []
-    const data = l.slice(5).trimStart()
+    const data = l.slice("data:".length).trimStart()
     if (data === "[DONE]") return [{ kind: "done" }]
     try {
       return chunkEvents(JSON.parse(data))
@@ -236,7 +240,9 @@ export function aiError(f: Failure, ctx: ErrCtx): string {
   return (ctx.note ? `AI · ${ctx.note}: ` : "AI: ") + what()
 }
 
+/** A request with no bytes for this long fails as `idle`. */
 export const IDLE_MS = 60_000
+/** A request still running after this long fails as `total`. */
 export const TOTAL_MS = 180_000
 /** Cleaned summaries longer than this abort the request. */
 export const MAX_SUMMARY = 1200
@@ -261,6 +267,7 @@ export interface ChatReq {
 }
 /** `raw` is the reply as received, for callers that parse structure (`extractJSON`). */
 export type ChatResult = { ok: true; text: string; raw: string } | { ok: false; failure: Failure } | { ok: false; cancelled: true }
+/** `ChatResult` without `raw`. */
 export type SummaryResult = { ok: true; text: string } | { ok: false; failure: Failure } | { ok: false; cancelled: true }
 
 const fail = (failure: Failure): ChatResult => ({ ok: false, failure })
@@ -268,6 +275,9 @@ const finish = (raw: string, req: ChatReq): ChatResult => {
   const text = req.clean(raw)
   return !text ? fail({ kind: "empty" }) : text.length > req.maxOut ? fail({ kind: "tooLong" }) : { ok: true, text, raw }
 }
+
+/** Shortest key or header value scrubbed from a message: a shorter one would shred ordinary words. */
+const MIN_SECRET = 4
 
 /**
  * The only network I/O. Never throws: every outcome is a result. The idle timer is re-armed by
@@ -281,7 +291,7 @@ export async function chat(t: AITarget, req: ChatReq, o: ChatOpts = {}): Promise
   if (!text) return r
   // a server may echo a secret back: the key and every custom header value never reach a message
   let out = text
-  for (const v of [t.key, ...Object.values(t.headers)]) if (v && v.length >= 4 && v !== "application/json") out = out.replaceAll(v, "…")
+  for (const v of [t.key, ...Object.values(t.headers)]) if (v && v.length >= MIN_SECRET && v !== "application/json") out = out.replaceAll(v, "…")
   return out === text ? r : { ok: false, failure: { ...f, message: out } as Failure }
 }
 
@@ -389,7 +399,7 @@ export function summaryRequest(text: string, maxChars: number): ChatReq {
   return { system: SYSTEM_PROMPT, user: clip(text, maxChars), maxOut: MAX_SUMMARY, clean: cleanSummary }
 }
 
-/** The TL;DR: `summaryRequest` for the target. Same result shape as before `chat`. */
+/** The TL;DR: `summaryRequest` for the target, as a `SummaryResult`. */
 export async function summarize(t: AITarget, text: string, o: ChatOpts = {}): Promise<SummaryResult> {
   const r = await chat(t, summaryRequest(text, t.maxChars), o)
   return r.ok ? { ok: true, text: r.text } : r

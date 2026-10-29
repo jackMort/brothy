@@ -1,3 +1,5 @@
+// Zen gloss, pure: which text is sent for the section under the reading line, how it is asked for, how the sheet reads.
+
 import { clip, cleanSummary, type ChatReq } from "./ai"
 import * as aiConfig from "./ai-config"
 import type { GlossStyle } from "./ai-config"
@@ -7,8 +9,6 @@ import { noteSections, sectionId, sectionSource } from "./sections"
 import { safeLine } from "./spans"
 import { truncate } from "./status"
 import { headingPath } from "./zen"
-
-/** Zen gloss: which text is sent for the section under the reading line, how it is asked for, how the sheet reads. */
 
 export type { GlossStyle }
 /** muted rows under the sheet's rule */
@@ -26,7 +26,7 @@ export const parseGlossStyle = (raw: unknown): GlossStyle => aiConfig.parseGloss
 const PLAIN = "Plain text only: no markdown, no lists, no preamble."
 const SAME = "Write in the same language as the section."
 
-/** Bump `PROMPTS.gloss` (ai.ts) whenever one of these changes. */
+/** Bump `PROMPTS.gloss` (ai-config.ts) whenever one of these changes. */
 export function glossSystem(style: GlossStyle): string {
   if (style === "simplify") return `Restate this section in plain, simple words in 1–2 sentences, at most 35 words. ${PLAIN} ${SAME}`
   if (style.startsWith("translate:"))

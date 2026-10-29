@@ -1,5 +1,6 @@
 // Zen mode: settings model and pure helpers (sections, typewriter, pages, dimming, timing).
 
+import { isRecord } from "./json"
 import type { Span } from "./spans"
 import { clamp } from "./text"
 import { mix, type Theme } from "./theme"
@@ -38,18 +39,17 @@ const BOOLS = ["spotlight", "typewriter", "ghost", "prompter"] as const
 
 /** The valid fields of a raw `zen` config value (numbers rounded and clamped); everything else is dropped. */
 export function pickZen(raw: unknown): Partial<ZenConfig> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
-  const r = raw as Record<string, unknown>
+  if (!isRecord(raw)) return {}
   const out: Partial<ZenConfig> = {}
-  if (r.flow === "scroll" || r.flow === "pages") out.flow = r.flow
+  if (raw.flow === "scroll" || raw.flow === "pages") out.flow = raw.flow
   for (const k of BOOLS) {
-    const v = r[k]
+    const v = raw[k]
     if (typeof v === "boolean") out[k] = v
   }
-  if (typeof r.wpm === "number" && Number.isFinite(r.wpm)) out.wpm = clamp(Math.round(r.wpm), ZEN_WPM.min, ZEN_WPM.max)
-  if (r.measure === "full") out.measure = "full"
-  else if (typeof r.measure === "number" && Number.isFinite(r.measure))
-    out.measure = clamp(Math.round(r.measure), ZEN_MEASURE.min, ZEN_MEASURE.max)
+  if (typeof raw.wpm === "number" && Number.isFinite(raw.wpm)) out.wpm = clamp(Math.round(raw.wpm), ZEN_WPM.min, ZEN_WPM.max)
+  if (raw.measure === "full") out.measure = "full"
+  else if (typeof raw.measure === "number" && Number.isFinite(raw.measure))
+    out.measure = clamp(Math.round(raw.measure), ZEN_MEASURE.min, ZEN_MEASURE.max)
   return out
 }
 
@@ -78,6 +78,7 @@ export interface ZenRow {
 
 const onOff = (b: boolean) => (b ? "on" : "off")
 
+/** The settings popup rows for `c`: label, value as drawn, and whether the current flow ignores the option. */
 export function zenRows(c: ZenConfig): ZenRow[] {
   const pages = c.flow === "pages"
   return [
@@ -171,6 +172,7 @@ export function wordSuffix(lines: string[]): number[] {
 /** Reading speed for "~N min left". */
 const READ_WPM = 230
 
+/** Whole minutes of reading left from line `from`, given `wordSuffix`. */
 export function minutesLeft(suffix: number[], from: number): number {
   const i = clamp(from, 0, suffix.length - 1)
   return Math.ceil((suffix[i] ?? 0) / READ_WPM)

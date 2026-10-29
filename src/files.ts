@@ -1,3 +1,5 @@
+// The Markdown tree: the scan (`scanTree`, the only disk access), its rows and counts, and the fuzzy name scoring and ranking the filters and switcher use.
+
 import { readdirSync, realpathSync, statSync, type Dirent } from "node:fs"
 import { basename, dirname, join, relative, sep } from "node:path"
 import { safeLine } from "./spans"
@@ -137,6 +139,7 @@ export interface TreeRow {
   depth: number
 }
 
+/** The first note, top level before folders, else the first in the first folder that has one; null for an empty tree. */
 export function firstFile(root: FileNode): FileNode | null {
   for (const c of root.children) {
     if (!c.dir) return c
@@ -252,6 +255,8 @@ export const SCORE_SUBSEQUENCE = 2e6
 export const SCORE_PATH = 1e6
 /** a subsequence loses this much per code point of span */
 const SPAN_PENALTY = 1e3
+/** An alias match keeps 1/ALIAS_DAMP of its distance above `SCORE_PATH`, so it ranks between a name match and a path match. */
+const ALIAS_DAMP = 10
 
 /**
  * How well `needle` matches `name`, or null: a substring (earlier is better) beats a
@@ -306,7 +311,7 @@ export function rankNotes(
         const a = scoreName(text, needle)
         if (a && (!best || a.score > best.score)) best = { text, ...a }
       }
-      if (best) out.push({ node: c, hits: [], score: SCORE_PATH + (best.score - SCORE_PATH) / 10, alias: { text: best.text, hits: best.hits } })
+      if (best) out.push({ node: c, hits: [], score: SCORE_PATH + (best.score - SCORE_PATH) / ALIAS_DAMP, alias: { text: best.text, hits: best.hits } })
       else if (fuzzyHits(stem(c.rel), needle)) out.push({ node: c, hits: [], score: SCORE_PATH })
     }
   }
