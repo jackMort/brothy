@@ -6,13 +6,14 @@ import { closeSync, openSync } from "node:fs"
 import { basename, dirname } from "node:path"
 import { askSection } from "../ai/ask"
 import { loadConfig } from "../system/config"
-import { quoteNeedle } from "../ai/delta"
+import { quoteNeedle, type Change } from "../ai/delta"
 import { editorCommand, runEditor, sourceLineAt, type EditResult } from "../system/editor"
 import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
 import { helpLayout } from "../ui/help"
 import { MEASURE } from "../ui/layout"
 import { HEADING_STYLES } from "../markdown/heading-style"
 import { parseFrontMatter } from "../markdown/frontmatter"
+import type { Rendered } from "../markdown/render"
 import { MINI_MIN_W } from "../ui/minimap"
 import { findQuote, matchKey, stepMatch } from "../ui/nav"
 import { findHeading } from "../ui/panel"
@@ -132,11 +133,7 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
     const { cv, view, s } = derive()
     const c = cv?.changes[at]
     if (!c || c.status === "removed") return
-    const hs = view.headings
-    // rows listed while a request runs come from the sent text: a heading that moved is found again by key
-    const i = c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key ? c.index : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
-    const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
-    const to = hs[i + 1]?.line ?? view.lines.length
+    const { from, to } = changeRows(view, c)
     const quote = cv?.notes[at]?.quote
     const line = quote ? findQuote(view.plain, from, to, quoteNeedle(quote, s.source)) : null
     setTop(line === null ? from : Math.max(from, line - 1))
@@ -604,4 +601,14 @@ export function makeActions(c: AppCtx, { aiJobs, links, zen, switcher, workspace
   }
 
   return { currentCtx, pokeHints, outlineGo, jumpChange, onKey }
+}
+
+/** The rows of change `c`'s section in `view`, `to` exclusive (the lead-in before the first heading for none). */
+export function changeRows(view: Rendered, c: Change) {
+  const hs = view.headings
+  // rows listed while a request runs come from the sent text: a heading that moved is found again by key
+  const i = c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key ? c.index : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
+  const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
+  const to = hs[i + 1]?.line ?? view.lines.length
+  return { from, to }
 }
