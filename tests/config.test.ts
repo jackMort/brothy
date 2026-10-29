@@ -307,3 +307,31 @@ describe("minimap", () => {
     }
   })
 })
+
+describe("file format", () => {
+  test("a hand-edited file round-trips byte for byte: unknown keys stay, a patch changes only its own key", () => {
+    const text = JSON.stringify({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, zen: { measure: 60 }, wide: true, extra: { a: [1, 2] } }, null, 2) + "\n"
+    writeFileSync(file(), text)
+    expect(loadConfig()).toMatchObject({ theme: "gruvbox", sidebar: { view: "outline", hidden: true }, wide: true })
+    expect(saveConfig({ theme: "gruvbox" })).toBe(true)
+    expect(readFileSync(file(), "utf8")).toBe(text)
+    expect(saveConfig({ wide: false, sidebar: { view: "info" } })).toBe(true)
+    expect(readFileSync(file(), "utf8")).toBe(
+      JSON.stringify({ theme: "gruvbox", sidebar: { view: "info", hidden: true }, zen: { measure: 60 }, wide: false, extra: { a: [1, 2] } }, null, 2) + "\n",
+    )
+  })
+  test("a BOM file and a blank file are both saved as plain two-space JSON", () => {
+    writeFileSync(file(), '\uFEFF{"theme":"a"}')
+    expect(saveConfig({ wide: true })).toBe(true)
+    expect(readFileSync(file(), "utf8")).toBe('{\n  "theme": "a",\n  "wide": true\n}\n')
+    writeFileSync(file(), "\n")
+    expect(saveConfig({ wide: true })).toBe(true)
+    expect(readFileSync(file(), "utf8")).toBe('{\n  "wide": true\n}\n')
+  })
+  test("a file that is valid JSON but not an object is left alone", () => {
+    writeFileSync(file(), "[1]")
+    expect(loadConfig()).toEqual({})
+    expect(saveConfig({ wide: true })).toBe(false)
+    expect(readFileSync(file(), "utf8")).toBe("[1]")
+  })
+})

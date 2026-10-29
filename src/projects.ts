@@ -2,11 +2,12 @@
 // filtered by the query, plus directory entries when the query looks like a path. Pure apart from
 // load/save; listing a directory goes through an injectable `DirIO`.
 
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path"
-import { configPath, writeFileAtomic } from "./config"
+import { configPath } from "./config"
 import { fuzzyHits, isMarkdown, scoreName } from "./files"
+import { isRecord, readJSON, writeFileAtomic } from "./json"
 import type { Geometry } from "./nav"
 
 /** Entries kept; the oldest go first. */
@@ -33,8 +34,8 @@ const isCount = (n: unknown): n is number => Number.isInteger(n) && (n as number
 
 /** A stored `Geometry`, or undefined when any part is malformed. */
 function pickGeometry(raw: unknown): Geometry | undefined {
-  if (!raw || typeof raw !== "object") return undefined
-  const { heads, total } = raw as Record<string, unknown>
+  if (!isRecord(raw)) return undefined
+  const { heads, total } = raw
   return Array.isArray(heads) && heads.every(isCount) && isCount(total) ? { heads: heads as number[], total } : undefined
 }
 
@@ -43,8 +44,8 @@ export function pickProjects(raw: unknown): ProjectEntry[] {
   if (!Array.isArray(raw)) return []
   const out: ProjectEntry[] = []
   for (const r of raw) {
-    if (!r || typeof r !== "object" || Array.isArray(r)) continue
-    const { root, lastNote, top, at, geo } = r as Record<string, unknown>
+    if (!isRecord(r)) continue
+    const { root, lastNote, top, at, geo } = r
     if (typeof root !== "string" || !isAbsolute(root) || out.some((e) => e.root === root)) continue
     const g = pickGeometry(geo)
     out.push({
@@ -61,12 +62,8 @@ export function pickProjects(raw: unknown): ProjectEntry[] {
 
 /** Recents, newest first; a missing or broken file is an empty list. */
 export function loadProjects(): ProjectEntry[] {
-  try {
-    const v: unknown = JSON.parse(readFileSync(projectsPath(), "utf8"))
-    return v && typeof v === "object" ? pickProjects((v as Record<string, unknown>).projects) : []
-  } catch {
-    return []
-  }
+  const f = readJSON(projectsPath())
+  return f.kind === "ok" && isRecord(f.value) ? pickProjects(f.value.projects) : []
 }
 
 /** Best effort: a broken file is replaced (it holds no settings), a write error is ignored. */

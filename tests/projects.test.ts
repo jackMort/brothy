@@ -60,6 +60,21 @@ describe("load / save", () => {
     saveProjects(list)
     expect(loadProjects()).toEqual(list)
   })
+  test("the file is {\"projects\": [...]} in two-space JSON with a trailing newline, and a stored file reads back", () => {
+    const list = [{ root: "/a", lastNote: "/a/n.md", top: 12, geo: { heads: [0, 5], total: 30 }, at: 5 }, entry("/b", 4)]
+    saveProjects(list)
+    const text = readFileSync(projectsPath(), "utf8")
+    expect(text).toBe(JSON.stringify({ projects: list }, null, 2) + "\n")
+    writeFileSync(projectsPath(), text)
+    expect(loadProjects()).toEqual(list)
+  })
+  test("valid JSON that is not an object is an empty list", () => {
+    mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
+    for (const text of ["[]", "null", '"x"', '{"projects":"x"}']) {
+      writeFileSync(projectsPath(), text)
+      expect(loadProjects()).toEqual([])
+    }
+  })
   test("a corrupt file is an empty list, and the next save replaces it", () => {
     mkdirSync(join(process.env.XDG_CONFIG_HOME!, "brothy"), { recursive: true })
     writeFileSync(projectsPath(), "{ not json")
