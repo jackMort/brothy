@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { A, calloutKind, parseFrontMatter, parseProperties, render, renderSource, sourceScan, stats, wrap, width } from "../src/markdown"
+import { parseFrontMatter, parseProperties } from "../src/frontmatter"
 import { canonicalLang } from "../src/highlight"
+import { calloutKind, render, wrap } from "../src/markdown"
+import { renderSource, sourceScan } from "../src/source"
+import { A } from "../src/spans"
+import { stats } from "../src/stats"
+import { width } from "../src/text"
 import { themes } from "../src/theme"
 
 const t = themes[0]!

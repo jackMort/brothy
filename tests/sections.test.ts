@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { parseFrontMatter, render, renderSource } from "../src/markdown"
+import { parseFrontMatter } from "../src/frontmatter"
+import { render } from "../src/markdown"
 import { noteSections, sectionId, sectionOf, sectionSource } from "../src/sections"
+import { renderSource } from "../src/source"
 import { themes } from "../src/theme"
 
 const t = themes[0]!

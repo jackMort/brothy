@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { HEADING_STYLES, parseFrontMatter, parseProperties, render, renderSource, stats, stripCode, wordStats, wrap, width, type HeadingStyle } from "../src/markdown"
 import { rankNotes, scanTree, visibleRows, folderCounts } from "../src/files"
+import { parseFrontMatter, parseProperties } from "../src/frontmatter"
+import { HEADING_STYLES, type HeadingStyle } from "../src/heading-style"
+import { render, wrap } from "../src/markdown"
+import { renderSource } from "../src/source"
+import { stats, stripCode, wordStats } from "../src/stats"
+import { width } from "../src/text"
 import { contrast, themes } from "../src/theme"
 import { join } from "node:path"
 

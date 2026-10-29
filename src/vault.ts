@@ -4,8 +4,9 @@
 import { statSync } from "node:fs"
 import { dirname, sep } from "node:path"
 import { rankNotes, scoreName, stem, type FileNode } from "./files"
-import { parseProperties, parseWikilink, sourceScan, wikiLabel } from "./markdown"
-import { themes } from "./theme"
+import { parseProperties } from "./frontmatter"
+import { parseWikilink, wikiLabel } from "./lexer"
+import { sourceScan } from "./source"
 
 /** Notes larger than this (bytes) are indexed by name and headings only. */
 export const BODY_LIMIT = 2 * 1024 * 1024
@@ -62,7 +63,7 @@ export function plainLine(line: string): string {
 }
 
 export function indexNote(src: string, mtime: number, size: number): NoteDoc {
-  const sc = sourceScan(src, themes[0]!)
+  const sc = sourceScan(src)
   const raw = parseProperties(src).find(([k]) => /^alias(es)?$/i.test(k))?.[1] ?? []
   const aliases = (Array.isArray(raw) ? raw : [raw]).map((a) => a.trim()).filter(Boolean)
   const headings = sc.headings.map(({ text, line, depth }) => ({ text, line, depth }))
