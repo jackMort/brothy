@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test"
 import { cachedHighlight, ensureHighlights, shutdownHighlighter } from "../src/highlight"
 import { pendingHighlights } from "../src/markdown"
-import { PEEK_MIN_W } from "../src/peek"
+import { PEEK_MIN_W } from "../src/geometry"
 import { A, type Span } from "../src/spans"
 import { width as sw } from "../src/text"
 import { contrast, themeByName, themes, type Theme } from "../src/theme"

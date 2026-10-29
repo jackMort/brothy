@@ -2,8 +2,8 @@
 // lifecycle every AI action shares (the switcher's ask too); then `makeAIJobs`, the TL;DR, gloss and reload-explain
 // requests and their keys (`a`, `D`, zen `a`). Not pure: both close over the app context.
 import { basename } from "node:path"
-import { PROMPTS, PROMPT_V, aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai"
-import { resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai-config"
+import { aiError, chat, noteText, shortModel, summaryRequest, type ChatReq, type ChatResult, type ErrCtx, type Failure } from "../ai"
+import { PROMPTS, PROMPT_V, resolveAI, type AIConfig, type AITarget, type GlossStyle } from "../ai-config"
 import { loadConfig } from "../config"
 import { deltaRequest, hhmm, parseDelta, type Change } from "../delta"
 import { stem } from "../files"

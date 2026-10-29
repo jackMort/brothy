@@ -19,7 +19,6 @@ import { BOARD_MODES, FAMILIES, SLOT_W, boardFrames, boardHeader, boardLayout, b
 import { SWITCH_MODES, artSpans, hitSpans, modeSwitch, openItem, padTo, scrim, switchItem, type PickerItem } from "./rows"
 
 // App and the tests import the row builders from here
-export { SWITCH_MODES, fitHits, hitSpans, modeSwitch, openItem, scrim, switchItem, type PickerItem } from "./rows"
 
 function Line({ spans }: { spans: Span[] }) {
   return (

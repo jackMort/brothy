@@ -8,7 +8,6 @@ import { A, type Span } from "./spans"
 import { spanWidth, truncate, width } from "./text"
 import type { Theme } from "./theme"
 
-export { truncate, truncateLeft } from "./text"
 
 // ------------------------------------------------------------- top line
 

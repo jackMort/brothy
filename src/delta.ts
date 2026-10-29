@@ -5,7 +5,7 @@
 
 import { cleanReply, cleanSummary, stripThink, type ChatReq } from "./ai"
 import { noteSections, type NoteSection } from "./sections"
-import { truncate } from "./status"
+import { truncate } from "./text"
 import { plainLine } from "./vault"
 
 /** One line of a diff: unchanged (" "), removed ("-") or added ("+"). */

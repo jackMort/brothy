@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { cleanSummary } from "../src/ai"
 import { GLOSS_CHARS, GLOSS_MAX, glossKey, glossRequest, glossRows, glossRule, glossSystem, glossTarget, parseGlossStyle } from "../src/gloss"
-import { width } from "../src/markdown"
+import { width } from "../src/text"
 import { noteSections } from "../src/sections"
 import { expectLinear, manyHeadings, SCALE } from "./perf"
 

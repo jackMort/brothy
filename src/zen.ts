@@ -5,7 +5,6 @@ import type { Span } from "./spans"
 import { clamp } from "./text"
 import { mix, type Theme } from "./theme"
 
-export { GHOST_HOLD, GHOST_STEP, GHOST_STEPS, HINT_HOLD, fadeStep } from "./status"
 
 export type Flow = "scroll" | "pages"
 

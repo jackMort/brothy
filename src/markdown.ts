@@ -13,14 +13,6 @@ import { isWikilink, lexBlocks, lexInline, normalize, stripComments, tokenOf, wi
 import { A, safe, type Span } from "./spans"
 import { graphemes, pushSpan, spanWidth, width, wrap } from "./text"
 
-export { A, width }
-export type { Span }
-// moved to their own modules; re-exported for the importers that still name this one
-export { HEADING_STYLES, type HeadingStyle } from "./heading-style"
-export { normalize, parseWikilink, scanComments, stripComments, wikiLabel, type Wikilink } from "./lexer"
-export { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "./frontmatter"
-export { stats, stripCode, wordStats, type Stats } from "./stats"
-
 export interface Line {
   spans: Span[]
   /** Background painted across the full row (code blocks). */

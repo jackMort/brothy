@@ -95,8 +95,6 @@ export function loadConfig(): Config {
   return out
 }
 
-/** Moved to json.ts; kept here for importers. */
-export { writeFileAtomic }
 
 /**
  * Merge `patch` into the file: top-level keys replace, except object-valued ones (`sidebar`,

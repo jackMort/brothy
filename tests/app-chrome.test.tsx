@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test"
 import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { GHOST_STEP, HINT_HOLD } from "../src/zen"
+import { GHOST_STEP, HINT_HOLD } from "../src/status"
 import { type Setup, B, HINT_ROW, keys, numbered, openHelp, PRIMARY, sections, spansOf, waitFor, waitFrame, withClock, useAppHarness } from "./helpers/app"
 import { hex } from "./helpers/theme"
 

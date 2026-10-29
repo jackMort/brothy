@@ -3,14 +3,12 @@
 import { clip, cleanSummary, type ChatReq } from "./ai"
 import * as aiConfig from "./ai-config"
 import type { GlossStyle } from "./ai-config"
-import { width, wrap } from "./text"
+import { truncate, width, wrap } from "./text"
 import { cached } from "./nav"
 import { noteSections, sectionId, sectionSource } from "./sections"
 import { safeLine } from "./spans"
-import { truncate } from "./status"
 import { headingPath } from "./zen"
 
-export type { GlossStyle }
 /** muted rows under the sheet's rule */
 export const GLOSS_ROWS = 3
 /** cleaned characters before a gloss is `too long` */

@@ -9,8 +9,6 @@ import { clamp, plural, truncate, truncateLeft, width, wrap } from "./text"
 import type { Theme } from "./theme"
 import type { NoteDoc, SwitchRow } from "./vault"
 
-/** from this many columns the switcher splits (geometry.ts); re-exported for importers */
-export { PEEK_MIN_W }
 /** outline rows shown around the hit's heading */
 export const PEEK_OUTLINE = 5
 /** TL;DR rows, the last cut with `…` */

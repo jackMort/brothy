@@ -13,7 +13,9 @@ import {
   tokenize,
   type Kind,
 } from "../src/highlight"
-import { A, pendingHighlights, render, width } from "../src/markdown"
+import { pendingHighlights, render } from "../src/markdown"
+import { A } from "../src/spans"
+import { width } from "../src/text"
 import { themes } from "../src/theme"
 import { brothy } from "./helpers/theme"
 

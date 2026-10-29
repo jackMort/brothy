@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
-import { PROMPT_V } from "../src/ai"
+import { PROMPT_V } from "../src/ai-config"
 import { CACHE_CAP, GLOSS_CAP, loadGlosses, saveGlosses, type Gloss, cacheFile, cachePath, isFresh, loadCache, loadSummaries, pruneSummaries, saveCache, saveSummaries, textHash, type Summary } from "../src/summaries"
 import { useXdgDir } from "./helpers/env"
 

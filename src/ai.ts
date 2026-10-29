@@ -6,13 +6,11 @@
 
 import type { AITarget } from "./ai-config"
 import { isRecord } from "./json"
-import { parseFrontMatter, stripComments } from "./markdown"
+import { parseFrontMatter } from "./frontmatter"
+import { stripComments } from "./lexer"
 import { safeLine } from "./spans"
-import { truncate } from "./status"
+import { truncate } from "./text"
 
-/** The `ai` block's types, presets and validation live in ai-config.ts; re-exported for importers. */
-export { PRESETS, PROMPTS, PROMPT_V, normalizeAI, parseGlossStyle, resolveAI } from "./ai-config"
-export type { AIConfig, AITarget, GlossStyle, Preset, Provider } from "./ai-config"
 
 /** What is summarized and hashed: the body without front matter and `%%comments%%`. */
 export function noteText(src: string): string {

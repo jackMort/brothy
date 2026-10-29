@@ -5,7 +5,8 @@
 // applies the theme; nothing here saves config or re-themes the app.
 import { fuzzyHits } from "./files"
 import { PEEK_MIN_W, SPLIT_ROWS_MARGIN, innerWidth, paneWidth, popupWidth, splitWidth } from "./geometry"
-import { render, type HeadingStyle, type Rendered } from "./markdown"
+import { render, type Rendered } from "./markdown"
+import type { HeadingStyle } from "./heading-style"
 import { A, type Span } from "./spans"
 import { clamp, spanWidth, width } from "./text"
 import { contrast, themes, type Theme } from "./theme"

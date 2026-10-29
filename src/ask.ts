@@ -4,10 +4,9 @@
 import { cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens, type ChatReq } from "./ai"
 import { SCORE_SUBSEQUENCE, scoreName, stem, type FileNode } from "./files"
 import { isRecord } from "./json"
-import { headingKey } from "./panel"
-import { sectionId } from "./sections"
+import { headingKey, sectionId } from "./sections"
 import { safeLine } from "./spans"
-import { truncate } from "./status"
+import { truncate } from "./text"
 import { SWITCH_CAP, foldSame, headingAt, lineOf, nextSection, notesOf, type AnswerRow, type NoteDoc, type SwitchRow, type VaultIndex } from "./vault"
 import { headingPath } from "./zen"
 

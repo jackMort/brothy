@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test"
-import { normalize, parseFrontMatter, render } from "../src/markdown"
+import { render } from "../src/markdown"
+import { normalize } from "../src/lexer"
+import { parseFrontMatter } from "../src/frontmatter"
 import { PEEK_BYTES, PEEK_TLDR, peekLines, peekWindow, switchSplit, type PeekInput } from "../src/peek"
 import type { Span } from "../src/spans"
 import { brothy } from "./helpers/theme"

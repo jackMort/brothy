@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { MAX_SUMMARY, PRESETS, PROMPTS, PROMPT_V, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanReply, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, normalizeAI, parseGlossStyle, resolveAI, shortModel, sseParser, stripThink, summarize, summaryRequest, tokens, type AIEvent, type AITarget } from "../src/ai"
+import { MAX_SUMMARY, SYSTEM_PROMPT, aiError, buildRequest, chat, cleanReply, cleanSummary, clip, errMessage, extractJSON, fmtTokens, jsonReply, noteText, shortModel, sseParser, stripThink, summarize, summaryRequest, tokens, type AIEvent } from "../src/ai"
+import { PRESETS, PROMPTS, PROMPT_V, normalizeAI, parseGlossStyle, resolveAI, type AITarget } from "../src/ai-config"
 import { IDLE_MS, TOTAL_MS } from "../src/ai"
 import * as aiConfig from "../src/ai-config"
 
@@ -497,12 +498,6 @@ describe("chat", () => {
 })
 
 describe("ai-config", () => {
-  test("ai.ts re-exports what moved to ai-config.ts", () => {
-    expect(PRESETS).toBe(aiConfig.PRESETS)
-    expect(normalizeAI).toBe(aiConfig.normalizeAI)
-    expect(resolveAI).toBe(aiConfig.resolveAI)
-    expect(parseGlossStyle).toBe(aiConfig.parseGlossStyle)
-  })
   test("parseGlossStyle with a fallback: a valid style wins, anything else is the fallback", () => {
     expect(aiConfig.parseGlossStyle("simplify", "explain")).toBe("simplify")
     expect(aiConfig.parseGlossStyle("translate:pl", "explain")).toBe("translate:pl")

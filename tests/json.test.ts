@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import { chmodSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { writeFileAtomic as fromConfig } from "../src/config"
 import { cacheHome, configHome, isRecord, readJSON, writeFileAtomic } from "../src/json"
 import { useEnvRestore } from "./helpers/env"
 import { useTmp } from "./helpers/tmp"
@@ -75,5 +74,4 @@ describe("writeFileAtomic", () => {
     writeFileAtomic(f, "[]\n", 0o600)
     expect(statSync(f).mode & 0o777).toBe(0o640)
   })
-  test("config.ts still exports it", () => expect(fromConfig).toBe(writeFileAtomic))
 })

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { PEEK_MIN_W, POPUP_W, innerWidth, paneWidth, popupWidth, splitWidth } from "../src/geometry"
-import { PEEK_MIN_W as peekMin, switchSplit } from "../src/peek"
+import { switchSplit } from "../src/peek"
 import { themeSplit } from "../src/themepick"
 
 test("popupWidth: the usual 70 columns, less on a narrow screen", () => {
@@ -21,8 +21,7 @@ test("innerWidth and paneWidth: Overlay's padding, then the divider and the pane
   expect(paneWidth(116 - 2, 41)).toBe(66)
 })
 
-test("switcher: popupWidth below PEEK_MIN_W, splitWidth from it (as the theme picker), and peek.ts still exports PEEK_MIN_W", () => {
-  expect(peekMin).toBe(PEEK_MIN_W)
+test("switcher: popupWidth below PEEK_MIN_W, splitWidth from it (as the theme picker)", () => {
   for (const W of [PEEK_MIN_W - 1, PEEK_MIN_W, 120, 200]) {
     expect(switchSplit(W).width).toBe(themeSplit(W, 40, 16).split ? splitWidth(W) : popupWidth(W))
   }

@@ -304,7 +304,7 @@ describe("headerLayout", () => {
 
 describe("wordmark", () => {
   const { LOGO, WORDMARK, WORDMARK_W, fitWordmark } = require("../src/status")
-  const { width } = require("../src/markdown")
+  const { width } = require("../src/text")
   test("logo is one cell", () => expect(width(LOGO)).toBe(1))
   test("rows are 3, equal width in cells", () => {
     expect(WORDMARK.length).toBe(3)

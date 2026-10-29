@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { cleanReply, fmtTokens, tokens } from "../src/ai"
 import { ASK_MEMO, ASK_PROMPT, EXCERPT, MAX_ASK, MAX_CANDIDATES, MAX_QUERIES, MAX_RERANK, QUESTION_MAX, RERANK_PROMPT, WHY_W, askCandidates, askLocate, askRequest, askRows, askSection, askTitleNote, parseQueries, parseRerank, putNewest, questionOf, rerankCost, rerankMessage, rerankRequest, type AskState, type AskView } from "../src/ask"
-import { truncate } from "../src/status"
+import { truncate } from "../src/text"
 import type { FileNode } from "../src/files"
 import { noteSections, sectionId } from "../src/sections"
 import { emptyIndex, indexNote, type AnswerRow, type SwitchRow, type VaultIndex } from "../src/vault"
