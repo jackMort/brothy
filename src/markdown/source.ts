@@ -333,6 +333,67 @@ function tintWikilinks(spans: Span[], t: Theme, exists?: (target: string) => boo
   )
 }
 
+/** Heading colour by depth. */
+const headingColor = (t: Theme, depth: number) => [t.primary, t.secondary, t.accent][depth - 1] ?? t.text
+
+/** What the structure pass found, for styling Source rows. */
+interface SourceStyle {
+  t: Theme
+  fmLines: number
+  hidden: boolean[]
+  fenceLines: Set<number>
+  codeLines: Set<number>
+}
+
+/** An ATX heading line: its `#` run muted, the title in the depth's colour (a line without `#` is all title). */
+function headingSpans(text: string, depth: number, t: Theme): Span[] {
+  const m = /^([^#]*#{1,6})(.*)$/.exec(text)
+  if (!m) return [{ text, fg: headingColor(t, depth), attr: A.BOLD }]
+  return [
+    { text: m[1]!, fg: t.textMuted, attr: A.BOLD },
+    { text: m[2]!, fg: headingColor(t, depth), attr: A.BOLD },
+  ]
+}
+
+/** A quote line: muted italic, a callout's `[!type]` marker in its kind's colour. */
+function quoteSpans(text: string, t: Theme): Span[] {
+  const m = /^(\s*(?:>\s*)+)(\[!([\w-]+)\][-+]?)(.*)$/.exec(text)
+  if (!m) return [{ text, fg: t.textMuted, attr: A.ITALIC }]
+  return [
+    { text: m[1]!, fg: t.textMuted, attr: A.ITALIC },
+    { text: m[2]!, fg: t[CALLOUT_KINDS[calloutKind(m[3]!)]!.color], attr: A.BOLD },
+    { text: m[4]!, fg: t.textMuted, attr: A.ITALIC },
+  ]
+}
+
+/** A list item line: its marker in `primary`. */
+function listSpans(text: string, t: Theme): Span[] {
+  const m = /^(\s*(?:[-*+]|\d+\.))(.*)$/.exec(text)
+  if (!m) return [{ text, fg: t.text }]
+  return [
+    { text: m[1]!, fg: t.primary },
+    { text: m[2]!, fg: t.text },
+  ]
+}
+
+/** Source line `i` as spans: front matter, comments, fences and code first, then headings (`setext` while inside one), quotes, lists and tables. */
+function sourceSpans(c: SourceStyle, i: number, text: string, h: SourceHeading | undefined, setext: SourceHeading | null): Span[] {
+  const { t } = c
+  if (i < c.fmLines) return [{ text, fg: t.textMuted }]
+  if (c.hidden[i]) return [{ text, fg: t.textMuted, attr: A.ITALIC }]
+  if (c.fenceLines.has(i)) return [{ text, fg: t.textMuted }]
+  if (c.codeLines.has(i)) return [{ text, fg: t.accent }]
+  if (setext) return [{ text, fg: headingColor(t, setext.depth), attr: A.BOLD }]
+  if (h) return headingSpans(text, h.depth, t)
+  if (/^\s*>/.test(text)) return quoteSpans(text, t)
+  if (/^\s*([-*+]|\d+\.)\s/.test(text)) return listSpans(text, t)
+  return [{ text, fg: /^\s*\|/.test(text) ? t.info : t.text }]
+}
+
+/** Whether Source line `i` is prose, whose wikilinks get tinted (not front matter, comments, fences, code or a heading). */
+const isProse = (c: SourceStyle, i: number, h: SourceHeading | undefined, setext: SourceHeading | null) =>
+  i >= c.fmLines && !c.hidden[i] && !c.fenceLines.has(i) && !c.codeLines.has(i) && !h && !setext
+
 /** Raw Markdown with a line-number gutter and light syntax coloring. */
 export function renderSource(src: string, max: number, t: Theme, opts: RenderOpts = {}): Rendered {
   src = normalize(src)
@@ -342,51 +403,19 @@ export function renderSource(src: string, max: number, t: Theme, opts: RenderOpt
   const raw = orig.map((l) => l.replace(/\t/g, "    ").replace(/^ +/, (m) => "\u00a0".repeat(m.length)))
   const { kept, hidden } = scanComments(orig, fmLines)
   const { headings: found, fenceLines, codeLines } = sourceStructure(kept, fmLines, t, hidden)
+  const style: SourceStyle = { t, fmLines, hidden, fenceLines, codeLines }
   const gw = String(raw.length).length
   const lines: Line[] = []
   const headings: Heading[] = []
   const srcRow: number[] = []
-  const hcolor = (d: number) => [t.primary, t.secondary, t.accent][d - 1] ?? t.text
   let setext: SourceHeading | null = null
   raw.forEach((text, i) => {
     srcRow.push(lines.length)
-    let spans: Span[]
     const h = found.get(i)
     if (h?.setext) setext = h
     else if (setext && i > setext.end) setext = null
-    if (i < fmLines) spans = [{ text, fg: t.textMuted }]
-    else if (hidden[i]) spans = [{ text, fg: t.textMuted, attr: A.ITALIC }]
-    else if (fenceLines.has(i)) spans = [{ text, fg: t.textMuted }]
-    else if (codeLines.has(i)) spans = [{ text, fg: t.accent }]
-    else if (setext) spans = [{ text, fg: hcolor(setext.depth), attr: A.BOLD }]
-    else if (h) {
-      const m = /^([^#]*#{1,6})(.*)$/.exec(text)
-      spans = m
-        ? [
-            { text: m[1]!, fg: t.textMuted, attr: A.BOLD },
-            { text: m[2]!, fg: hcolor(h.depth), attr: A.BOLD },
-          ]
-        : [{ text, fg: hcolor(h.depth), attr: A.BOLD }]
-    } else if (/^\s*>/.test(text)) {
-      const m = /^(\s*(?:>\s*)+)(\[!([\w-]+)\][-+]?)(.*)$/.exec(text)
-      spans = m
-        ? [
-            { text: m[1]!, fg: t.textMuted, attr: A.ITALIC },
-            { text: m[2]!, fg: t[CALLOUT_KINDS[calloutKind(m[3]!)]!.color], attr: A.BOLD },
-            { text: m[4]!, fg: t.textMuted, attr: A.ITALIC },
-          ]
-        : [{ text, fg: t.textMuted, attr: A.ITALIC }]
-    } else if (/^\s*([-*+]|\d+\.)\s/.test(text)) {
-      const m = /^(\s*(?:[-*+]|\d+\.))(.*)$/.exec(text)
-      spans = m
-        ? [
-            { text: m[1]!, fg: t.primary },
-            { text: m[2]!, fg: t.text },
-          ]
-        : [{ text, fg: t.text }]
-    } else if (/^\s*\|/.test(text)) spans = [{ text, fg: t.info }]
-    else spans = [{ text, fg: t.text }]
-    if (i >= fmLines && !hidden[i] && !fenceLines.has(i) && !codeLines.has(i) && !h && !setext) spans = tintWikilinks(spans, t, opts.exists)
+    let spans = sourceSpans(style, i, text, h, setext)
+    if (isProse(style, i, h, setext)) spans = tintWikilinks(spans, t, opts.exists)
     const idx = h ? headings.push({ depth: h.depth, text: h.text, line: lines.length }) - 1 : -1
     const gutter = { text: String(i + 1).padStart(gw) + "  ", fg: t.textMuted }
     const rows = wrap(spans, max, [gutter], [{ text: pad(gw + 2) }])
