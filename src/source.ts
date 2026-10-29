@@ -10,6 +10,7 @@ import { lexInline, lexOutline, normalize, parseWikilink, scanComments, tokenOf 
 import { CALLOUT_KINDS, calloutKind, calloutOf, inline, pad, plainOf, wrap, type Heading, type Line, type RenderOpts, type Rendered } from "./markdown"
 import { A, type Span } from "./spans"
 
+/** A heading found on source lines, keyed by its first line. */
 interface SourceHeading {
   depth: number
   text: string
@@ -18,15 +19,15 @@ interface SourceHeading {
   setext: boolean
 }
 
+/** A heading's outline title from its inline tokens: Preview's text (NBSP read as a space), which no theme changes. */
+const titleOf = (tokens: Token[] | undefined, t: Theme) => plainOf(inline(tokens, t)).replace(/\u00a0/g, " ")
+
 /**
  * Line-based mirror of the Markdown block rules that matter for the outline, for notes whose
  * blocks are only headings, fences, quotes and paragraphs (`needsLexer` says when that does not hold):
  * fences (matching char and length), ATX and setext headings, quotes. `lines` have their
  * `%%comments%%` cut (`scanComments().kept`), so titles and structure match what Preview lexes.
  */
-/** A heading's outline title from its inline tokens: Preview's text (NBSP read as a space), which no theme changes. */
-const titleOf = (tokens: Token[] | undefined, t: Theme) => plainOf(inline(tokens, t)).replace(/\u00a0/g, " ")
-
 export function sourceStructureLines(lines: string[], from: number, t: Theme, hidden: boolean[]) {
   const headings = new Map<number, SourceHeading>()
   const fenceLines = new Set<number>()
@@ -141,6 +142,7 @@ export function needsLexer(live: string[]): boolean {
   return false
 }
 
+/** Line breaks in `s`. */
 const newlines = (s: string) => s.split("\n").length - 1
 
 /**
@@ -154,6 +156,7 @@ function sourceStructure(lines: string[], from: number, t: Theme, hidden: boolea
   return needsLexer(live) ? sourceStructureLexed(lines, from, t, hidden) : sourceStructureLines(lines, from, t, hidden)
 }
 
+/** `sourceStructure` through the lexer: the path for every note `needsLexer` flags. */
 export function sourceStructureLexed(lines: string[], from: number, t: Theme, hidden: boolean[]) {
   const headings = new Map<number, SourceHeading>()
   const fenceLines = new Set<number>()
@@ -231,6 +234,7 @@ export function sourceStructureLexed(lines: string[], from: number, t: Theme, hi
   return { headings, fenceLines, codeLines }
 }
 
+/** What the switcher's index keeps of a note. */
 export interface SourceScan {
   /** the Source outline (same headings, same order as `renderSource`), with each heading's first and last source line */
   headings: { depth: number; text: string; line: number; end: number }[]

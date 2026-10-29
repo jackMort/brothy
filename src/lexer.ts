@@ -24,6 +24,7 @@ const highlightExt: TokenizerExtension = {
   },
 }
 
+/** A parsed `[[wikilink]]`. */
 export interface Wikilink {
   target: string
   heading?: string
@@ -99,6 +100,7 @@ const md = new Marked({ gfm: true, extensions: [highlightExt, wikilinkExt] })
  */
 const INLINE_CAP = 4000
 
+/** Marked's lexer with each inline run cut at `INLINE_CAP`. */
 class CappedLexer extends md.Lexer {
   override inlineTokens(src: string, tokens: Token[] = []): Token[] {
     if (src.length <= INLINE_CAP) return super.inlineTokens(src, tokens)
@@ -112,6 +114,7 @@ class CappedLexer extends md.Lexer {
   }
 }
 
+/** Block tokens with their inline passes: what Preview, callout bodies and stats read. */
 export const lexBlocks = (src: string): Token[] => new CappedLexer(md.defaults).lex(src)
 
 /** `lexBlocks` for the outline: only headings get their inline pass, as nothing else is read from the inline tokens. */
@@ -130,6 +133,8 @@ export function lexOutline(src: string): Token[] {
   for (const q of lx.inlineQueue) if (wanted.has(q.tokens)) lx.inlineTokens(q.src, q.tokens)
   return tokens
 }
+
+/** One run of inline text (outline and callout titles). */
 export const lexInline = (src: string): Token[] => new CappedLexer(md.defaults).inlineTokens(src)
 
 /**

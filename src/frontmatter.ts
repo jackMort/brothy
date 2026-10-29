@@ -4,14 +4,17 @@
 import { normalize } from "./lexer"
 import { safeLine } from "./spans"
 
+/** A note split at its front matter. */
 export interface FrontMatter {
   entries: [string, string][]
   body: string
   offset: number // number of source lines consumed by front matter
 }
 
+/** A `---` block at the very top; its body may be empty. */
 const FRONT = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/
 
+/** The front matter's `key: value` lines (quotes stripped) and the body after it; no front matter is no entries. */
 export function parseFrontMatter(src: string): FrontMatter {
   src = normalize(src)
   const m = FRONT.exec(src)
@@ -24,7 +27,9 @@ export function parseFrontMatter(src: string): FrontMatter {
   return { entries, body: src.slice(m[0].length), offset: m[0].replace(/\r?\n$/, "").split("\n").length }
 }
 
+/** A property: its key and a value or a list of them. */
 export type Property = [string, string | string[]]
+
 /** Keys whose plain `a, b` values are lists (Obsidian writes `tags: a, b`). */
 const LIST_KEYS = new Set(["tags", "tag", "aliases", "alias", "cssclasses"])
 const unquote = (s: string) => {

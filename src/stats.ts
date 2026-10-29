@@ -5,6 +5,7 @@ import type { Token } from "marked"
 
 import { lexBlocks, normalize, stripComments, tokenOf } from "./lexer"
 
+/** What Info shows about a note; `tasks` is [done, all]. */
 export interface Stats {
   words: number
   lines: number
@@ -21,9 +22,11 @@ function countWords(src: string): { words: number; minutes: number } {
   const words = (src.replace(/```[\s\S]*?```/g, "").replace(/\[[ xX]\]/g, "").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
   return { words, minutes: Math.max(1, Math.round(words / 220)) }
 }
+
 /** The same `words` and `minutes` as `stats(src)`. */
 export const wordStats = (src: string) => countWords(stripComments(normalize(src)))
 
+/** Counts over the note as Preview lexes it (comments cut, though `lines` counts theirs); wikilinks count as links. */
 export function stats(src: string): Stats {
   const lines = normalize(src).split("\n").length
   src = stripComments(normalize(src))

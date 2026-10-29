@@ -1,3 +1,8 @@
+// The Preview renderer: Markdown in, pre-wrapped styled lines out (`Span[]` per `Line`) at a given width, with each
+// heading's line and the link targets. Pure apart from reading the code-highlight cache. Scrolling, heading jumps and
+// search work on these exact line indexes, so a rendering change must keep the line↔heading mapping. Holds `wrap`,
+// inline spans, callouts, blocks and tables; the lexer, front matter, Source view and stats have their own modules.
+
 import type { Token, Tokens } from "marked"
 import type { Theme } from "./theme"
 
@@ -10,6 +15,7 @@ import { graphemes, pushSpan, spanWidth, width } from "./text"
 
 export { A, width }
 export type { Span }
+// moved to their own modules; re-exported for the importers that still name this one
 export { HEADING_STYLES, type HeadingStyle } from "./heading-style"
 export { normalize, parseWikilink, scanComments, stripComments, wikiLabel, type Wikilink } from "./lexer"
 export { parseFrontMatter, parseProperties, type FrontMatter, type Property } from "./frontmatter"
@@ -158,6 +164,7 @@ export function stripTags(html: string): string {
   })
 }
 
+/** Inline tokens as spans, styled from `base` down; with a `sink`, links are numbered into it (`Span.link`). */
 export function inline(tokens: Token[] | undefined, t: Theme, base: Omit<Span, "text"> = { fg: t.text }, sink?: LinkSink): Span[] {
   const out: Span[] = []
   if (!tokens) return out
@@ -263,6 +270,7 @@ function decode(s: string): string {
   })
 }
 
+/** The text of a row of spans. */
 export const plainOf = (spans: Span[]) => spans.map((s) => s.text).join("")
 
 // ---------------------------------------------------------------- callouts
@@ -332,8 +340,10 @@ export function calloutOf(q: Tokens.Blockquote): Callout | null {
 
 // ---------------------------------------------------------------- blocks
 
+/** `n` spaces, none when `n` is negative. */
 export const pad = (n: number) => " ".repeat(Math.max(0, n))
 
+/** What `blocks()` writes into: the rows, the outline, the code blocks still to highlight and the link targets. */
 interface Ctx {
   t: Theme
   lines: Line[]
@@ -349,10 +359,12 @@ const LADDER = ["██ ", "▓▓▓ ", "▒▒▒▒ ", "░░░░░ ", "�
 /** The `rules` leads of h1 to h3; deeper headings are bare text. */
 const RULE_LEADS = ["━━ ", "── ", "╌╌ "]
 
+/** Push wrapped rows; `extra` (a heading index) goes on the first one only. */
 function emitRows(ctx: Ctx, rows: Span[][], extra: Partial<Line> = {}) {
   rows.forEach((spans, i) => ctx.lines.push(i === 0 ? { spans, ...extra } : { spans }))
 }
 
+/** A blank row in `prefix` (quote bars, list indent) before a heading, unless the last row already is one. */
 function blank(ctx: Ctx, prefix: Span[]) {
   const last = ctx.lines[ctx.lines.length - 1]
   if (!last) return
@@ -423,10 +435,15 @@ function callout(ctx: Ctx, c: Callout, max: number, first: Span[], rest: Span[],
   ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
 }
 
-/** `depth` is the list nesting level, used to pick the bullet glyph. */
 /** Fences Obsidian runs as queries: shown as one collapsed row; the query is read in Source. */
 const DATAVIEW_LANGS = new Set(["dataview", "dataviewjs", "tasks"])
 
+/**
+ * Lay out block tokens into `ctx.lines`, `max` columns wide. `first` prefixes the first row this call emits and
+ * `rest` every other one, so quotes, callouts and list items recurse with longer prefixes (a bar, an indent).
+ * `depth` is the list nesting level, used to pick the bullet glyph. Most blocks end with a blank row in `rest`;
+ * containers trim the last one (`trimTrailingBlank`) and `render` trims the document's ends.
+ */
 function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Span[], depth = 0) {
   const { t } = ctx
   let usedFirst = false
@@ -448,13 +465,14 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         const idx = ctx.headings.length
         ctx.headings.push({ depth: h.depth, text: plainOf(text).replace(/\u00a0/g, " "), line: ctx.lines.length })
         blank(ctx, rest)
-        ctx.headings[idx]!.line = ctx.lines.length
+        ctx.headings[idx]!.line = ctx.lines.length // after the blank row, so a jump lands on the title
         headingRows(ctx, h.depth, styled, fg, idx, max, pre(), rest)
         ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
         break
       }
       case "paragraph":
       case "text": {
+        // a "text" block is a tight list item's body: no blank row after it
         const p = tokenOf(tok, "paragraph", "text")
         emitRows(ctx, wrap(inline(p.tokens, t, undefined, ctx.sink), max, pre(), rest))
         if (tok.type === "paragraph") ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
@@ -480,6 +498,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
         const start = typeof l.start === "number" ? l.start : 1
         const numW = l.ordered ? String(start + l.items.length - 1).length + 1 : 1
         l.items.forEach((item, i) => {
+          // marked makes no task of an item that is only `[ ]` or `[x]`: draw it as an empty task
           const bare = item.task ? null : /^\[([ xX])\]$/.exec(item.text.trim())
           const task = item.task || !!bare
           const checked = item.task ? !!item.checked : !!bare && bare[1] !== " "
@@ -534,6 +553,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
           ctx.lines.push({ spans: rest.map((s) => ({ ...s })) })
           break
         }
+        // a filled block: a top row with the language at its right, the code (wrapped rows marked `↪`), a bottom row
         const p0 = pre()
         const inner = max - spanWidth(rest)
         const fill = t.backgroundElement
@@ -592,6 +612,7 @@ function blocks(ctx: Ctx, tokens: Token[], max: number, first: Span[], rest: Spa
   }
 }
 
+/** Drop the blank rows (in `rest`) a container's last block left, keeping at least the row at `from`. */
 function trimTrailingBlank(ctx: Ctx, from: number, rest: Span[]) {
   const r = plainOf(rest).trim()
   while (ctx.lines.length > from + 1) {
@@ -608,6 +629,7 @@ function fitWidths(natural: number[], avail: number): number[] {
   const w = natural.map(() => 0)
   let left = avail
   let open = natural.map((_, i) => i)
+  // a column within an equal share of what is left keeps its width; each one settled frees room, so repeat
   for (;;) {
     const share = Math.floor(left / open.length)
     const small = open.filter((i) => natural[i]! <= share)
@@ -618,6 +640,8 @@ function fitWidths(natural: number[], avail: number): number[] {
     }
     open = open.filter((i) => !small.includes(i))
   }
+  // the rest split what is left by natural width, at least 1 each; rounding is made up from the first column,
+  // or taken back from the widest
   const sum = open.reduce((a, i) => a + natural[i]!, 0)
   let used = 0
   for (const i of open) {
@@ -659,6 +683,10 @@ function truncate(spans: Span[], max: number): Span[] {
 /** Columns narrower than this are cut to one line with "…" instead of wrapped. */
 const MIN_WRAP_COL = 4
 
+/**
+ * A boxed table that never exceeds `max`: columns shrink (`fitWidths`), narrow ones truncate, and the columns that
+ * cannot fit at all become one final `…` column. With no room even for that, the raw table is shown as text.
+ */
 function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Span[]) {
   const { t } = ctx
   const prefixW = Math.max(spanWidth(first), spanWidth(rest))
@@ -677,6 +705,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
     .slice(0, cols)
     .map((c) => inline(c.tokens, t, undefined, ctx.sink).map((s) => ({ ...s, fg: s.bg ? s.fg : t.primary, attr: (s.attr ?? 0) | A.BOLD })))
   const rows = tb.rows.map((r) => r.slice(0, cols).map((c) => inline(c.tokens, t, undefined, ctx.sink)))
+  // cell room: the measure less the prefix, a border per column plus one, 2 cells of padding per column, the `…` column
   const avail = max - prefixW - (cols + 1 + more.length) - (cols + more.length) * 2 - more.length
   const natural = Array.from({ length: cols }, (_, i) =>
     Math.max(3, spanWidth(header[i] ?? []), maxOf(rows.map((r) => spanWidth(r[i] ?? [])))),
@@ -686,6 +715,7 @@ function table(ctx: Ctx, tb: Tokens.Table, max: number, first: Span[], rest: Spa
   const rule = (l: string, m: string, r: string, p: Span[]) => ({
     spans: [...p, { text: l + widths.map((w) => "─".repeat(w + 2)).join(m) + r, fg: B }],
   })
+  // one table row: every cell wrapped (or truncated) to its width, as many rows as its tallest cell, aligned per column
   const row = (cells: Span[][], p: Span[]) => {
     const wrapped = widths.map((cw, i) => (cw < MIN_WRAP_COL ? [truncate(cells[i] ?? [], cw)] : wrap(cells[i] ?? [], cw)))
     const h = maxOf(wrapped.map((w) => w.length), 1)
