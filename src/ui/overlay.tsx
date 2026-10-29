@@ -152,6 +152,33 @@ const LIST_BOX = { flexDirection: "column", paddingLeft: 1, paddingRight: 1 } as
 /** A pickable row's frame, shared by PickerList and ThemeBoard: one line, 3 cells of padding, `bg` when highlighted. */
 const rowBox = (bg: string | undefined) => ({ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3, backgroundColor: bg })
 
+/** The longest prefix of `text` within `room` columns, cut by code point and measuring each once. */
+function cutTo(text: string, room: number): string {
+  let w = 0
+  let kept = ""
+  for (const ch of text) {
+    if ((w += sw(ch)) > room) break
+    kept += ch
+  }
+  return kept
+}
+
+/** One picker row's spans within `textW` columns: the item's spans cut to leave room for `right`, a gap, then `right` muted. */
+function pickerRowSpans(t: Theme, it: PickerItem, sel: boolean, fgOn: string, textW: number): Span[] {
+  const right = it.right ?? ""
+  const leftMax = textW - (right ? sw(right) + 1 : 0)
+  const spans: Span[] = []
+  let used = 0
+  for (const s of it.spans) {
+    const text = used + sw(s.text) > leftMax ? cutTo(s.text, leftMax - used) : s.text
+    if (text) spans.push({ ...s, text, fg: sel ? fgOn : s.fg })
+    used += sw(text)
+  }
+  spans.push({ text: " ".repeat(Math.max(0, textW - used - sw(right))) })
+  if (right) spans.push({ text: right, fg: sel ? fgOn : t.textMuted })
+  return spans
+}
+
 /** Rows with paddingX 3; the highlighted row is filled with `primary` and drawn in contrastOn(primary). */
 export function PickerList({
   t,
@@ -184,27 +211,7 @@ export function PickerList({
     <box key="picker-list" style={LIST_BOX}>
       {rows.map((it, j) => {
         const sel = top + j === hl && !it.header
-        const right = it.right ?? ""
-        const leftMax = textW - (right ? sw(right) + 1 : 0)
-        const spans: Span[] = []
-        let used = 0
-        for (const s of it.spans) {
-          let text = s.text
-          if (used + sw(text) > leftMax) {
-            // cut by code point, measuring each once
-            let w = used
-            let kept = ""
-            for (const ch of text) {
-              if ((w += sw(ch)) > leftMax) break
-              kept += ch
-            }
-            text = kept
-          }
-          if (text) spans.push({ ...s, text, fg: sel ? fgOn : s.fg })
-          used += sw(text)
-        }
-        spans.push({ text: " ".repeat(Math.max(0, textW - used - sw(right))) })
-        if (right) spans.push({ text: right, fg: sel ? fgOn : t.textMuted })
+        const spans = pickerRowSpans(t, it, sel, fgOn, textW)
         return (
           <box
             key={sel ? "sel" + j : "row" + j}
