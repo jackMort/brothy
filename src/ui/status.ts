@@ -8,7 +8,6 @@ import { A, type Span } from "../lib/spans"
 import { spanWidth, truncate, width } from "../lib/text"
 import type { Theme } from "../theme/theme"
 
-
 // ------------------------------------------------------------- top line
 
 /** Equal as titles: case and surrounding spaces ignored. */
@@ -17,14 +16,7 @@ const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 /** The note's name: front-matter `title` (quotes, `*`, `_` and backticks stripped), else the file name without extension. */
 export function noteTitle(props: readonly (readonly [string, string | string[]])[], path: string): string {
   const v = props.find(([k]) => k.toLowerCase() === "title")?.[1]
-  const title =
-    typeof v === "string"
-      ? v
-          .trim()
-          .replace(/^(["'])(.*)\1$/, "$2")
-          .replace(/[*_`]/g, "")
-          .trim()
-      : ""
+  const title = typeof v === "string" ? v.trim().replace(/^(["'])(.*)\1$/, "$2").replace(/[*_`]/g, "").trim() : ""
   if (title) return title
   const name = basename(path)
   return stem(name) || name

@@ -5,11 +5,8 @@ import type { Span } from "../lib/spans"
 import { clamp } from "../lib/text"
 import { mix, type Theme } from "../theme/theme"
 
-
-export type Flow = "scroll" | "pages"
-
 export interface ZenConfig {
-  flow: Flow
+  flow: "scroll" | "pages"
   spotlight: boolean
   typewriter: boolean
   ghost: boolean
@@ -32,7 +29,7 @@ export const ZEN_DEFAULTS: ZenConfig = {
 }
 
 export const ZEN_WPM = { min: 120, max: 400, step: 20 } as const
-export const ZEN_MEASURE = { min: 60, max: 100, step: 4 } as const
+const ZEN_MEASURE = { min: 60, max: 100, step: 4 } as const
 
 const BOOLS = ["spotlight", "typewriter", "ghost", "prompter"] as const
 

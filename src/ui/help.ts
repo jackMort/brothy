@@ -26,7 +26,7 @@ export interface HelpLayout {
   vis: number
 }
 
-export const HELP_TWO_COLS = 100
+const HELP_TWO_COLS = 100
 /** the two-column sheet's widest popup, and the columns it keeps free of the screen */
 const HELP_WIDE_W = 112
 const HELP_WIDE_MARGIN = 8
@@ -44,7 +44,6 @@ const join = (gs: HelpGroup[]): HelpLine[] => gs.flatMap((g, i) => (i ? [null, .
 export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, columns = HELP_COLUMNS): HelpLayout {
   const two = W >= HELP_TWO_COLS
   const width = two ? Math.min(HELP_WIDE_W, W - HELP_WIDE_MARGIN) : popupWidth(W)
-  // Overlay padding 1 and the body's 4 each side
   const inner = innerWidth(width) - BODY_PAD
   const colW = two ? Math.floor((inner - COL_GAP) / 2) : inner
   const keyW = clamp(colW - DESC_MIN, HELP_KEY_W - 7, HELP_KEY_W)

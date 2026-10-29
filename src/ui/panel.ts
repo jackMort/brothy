@@ -94,7 +94,7 @@ const MAX_PROP_ROWS = 4
 /** Widest key column of the properties (the keys are cut to it), and the fewest columns a value gets. */
 const PROP_KEY_MAX = 8
 const PROP_ROOM_MIN = 4
-export const MAX_LINKS = 8
+const MAX_LINKS = 8
 const TAG_KEYS = new Set(["tags", "tag"])
 const ORDER = ["title", "aliases", "tags", "date", "created", "modified"]
 
@@ -172,7 +172,7 @@ export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
 /** Change rows shown at most; the rest are counted in a `+ n more sections` row. */
 export const MAX_CHANGE_ROWS = 8
 /** Summary rows under the `Changed` label; the last is cut with `…`. */
-export const CHANGE_SUMMARY_ROWS = 3
+const CHANGE_SUMMARY_ROWS = 3
 export type ChangeState = "idle" | "loading" | "result"
 /** What Info shows for a live reload: `label` is the baseline's HH:MM (idle) or the model's display name (result). */
 export interface ChangeView {
@@ -185,7 +185,7 @@ export interface ChangeView {
 const MARK = { edited: "~", added: "+", removed: "−" } as const
 
 /** `+a −r`, one side omitted when zero. */
-export const changeCounts = (c: Pick<Change, "plus" | "minus">) => [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
+const changeCounts = (c: Pick<Change, "plus" | "minus">) => [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
 
 /** The `Changed` block (spec: Strings): label, summary, then a row per change with its model line under it. */
 export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {

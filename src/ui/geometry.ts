@@ -9,7 +9,7 @@ export const POPUP_W = 70
 /** the zen settings popup's width */
 export const ZEN_POPUP_W = 52
 /** columns a popup leaves free at the screen edges */
-export const POPUP_EDGE = 2
+const POPUP_EDGE = 2
 /** Overlay's padding of 1 each side: a popup's inner width is its width minus this */
 export const POPUP_INSET = 2
 /** PickerList and ThemeBoard pad each row 3 and the box 1 each side: a row's text is `innerW` minus this */
@@ -17,13 +17,13 @@ export const ROW_PAD = 8
 /** PickerInput and the help body pad 4 each side */
 export const BODY_PAD = 8
 /** the split popup keeps this many columns free of the screen (`min(W − SPLIT_MARGIN, SPLIT_MAX_W)` wide) */
-export const SPLIT_MARGIN = 12
+const SPLIT_MARGIN = 12
 /** the widest the split popup gets */
-export const SPLIT_MAX_W = 116
+const SPLIT_MAX_W = 116
 /** the widest the switcher's list gets beside its pane */
 export const LIST_MAX_W = 70
 /** the `│` between a list and its pane */
-export const DIVIDER_W = 1
+const DIVIDER_W = 1
 /** a pane pads its text 2 left and 4 right */
 export const PANE_PAD = 6
 /** rows the theme picker's split popup leaves free of the screen (`rows` is `H` minus this) */
