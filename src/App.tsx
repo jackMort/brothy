@@ -131,7 +131,7 @@ export function App({ root: startRoot, initialFile, themeName, transparent, fetc
   const popups = makePopups(ctx)
   const { currentCtx, pokeHints, outlineGo, jumpChange, onKey } = makeActions(ctx, { aiJobs, links, zen, switcher, workspace, popups, edit: editImpl })
 
-  // ---------------------------------------------------- effects
+  // ---------------------------------------------------- effects and keys
   const { openPath } = ui.current
   useAppEffects(ctx, { ...aiJobs, ...links, ...workspace })
   useKeyboard(onKey)
