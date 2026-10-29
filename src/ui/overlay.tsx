@@ -96,7 +96,6 @@ export function Overlay({
   children: ReactNode
 }) {
   const wash = scrim(t)
-  const pointer = usePointer()
   return (
     <box
       key="overlay"
@@ -117,31 +116,57 @@ export function Overlay({
         backgroundColor: RGBA.fromInts(wash.r, wash.g, wash.b, wash.a),
       }}
     >
-      <box
-        onMouse={pointer.note} // down and the wheel stop here, short of App's root
-        onMouseDown={(e: MouseEvent) => e.stopPropagation()}
-        onMouseScroll={(e: MouseEvent) => {
-          if (e.scroll?.direction === "up" || e.scroll?.direction === "down") onScroll?.(e.scroll.direction === "up" ? -1 : 1)
-          e.stopPropagation()
-        }}
-        style={{
-          width: popupWidth(W, width),
-          flexShrink: 0,
-          flexDirection: "column",
-          backgroundColor: t.backgroundPanel,
-          padding: 1,
-          gap: 1,
-        }}
-      >
-        <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 4, paddingRight: 4 }}>
-          <text fg={t.text}>{title}</text>
-          <text>
-            {note ? <span fg={t.textMuted}>{note + "  "}</span> : null}
-            <span fg={t.textMuted}>esc</span>
-          </text>
-        </box>
+      <OverlayPanel t={t} W={W} width={width} title={title} note={note} onScroll={onScroll}>
         {children}
+      </OverlayPanel>
+    </box>
+  )
+}
+
+/** The popup box over the backdrop: its title bar, and the pointer and wheel events that stop short of App's root. */
+function OverlayPanel({
+  t,
+  W,
+  width,
+  title,
+  note,
+  onScroll,
+  children,
+}: {
+  t: Theme
+  W: number
+  width: number
+  title: string
+  note?: string
+  onScroll?: (dir: 1 | -1) => void
+  children: ReactNode
+}) {
+  const pointer = usePointer()
+  return (
+    <box
+      onMouse={pointer.note} // down and the wheel stop here, short of App's root
+      onMouseDown={(e: MouseEvent) => e.stopPropagation()}
+      onMouseScroll={(e: MouseEvent) => {
+        if (e.scroll?.direction === "up" || e.scroll?.direction === "down") onScroll?.(e.scroll.direction === "up" ? -1 : 1)
+        e.stopPropagation()
+      }}
+      style={{
+        width: popupWidth(W, width),
+        flexShrink: 0,
+        flexDirection: "column",
+        backgroundColor: t.backgroundPanel,
+        padding: 1,
+        gap: 1,
+      }}
+    >
+      <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 4, paddingRight: 4 }}>
+        <text fg={t.text}>{title}</text>
+        <text>
+          {note ? <span fg={t.textMuted}>{note + "  "}</span> : null}
+          <span fg={t.textMuted}>esc</span>
+        </text>
       </box>
+      {children}
     </box>
   )
 }
@@ -446,6 +471,70 @@ export function OpenPicker({
   )
 }
 
+/** ThemeBoard's top row: the `dark` / `light` header, or the empty note. */
+function BoardHead({ t, L, shown, empty }: { t: Theme; L: ReturnType<typeof boardLayout>; shown: ThemeMode; empty: boolean }) {
+  return empty ? (
+    <box key="none" style={{ height: 1, paddingLeft: 3 }}>
+      <text fg={t.textMuted}>No themes match</text>
+    </box>
+  ) : (
+    <box key="head" style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3 }}>
+      <Line spans={boardHeader(t, shown, L)} />
+    </box>
+  )
+}
+
+/** One family row of ThemeBoard: the name with its hits and a clickable slot per mode. */
+function BoardRow({
+  t,
+  L,
+  h,
+  sel,
+  frames,
+  pointer,
+  onHover,
+  onActivate,
+  onPick,
+}: {
+  t: Theme
+  L: ReturnType<typeof boardLayout>
+  h: FamilyHit
+  sel: boolean
+  frames: ReturnType<typeof boardFrames>
+  pointer: ReturnType<typeof usePointer>
+  onHover: () => void
+  onActivate: () => void
+  onPick: (mode: ThemeMode) => void
+}) {
+  return (
+    <box
+      onMouseOver={(e: MouseEvent) => pointer.moved(e) && onHover()}
+      onMouseDown={(e: MouseEvent) => {
+        if (e.button === MouseButton.LEFT) onActivate()
+      }}
+      style={{ ...rowBox(sel ? t.backgroundElement : undefined), flexDirection: "row" }}
+    >
+      <box style={{ width: L.nameW, height: 1, flexShrink: 0 }}>
+        <Line spans={hitSpans(h.family.name, h.hits, t.text, t.primary, sel)} />
+      </box>
+      {BOARD_MODES.map((m, k) => (
+        <box
+          key={m}
+          style={{ width: SLOT_W, height: 1, flexShrink: 0, marginLeft: k ? L.gap : 0 }}
+          onMouseDown={(e: MouseEvent) => {
+            if (e.button !== MouseButton.LEFT) return
+            pointer.note(e)
+            e.stopPropagation() // a missing mode is not a theme: its struck word does nothing
+            if (h.family[m]) onPick(m)
+          }}
+        >
+          <Line spans={boardSlot(t, h.family[m], m, frames[m])} />
+        </box>
+      ))}
+    </box>
+  )
+}
+
 /**
  * The `t` picker's list as a board: a header (`dark` / `light` over their slots), then one row per family,
  * its name with the hits and a slot per mode (`boardSlot`: a specimen in that theme's own roles, or the
@@ -489,46 +578,23 @@ export function ThemeBoard({
   const pointer = usePointer()
   return (
     <box key="theme-board" style={LIST_BOX}>
-      {rows.length ? (
-        <box key="head" style={{ height: 1, flexShrink: 0, paddingLeft: 3, paddingRight: 3 }}>
-          <Line spans={boardHeader(t, shown, L)} />
-        </box>
-      ) : (
-        <box key="none" style={{ height: 1, paddingLeft: 3 }}>
-          <text fg={t.textMuted}>No themes match</text>
-        </box>
-      )}
+      <BoardHead t={t} L={L} shown={shown} empty={!rows.length} />
       {rows.slice(top, top + height).map((h, j) => {
         const i = top + j
         const sel = i === hl
-        const frames = boardFrames(h.family, mode, orig, sel)
         return (
-          <box
+          <BoardRow
             key={sel ? "sel" + j : "row" + j}
-            onMouseOver={(e: MouseEvent) => pointer.moved(e) && onHover?.(i)}
-            onMouseDown={(e: MouseEvent) => {
-              if (e.button === MouseButton.LEFT) onActivate?.(i)
-            }}
-            style={{ ...rowBox(sel ? t.backgroundElement : undefined), flexDirection: "row" }}
-          >
-            <box style={{ width: L.nameW, height: 1, flexShrink: 0 }}>
-              <Line spans={hitSpans(h.family.name, h.hits, t.text, t.primary, sel)} />
-            </box>
-            {BOARD_MODES.map((m, k) => (
-              <box
-                key={m}
-                style={{ width: SLOT_W, height: 1, flexShrink: 0, marginLeft: k ? L.gap : 0 }}
-                onMouseDown={(e: MouseEvent) => {
-                  if (e.button !== MouseButton.LEFT) return
-                  pointer.note(e)
-                  e.stopPropagation() // a missing mode is not a theme: its struck word does nothing
-                  if (h.family[m]) onPick?.(i, m)
-                }}
-              >
-                <Line spans={boardSlot(t, h.family[m], m, frames[m])} />
-              </box>
-            ))}
-          </box>
+            t={t}
+            L={L}
+            h={h}
+            sel={sel}
+            frames={boardFrames(h.family, mode, orig, sel)}
+            pointer={pointer}
+            onHover={() => onHover?.(i)}
+            onActivate={() => onActivate?.(i)}
+            onPick={(m) => onPick?.(i, m)}
+          />
         )
       })}
     </box>
