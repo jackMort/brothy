@@ -92,12 +92,8 @@ export async function mountCast(el: HTMLElement) {
     dirty = true
     draw()
   }
-  /** the canvas, only when the screen changed: the casts change it a few times a second at most */
-  function paint() {
-    if (!dirty) return
-    dirty = false
-    ctx.clearRect(0, 0, c.cols * cw, c.rows * rh)
-    const lw = Math.max(1, Math.round(fs * 0.075))
+  /** the cells whose background differs from the theme's own, as filled rectangles */
+  function paintBackgrounds() {
     for (let y = 0; y < c.rows; y++)
       for (let x = 0; x < c.cols; x++) {
         const bg = s.bg[y * c.cols + x]
@@ -106,38 +102,56 @@ export async function mountCast(el: HTMLElement) {
           ctx.fillRect(Math.floor(x * cw), y * rh, Math.ceil(cw) + 1, Math.ceil(rh))
         }
       }
+  }
+  /** the light quadruple-dash rule: four short bars across the cell's middle */
+  function paintDash(X: number, Y: number, lw: number) {
+    const cy = Math.round(Y + rh / 2) - lw / 2,
+      seg = cw / 4
+    for (let k = 0; k < 4; k++) ctx.fillRect(X + k * seg + seg * 0.15, cy, seg * 0.6, lw)
+  }
+  /** a box-drawing glyph from its arms (l r u d, upper case for heavy) */
+  function paintBox(box: string, X: number, Y: number, lw: number) {
+    const w = box === "LR" ? lw * 2 : lw,
+      cx = X + cw / 2,
+      cy = Math.round(Y + rh / 2) - w / 2,
+      arms = box.toLowerCase()
+    if (arms.includes("l")) ctx.fillRect(X, cy, cw / 2 + w / 2, w)
+    if (arms.includes("r")) ctx.fillRect(cx - w / 2, cy, cw / 2 + w / 2 + 0.5, w)
+    if (arms.includes("u")) ctx.fillRect(Math.round(cx - w / 2), Y, w, rh / 2 + w / 2)
+    if (arms.includes("d")) ctx.fillRect(Math.round(cx - w / 2), cy, w, rh / 2 + w / 2 + 0.5)
+  }
+  /** a glyph from the font, with its italic / bold / underline / strike attributes */
+  function paintText(ch: string, a: number, X: number, Y: number, lw: number) {
+    ctx.font = `${a & 2 ? "italic " : ""}${a & 1 ? "600 " : ""}${fs}px ${font}`
+    ctx.fillText(ch, X, Y + rh / 2)
+    if (a & 4) ctx.fillRect(X, Y + rh * 0.86, cw + 0.5, lw)
+    if (a & 8) ctx.fillRect(X, Y + rh / 2, cw + 0.5, lw)
+  }
+  /** the glyph in cell `i` at (x, y): box and block elements as rectangles, the rest as text */
+  function paintCell(i: number, ch: string, x: number, y: number, lw: number) {
+    const X = x * cw,
+      Y = y * rh,
+      box = BOX[ch],
+      blk = BLOCK[ch]
+    ctx.fillStyle = `rgb(${s.fg[i] ?? FG[m]})`
+    if (box === "dash") paintDash(X, Y, lw)
+    else if (box) paintBox(box, X, Y, lw)
+    else if (blk) ctx.fillRect(X + blk[0] * cw, Y, (blk[1] - blk[0]) * cw, rh)
+    else paintText(ch, s.at[i]!, X, Y, lw)
+  }
+  /** the canvas, only when the screen changed: the casts change it a few times a second at most */
+  function paint() {
+    if (!dirty) return
+    dirty = false
+    ctx.clearRect(0, 0, c.cols * cw, c.rows * rh)
+    const lw = Math.max(1, Math.round(fs * 0.075))
+    paintBackgrounds()
     ctx.textBaseline = "middle"
     for (let y = 0; y < c.rows; y++)
       for (let x = 0; x < c.cols; x++) {
         const i = y * c.cols + x,
           ch = s.ch[i]!
-        if (ch === " ") continue
-        const X = x * cw,
-          Y = y * rh,
-          a = s.at[i]!
-        ctx.fillStyle = `rgb(${s.fg[i] ?? FG[m]})`
-        const box = BOX[ch],
-          blk = BLOCK[ch]
-        if (box === "dash") {
-          const cy = Math.round(Y + rh / 2) - lw / 2,
-            seg = cw / 4
-          for (let k = 0; k < 4; k++) ctx.fillRect(X + k * seg + seg * 0.15, cy, seg * 0.6, lw)
-        } else if (box) {
-          const w = box === "LR" ? lw * 2 : lw,
-            cx = X + cw / 2,
-            cy = Math.round(Y + rh / 2) - w / 2,
-            arms = box.toLowerCase()
-          if (arms.includes("l")) ctx.fillRect(X, cy, cw / 2 + w / 2, w)
-          if (arms.includes("r")) ctx.fillRect(cx - w / 2, cy, cw / 2 + w / 2 + 0.5, w)
-          if (arms.includes("u")) ctx.fillRect(Math.round(cx - w / 2), Y, w, rh / 2 + w / 2)
-          if (arms.includes("d")) ctx.fillRect(Math.round(cx - w / 2), cy, w, rh / 2 + w / 2 + 0.5)
-        } else if (blk) ctx.fillRect(X + blk[0] * cw, Y, (blk[1] - blk[0]) * cw, rh)
-        else {
-          ctx.font = `${a & 2 ? "italic " : ""}${a & 1 ? "600 " : ""}${fs}px ${font}`
-          ctx.fillText(ch, X, Y + rh / 2)
-          if (a & 4) ctx.fillRect(X, Y + rh * 0.86, cw + 0.5, lw)
-          if (a & 8) ctx.fillRect(X, Y + rh / 2, cw + 0.5, lw)
-        }
+        if (ch !== " ") paintCell(i, ch, x, y, lw)
       }
   }
   function draw() {
