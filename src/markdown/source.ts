@@ -194,82 +194,101 @@ function sourceStructure(lines: string[], from: number, t: Theme, hidden: boolea
   return needsLexer(live) ? sourceStructureLexed(lines, from, t, hidden) : sourceStructureLines(lines, from, t, hidden)
 }
 
+/** The lexed reader's state: what it found so far, and the source line of each lexed line (comment-only lines are not lexed). */
+interface LexScan {
+  headings: Map<number, SourceHeading>
+  fenceLines: Set<number>
+  codeLines: Set<number>
+  at: number[]
+  t: Theme
+}
+
+/** A token's or list item's raw split into rows, trailing blank lines dropped. */
+const rawRows = (raw: string) => raw.replace(/\n+$/, "").split("\n")
+
+/**
+ * Where each piece of `text` starts, as a lexed line (`line0` plus the newlines before it). A piece is located by
+ * searching its raw from the previous one: marked rewrites the raw of a quote's last tokens (lazy lines), so summing
+ * raw lengths drifts, while the order of the pieces holds. `retry` also tries the raw without its trailing blanks.
+ */
+function locator(text: string, line0: number, retry: boolean) {
+  let pos = 0
+  let seen = 0 // newlines in text before `from`, counted incrementally (a rescan per piece is quadratic)
+  let from = 0
+  return (raw: string) => {
+    let i = text.indexOf(raw, pos)
+    if (i < 0 && retry) i = text.indexOf(raw.trimEnd(), pos)
+    if (i < 0) i = pos
+    seen += newlines(text.slice(from, i))
+    from = i
+    pos = Math.min(text.length, i + raw.length)
+    return line0 + seen
+  }
+}
+
+/** A heading token on lexed line `line`: ATX unless its raw does not open with `#`. */
+function lexedHeading(s: LexScan, tok: Token, line: number) {
+  const h = tokenOf(tok, "heading")
+  const end = s.at[line + rawRows(tok.raw).length - 1] ?? s.at[line]!
+  s.headings.set(s.at[line]!, { depth: h.depth, text: titleOf(h.tokens, s.t), end, setext: !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(tok.raw) })
+}
+
+/** A fenced code token on lexed line `line`: the fence lines and the code rows between them (a missing close leaves its last row code). */
+function lexedCode(s: LexScan, tok: Token, line: number) {
+  if (tokenOf(tok, "code").codeBlockStyle === "indented") return
+  const rows = rawRows(tok.raw)
+  const open = /^ {0,3}(`{3,}|~{3,})/.exec(rows[0]!)
+  const close = rows.length > 1 ? /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(rows[rows.length - 1]!) : null
+  const closed = !!open && !!close && close[1]![0] === open[1]![0] && close[1]!.length >= open[1]!.length
+  s.fenceLines.add(s.at[line]!)
+  for (let k = 1; k < rows.length; k++) (k === rows.length - 1 && closed ? s.fenceLines : s.codeLines).add(s.at[line + k]!)
+}
+
+/** A list token on lexed line `line`: each item's tokens, located within the list's raw. */
+function lexedList(s: LexScan, tok: Token, line: number) {
+  const l = tokenOf(tok, "list")
+  const locate = locator(l.raw, line, false)
+  for (const item of l.items) walkTokens(s, item.tokens, item.text, locate(item.raw))
+}
+
+/** `tokens` were lexed from `text`, which starts on lexed line `line0`: records the headings, fences and code they hold. */
+function walkTokens(s: LexScan, tokens: Token[], text: string, line0: number) {
+  const locate = locator(text, line0, true)
+  for (const tok of tokens) {
+    const line = locate(tok.raw)
+    switch (tok.type) {
+      case "heading":
+        lexedHeading(s, tok, line)
+        break
+      case "code":
+        lexedCode(s, tok, line)
+        break
+      case "blockquote": {
+        const q = tokenOf(tok, "blockquote")
+        const c = calloutOf(q)
+        if (c) walkTokens(s, lexOutline(c.body), c.body, line + 1)
+        else walkTokens(s, q.tokens, q.text, line)
+        break
+      }
+      case "list":
+        lexedList(s, tok, line)
+        break
+    }
+  }
+}
+
 /** `sourceStructure` through the lexer: the path for every note `needsLexer` flags. */
 export function sourceStructureLexed(lines: string[], from: number, t: Theme, hidden: boolean[]) {
-  const headings = new Map<number, SourceHeading>()
-  const fenceLines = new Set<number>()
-  const codeLines = new Set<number>()
-  const at: number[] = []
+  const s: LexScan = { headings: new Map(), fenceLines: new Set(), codeLines: new Set(), at: [], t }
   const body: string[] = []
   for (let i = from; i < lines.length; i++)
     if (!hidden[i]) {
-      at.push(i)
+      s.at.push(i)
       body.push(lines[i]!)
     }
-  /**
-   * `tokens` were lexed from `text`, which starts on lexed line `line0`. Each token is located by
-   * searching its raw from the previous one: marked rewrites the raw of a quote's last tokens
-   * (lazy lines), so summing raw lengths drifts, while the order of the pieces holds.
-   */
-  const walk = (tokens: Token[], text: string, line0: number) => {
-    let pos = 0
-    let seen = 0 // newlines in text before `from`, counted incrementally (a rescan per token is quadratic)
-    let from = 0
-    for (const tok of tokens) {
-      let i = text.indexOf(tok.raw, pos)
-      if (i < 0) i = text.indexOf(tok.raw.trimEnd(), pos)
-      if (i < 0) i = pos
-      seen += newlines(text.slice(from, i))
-      from = i
-      const line = line0 + seen
-      pos = Math.min(text.length, i + tok.raw.length)
-      const rowsOf = () => tok.raw.replace(/\n+$/, "").split("\n").length
-      switch (tok.type) {
-        case "heading": {
-          const h = tokenOf(tok, "heading")
-          const title = titleOf(h.tokens, t)
-          headings.set(at[line]!, { depth: h.depth, text: title, end: at[line + rowsOf() - 1] ?? at[line]!, setext: !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(tok.raw) })
-          break
-        }
-        case "code": {
-          if (tokenOf(tok, "code").codeBlockStyle === "indented") break
-          const rows = rowsOf()
-          const last = tok.raw.replace(/\n+$/, "").split("\n")
-          const open = /^ {0,3}(`{3,}|~{3,})/.exec(last[0]!)
-          const close = last.length > 1 ? /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(last[last.length - 1]!) : null
-          const closed = !!open && !!close && close[1]![0] === open[1]![0] && close[1]!.length >= open[1]!.length
-          fenceLines.add(at[line]!)
-          for (let k = 1; k < rows; k++) (k === rows - 1 && closed ? fenceLines : codeLines).add(at[line + k]!)
-          break
-        }
-        case "blockquote": {
-          const q = tokenOf(tok, "blockquote")
-          const c = calloutOf(q)
-          if (c) walk(lexOutline(c.body), c.body, line + 1)
-          else walk(q.tokens, q.text, line)
-          break
-        }
-        case "list": {
-          const l = tokenOf(tok, "list")
-          let at0 = 0
-          let seen = 0
-          let from = 0
-          for (const item of l.items) {
-            let j = l.raw.indexOf(item.raw, at0)
-            if (j < 0) j = at0
-            seen += newlines(l.raw.slice(from, j))
-            from = j
-            walk(item.tokens, item.text, line + seen)
-            at0 = Math.min(l.raw.length, j + item.raw.length)
-          }
-          break
-        }
-      }
-    }
-  }
   const text = body.join("\n")
-  walk(lexOutline(text), text, 0)
-  return { headings, fenceLines, codeLines }
+  walkTokens(s, lexOutline(text), text, 0)
+  return { headings: s.headings, fenceLines: s.fenceLines, codeLines: s.codeLines }
 }
 
 /** What the switcher's index keeps of a note. */
@@ -314,6 +333,67 @@ function tintWikilinks(spans: Span[], t: Theme, exists?: (target: string) => boo
   )
 }
 
+/** Heading colour by depth. */
+const headingColor = (t: Theme, depth: number) => [t.primary, t.secondary, t.accent][depth - 1] ?? t.text
+
+/** What the structure pass found, for styling Source rows. */
+interface SourceStyle {
+  t: Theme
+  fmLines: number
+  hidden: boolean[]
+  fenceLines: Set<number>
+  codeLines: Set<number>
+}
+
+/** An ATX heading line: its `#` run muted, the title in the depth's colour (a line without `#` is all title). */
+function headingSpans(text: string, depth: number, t: Theme): Span[] {
+  const m = /^([^#]*#{1,6})(.*)$/.exec(text)
+  if (!m) return [{ text, fg: headingColor(t, depth), attr: A.BOLD }]
+  return [
+    { text: m[1]!, fg: t.textMuted, attr: A.BOLD },
+    { text: m[2]!, fg: headingColor(t, depth), attr: A.BOLD },
+  ]
+}
+
+/** A quote line: muted italic, a callout's `[!type]` marker in its kind's colour. */
+function quoteSpans(text: string, t: Theme): Span[] {
+  const m = /^(\s*(?:>\s*)+)(\[!([\w-]+)\][-+]?)(.*)$/.exec(text)
+  if (!m) return [{ text, fg: t.textMuted, attr: A.ITALIC }]
+  return [
+    { text: m[1]!, fg: t.textMuted, attr: A.ITALIC },
+    { text: m[2]!, fg: t[CALLOUT_KINDS[calloutKind(m[3]!)]!.color], attr: A.BOLD },
+    { text: m[4]!, fg: t.textMuted, attr: A.ITALIC },
+  ]
+}
+
+/** A list item line: its marker in `primary`. */
+function listSpans(text: string, t: Theme): Span[] {
+  const m = /^(\s*(?:[-*+]|\d+\.))(.*)$/.exec(text)
+  if (!m) return [{ text, fg: t.text }]
+  return [
+    { text: m[1]!, fg: t.primary },
+    { text: m[2]!, fg: t.text },
+  ]
+}
+
+/** Source line `i` as spans: front matter, comments, fences and code first, then headings (`setext` while inside one), quotes, lists and tables. */
+function sourceSpans(c: SourceStyle, i: number, text: string, h: SourceHeading | undefined, setext: SourceHeading | null): Span[] {
+  const { t } = c
+  if (i < c.fmLines) return [{ text, fg: t.textMuted }]
+  if (c.hidden[i]) return [{ text, fg: t.textMuted, attr: A.ITALIC }]
+  if (c.fenceLines.has(i)) return [{ text, fg: t.textMuted }]
+  if (c.codeLines.has(i)) return [{ text, fg: t.accent }]
+  if (setext) return [{ text, fg: headingColor(t, setext.depth), attr: A.BOLD }]
+  if (h) return headingSpans(text, h.depth, t)
+  if (/^\s*>/.test(text)) return quoteSpans(text, t)
+  if (/^\s*([-*+]|\d+\.)\s/.test(text)) return listSpans(text, t)
+  return [{ text, fg: /^\s*\|/.test(text) ? t.info : t.text }]
+}
+
+/** Whether Source line `i` is prose, whose wikilinks get tinted (not front matter, comments, fences, code or a heading). */
+const isProse = (c: SourceStyle, i: number, h: SourceHeading | undefined, setext: SourceHeading | null) =>
+  i >= c.fmLines && !c.hidden[i] && !c.fenceLines.has(i) && !c.codeLines.has(i) && !h && !setext
+
 /** Raw Markdown with a line-number gutter and light syntax coloring. */
 export function renderSource(src: string, max: number, t: Theme, opts: RenderOpts = {}): Rendered {
   src = normalize(src)
@@ -323,51 +403,19 @@ export function renderSource(src: string, max: number, t: Theme, opts: RenderOpt
   const raw = orig.map((l) => l.replace(/\t/g, "    ").replace(/^ +/, (m) => "\u00a0".repeat(m.length)))
   const { kept, hidden } = scanComments(orig, fmLines)
   const { headings: found, fenceLines, codeLines } = sourceStructure(kept, fmLines, t, hidden)
+  const style: SourceStyle = { t, fmLines, hidden, fenceLines, codeLines }
   const gw = String(raw.length).length
   const lines: Line[] = []
   const headings: Heading[] = []
   const srcRow: number[] = []
-  const hcolor = (d: number) => [t.primary, t.secondary, t.accent][d - 1] ?? t.text
   let setext: SourceHeading | null = null
   raw.forEach((text, i) => {
     srcRow.push(lines.length)
-    let spans: Span[]
     const h = found.get(i)
     if (h?.setext) setext = h
     else if (setext && i > setext.end) setext = null
-    if (i < fmLines) spans = [{ text, fg: t.textMuted }]
-    else if (hidden[i]) spans = [{ text, fg: t.textMuted, attr: A.ITALIC }]
-    else if (fenceLines.has(i)) spans = [{ text, fg: t.textMuted }]
-    else if (codeLines.has(i)) spans = [{ text, fg: t.accent }]
-    else if (setext) spans = [{ text, fg: hcolor(setext.depth), attr: A.BOLD }]
-    else if (h) {
-      const m = /^([^#]*#{1,6})(.*)$/.exec(text)
-      spans = m
-        ? [
-            { text: m[1]!, fg: t.textMuted, attr: A.BOLD },
-            { text: m[2]!, fg: hcolor(h.depth), attr: A.BOLD },
-          ]
-        : [{ text, fg: hcolor(h.depth), attr: A.BOLD }]
-    } else if (/^\s*>/.test(text)) {
-      const m = /^(\s*(?:>\s*)+)(\[!([\w-]+)\][-+]?)(.*)$/.exec(text)
-      spans = m
-        ? [
-            { text: m[1]!, fg: t.textMuted, attr: A.ITALIC },
-            { text: m[2]!, fg: t[CALLOUT_KINDS[calloutKind(m[3]!)]!.color], attr: A.BOLD },
-            { text: m[4]!, fg: t.textMuted, attr: A.ITALIC },
-          ]
-        : [{ text, fg: t.textMuted, attr: A.ITALIC }]
-    } else if (/^\s*([-*+]|\d+\.)\s/.test(text)) {
-      const m = /^(\s*(?:[-*+]|\d+\.))(.*)$/.exec(text)
-      spans = m
-        ? [
-            { text: m[1]!, fg: t.primary },
-            { text: m[2]!, fg: t.text },
-          ]
-        : [{ text, fg: t.text }]
-    } else if (/^\s*\|/.test(text)) spans = [{ text, fg: t.info }]
-    else spans = [{ text, fg: t.text }]
-    if (i >= fmLines && !hidden[i] && !fenceLines.has(i) && !codeLines.has(i) && !h && !setext) spans = tintWikilinks(spans, t, opts.exists)
+    let spans = sourceSpans(style, i, text, h, setext)
+    if (isProse(style, i, h, setext)) spans = tintWikilinks(spans, t, opts.exists)
     const idx = h ? headings.push({ depth: h.depth, text: h.text, line: lines.length }) - 1 : -1
     const gutter = { text: String(i + 1).padStart(gw) + "  ", fg: t.textMuted }
     const rows = wrap(spans, max, [gutter], [{ text: pad(gw + 2) }])
