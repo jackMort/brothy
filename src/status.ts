@@ -8,6 +8,9 @@ export { truncate, truncateLeft } from "./text"
 
 // ------------------------------------------------------------- top line
 
+/** Equal as titles: case and surrounding spaces ignored. */
+const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
 /** The note's name: front-matter `title` (quotes, `*`, `_` and backticks stripped), else the file name without extension. */
 export function noteTitle(props: readonly (readonly [string, string | string[]])[], path: string): string {
   const v = props.find(([k]) => k.toLowerCase() === "title")?.[1]
@@ -46,8 +49,7 @@ const locWidth = (l: Location) =>
  * title is cut.
  */
 export function locationParts(dir: string, title: string, trail: string[], room: number): Location {
-  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-  const path = trail.length && same(trail[0]!, title) ? trail.slice(1) : trail.slice()
+  const path = trail.length && sameText(trail[0]!, title) ? trail.slice(1) : trail.slice()
   const l: Location = { folder: dir === "." ? "" : dir, title, ancestors: path.slice(0, -1), section: path.at(-1) ?? "" }
   const segs = l.folder ? l.folder.split("/") : []
   while (locWidth(l) > room && segs.length > 1) {
@@ -148,8 +150,7 @@ export function logoState(o: { gone: boolean; reloadedAt: number | null; now: nu
 
 /** Is the note's own main heading (the first heading equal to `title`) on screen, lines `[top, top + rows)`? */
 export function mainHeadingVisible(hs: readonly { text: string; line: number }[], title: string, top: number, rows: number): boolean {
-  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-  const h = hs.find((x) => same(x.text, title))
+  const h = hs.find((x) => sameText(x.text, title))
   return !!h && h.line >= top && h.line < top + rows
 }
 
