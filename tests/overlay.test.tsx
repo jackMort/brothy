@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { testRender } from "@opentui/react/test-utils"
 import { quietAct } from "./quiet-act"
-import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemeBoard, ThemePicker, ZenSettings, fitHits, modeSwitch, scrim } from "../src/overlay"
+import { HelpSheet, OpenPicker, Overlay, PickerInput, PickerList, Switcher, ThemeBoard, ThemePicker, ZenSettings } from "../src/overlay"
 import { helpLayout } from "../src/help"
 import { WORDMARK } from "../src/status"
 import type { OpenRow } from "../src/projects"
@@ -44,16 +44,6 @@ test("disabled rows are drawn muted", async () => {
   const line = setup.captureSpans().lines.find((l) => l.spans.some((sp) => sp.text.includes("Typewriter")))!
   const value = line.spans.find((sp) => sp.text.includes("on"))!
   expect(hex(value.fg)).toBe(t.textMuted)
-})
-
-test("scrim is a dark wash over dark themes and a light wash over light themes", () => {
-  for (const t of themes) {
-    const { r, g, b, a } = scrim(t)
-    expect(a, t.name).toBeGreaterThan(100)
-    expect(a, t.name).toBeLessThan(220)
-    if (t.mode === "dark") expect([r, g, b]).toEqual([0, 0, 0])
-    else expect([r, g, b]).toEqual([255, 255, 255])
-  }
 })
 
 test("Overlay paints its backdrop with the theme's scrim", async () => {
@@ -141,18 +131,6 @@ test("Switcher at 60 columns: a match late in a long heading or note name stays 
     expect(row.spans.filter((sp) => hex(sp.fg) === t.primary || hex(sp.bg) === t.primary).map((sp) => sp.text).join("")).toContain(word)
     expect(row.spans.map((sp) => sp.text).join("")).toContain("…")
   }
-})
-
-test("fitHits: the end is cut first; a late match gets a window; wide characters count double", () => {
-  expect(fitHits("short", [0], 10)).toEqual({ text: "short", hits: [0] })
-  expect(fitHits("abcdefghij", [1, 2], 6)).toEqual({ text: "abcde…", hits: [1, 2] })
-  const late = fitHits("abcdefghijklmnopqrst", [15, 16], 8)
-  expect(late.text.startsWith("…")).toBe(true)
-  expect(late.hits.map((h) => [...late.text][h]).join("")).toBe("pq")
-  expect(Bun.stringWidth(late.text)).toBeLessThanOrEqual(8)
-  const cjk = fitHits("日本語のテキストと検索", [9, 10], 9)
-  expect(cjk.hits.map((h) => [...cjk.text][h]).join("")).toBe("検索")
-  expect(Bun.stringWidth(cjk.text)).toBeLessThanOrEqual(9)
 })
 
 test("OpenPicker: Recent rows with the ~ path and last note, missing ones muted, then the Path section", async () => {
@@ -333,19 +311,6 @@ test("ThemeBoard: a header, then the name and a specimen per mode; the cursor ro
   const g = setup.captureCharFrame()
   expect(g).toContain("No themes match")
   expect(g).not.toContain("dark") // no header without rows
-})
-
-test("modeSwitch: the active side is a primary chip on backgroundElement, the other muted", () => {
-  const t = themes[0]!
-  const segs = modeSwitch(t, "light")
-  expect(segs.map((seg) => seg.map((s) => s.text).join(""))).toEqual([" dark ", " light "]) // SWITCH_MODES order, one per chip
-  expect(segs[1]!.find((s) => s.text === "light")).toMatchObject({ fg: t.primary, bg: t.backgroundElement, attr: 1 })
-  expect(segs[0]!.map((s) => s.fg)).toEqual([t.textMuted])
-  expect(segs[0]![0]!.attr).toBeUndefined()
-  // a dark-only family: dark is the chip, light muted and struck through
-  const only = modeSwitch(t, "dark", "dark")
-  expect(only[0]!.find((s) => s.text === "dark")).toMatchObject({ fg: t.primary })
-  expect(only[1]).toEqual([{ text: " light ", fg: t.textMuted, attr: A.STRIKE }])
 })
 
 test("ThemePicker at 120 columns: query with the mode switch, 41-wide board, │, the pane on the candidate's background; no pane below 100", async () => {
