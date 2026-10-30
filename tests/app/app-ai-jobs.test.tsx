@@ -15,10 +15,11 @@ test("D from the Files panel starts the request and shows Info", async () => {
   const { s, ai } = await mountAI(d, "e.md", { size: W120 })
   writeFileSync(join(d, "e.md"), EDITED)
   await waitFrame(s, (f) => f.includes("reloaded · ² sections changed"), 4000)
-  expect(await keys(s, "1")).not.toContain("Changed ·")
+  expect(await keys(s, "1")).not.toContain("Changed since")
   const f = await keys(s, "D")
   await waitFor(s, () => ai.calls.length === 1)
-  expect(f).toContain("Changed · explaining…")
+  expect(f).toMatch(/Changed since \d\d:\d\d\s+D cancel/)
+  expect(f).toContain("▍ asking llama3.2")
 })
 
 test("D refused while 3 requests run: AI busy, no request, Info stays closed", async () => {
@@ -37,6 +38,6 @@ test("D refused while 3 requests run: AI busy, no request, Info stays closed", a
   await keys(s, "1")
   const f = await keys(s, "D")
   expect(f).toContain("AI busy · 3 requests running")
-  expect(f).not.toContain("Changed ·")
+  expect(f).not.toContain("Changed since")
   expect(ai.calls.length).toBe(3)
 })

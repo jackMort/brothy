@@ -5,7 +5,7 @@ import { type AskView, askStage, questionOf } from "../../ai/ask"
 import type { Summary } from "../../ai/cache"
 import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
-import { type Change, hhmm } from "../../ai/delta"
+import type { Change } from "../../ai/delta"
 import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
 import { plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
@@ -19,7 +19,7 @@ import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../.
 import { ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
 import { relocate, remapTop } from "../../ui/nav"
-import type { ChangeView, SummaryView } from "../../ui/panel"
+import type { ChangeState, ChangeView, SummaryView } from "../../ui/panel"
 import { noteTitle } from "../../ui/status"
 import { pageSlice, sectionAt, typewriterTop } from "../../ui/zen"
 import type { DeriveRefs, Memo, ScrollEntry } from "../derive"
@@ -90,50 +90,70 @@ function cachedSummary(s: UI, path: string, saved: Summary | undefined, hash: st
   return memo.summary(saved.summary, stale ? "outdated" : "fresh", model, 0, stale, "", error, s.tldrOpen)
 }
 
-/** The Changed block in Info, null while there is nothing to list or explain. */
+/**
+ * The Changed block in Info (`SPEC-delta.md` §3), null while there is nothing to list or explain: `D` running, else the
+ * explanation while the note is still the explained text, else the list since the baseline (failed, too large or idle),
+ * the last explanation under it as Earlier.
+ */
 function changeBlock(
   s: UI,
   base: UI["baseline"],
   changes: readonly Change[] | null,
+  after: string,
   memo: Memo,
   jobs: Map<string, Job>,
 ): ChangeView | null {
-  const dl = s.delta && s.delta.path === s.openPath ? s.delta : null
-  // loading, else the reply while nothing changed since the explained text, else the idle list
-  const explained = dl ? explanationBlock(dl, changes, memo, jobs) : null
-  if (explained) return explained
-  if (base && changes?.length) return { state: "idle", label: hhmm(base.at), changes, summary: "", notes: NO_NOTES }
-  return null
+  const dl = s.delta?.path === s.openPath ? s.delta : null
+  const job = dl && jobs.get(jobKey("delta", dl.path))
+  if (dl && job) return runningBlock(s, dl, job, memo)
+  // null: too large to compare, not unchanged
+  if (changes?.length === 0) return resultBlock(s, dl, memo)
+  return base && listBlock(s, base, changes, after, dl, memo)
 }
 
-/** `D`'s part of the Changed block: the reply streaming in, or the finished one while nothing changed since the explained text; else null. */
-function explanationBlock(
-  dl: NonNullable<UI["delta"]>,
+/** The explanation while the note is still the explained text; null without one. */
+function resultBlock(s: UI, dl: UI["delta"], memo: Memo): ChangeView | null {
+  const r = dl?.result
+  return r
+    ? memo.change("result", r.since, r.model, 0, r.changes, r.summary, r.notes, null, s.changesOpen, !!s.ai, null)
+    : null
+}
+
+/** The list since the baseline: idle, failed (while the note is the text it was sent) or too large; Earlier under it. */
+function listBlock(
+  s: UI,
+  base: NonNullable<UI["baseline"]>,
   changes: readonly Change[] | null,
+  after: string,
+  dl: UI["delta"],
   memo: Memo,
-  jobs: Map<string, Job>,
-): ChangeView | null {
-  const dJob = jobs.get(jobKey("delta", dl.path))
-  if (dJob) {
-    const live = memo.partial(dJob.raw, dl.changes)
-    return {
-      state: "loading",
-      label: "",
-      changes: dl.changes,
-      summary: live?.summary ?? "",
-      notes: live?.notes ?? NO_NOTES,
-    }
-  }
-  // null: too large to compare, not unchanged
-  if (dl.result && changes !== null && !changes.length)
-    return {
-      state: "result",
-      label: dl.result.model,
-      changes: dl.changes,
-      summary: dl.result.summary,
-      notes: dl.result.notes,
-    }
-  return null
+): ChangeView {
+  const error = dl?.error && dl.text === after ? dl.error : null
+  let state: ChangeState = error ? "error" : "idle"
+  if (changes === null) state = "large"
+  const earlier = dl && (dl.result ?? dl.earlier)
+  return memo.change(state, base.at, "", 0, changes, "", NO_NOTES, error, s.changesOpen, !!s.ai, earlier)
+}
+
+/** `D` running: waiting, then the reply streaming in over the changes it was sent; the explanation before it under Earlier. */
+function runningBlock(s: UI, dl: NonNullable<UI["delta"]>, job: Job, memo: Memo): ChangeView {
+  const live = memo.partial(job.raw, dl.changes)
+  const secs = waitSecs(Date.now(), job.at)
+  const [summary, notes] = [live?.summary ?? "", live?.notes ?? NO_NOTES]
+  const model = shortModel(job.model)
+  return memo.change(
+    "loading",
+    dl.since,
+    model,
+    secs,
+    dl.changes,
+    summary,
+    notes,
+    null,
+    s.changesOpen,
+    !!s.ai,
+    dl.earlier,
+  )
 }
 
 /** A live reload's changes: the open note against the text it had when it opened (memory only), and the Changed block. */
@@ -143,7 +163,7 @@ function changeView(s: UI, { file, src, fm }: NoteView, memo: Memo, jobs: Map<st
   const propsKey = memo.propsKey(fm)
   const changes = base ? memo.diff(base.text, after) : NO_CHANGES
   const propsChanged = !!base && propsKey !== base.props
-  const cv = changeBlock(s, base, changes, memo, jobs)
+  const cv = changeBlock(s, base, changes, after, memo, jobs)
   return { changes, propsChanged, after, propsKey, cv }
 }
 
@@ -157,20 +177,7 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
   const title = noteTitle(props, s.openPath ?? "")
   const delta = changeView(s, opened, memo, jobs)
   const { cv } = delta
-  const infoRows = memo.info(
-    props,
-    st,
-    links,
-    L.PNW - 2,
-    file?.info ?? null,
-    sv,
-    cv?.state ?? "",
-    cv?.label ?? "",
-    cv?.changes ?? NO_CHANGES,
-    cv?.summary ?? "",
-    cv?.notes ?? NO_NOTES,
-    title,
-  )
+  const infoRows = memo.info(props, st, links, L.PNW - 2, file?.info ?? null, sv, cv, title)
   const linkRows = memo.linkIdx(infoRows)
   return { props, title, ...delta, sv, infoRows, linkRows }
 }

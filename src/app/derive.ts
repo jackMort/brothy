@@ -14,7 +14,7 @@ import {
 import { textHash } from "../ai/cache"
 import { cleanSummary, noteText } from "../ai/client"
 import { type AIConfig, resolveAI } from "../ai/config"
-import { type Change, type DeltaNote, diffSections, parseDelta } from "../ai/delta"
+import { type Change, type DeltaNote, diffSections, hhmm, parseDelta } from "../ai/delta"
 import { freshGlosses, glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
@@ -39,6 +39,7 @@ import { miniInk } from "../ui/minimap"
 import { cached, findLines, matchIndex } from "../ui/nav"
 import {
   type ChangeState,
+  type ChangeView,
   extractLinks,
   type FileMeta,
   fmtSize,
@@ -65,7 +66,7 @@ import {
   switcherList,
   truncationNote,
 } from "./derive/steps"
-import type { FileRow, Job, UI } from "./store"
+import type { Explained, FileRow, Job, UI } from "./store"
 
 /** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
 function documentMemo(stdin: string | undefined) {
@@ -125,30 +126,16 @@ function panelMemo() {
         w: number,
         f: FileMeta | null,
         sv: SummaryView | null,
-        cState: ChangeState | "",
-        cLabel: string,
-        cChanges: readonly Change[],
-        cSummary: string,
-        cNotes: readonly (DeltaNote | undefined)[],
+        cv: ChangeView | null,
         title: string,
-      ) =>
-        infoItems(
-          p,
-          st,
-          l,
-          w,
-          f,
-          undefined,
-          sv ?? undefined,
-          cState
-            ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title }
-            : undefined,
-        ),
+      ) => infoItems(p, st, l, w, f, undefined, sv ?? undefined, cv ? { view: cv, title } : undefined),
     ),
-    // Info cursor stops: the TL;DR's rule when it overflows, links and change rows (removed sections are not stops)
+    // Info cursor stops: the TL;DR's rule when it overflows, links, change rows (removed sections are not) and `+ n more`
     linkIdx: cached((items: InfoItem[]) =>
       items.flatMap((it, i) =>
-        it.kind === "link" || ((it.kind === "change" || it.kind === "frule") && it.stop) ? [i] : [],
+        it.kind === "link" || it.kind === "cmore" || ((it.kind === "change" || it.kind === "frule") && it.stop)
+          ? [i]
+          : [],
       ),
     ),
     rows: cached(visibleRows),
@@ -159,6 +146,34 @@ function panelMemo() {
     }),
     diff: cached(diffSections),
     partial: cached((raw: string, changes: Change[]) => parseDelta(raw, changes, true)),
+    // one object per state of the Changed block, so the Info memo holds while nothing changes
+    change: cached(
+      (
+        state: ChangeState,
+        since: number,
+        model: string,
+        secs: number,
+        changes: readonly Change[] | null,
+        summary: string,
+        notes: readonly (DeltaNote | undefined)[],
+        error: string | null,
+        open: boolean,
+        ai: boolean,
+        e: Explained | null,
+      ): ChangeView => ({
+        state,
+        since: hhmm(since),
+        model,
+        secs,
+        changes,
+        summary,
+        notes,
+        error,
+        open,
+        ai,
+        earlier: e && { since: hhmm(e.since), model: e.model, summary: e.summary, notes: e.notes, changes: e.changes },
+      }),
+    ),
   }
 }
 

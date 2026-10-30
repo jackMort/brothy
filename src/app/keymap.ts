@@ -64,7 +64,7 @@ export interface FooterState {
   disk: boolean
   /** an `ai` block is configured: AI is off until then */
   ai: boolean
-  /** an `ai` block and changes still to explain */
+  /** the Changed block gives `D` something to do: explain, cancel or retry */
   changes: boolean
   /** an `ai` block and no fresh TL;DR for the open note: the document footer offers `a` */
   tldr: boolean
@@ -136,9 +136,8 @@ const KEYMAP = {
     keys: ["S-d"],
     label: "D",
     desc: "explain what changed on disk",
-    hint: "changes",
+    hint: "explain",
     group: "AI",
-    spare: true,
     when: "changes",
   },
   edit: {

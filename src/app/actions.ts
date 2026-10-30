@@ -18,6 +18,7 @@ import { type EditResult, editorCommand, runEditor, sourceLineAt } from "../syst
 import { MEASURE } from "../ui/layout"
 import { MINI_MIN_W } from "../ui/minimap"
 import { findQuote, stepMatch } from "../ui/nav"
+import type { InfoItem } from "../ui/panel"
 import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
@@ -25,7 +26,7 @@ import { makeOnKey } from "./dispatch"
 import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { Popups } from "./popups"
-import type { Focus } from "./store"
+import type { Focus, UI } from "./store"
 import type { SwitcherControl } from "./switcher"
 import {
   makeDocActions,
@@ -57,7 +58,7 @@ export type Actions = Record<KeyId, (k: KeyEvent) => void>
 /** The actions over the app context; App registers `onKey` and draws with the rest. */
 export function makeActions(c: AppCtx, f: Features) {
   const keys = makeKeyContext(c, f.links)
-  const moves = makeMoves(c)
+  const moves = makeMoves(c, f.links)
   const actions: Actions = {
     ...makeToggleActions(c, f, keys),
     ...makeGlobalActions(c, f, keys),
@@ -65,15 +66,20 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makeDocActions(c, f.links, moves),
     ...makeZenActions(c, f, moves),
     ...makeOutlineActions(c, moves),
-    ...makeInfoActions(c, f.links, moves),
+    ...makeInfoActions(c, moves),
     ...makeFilesActions(c),
     ...makeFilterActions(c, f.popups, moves),
     ...makePopupActions(c, f),
     ...makeSwitcherActions(c, f),
   }
   const { currentCtx, pokeHints } = keys
-  const { outlineGo, jumpChange } = moves
-  return { currentCtx, pokeHints, outlineGo, jumpChange, onKey: makeOnKey(c, f, actions, keys.docMode) }
+  return {
+    currentCtx,
+    pokeHints,
+    outlineGo: moves.outlineGo,
+    infoGo: moves.infoGo,
+    onKey: makeOnKey(c, f, actions, keys.docMode),
+  }
 }
 
 /** The context the keys and hints go by, and the key hints' fade. */
@@ -119,8 +125,8 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
 }
 type KeyContext = ReturnType<typeof makeKeyContext>
 
-/** Moves within the note: to a find match, a heading, an Outline heading, a Changed row. */
-function makeMoves(c: AppCtx) {
+/** Moves within the note and Info: to a find match, a heading, an Outline heading, a Changed row; Info's stops. */
+function makeMoves(c: AppCtx, { openLink }: Pick<Links, "openLink">) {
   const { set, derive, flash, setTop, focusDoc, showMatch } = c
 
   const jumpMatch = (dir: 1 | -1) => {
@@ -156,7 +162,7 @@ function makeMoves(c: AppCtx) {
   /** Scroll to change `at` of the Changed block: the reply's quote when it is in that section, else its heading. */
   const jumpChange = (at: number) => {
     const { cv, view, s } = derive()
-    const c = cv?.changes[at]
+    const c = cv?.changes?.[at]
     if (!c || c.status === "removed") return
     const { from, to } = changeRows(view, c)
     const quote = cv?.notes[at]?.quote
@@ -165,7 +171,27 @@ function makeMoves(c: AppCtx) {
     focusDoc()
   }
 
-  return { jumpMatch, jumpHeading, outlineGo, jumpChange }
+  /** `+ n more`: list every change, or fold back to MAX_CHANGE_ROWS; Info's cursor stays on the row. */
+  const toggleChanges = () => {
+    set({ changesOpen: !derive().s.changesOpen })
+    const { linkRows, infoRows } = derive()
+    set({
+      infoCur: Math.max(
+        0,
+        linkRows.findIndex((i) => infoRows[i]?.kind === "cmore"),
+      ),
+    })
+  }
+
+  /** `⏎` or a click on an Info stop: follow the link, go to the change, open or fold `+ n more` or a long TL;DR. */
+  const infoGo = (it: InfoItem) => {
+    if (it.kind === "link") openLink(it)
+    else if (it.kind === "change") jumpChange(it.at)
+    else if (it.kind === "cmore") toggleChanges()
+    else if (it.kind === "frule") set({ tldrOpen: !derive().s.tldrOpen })
+  }
+
+  return { jumpMatch, jumpHeading, outlineGo, jumpChange, infoGo }
 }
 export type Moves = ReturnType<typeof makeMoves>
 
@@ -239,25 +265,15 @@ function makeGlobalActions(
     theme: popups.openTheme,
     reload: () => {
       const s = ui.current
-      const piped = s.piped
-      const tree = piped ? s.tree : scanTree(s.root)
-      // folders that are gone are forgotten; the open note's path stays open
-      const folders = folderCounts(tree)
-      const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
-      if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
-      let linkTree = tree
-      if (piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
-      else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
       const ai = loadConfig().ai ?? null
       set({
-        tree,
-        linkTree,
-        expanded,
+        ...rescan(s),
         reload: s.reload + 1,
         watchGen: s.watchGen + 1,
         ai,
         summaryErr: {},
         lastAsk: null,
+        delta: s.delta && { ...s.delta, error: null },
       })
       if (ui.current.zen) aiJobs.ensureGlosses()
       switcher.dropIndex()
@@ -290,6 +306,19 @@ function makeGlobalActions(
       process.exit(0)
     },
   } satisfies Partial<Actions>
+}
+
+/** `r`'s new trees: Files (a piped session keeps its own), the link tree, and the open folders that are still there. */
+function rescan(s: UI) {
+  const tree = s.piped ? s.tree : scanTree(s.root)
+  // folders that are gone are forgotten; the open note's path stays open
+  const folders = folderCounts(tree)
+  const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
+  if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
+  let linkTree = tree
+  if (s.piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
+  else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
+  return { tree, linkTree, expanded }
 }
 
 /** `e`: the note in $EDITOR at the top line, the renderer suspended meanwhile. */

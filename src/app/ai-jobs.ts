@@ -373,38 +373,51 @@ function makeSummary(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJo
 
 /** `D`: send the changed hunks of a note and keep the reply. */
 function makeDeltaStart(c: AppCtx, { failText, startJob }: Jobs) {
-  const { ui, set, bump, derive, flash } = c
+  const { ui, set, bump, flash } = c
 
-  /** Send the changed hunks of `path`; on success the baseline moves to the sent text, so later edits list anew. */
-  const startDelta = (
-    path: string,
-    changes: Change[],
-    text: string,
-    props: string,
-    title: string,
-    target: AITarget,
-    model: string,
-  ) => {
-    startJob("delta", path, target, deltaRequest(title, changes, target.maxChars), {
+  /**
+   * Send the changed hunks of `path` (listed since `since`); the explanation before it moves to Earlier. On success the
+   * baseline moves to the sent text, so later edits list anew; a failure stays in the block while the note is the sent
+   * text, the baseline where it was.
+   */
+  const startDelta = (o: {
+    path: string
+    changes: Change[]
+    text: string
+    props: string
+    since: number
+    title: string
+    target: AITarget
+  }) => {
+    const { path, changes, text, props, since, target } = o
+    startJob("delta", path, target, deltaRequest(o.title, changes, target.maxChars), {
       stream: true,
-      begin: () => set({ delta: { path, changes, text, props, result: null } }),
+      begin: () => {
+        const prev = ui.current.delta?.path === path ? ui.current.delta : null
+        const earlier = prev?.result ?? prev?.earlier ?? null
+        set({ delta: { path, changes, text, props, since, result: null, error: null, earlier } })
+      },
       done: (r, job) => {
         const s = ui.current
-        if (s.delta?.path !== path) return bump((x) => x + 1)
+        const dl = s.delta
+        if (dl?.path !== path) return bump((x) => x + 1)
         const out = deltaOutcome(r, job.raw, changes)
-        if (!out) return set({ delta: null })
+        if (!out) return set({ delta: dl.earlier ? dl : null })
         if ("failure" in out) {
-          set({ delta: null })
+          const error = aiMessage(out.failure, {
+            host: target.host,
+            keyEnv: target.keyEnv,
+            key: target.key,
+            noun: "explanation",
+          })
+          set({ delta: { ...dl, error } })
           return flash(failText(target, out.failure, "explanation"), "error")
         }
-        const { parsed } = out
-        // edits made during the request now differ from the moved baseline and list as a new idle
-        // change set; the reply is kept only when it still describes the note as it is
+        // edits made during the request now differ from the moved baseline and list as a new idle change set, the
+        // reply under Earlier
         const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
-        set({
-          baseline,
-          delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null,
-        })
+        const result = { ...out.parsed, model: shortModel(job.model), since, changes }
+        set({ baseline, delta: { ...dl, result } })
       },
     })
   }
@@ -422,7 +435,16 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
   const dropDelta = () => {
     const s = ui.current
     if (s.delta) cancelJob(jobKey("delta", s.delta.path))
-    if (s.baseline || s.delta) set({ baseline: null, delta: null })
+    if (s.baseline || s.delta || s.changesOpen) set({ baseline: null, delta: null, changesOpen: false })
+  }
+
+  /** A `D` running for `path` cancelled (back to the list, Earlier kept); false when none runs. */
+  const cancelDelta = (path: string | null) => {
+    if (!path || !cancelJob(jobKey("delta", path))) return false
+    const dl = ui.current.delta
+    set({ delta: dl?.earlier ? dl : null })
+    flash("explanation cancelled")
+    return true
   }
 
   /** `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. */
@@ -431,10 +453,7 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
     const d = derive()
     const path = d.s.openPath
     // cancel first: a request stays cancellable after its `ai` block goes or the note is reverted
-    if (path && cancelJob(jobKey("delta", path))) {
-      set({ delta: null })
-      return flash("explanation cancelled")
-    }
+    if (cancelDelta(path)) return
     if (!ai) return flash(AI_OFF)
     if (d.changes === null) return flash("too large to compare")
     const base = d.s.baseline?.path === path ? d.s.baseline : null
@@ -442,7 +461,7 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
     const target = aiGate(ai)
     if (!target) return
     focusPanel("info")
-    startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
+    startDelta({ path, changes: d.changes, text: d.after, props: d.propsKey, since: base.at, title: d.title, target })
   }
 
   return { dropDelta, explainChange }

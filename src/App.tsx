@@ -34,7 +34,7 @@ import { surface } from "./theme/theme"
 import { INK_STEPS } from "./ui/chrome"
 import { DRAWER_BELOW } from "./ui/layout"
 import { usePointer } from "./ui/overlay"
-import { tldrHead, tldrWord } from "./ui/panel"
+import { changeKey, type InfoItem, tldrHead, tldrWord } from "./ui/panel"
 import { fadeStep, GHOST_STEPS, tooSmall } from "./ui/status"
 import { STILL_TICK } from "./ui/welcome"
 
@@ -101,7 +101,7 @@ export function App({
   const switcher = makeSwitcher(ctx, links)
   const workspace = makeWorkspace(ctx, switcher, aiJobs)
   const popups = makePopups(ctx)
-  const { currentCtx, pokeHints, outlineGo, jumpChange, onKey } = makeActions(ctx, {
+  const { currentCtx, pokeHints, outlineGo, infoGo, onKey } = makeActions(ctx, {
     aiJobs,
     links,
     zen,
@@ -122,7 +122,7 @@ export function App({
 
   // the panel and the document write the list tops and the welcome row back to the store as they draw: always built,
   // even when zen or a too-small terminal leaves them off screen
-  const panelEl = panelBox(ctx, d, { outlineGo, jumpChange, openLink: links.openLink })
+  const panelEl = panelBox(ctx, d, { outlineGo, infoGo })
   const docEl = docBox(ctx, d, { ...workspace, ...zen })
   const miniEl = miniBox(ctx, d)
   const progressEl = progressLine(ctx, d)
@@ -221,18 +221,32 @@ function footerState({ s, cv, sv }: Derived): FooterState {
     preview: !s.source,
     disk: s.openPath !== STDIN,
     ai: !!s.ai,
-    changes: !!s.ai && !!cv && cv.state !== "result",
+    changes: !!changeKey(cv),
     tldr: !!sv && tldrHead(sv) !== "fresh",
   }
 }
 
-/** The footer words that follow the TL;DR: what `a` does now, and `↑↓ move  ⏎ more|less` on its stop in Info. */
-function footerWords({ sv, infoRows, linkRows, infoCur }: Derived): Partial<Record<KeyId, string>> {
-  if (!sv) return {}
-  const word = tldrWord(sv)
-  const words: Partial<Record<KeyId, string>> = { summarize: word, summarizeHint: word }
-  if (infoRows[linkRows[infoCur] ?? -1]?.kind !== "frule") return words
-  return { ...words, infoMove: "move", infoOpen: sv.open ? "less" : "more" }
+/** The footer words that follow the state: what `a` does now (the TL;DR) and `D` (the Changed block), then Info's cursor row. */
+function footerWords(d: Derived): Partial<Record<KeyId, string>> {
+  const words: Partial<Record<KeyId, string>> = {}
+  if (d.sv) words.summarize = words.summarizeHint = tldrWord(d.sv)
+  const dWord = changeKey(d.cv)?.word
+  if (dWord) words.explainChange = dWord
+  return { ...words, ...stopWords(d.infoRows[d.linkRows[d.infoCur] ?? -1], d.s.tldrOpen) }
+}
+
+/** On Info's cursor row: `↑↓ move  ⏎ more|less` (the TL;DR's stop), `↑↓ changes  ⏎ go to` (a change), `⏎ all|fewer` (`+ n more`). */
+function stopWords(at: InfoItem | undefined, tldrOpen: boolean): Partial<Record<KeyId, string>> {
+  switch (at?.kind) {
+    case "frule":
+      return { infoMove: "move", infoOpen: tldrOpen ? "less" : "more" }
+    case "change":
+      return { infoMove: "changes", infoOpen: "go to" }
+    case "cmore":
+      return { infoMove: "changes", infoOpen: at.open ? "fewer" : "all" }
+    default:
+      return {}
+  }
 }
 
 /** The parts both screens draw, built every render. */

@@ -46,13 +46,28 @@ export type FileRow = TreeRow & { hits?: number[] }
 export type Spot = { key: string; top: number; geo: Geometry }
 /** The open note's body (`noteText`) and properties when it was opened or last explained; memory only. */
 type Baseline = { path: string; text: string; props: string; at: number }
-/** `D` for `path`: the changes sent, the text and properties they lead to, and the reply once it is in. */
+/** A finished explanation: the reply, the model's display name, the baseline time its changes were listed since, and them. */
+export type Explained = {
+  summary: string
+  notes: (DeltaNote | undefined)[]
+  model: string
+  since: number
+  changes: Change[]
+}
+/**
+ * `D` for `path`: the changes sent, the text and properties they lead to, the baseline time they were listed since; the
+ * reply once it is in (shown while the note is that text, under Earlier after), the failure while the note is still
+ * the sent text, and the explanation before this one (Earlier).
+ */
 type DeltaState = {
   path: string
   changes: Change[]
   text: string
   props: string
-  result: { summary: string; notes: (DeltaNote | undefined)[]; model: string } | null
+  since: number
+  result: Explained | null
+  error: string | null
+  earlier: Explained | null
 }
 /** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
 export type JobKind = "tldr" | "gloss" | "delta" | "ask"
@@ -201,6 +216,8 @@ export interface UI {
   baseline: Baseline | null
   /** the explanation running or shown for `baseline.path` */
   delta: DeltaState | null
+  /** the Changed block lists every change, past MAX_CHANGE_ROWS */
+  changesOpen: boolean
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
@@ -285,5 +302,6 @@ export function initUI(
     gloss: null,
     baseline: null,
     delta: null,
+    changesOpen: false,
   }
 }

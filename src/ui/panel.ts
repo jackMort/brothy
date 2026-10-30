@@ -1,9 +1,9 @@
 // Panel views (Files, Outline, Info): pure row data and the spans each row is drawn with; Files rows come from files.ts.
 
 import { dirname, resolve, sep } from "node:path"
-import type { Change, DeltaNote } from "../ai/delta"
+import { type Change, changeCounts, type DeltaNote } from "../ai/delta"
 import { A, type Span, safeLine } from "../lib/spans"
-import { plural, spanWidth, truncate, truncateLeft, width, wrap } from "../lib/text"
+import { plural, spanWidth, superscript, truncate, truncateLeft, width, wrap } from "../lib/text"
 import type { Property } from "../markdown/frontmatter"
 import type { LinkTarget } from "../markdown/render"
 import { headingKey } from "../markdown/sections"
@@ -97,11 +97,22 @@ export type InfoItem =
   | { kind: "more"; n: number }
   | { kind: "stat"; text: string }
   | { kind: "blank" }
-  | { kind: "foot"; mark: string | null; markStale: boolean; text: string; tone: FootTone }
+  | { kind: "foot"; mark: string | null; markStale: boolean; text: string; tone: FootTone; hang?: number }
   | { kind: "frule"; tail: Tail | null; stop: boolean }
-  | { kind: "summary"; text: string; muted: boolean }
-  | { kind: "changes"; status: string }
-  | { kind: "change"; mark: "~" | "+" | "−"; text: string; counts: string; at: number; stop: boolean }
+  | { kind: "changes"; since: string; model: string | null; right: Tail | null }
+  | {
+      kind: "change"
+      n: number
+      text: string
+      counts: string
+      at: number
+      stop: boolean
+      removed: boolean
+      tone: ChangeTone
+    }
+  | { kind: "wait"; model: string; secs: number }
+  | { kind: "earlier"; since: string; model: string }
+  | { kind: "cmore"; n: number; open: boolean }
 
 export interface LinkRef {
   target: string
@@ -165,8 +176,8 @@ const ERROR_ROWS = 3
 const CANCEL_TAIL_W = 44
 /** `* `: the mark and its space; continuation rows hang by the same. */
 const HANG = 2
-/** How a `foot` row is drawn: the text role, dimmed (outdated, regenerating), an error, the caret, the `a` hint. */
-type FootTone = "text" | "stale" | "error" | "caret" | "hint"
+/** How a `foot` row is drawn: the text role, muted (a change's note), dimmed (outdated, regenerating, Earlier), an error, the caret, the `a` hint. */
+type FootTone = "text" | "muted" | "stale" | "error" | "caret" | "hint"
 export type SummaryState = "none" | "waiting" | "streaming" | "fresh" | "outdated"
 /** What the Info tab shows for the note's TL;DR. */
 export interface SummaryView {
@@ -187,9 +198,22 @@ export interface SummaryView {
   open: boolean
 }
 
-/** `rows` as `foot` items: the first behind the mark, the rest hung under it. */
-const footRows = (rows: string[], tone: FootTone, markStale: boolean, mark: string | null = "*"): InfoItem[] =>
-  rows.map((text, i) => ({ kind: "foot", mark: i ? null : mark, markStale, text, tone }))
+/** `rows` as `foot` items: the first behind the mark, the rest hung under it (`hang` columns without a mark). */
+const footRows = (
+  rows: string[],
+  tone: FootTone,
+  markStale: boolean,
+  mark: string | null = "*",
+  hang = HANG,
+): InfoItem[] =>
+  rows.map((text, i) => ({
+    kind: "foot",
+    mark: i ? null : mark,
+    markStale,
+    text,
+    tone,
+    ...(hang === HANG ? {} : { hang }),
+  }))
 
 /** The rule's tail per state: waiting, streaming, the signature (`⏎ more` on overflow), outdated, error. */
 function tldrTail(sv: SummaryView, cols: number, overflow: boolean): Tail | null {
@@ -261,56 +285,157 @@ export function tldrWord(sv: SummaryView): string {
   return sv.state === "outdated" ? "refresh" : "summarize"
 }
 
-/** `text` wrapped to `cols`, at most `max` rows; the last is cut with `…` when text is left over. */
-function clippedRows(text: string, cols: number, max: number): string[] {
-  const rows = wrap([{ text: safeLine(text) }], cols).map((r) => r.map((s) => s.text).join(""))
-  const shown = rows.slice(0, max)
-  if (rows.length > max) shown[max - 1] = truncate(shown[max - 1]! + "…", cols)
-  return shown
-}
-
-/** Change rows shown at most; the rest are counted in a `+ n more sections` row. */
+/** Change rows listed at most; past them a `+ n more sections` stop opens the rest, up to MAX_CHANGE_ROWS_OPEN. */
 export const MAX_CHANGE_ROWS = 8
-/** Summary rows under the `Changed` label; the last is cut with `…`. */
-const CHANGE_SUMMARY_ROWS = 3
-export type ChangeState = "idle" | "loading" | "result"
-/** What Info shows for a live reload: `label` is the baseline's HH:MM (idle) or the model's display name (result). */
-export interface ChangeView {
-  state: ChangeState
-  label: string
-  changes: readonly Change[]
+export const MAX_CHANGE_ROWS_OPEN = 60
+/** Rows of the explanation's summary and of each change's note (Earlier keeps fewer of each). */
+const CHANGE_SUMMARY_ROWS = 5
+const CHANGE_NOTE_ROWS = 2
+const EARLIER_SUMMARY_ROWS = 2
+const EARLIER_NOTE_ROWS = 1
+/** Rows the error and the too-large notice take at most. */
+const CHANGE_MSG_ROWS = 2
+const LARGE = "too many lines changed to compare; nothing to explain"
+export type ChangeState = "idle" | "loading" | "result" | "error" | "large"
+/** A finished explanation: since when its changes were listed (HH:MM), the model's display name, the reply and its changes. */
+interface EarlierView {
+  since: string
+  model: string
   summary: string
   notes: readonly (DeltaNote | undefined)[]
+  changes: readonly Change[]
 }
-const MARK = { edited: "~", added: "+", removed: "−" } as const
+/** What Info shows for a live reload (`SPEC-delta.md` §3). */
+export interface ChangeView {
+  state: ChangeState
+  /** the baseline's HH:MM (the explained list's, once explained) */
+  since: string
+  /** the display name: the running job's, or the explanation's */
+  model: string
+  /** loading: whole seconds since the request went out */
+  secs: number
+  /** null: too large to compare */
+  changes: readonly Change[] | null
+  summary: string
+  notes: readonly (DeltaNote | undefined)[]
+  /** the last request failed, with this message */
+  error: string | null
+  /** every change listed, past MAX_CHANGE_ROWS */
+  open: boolean
+  /** an `ai` block is set: the label offers `D` */
+  ai: boolean
+  /** the last explanation, kept dimmed once the note changed again */
+  earlier: EarlierView | null
+}
+/** How a change row is drawn: listed, explained (its number muted), or under Earlier (all dimmed, not a stop). */
+type ChangeTone = "fresh" | "explained" | "earlier"
 
-/** `+a −r`, one side omitted when zero. */
-const changeCounts = (c: Pick<Change, "plus" | "minus">) =>
-  [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
+/** `D` at the label's right end and in the footer: what it does now; nothing with AI off, once explained or too large. */
+export function changeKey(cv: ChangeView | null): Tail | null {
+  if (!cv) return null
+  if (cv.state === "loading") return { key: "D", word: "cancel" }
+  if (!cv.ai) return null
+  if (cv.state === "idle") return { key: "D", word: "explain" }
+  return cv.state === "error" ? { key: "D", word: "retry" } : null
+}
 
-/** The `Changed` block (spec: Strings): label, summary, then a row per change with its model line under it. */
-export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
-  const label = "Changed"
-  let status: string
-  if (cv.state === "loading") status = " · explaining…"
-  else if (cv.state === "result") status = truncate(" · " + cv.label, cols - width(label))
-  else status = ` · since ${cv.label}`
-  const out: InfoItem[] = [{ kind: "changes", status }]
-  if (cv.state !== "idle" && cv.summary) {
-    for (const text of clippedRows(cv.summary, cols, CHANGE_SUMMARY_ROWS))
-      out.push({ kind: "summary", text, muted: true })
-  }
-  cv.changes.slice(0, MAX_CHANGE_ROWS).forEach((c, at) => {
-    const counts = changeCounts(c)
-    const room = Math.max(1, cols - 2 - (counts ? width(counts) + 1 : 0))
-    const name = truncate(safeLine(c.index < 0 || !c.path.length ? title : c.path.at(-1)!), room)
-    const text = name + " ".repeat(Math.max(0, room - width(name)) + (counts ? 1 : 0))
-    out.push({ kind: "change", mark: MARK[c.status], text, counts, at, stop: c.status !== "removed" })
-    const what = cv.state === "idle" ? undefined : cv.notes[at]?.what
-    if (what) out.push({ kind: "summary", text: truncate("    " + safeLine(what), cols), muted: true })
+/** One change's row: its number, the section's name (the note's title for the lead-in), `+a −r` or `new`. */
+function changeRow(c: Change, at: number, n: number, title: string, cols: number, tone: ChangeTone): InfoItem {
+  const counts = c.status === "added" ? "new" : changeCounts(c)
+  const room = Math.max(1, cols - width(superscript(n)) - 1 - (counts ? width(counts) + 1 : 0))
+  const text = truncate(safeLine(c.index < 0 || !c.path.length ? title : c.path.at(-1)!), room)
+  const removed = c.status === "removed"
+  return { kind: "change", n, text, counts, at, stop: tone !== "earlier" && !removed, removed, tone }
+}
+
+/** Rows per change, the first `max`: its row, then its note hung under the name (`noteMax` rows; 0: none). */
+function changeList(
+  changes: readonly Change[],
+  notes: readonly (DeltaNote | undefined)[],
+  o: { title: string; cols: number; tone: ChangeTone; first: number; max: number; noteMax: number },
+): InfoItem[] {
+  return changes.slice(0, o.max).flatMap((c, at) => {
+    const n = o.first + at
+    const hang = width(superscript(n)) + 1
+    const what = o.noteMax ? notes[at]?.what : undefined
+    const rows = what ? noteRows(what, o.cols - hang, null, o.noteMax, { cut: "…" }) : []
+    return [
+      changeRow(c, at, n, o.title, o.cols, o.tone),
+      ...footRows(rows, o.tone === "earlier" ? "stale" : "muted", false, null, hang),
+    ]
   })
-  if (cv.changes.length > MAX_CHANGE_ROWS)
-    out.push({ kind: "stat", text: `+ ${cv.changes.length - MAX_CHANGE_ROWS} more sections` })
+}
+
+/** Under the label: the waiting row, the summary streaming or done, or the error. */
+function explanationRows(cv: ChangeView, cols: number): InfoItem[] {
+  if (cv.state === "error" && cv.error) {
+    const rows = noteRows(cv.error, cols - 2, null, CHANGE_MSG_ROWS, { cut: "…" })
+    return footRows(
+      rows.map((r, i) => (i ? "  " : "✗ ") + r),
+      "error",
+      false,
+      null,
+      0,
+    )
+  }
+  if (cv.state !== "loading" && cv.state !== "result") return []
+  if (cv.state === "loading" && !cv.summary && !cv.notes.some(Boolean))
+    return [{ kind: "wait", model: cv.model, secs: cv.secs }]
+  const text = cv.state === "loading" ? cv.summary + CARET : cv.summary
+  return footRows(noteRows(text, cols, null, CHANGE_SUMMARY_ROWS, { cut: "…" }), "text", false, null, 0)
+}
+
+/** The last explanation under the current rows, dimmed: its label, summary, and rows numbered on from `first`. */
+function earlierItems(e: EarlierView, first: number, title: string, cols: number): InfoItem[] {
+  return [
+    { kind: "earlier", since: e.since, model: e.model },
+    ...footRows(noteRows(e.summary, cols, null, EARLIER_SUMMARY_ROWS, { cut: "…" }), "stale", false, null, 0),
+    ...changeList(e.changes, e.notes, {
+      title,
+      cols,
+      tone: "earlier",
+      first,
+      max: MAX_CHANGE_ROWS,
+      noteMax: EARLIER_NOTE_ROWS,
+    }),
+  ]
+}
+
+/** Too large to compare: why, in place of the rows. */
+const largeRows = (cols: number) => footRows(noteRows(LARGE, cols, null, CHANGE_MSG_ROWS), "muted", false, null, 0)
+
+/** The current list: the explanation's rows, a row per change (notes once explained), `+ n more` past MAX_CHANGE_ROWS. */
+function currentRows(cv: ChangeView, changes: readonly Change[], title: string, cols: number): InfoItem[] {
+  const explained = cv.state === "loading" || cv.state === "result"
+  const out = [
+    ...explanationRows(cv, cols),
+    ...changeList(changes, cv.notes, {
+      title,
+      cols,
+      tone: cv.state === "result" ? "explained" : "fresh",
+      first: 1,
+      max: cv.open ? MAX_CHANGE_ROWS_OPEN : MAX_CHANGE_ROWS,
+      noteMax: explained ? CHANGE_NOTE_ROWS : 0,
+    }),
+  ]
+  if (changes.length > MAX_CHANGE_ROWS) out.push({ kind: "cmore", n: changes.length - MAX_CHANGE_ROWS, open: cv.open })
+  return out
+}
+
+/**
+ * The `Changed` block (`SPEC-delta.md` §3): the label with `D`'s word at its right end; the waiting row, the summary or
+ * the error; a numbered row per change with its note once explained, `+ n more` past MAX_CHANGE_ROWS; then Earlier.
+ */
+export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
+  const label: InfoItem = {
+    kind: "changes",
+    since: cv.since,
+    model: cv.state === "result" ? cv.model : null,
+    right: changeKey(cv),
+  }
+  const out = [label, ...(cv.changes ? currentRows(cv, cv.changes, title, cols) : largeRows(cols))]
+  const first = (cv.changes?.length ?? 0) + 1
+  if (cv.earlier && cv.state !== "result") out.push(...earlierItems(cv.earlier, first, title, cols))
   return out
 }
 
@@ -439,16 +564,54 @@ function footSpans(it: Extract<InfoItem, { kind: "foot" }>, t: Theme, cols: numb
   const c = footInk(t)
   if (it.tone === "caret")
     return waitingRow(t, { mark: "*", model: "", secs: 0, status: false, width: cols, stale: it.markStale })
-  const lead: Span[] = it.mark
-    ? [{ text: it.mark, fg: it.markStale ? c.markStale : c.mark }, { text: " " }]
-    : [{ text: " ".repeat(HANG) }]
+  const hang = it.hang ?? HANG
+  let lead: Span[] = hang ? [{ text: " ".repeat(hang) }] : []
+  if (it.mark) lead = [{ text: it.mark, fg: it.markStale ? c.markStale : c.mark }, { text: " " }]
   const cut = it.text.indexOf(" ")
   if (it.tone === "hint")
     return [...lead, { text: it.text.slice(0, cut), fg: c.key }, { text: it.text.slice(cut), fg: c.word }]
-  if (it.tone === "error" && it.mark)
+  if (it.tone === "error" && it.text.startsWith("✗"))
     return [...lead, { text: "✗", fg: c.error, attr: A.BOLD }, { text: it.text.slice(1), fg: c.status }]
-  const fg = { text: c.text, stale: c.stale, error: c.status }[it.tone]
+  const fg = { text: c.text, muted: c.note, stale: c.stale, error: c.status }[it.tone]
   return [...lead, { text: it.text, fg }]
+}
+
+/** `left`, then `right`'s key (text) and word (muted) at the right edge of `cols`; `left` alone when they don't both fit. */
+function rightAligned(left: Span[], right: Tail, t: Theme, cols: number): Span[] {
+  const r: Span[] = [
+    { text: right.key ?? "", fg: t.text },
+    { text: ` ${right.word}`, fg: t.textMuted },
+  ]
+  const gap = cols - spanWidth(left) - spanWidth(r)
+  return gap < 1 ? left : [...left, { text: " ".repeat(gap) }, ...r]
+}
+
+/** `Changed since 09:23` (`· llama3.2` once explained), `D`'s word at the right edge while it fits. */
+function changeLabelSpans(it: Extract<InfoItem, { kind: "changes" }>, t: Theme, cols: number): Span[] {
+  const rest = ` since ${it.since}${it.model ? ` · ${safeLine(it.model)}` : ""}`
+  const left: Span[] = [
+    { text: "Changed", fg: t.textMuted, attr: A.BOLD },
+    { text: truncate(rest, Math.max(0, cols - 7)), fg: t.textMuted },
+  ]
+  return it.right ? rightAligned(left, it.right, t, cols) : left
+}
+
+/** A change row: its number (primary; muted once explained or removed), the name (struck through when removed), the counts at the right edge. */
+function changeSpans(it: Extract<InfoItem, { kind: "change" }>, t: Theme, cols: number): Span[] {
+  const c = footInk(t)
+  const mark = superscript(it.n)
+  let fg = { mark: c.mark, name: c.text, counts: c.status }
+  if (it.tone === "earlier") fg = { mark: c.stale, name: c.stale, counts: c.stale }
+  else if (it.removed) fg = { mark: c.markStale, name: c.status, counts: c.status }
+  else if (it.tone === "explained") fg = { ...fg, mark: c.markStale }
+  const pad = Math.max(it.counts ? 1 : 0, cols - width(mark) - 1 - width(it.text) - width(it.counts))
+  return [
+    { text: mark, fg: fg.mark },
+    { text: " " },
+    { text: it.text, fg: fg.name, attr: it.removed ? A.STRIKE : A.NONE },
+    { text: " ".repeat(pad) },
+    { text: it.counts, fg: fg.counts },
+  ]
 }
 
 /** Info row `it` in `t`, `cols` text columns wide: tags and link targets are cut to fit. */
@@ -475,20 +638,23 @@ export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
       return footSpans(it, t, cols)
     case "frule":
       return footnoteRule(t, cols, it.tail)
-    case "summary":
-      return [{ text: it.text, fg: it.muted ? t.textMuted : t.text }]
     case "changes":
+      return changeLabelSpans(it, t, cols)
+    case "change":
+      return changeSpans(it, t, cols)
+    case "wait":
+      return waitingRow(t, { mark: null, model: it.model, secs: it.secs, status: true, width: cols })
+    case "earlier": {
+      const c = footInk(t)
+      const rest = truncate(` ${it.since}${it.model ? ` · ${safeLine(it.model)}` : ""}`, Math.max(0, cols - 7))
       return [
-        { text: "Changed", fg: t.textMuted, attr: A.BOLD },
-        { text: it.status, fg: t.textMuted },
+        { text: "Earlier", fg: c.stale, attr: A.BOLD },
+        { text: rest, fg: c.stale },
       ]
-    case "change": {
-      const added = it.mark === "+" ? t.success : t.textMuted
-      return [
-        { text: it.mark + " ", fg: it.mark === "~" ? t.warning : added },
-        { text: it.text, fg: it.stop ? t.text : t.textMuted },
-        { text: it.counts, fg: t.textMuted },
-      ]
+    }
+    case "cmore": {
+      const left = it.open ? "show fewer" : `+ ${it.n} more section${it.n === 1 ? "" : "s"}`
+      return rightAligned([{ text: left, fg: t.textMuted }], { key: "⏎", word: it.open ? "fewer" : "all" }, t, cols)
     }
     case "link":
       return [

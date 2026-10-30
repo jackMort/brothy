@@ -17,7 +17,6 @@ import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Ctx } from "./keymap"
 import type { Links } from "./links"
-import { jobKey } from "./store"
 import type { WorkspaceControl } from "./workspace"
 
 /** What the effects call from the feature factories. */
@@ -38,10 +37,7 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
 }
 
 /** Live reload of the open note, then its change baseline. */
-function useNoteWatch(
-  { ui, set, bump, derive, memo, timers, jobs, flash }: AppCtx,
-  dropDelta: EffectDeps["dropDelta"],
-) {
+function useNoteWatch({ ui, set, bump, derive, memo, timers, flash }: AppCtx, dropDelta: EffectDeps["dropDelta"]) {
   const { openPath, watchGen } = ui.current
   useEffect(() => {
     if (!openPath || openPath === STDIN) return
@@ -51,10 +47,6 @@ function useNoteWatch(
         clearTimeout(timers.current.logo)
         timers.current.logo = setTimeout(() => bump((x) => x + 1), LOGO_HOLD + 20)
         const d = derive()
-        // a shown explanation goes once the list moves on, or once it can't be compared
-        const dl = d.s.delta
-        if (dl?.result && (d.changes === null || d.changes.length) && !jobs.current.has(jobKey("delta", dl.path)))
-          set({ delta: null })
         flash(reloadToast(d.changes, d.propsChanged, !!d.s.ai))
       },
       error: (msg) => flash(msg, "error"),
