@@ -17,6 +17,9 @@ const WALK_EDIT =
     .replace("## Two\n\ngone soon\n\n", "")
     .replace("three\n", "three!\n") + "\n## Four\n\nfour\n"
 const SIZE = { width: 120, height: 32 }
+/** The terminal's PageDown / PageUp (the mock keys have no names for them). */
+const PGDN = "\x1b[6~"
+const PGUP = "\x1b[5~"
 /** The popup at 120 columns: 108 wide, 6 in. */
 const POPUP_X = 6
 
@@ -183,6 +186,27 @@ test("80×24: the sheet fills the screen, rows fit it, long lines are cut with �
   expect(rows.slice(top).filter((r) => r.length > 80)).toEqual([])
   expect(rows.some((r) => r.includes("… more lines") || r.includes("+ filler"))).toBe(true)
   expect(rows.filter((r) => /…/.test(r)).length).toBeGreaterThan(0)
+})
+
+test("PgDn / PgUp page through a long list; the bar follows and stays on screen", async () => {
+  const many = Array.from({ length: 30 }, (_, i) => `## S${i}\n\nbody ${i}\n`).join("\n")
+  const d = tmp({ "a.md": `# T\n\n${many}` })
+  const s = await mount(d, "a.md", { size: { width: 100, height: 24 } })
+  writeFileSync(join(d, "a.md"), `# T\n\n${many.replaceAll("body", "text")}`)
+  await waitFrame(s, (f) => f.includes("sections changed"), 4000)
+  await keys(s, "tab", "3", "enter")
+  const bar = (f: string) => /▌(\S+)\s+S/.exec(f)?.[1]
+  expect(bar(s.captureCharFrame())).toBe("¹")
+  let f = await keys(s, PGDN)
+  const first = bar(f)
+  expect(first).toBeDefined()
+  expect(first).not.toBe("¹")
+  f = await keys(s, ...Array(8).fill(PGDN))
+  expect(bar(f)).toBe("³⁰")
+  expect(f).toContain("S29")
+  f = await keys(s, ...Array(9).fill(PGUP))
+  expect(bar(f)).toBe("¹")
+  expect(f).toContain("What changed")
 })
 
 test("a reload that leaves the note as it was closes the sheet", async () => {

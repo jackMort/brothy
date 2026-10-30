@@ -17,13 +17,14 @@ export function makeProof(c: AppCtx, { jumpChange }: Pick<Links, "jumpChange">) 
     set({ proof: { hl: at, top: proofTop(p.rows, at, p.top, p.height) } })
   }
 
-  /** A page down / up: the first block header at or below the new first row is highlighted (the last one past them all). */
+  /** A page down / up: the first block header at or below the new first row is highlighted; at the end of the list, its last (first) block. */
   const proofPage = (dir: 1 | -1) => {
     const { proof: p, cv } = derive()
     if (!p || !cv?.changes) return
     const top = clamp(p.top + dir * (p.height - 1), 0, Math.max(0, p.rows.length - p.height))
     const first = p.rows.findIndex((r, y) => y >= top && r.kind === "block")
-    const hl = first < 0 ? cv.changes.length - 1 : blockAt(p.rows, first)!
+    const end = dir > 0 ? cv.changes.length - 1 : 0
+    const hl = top === p.top || first < 0 ? end : blockAt(p.rows, first)!
     set({ proof: { hl, top: proofTop(p.rows, hl, top, p.height) } })
   }
 
