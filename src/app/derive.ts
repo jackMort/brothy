@@ -14,7 +14,16 @@ import {
 import { textHash } from "../ai/cache"
 import { cleanSummary, noteText } from "../ai/client"
 import { type AIConfig, resolveAI } from "../ai/config"
-import { type Change, changeMarks, type DeltaNote, diffSections, hhmm, parseDelta } from "../ai/delta"
+import {
+  type Change,
+  changeMarks,
+  changeRows,
+  type DeltaNote,
+  diffSections,
+  hhmm,
+  parseDelta,
+  quoteNeedle,
+} from "../ai/delta"
 import { freshGlosses, glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
@@ -36,7 +45,7 @@ import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
 import type { Stale } from "../ui/footnote"
 import { layout } from "../ui/layout"
 import { miniInk } from "../ui/minimap"
-import { cached, findLines, matchIndex } from "../ui/nav"
+import { cached, findLines, findQuote, matchIndex } from "../ui/nav"
 import {
   type ChangeState,
   type ChangeView,
@@ -58,6 +67,7 @@ import {
   filesList,
   glossSheet,
   infoPanel,
+  landingView,
   matchState,
   noteView,
   openerList,
@@ -146,6 +156,11 @@ function panelMemo() {
     }),
     diff: cached(diffSections),
     marks: cached(changeMarks),
+    // the landing's quoted row in Preview: where `⏎` scrolled, marked in the gutter
+    landRow: cached((view: Rendered, c: Change, quote: string) => {
+      const { from, to } = changeRows(view, c)
+      return findQuote(view.plain, from, to, quoteNeedle(quote, false))
+    }),
     partial: cached((raw: string, changes: Change[]) => parseDelta(raw, changes, true)),
     // one object per state of the Changed block, so the Info memo holds while nothing changes
     change: cached(
@@ -374,6 +389,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
       matches,
       matchIdx: matchIndex(matches, s.matchLine),
       currentHeading,
+      land: landingView(s, L, doc, info.cv, memo, jobs.current),
       sideFocus: (L.shown && s.focus === "panel" ? s.view : null) as View | null,
       oRows,
       outlineCur: clamp(s.outlineCur, 0, oRows.length - 1),

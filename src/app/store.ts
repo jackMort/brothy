@@ -218,6 +218,8 @@ export interface UI {
   delta: DeltaState | null
   /** the Changed block lists every change, past MAX_CHANGE_ROWS */
   changesOpen: boolean
+  /** the change `⏎` (or `D` below 100 columns) went to, numbered as listed: its footnote and the walk; dropped by `esc`, another note, zen */
+  landing: { path: string; n: number } | null
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
@@ -303,5 +305,6 @@ export function initUI(
     baseline: null,
     delta: null,
     changesOpen: false,
+    landing: null,
   }
 }

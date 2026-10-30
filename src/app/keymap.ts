@@ -21,9 +21,10 @@ export type Mode =
   | "label"
   | "switch"
   | "open"
-/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus). */
+/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change). */
 export type Ctx =
   | "doc"
+  | "landing"
   | `panel:${View}`
   | "filter"
   | "zen"
@@ -183,6 +184,9 @@ const KEYMAP = {
     hint: "match",
     when: "query",
   },
+  // hint-only: while landed on a change, `[ ]` (docHeading) walk the changes and `3` (views) opens Info
+  landWalk: { modes: ["doc"], keys: [], label: "[ ]", hint: "changes" },
+  landInfo: { modes: ["doc"], keys: [], label: "3", hint: "all in Info" },
   back: { modes: ["doc"], keys: ["h", "left"], label: "h", desc: "focus the panel" },
   links: {
     modes: ["doc"],
@@ -407,6 +411,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     ["focus", "panel"],
     "help",
   ],
+  landing: ["landWalk", "landInfo", "explainChange", ["clear", "hide"]],
   "panel:files": [
     "filesMove",
     "filesOpen",

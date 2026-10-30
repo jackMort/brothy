@@ -5,7 +5,7 @@ import { type AskView, askStage, questionOf } from "../../ai/ask"
 import type { Summary } from "../../ai/cache"
 import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
-import type { Change, ChangeMark } from "../../ai/delta"
+import type { Change, ChangeMark, DeltaNote } from "../../ai/delta"
 import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
 import { plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
@@ -185,6 +185,39 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
   const marks = cv?.changes && !s.source ? memo.marks(doc.headings, doc.lines.length, cv.changes) : NO_MARKS
   return { props, title, ...delta, sv, infoRows, linkRows, marks }
 }
+
+/**
+ * The landing (`⏎` on a change, `D` below 100 columns) against the list on screen: its number, change and note, the
+ * quoted row in Preview, the wait while its note is still to come, and the list (`[ ]` walk it). Null in zen, on
+ * another note, or once the list no longer has it.
+ */
+export function landingView(
+  s: UI,
+  L: Layout,
+  doc: Rendered,
+  cv: ChangeView | null,
+  memo: Memo,
+  jobs: Map<string, Job>,
+) {
+  const l = s.landing?.path === s.openPath && !L.zen ? s.landing : null
+  const changes = cv?.changes
+  const c = l && changes?.[l.n - 1]
+  if (!l || !c || c.status === "removed") return null
+  const note = cv?.notes[l.n - 1]
+  return {
+    n: l.n,
+    change: c,
+    note,
+    changes,
+    row: note?.quote ? memo.landRow(doc, c, note.quote) : null,
+    ...landWait(note, jobs.get(jobKey("delta", l.path))),
+  }
+}
+
+/** The landing's note still to come while `D` runs: the model and the seconds its footnote shows. */
+const landWait = (note: DeltaNote | undefined, job: Job | undefined) => ({
+  wait: job && !note ? { model: shortModel(job.model), secs: waitSecs(Date.now(), job.at) } : null,
+})
 
 /** The panel list's height and its filter row; puts the Files cursor back on the same note when the list changes. */
 export function filesCursor(

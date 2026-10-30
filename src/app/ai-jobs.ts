@@ -16,7 +16,7 @@ import {
   summaryRequest,
 } from "../ai/client"
 import { type AIConfig, type AITarget, type GlossStyle, PROMPT_V, PROMPTS, resolveAI } from "../ai/config"
-import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta } from "../ai/delta"
+import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta, stepChange } from "../ai/delta"
 import { GLOSS_DWELL, type GlossTarget, glossKey, glossRequest } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
 import { stem } from "../notes/files"
@@ -24,6 +24,7 @@ import { STDIN } from "../notes/workspace"
 import { loadConfig } from "../system/config"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
+import type { Links } from "./links"
 import { type Job, type JobKind, jobKey, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
@@ -426,7 +427,7 @@ function makeDeltaStart(c: AppCtx, { failText, startJob }: Jobs) {
 }
 
 /** `D`: the reload-explain request for the open note's changes. */
-function makeReloadExplain(c: AppCtx, jobs: Jobs) {
+function makeReloadExplain(c: AppCtx, jobs: Jobs, { jumpChange }: Pick<Links, "jumpChange">) {
   const { reloadAI, cancelJob, aiGate } = jobs
   const { ui, set, derive, flash, focusPanel } = c
   const { startDelta } = makeDeltaStart(c, jobs)
@@ -435,7 +436,14 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
   const dropDelta = () => {
     const s = ui.current
     if (s.delta) cancelJob(jobKey("delta", s.delta.path))
-    if (s.baseline || s.delta || s.changesOpen) set({ baseline: null, delta: null, changesOpen: false })
+    if (s.baseline || s.delta || s.landing) set({ baseline: null, delta: null, changesOpen: false, landing: null })
+  }
+
+  /** Where `D` shows its explanation: Info; below 100 columns, where Info is a drawer over the note, the first change's footnote. */
+  const showDelta = (d: Derived) => {
+    const first = d.changes && stepChange(d.changes, 0, 1)
+    if (d.L.mode === "drawer" && first) jumpChange(first - 1)
+    else focusPanel("info")
   }
 
   /** A `D` running for `path` cancelled (back to the list, Earlier kept); false when none runs. */
@@ -460,7 +468,7 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
     if (!path || !base || !d.changes.length) return flash(`no changes since ${hhmm(base?.at ?? Date.now())}`)
     const target = aiGate(ai)
     if (!target) return
-    focusPanel("info")
+    showDelta(d)
     startDelta({ path, changes: d.changes, text: d.after, props: d.propsKey, since: base.at, title: d.title, target })
   }
 
@@ -468,13 +476,13 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
 }
 
 /** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */
-export function makeAIJobs(c: AppCtx) {
+export function makeAIJobs(c: AppCtx, links: Pick<Links, "jumpChange">) {
   const jobs = makeJobs(c)
   const { ensureGlosses, glossEntered } = makeGlossSheet(c)
   return {
     ensureGlosses,
     glossEntered,
-    ...makeReloadExplain(c, jobs),
+    ...makeReloadExplain(c, jobs, links),
     ...makeSummary(c, jobs),
     ...makeZenGloss(c, jobs, { ensureGlosses }),
   }

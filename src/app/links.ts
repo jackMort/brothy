@@ -1,12 +1,14 @@
-// Links, link labels and history: following a wikilink or an Info link, the `f` labels over the links on screen, and
-// `H` / `L` back and forward. Not pure: `makeLinks` closes over the app context.
+// Links, link labels, history and landing: following a wikilink or an Info link, the `f` labels over the links on
+// screen, `H` / `L` back and forward, and going to a changed section (`⏎` on a Changed row, `[ ]` while there). Not
+// pure: `makeLinks` closes over the app context.
 import { existsSync } from "node:fs"
 import { basename } from "node:path"
+import { changeRows, quoteNeedle, stepChange } from "../ai/delta"
 import type { LinkTarget } from "../markdown/render"
 import { scanTree, stem } from "../notes/files"
 import { drop, go, keep, stepTo } from "../notes/history"
 import { STDIN } from "../notes/workspace"
-import { linkLabels, narrowLabels, visibleLinks } from "../ui/nav"
+import { findQuote, linkLabels, narrowLabels, visibleLinks } from "../ui/nav"
 import { findHeading, type InfoItem, linkDest, resolveLink } from "../ui/panel"
 import type { AppCtx } from "./ctx"
 import type { UI } from "./store"
@@ -137,10 +139,46 @@ function makeHistory(c: AppCtx) {
   return { histMove }
 }
 
-/** Links, labels and history over the app context. */
+/** Landing on a change: `⏎` on a Changed row (or `D` below 100 columns) goes to it and keeps its footnote; `[ ]` walk. */
+function makeLanding(c: AppCtx) {
+  const { set, derive, flash, setTop, focusDoc } = c
+
+  /** Scroll to change `at` of the Changed block (the reply's quote when it is in that section, else its heading) and land on it. */
+  const jumpChange = (at: number) => {
+    const { cv, view, s } = derive()
+    const ch = cv?.changes?.[at]
+    if (!cv || !s.openPath || !ch || ch.status === "removed") return
+    const { from, to } = changeRows(view, ch)
+    const quote = cv.notes[at]?.quote
+    const line = quote ? findQuote(view.plain, from, to, quoteNeedle(quote, s.source)) : null
+    setTop(line === null ? from : Math.max(from, line - 1))
+    set({ landing: { path: s.openPath, n: at + 1 } })
+    focusDoc()
+  }
+
+  /** `[` `]` while landed: the previous / next change, removed ones skipped; at either end a toast. False when not landed. */
+  const landStep = (dir: 1 | -1) => {
+    const { land } = derive()
+    if (!land) return false
+    const n = stepChange(land.changes, land.n, dir)
+    if (n === null) flash(dir > 0 ? "last change" : "first change")
+    else jumpChange(n - 1)
+    return true
+  }
+
+  return { jumpChange, landStep }
+}
+
+/** Links, labels, history and landing on a change, over the app context. */
 export function makeLinks(c: AppCtx) {
   const { ensureLinks, openLink, followLink } = makeFollow(c)
-  return { ensureLinks, openLink, ...makeLabels(c, { ensureLinks, followLink }), ...makeHistory(c) }
+  return {
+    ensureLinks,
+    openLink,
+    ...makeLabels(c, { ensureLinks, followLink }),
+    ...makeHistory(c),
+    ...makeLanding(c),
+  }
 }
 /** What `makeLinks` gives App and the other factories. */
 export type Links = ReturnType<typeof makeLinks>

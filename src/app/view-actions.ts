@@ -19,10 +19,10 @@ import type { Popups } from "./popups"
 /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
 const typing = () => {}
 
-/** The document: scrolling, headings, matches, and the link labels. */
+/** The document: scrolling, headings (the changes while landed on one), matches, and the link labels. */
 export function makeDocActions(
   c: AppCtx,
-  { startLabels }: Pick<Links, "startLabels">,
+  { startLabels, landStep }: Pick<Links, "startLabels" | "landStep">,
   { jumpHeading, jumpMatch }: Moves,
 ) {
   const { ui, set, derive, setTop, scrollBy, focusPanel } = c
@@ -31,9 +31,14 @@ export function makeDocActions(
     docHalf: (k) => scrollBy((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
     docPage: (k) => scrollBy((isDown(k) ? 1 : -1) * (derive().L.CH - 2)),
     docEnds: (k) => setTop(k.name === "home" || (k.name === "g" && !k.shift) ? 0 : derive().maxTop),
-    docHeading: (k) => jumpHeading(k.sequence === "]" || k.sequence === "}" ? 1 : -1),
+    docHeading: (k) => {
+      const dir = k.sequence === "]" || k.sequence === "}" ? 1 : -1
+      if (!landStep(dir)) jumpHeading(dir)
+    },
     docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
     back: () => focusPanel(),
+    landWalk: typing,
+    landInfo: typing,
     links: startLabels,
     labelType: typing,
     labelErase: () => {

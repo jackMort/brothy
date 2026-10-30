@@ -4,7 +4,19 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { DELTA_PROMPT } from "../../src/ai/delta"
 import { hex } from "../helpers/theme"
-import { B, bodyRows, keys, OLLAMA, openHelp, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
+import {
+  B,
+  bodyRows,
+  filler,
+  keys,
+  OLLAMA,
+  openHelp,
+  useAppHarness,
+  W120,
+  waitFor,
+  waitFrame,
+  withClock,
+} from "./helpers"
 
 const { cfgDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 
@@ -459,4 +471,100 @@ test("marks turn muted once explained", async () => {
   ai.end(0)
   await waitFrame(s, (f) => /Changed since \d\d:\d\d · llama3.2/.test(f))
   expect(fgAt(s, one, "¹")).toBe(B.textMuted)
+})
+
+const WALK =
+  "# Walk\n\n## One\n\n" +
+  filler(12) +
+  "\n\nthe old line\n\n## Two\n\ngone soon\n\n## Three\n\nthree\n\n" +
+  filler(12).replaceAll("filler", "more") +
+  "\n"
+const WALK_EDIT =
+  WALK.replace("the old line", "the new line here")
+    .replace("## Two\n\ngone soon\n\n", "")
+    .replace("three\n", "three!\n") + "\n## Four\n\nfour\n"
+
+/** The footnote's rule row and the note under it, by their text. */
+const footOf = (f: string) => {
+  const rows = f.split("\n")
+  const at = rows.findIndex((r) => /^\s*─{16} {2,}\S/.test(r))
+  return at < 0 ? null : { rule: rows[at]!.trim(), note: rows[at + 1]!.trim() }
+}
+
+test("⏎ on a change lands: the footnote under a rule, the quoted line marked; [ ] walk, esc hides, scrolling keeps it", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": WALK })
+  const { s, ai } = await mountAI(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Sum.\n§1: one line reworded | "the new line here"\n§3: three shouts\n')
+  ai.end(0)
+  await waitFrame(s, (f) => /Changed since \d\d:\d\d · llama3.2/.test(f))
+  let f = await keys(s, "enter")
+  expect(footOf(f)).toEqual({
+    rule: "────────────────                                                 ¹ of 4 · ] next",
+    note: "¹ one line reworded",
+  })
+  const rows = f.split("\n")
+  const line = rows.findIndex((r) => r.includes("the new line here"))
+  expect(line).toBe(3) // the landing puts the quoted line on the body's second row
+  expect(rows[line]![rows[line]!.indexOf("the new") - 2]).toBe("¹")
+  expect(f.split("\n")[28]).toMatch(/\[ \] changes {3}3 all in Info {3}esc hide/)
+  // ] skips the removed section (²) for ³; at the last change the tail offers [ prev
+  f = await keys(s, "]")
+  expect(footOf(f)?.note).toBe("³ three shouts")
+  f = await keys(s, "]")
+  expect(footOf(f)).toEqual({
+    rule: "────────────────                                                 ⁴ of 4 · [ prev",
+    note: "⁴ new section · +3",
+  })
+  expect(await keys(s, "]")).toContain("last change")
+  expect(footOf(await keys(s, "[", "[", "[")))?.toEqual(expect.objectContaining({ note: "¹ one line reworded" }))
+  expect(await keys(s)).toContain("first change")
+  expect(footOf(await keys(s, "j", "j", "space"))).not.toBeNull() // reading on keeps it
+  f = await keys(s, "esc")
+  expect(footOf(f)).toBeNull()
+  expect(f.split("\n")[28]).not.toContain("[ ] changes")
+  expect(footOf(await keys(s, "["))).toBeNull() // [ ] are the headings again
+})
+
+test("a landing goes with another note and with zen; a search query clears before it", async () => {
+  const d = tmp({ "a.md": WALK, "b.md": "# B\n" })
+  const s = await mount(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("reloaded"), 4000)
+  expect(footOf(await keys(s, "3", "enter"))?.note).toBe("¹ edited · +1 −1") // AI off: the counts
+  expect(footOf(await keys(s, "/", "type:three", "enter", "esc"))).not.toBeNull()
+  expect(footOf(await keys(s, "esc"))).toBeNull()
+  await keys(s, "3", "enter")
+  expect(footOf(await keys(s, "z", "z"))).toBeNull()
+  await keys(s, "3", "enter")
+  await openNote(s, "b")
+  await openNote(s, "a")
+  expect(footOf(await keys(s))).toBeNull()
+})
+
+test("D below 100 columns lands on the first change instead of opening the drawer; 3 opens Info", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": WALK })
+  const { s, ai } = await mountAI(d, "a.md", { size: { width: 80, height: 24 } })
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  let f = await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  f = await keys(s)
+  expect(f).not.toContain("¹Files") // no drawer
+  expect(footOf(f)?.rule).toMatch(/asking llama3.2 · D cancel$/)
+  expect(footOf(f)?.note).toBe("¹ ▍")
+  await withClock(new Date(Date.now() + 10_000), async () => {
+    // past the toast, so the hints get the whole line
+    expect((await keys(s, "?")).split("\n")[22]).toMatch(/\[ \] changes {3}3 all in Info {3}D cancel {3}esc hide/)
+  })
+  ai.send(0, "Sum.\n§1: one line reworded\n")
+  ai.end(0)
+  f = await waitFrame(s, (f) => footOf(f)?.note === "¹ one line reworded")
+  expect(footOf(f)?.rule).toMatch(/¹ of 4 · \] next$/)
+  expect(await keys(s, "3")).toContain("¹Files")
 })

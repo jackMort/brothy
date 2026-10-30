@@ -6,18 +6,16 @@
 import { closeSync, openSync } from "node:fs"
 import { basename } from "node:path"
 import type { KeyEvent } from "@opentui/core"
-import { type Change, changeHeading, quoteNeedle } from "../ai/delta"
 import { parseFrontMatter } from "../markdown/frontmatter"
 import { HEADING_STYLES } from "../markdown/heading-style"
-import type { Rendered } from "../markdown/render"
 import { sourceScan } from "../markdown/source"
 import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
 import { STDIN } from "../notes/workspace"
-import { loadConfig } from "../system/config"
+import { loadConfig, type View } from "../system/config"
 import { type EditResult, editorCommand, runEditor, sourceLineAt } from "../system/editor"
 import { MEASURE } from "../ui/layout"
 import { MINI_MIN_W } from "../ui/minimap"
-import { findQuote, stepMatch } from "../ui/nav"
+import { stepMatch } from "../ui/nav"
 import type { InfoItem } from "../ui/panel"
 import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
@@ -107,14 +105,14 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
   /** Context id now: an open popup, else zen, else the panel view or the document. */
   const currentCtx = (): Ctx => {
     const s = ui.current
-    if (s.themePick) return "theme"
-    if (s.zenOrig !== null) return "zenSettings"
-    if (s.opener) return "open"
-    if (s.switcher) return "switch"
-    if (s.prompt) return "prompt"
+    const popup = popupCtx(s)
+    if (popup) return popup
     if (liveLabels()) return "label"
     if (s.help) return "help"
-    return derive().L.zen ? "zen" : docMode()
+    const d = derive()
+    if (d.L.zen) return "zen"
+    const doc = docMode()
+    return doc === "doc" && d.land ? "landing" : doc
   }
   const hintsVisible = () => {
     const s = ui.current
@@ -125,8 +123,17 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
 }
 type KeyContext = ReturnType<typeof makeKeyContext>
 
+/** The open popup's context (they take every key, in this order), else null. */
+function popupCtx(s: UI): Ctx | null {
+  if (s.themePick) return "theme"
+  if (s.zenOrig !== null) return "zenSettings"
+  if (s.opener) return "open"
+  if (s.switcher) return "switch"
+  return s.prompt ? "prompt" : null
+}
+
 /** Moves within the note and Info: to a find match, a heading, an Outline heading, a Changed row; Info's stops. */
-function makeMoves(c: AppCtx, { openLink }: Pick<Links, "openLink">) {
+function makeMoves(c: AppCtx, { openLink, jumpChange }: Pick<Links, "openLink" | "jumpChange">) {
   const { set, derive, flash, setTop, focusDoc, showMatch } = c
 
   const jumpMatch = (dir: 1 | -1) => {
@@ -159,18 +166,6 @@ function makeMoves(c: AppCtx, { openLink }: Pick<Links, "openLink">) {
     }
   }
 
-  /** Scroll to change `at` of the Changed block: the reply's quote when it is in that section, else its heading. */
-  const jumpChange = (at: number) => {
-    const { cv, view, s } = derive()
-    const c = cv?.changes?.[at]
-    if (!c || c.status === "removed") return
-    const { from, to } = changeRows(view, c)
-    const quote = cv?.notes[at]?.quote
-    const line = quote ? findQuote(view.plain, from, to, quoteNeedle(quote, s.source)) : null
-    setTop(line === null ? from : Math.max(from, line - 1))
-    focusDoc()
-  }
-
   /** `+ n more`: list every change, or fold back to MAX_CHANGE_ROWS; Info's cursor stays on the row. */
   const toggleChanges = () => {
     set({ changesOpen: !derive().s.changesOpen })
@@ -191,7 +186,7 @@ function makeMoves(c: AppCtx, { openLink }: Pick<Links, "openLink">) {
     else if (it.kind === "frule") set({ tldrOpen: !derive().s.tldrOpen })
   }
 
-  return { jumpMatch, jumpHeading, outlineGo, jumpChange, infoGo }
+  return { jumpMatch, jumpHeading, outlineGo, infoGo }
 }
 export type Moves = ReturnType<typeof makeMoves>
 
@@ -252,6 +247,12 @@ function makeGlobalActions(
   { pokeHints, currentCtx, hintsVisible }: KeyContext,
 ) {
   const { ui, set, derive, renderer, flash, selectView, focusPanel, focusDoc } = c
+  /** `esc` in the panel: the view's filter first, then back to the document. */
+  const clearPanel = (s: UI, view: View) => {
+    if (view === "files" && s.filter) return set({ filter: "" })
+    if (view === "outline" && s.outlineFilter) return set({ outlineFilter: "" })
+    focusDoc()
+  }
   return {
     switcher: switcher.openSwitcher,
     open: workspace.openOpener,
@@ -281,16 +282,13 @@ function makeGlobalActions(
     },
     clear: () => {
       const { s, sideFocus, sheet } = derive()
-      if (sideFocus) {
-        if (sideFocus === "files" && s.filter) return set({ filter: "" })
-        if (sideFocus === "outline" && s.outlineFilter) return set({ outlineFilter: "" })
-        return focusDoc()
-      }
+      if (sideFocus) return clearPanel(s, sideFocus)
       // a gloss on screen goes first; it stays hidden until the reading line leaves its section (a fading one falls through)
       if (sheet && sheet.fadeAt === null) return set({ gloss: null })
       if (s.landed) set({ landed: null })
       if (s.toast?.kind === "error") set({ toast: null })
       if (s.query) set({ query: "", matchLine: null })
+      else if (s.landing) set({ landing: null })
       else if (derive().L.zen) zen.toggleZen(false)
     },
     // the welcome page shows no hints, so ? opens the sheet at once
@@ -364,13 +362,4 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
       flash(`edited · ${basename(s.openPath)}`)
     },
   } satisfies Partial<Actions>
-}
-
-/** The rows of change `c`'s section in `view`, `to` exclusive (the lead-in before the first heading for none). */
-export function changeRows(view: Rendered, c: Change) {
-  const hs = view.headings
-  const i = changeHeading(hs, c) ?? c.index
-  const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
-  const to = hs[i + 1]?.line ?? view.lines.length
-  return { from, to }
 }

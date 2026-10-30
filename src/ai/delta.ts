@@ -4,6 +4,7 @@
  */
 
 import { superscript, truncate } from "../lib/text"
+import type { Rendered } from "../markdown/render"
 import { headingKey, type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
 import { type Tail, waitText } from "../ui/footnote"
@@ -405,6 +406,15 @@ export function changeHeading(headings: readonly { text: string }[], c: Change):
   let seen = 0
   const i = headings.findIndex((h) => headingKey(h.text) === c.key && seen++ === c.ord)
   return i < 0 ? null : i
+}
+
+/** The rows of change `c`'s section in `view`, `to` exclusive (the lead-in before the first heading for none). */
+export function changeRows(view: Pick<Rendered, "headings" | "lines">, c: Change) {
+  const hs = view.headings
+  const i = changeHeading(hs, c) ?? c.index
+  const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
+  const to = hs[i + 1]?.line ?? view.lines.length
+  return { from, to }
 }
 
 /** Changes past this number draw no mark (the head still counts them). */

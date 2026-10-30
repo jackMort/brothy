@@ -96,9 +96,9 @@ test("a typing binding's empty word stays empty", () => {
   expect(footerHints("filter", ALL).map((h) => h.word)).toEqual(["", "", "open", "clear"])
 })
 
-test("popups and typing pin their hints; the document, the panel and zen fade theirs", () => {
+test("popups and typing pin their hints; the document (landed too), the panel and zen fade theirs", () => {
   for (const c of Object.keys(FOOTERS) as (keyof typeof FOOTERS)[])
-    expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "zen" || c.startsWith("panel:")))
+    expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "landing" || c === "zen" || c.startsWith("panel:")))
 })
 
 test("modeOf maps a panel context to its view's mode", () => {
