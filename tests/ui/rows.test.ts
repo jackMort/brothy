@@ -97,6 +97,54 @@ test("switchItem: heading and text rows lead with the note name, an alias shows 
   })
 })
 
+test("switchItem: ask rows in theme roles; marks in the padding; never stops", () => {
+  const searched = switchItem({ kind: "askNote", text: "a · b", tone: "text", lead: "searched: " }, t)
+  expect(searched.spans).toEqual([
+    { text: "searched: ", fg: t.textMuted },
+    { text: "a · b", fg: t.text },
+  ])
+  expect(switchItem({ kind: "askNote", text: "no key", tone: "error" }, t).spans[0]!.fg).toBe(t.error)
+  const rule = switchItem({ kind: "rule" }, t, 60)
+  expect(rule).toEqual({ header: true, spans: [{ text: "─".repeat(16), fg: t.border }] })
+  const foot = switchItem({ kind: "footnote", n: 2, text: "six hours for beef bones" }, t, 12)
+  expect(foot).toEqual({
+    header: true,
+    mark: { text: "²", fg: t.primary },
+    spans: [{ text: "six hours f…", fg: t.textMuted }],
+  })
+  const wait = switchItem({ kind: "askWait", text: "asking llama3.2 · 3 s" }, t)
+  expect(wait.header).toBe(true)
+  expect(wait.spans).toEqual([
+    { text: "▍", fg: t.text },
+    { text: " asking llama3.2 · 3 s", fg: t.textMuted },
+  ])
+  const err = switchItem({ kind: "askAction", act: "ask", text: "can't reach h", note: "", error: true }, t)
+  expect(err.spans[0]).toEqual({ text: "✗ ", fg: t.error, attr: A.BOLD })
+  const head = switchItem({ kind: "header", title: "Answers", count: "3", right: "llama3.2" }, t)
+  expect(head.spans.map((x) => x.text).join("")).toBe("Answers  3")
+  expect(head.right).toBe("llama3.2")
+  const answer = switchItem(
+    {
+      kind: "answer",
+      path: "/v/s.md",
+      name: "stock",
+      heading: 0,
+      text: "How long to simmer",
+      key: "how long to simmer",
+      ord: 0,
+      id: "/v/s.md#how long to simmer#0",
+      query: "simmer",
+      hits: [12, 13, 14, 15, 16, 17],
+      right: "",
+      n: 1,
+    },
+    t,
+    40,
+  )
+  expect(answer.mark).toEqual({ text: "¹", fg: t.primary })
+  expect(answer.spans.map((x) => x.text).join("")).toBe("stock › How long to simmer")
+})
+
 test("switchItem: a narrow row keeps the match in view and the note name within a quarter", () => {
   const w = 30
   const it = switchItem(

@@ -16,7 +16,7 @@ import {
   rerankRequest,
 } from "../ai/ask"
 import { isFresh, type Summary, textHash } from "../ai/cache"
-import { type Failure, shortModel } from "../ai/client"
+import { aiMessage, type Failure, shortModel } from "../ai/client"
 import type { Rendered } from "../markdown/render"
 import { folderCounts } from "../notes/files"
 import { peekLines, peekWindow, switchSplit } from "../notes/peek"
@@ -66,12 +66,12 @@ function makeAskStart(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs,
     const question = qn.text
     const known = askMemo.current.get(foldSame(question))
     if (known) return setAsk({ question, phase: "result", queries: known.queries, model: known.model })
-    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy }))
+    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy, sent: false }))
     if (!target) return
     const asked = sw.q
     // an edit, a close or another ask aborts the job, so `done` never runs for it
     startJob("ask", undefined, target, askRequest(question), {
-      begin: () => setAsk({ question, phase: "asking" }),
+      begin: () => setAsk({ question, phase: "asking", model: ai.model }),
       done: (r) => {
         if (ui.current.switcher?.q !== asked) return
         const queries = r.ok ? parseQueries(r.raw) : null
@@ -83,9 +83,10 @@ function makeAskStart(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs,
         if (r.ok) f = { kind: "invalid" }
         else if ("failure" in r) f = r.failure
         else return
-        const msg = failText(target, f, "answer")
-        flash(msg, "error")
-        setAsk({ question, phase: "error", error: msg })
+        flash(failText(target, f, "answer"), "error")
+        const ctx = { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" as const }
+        // a connection that never opened sent nothing; anything the host answered, or a cut stream, had the question
+        setAsk({ question, phase: "error", error: aiMessage(f, ctx), sent: f.kind !== "network" })
       },
     })
   }

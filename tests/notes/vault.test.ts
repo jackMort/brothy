@@ -236,6 +236,37 @@ describe("recents and rows", () => {
     const note: SwitchRow[] = [{ kind: "askNote", text: "type a question" }]
     expect(firstHit(note)).toBe(-1)
   })
+  test("ask rows: the rule, footnotes and the waiting row are never stops; ↑↓ and tab skip them", () => {
+    const answer = (n: number): SwitchRow => ({
+      kind: "answer",
+      path: `/v/${n}.md`,
+      name: String(n),
+      heading: 0,
+      text: "A",
+      key: "a",
+      ord: 0,
+      id: `/v/${n}.md#a#0`,
+      query: "a",
+      hits: [],
+      right: "",
+      n,
+    })
+    const rows: SwitchRow[] = [
+      { kind: "header", title: "Answers", count: "2", right: "llama3.2" },
+      answer(1),
+      answer(2),
+      { kind: "rule" },
+      { kind: "footnote", n: 1, text: "why" },
+      { kind: "askWait", text: "asking llama3.2" },
+      { kind: "header", title: "Other matches", count: "1" },
+      answer(3),
+    ]
+    expect(rows.map(isStop)).toEqual([false, true, true, false, false, false, false, true])
+    expect(stepRow(rows, 2, 1)).toBe(7)
+    expect(stepRow(rows, 7, -1)).toBe(2)
+    expect(nextSection(rows, 1)).toBe(7)
+    expect(firstHit(rows.slice(3, 6))).toBe(-1)
+  })
   test("recentSection: newest first, then the open note's folder-mates; the open note and vanished paths left out", () => {
     const tree = treeOf(["d/a.md", "d/b.md", "d/c.md", "e/x.md"])
     const sec = recentSection(tree, ["/v/e/x.md", "/v/d/a.md", "/v/gone.md"], "/v/d/a.md")

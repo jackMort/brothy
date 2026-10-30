@@ -7,13 +7,16 @@ import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPTS } from "../../ai/config"
 import { type Change, hhmm } from "../../ai/delta"
 import { type GlossState, type GlossTarget, parseGlossStyle } from "../../ai/gloss"
-import { wrap } from "../../lib/text"
+import { plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
-import { SCAN_LIMIT } from "../../notes/files"
+import { folderCounts, SCAN_LIMIT } from "../../notes/files"
+import { switchSplit } from "../../notes/peek"
 import type { OpenRow } from "../../notes/projects"
 import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
 import { projectRoot } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
+import { waitSecs } from "../../ui/footnote"
+import { ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
 import { relocate, remapTop } from "../../ui/nav"
 import type { ChangeView, SummaryView } from "../../ui/panel"
@@ -194,7 +197,7 @@ export function filesCursor(
 // ------------------------------------------------------------- popups
 
 /** The `C-p` switcher's rows (the ask's while the query is a question) and its highlight, always on a stop. */
-export function switcherList(s: UI, memo: Memo, ix: VaultIndex) {
+export function switcherList(s: UI, memo: Memo, ix: VaultIndex, W: number, jobs: Map<string, Job>) {
   const question = s.switcher ? questionOf(s.switcher.q) : null
   const askState = s.switcher?.ask
   // ranking waits for a complete index, then re-runs whenever it changes (ixVer)
@@ -202,11 +205,16 @@ export function switcherList(s: UI, memo: Memo, ix: VaultIndex) {
     question && askState?.queries && !s.indexing ? memo.cands(ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
   const askCost = question && askCands.length ? memo.cost(question.text, askCands, ix, s.ixVer) : ""
   let swRows: SwitchRow[] = []
-  if (s.switcher) {
-    swRows = question
-      ? memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null)
-      : memo.switch(ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
-  }
+  if (s.switcher && question) {
+    const job = jobs.get(jobKey("ask"))
+    const split = switchSplit(W)
+    swRows = memo.ask(question.text, question.cut, memo.host(s.ai), askState, askCands, askCost, s.indexing !== null, {
+      secs: job ? waitSecs(Date.now(), job.at) : 0,
+      notes: plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note"),
+      width: split.listW - ROW_PAD,
+      pane: split.split,
+    })
+  } else if (s.switcher) swRows = memo.switch(ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
   // the highlight always sits on a stop (results change under it while typing or indexing)
   const swAt = s.switcher ? swRows[s.switcher.hl] : undefined
   const swHl = s.switcher && swAt && isStop(swAt) ? s.switcher.hl : firstHit(swRows)

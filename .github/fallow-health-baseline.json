@@ -26,11 +26,6 @@
         "count": 1
       }
     },
-    "src/ai/ask.ts": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
     "src/ai/client.ts": {
       "complexity_moderate": {
         "count": 1
@@ -278,11 +273,6 @@
       }
     },
     "src/App.tsx\u0000App": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
-    "src/ai/ask.ts\u0000askRows": {
       "complexity_moderate": {
         "count": 1
       }

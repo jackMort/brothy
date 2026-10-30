@@ -9,6 +9,7 @@ import {
   askRequest,
   askRows,
   askSection,
+  askStage,
   askTitleNote,
   EXCERPT,
   MAX_ASK,
@@ -133,6 +134,33 @@ const V = vault([
   ["guides/getting-started.md", GS],
   ["notes/path.md", "# Misc\n\nnothing here\n"],
 ])
+/** One line per ask row, by kind, for comparing whole lists. */
+const SHOW: { [K in SwitchRow["kind"]]: (r: Extract<SwitchRow, { kind: K }>) => string } = {
+  header: (r) => `# ${r.title} ${r.count}${r.right === undefined ? "" : ` | ${r.right}`}`,
+  askNote: (r) => `~${r.tone ? ` ${r.tone}` : ""} ${r.lead ?? ""}${r.text}`,
+  askAction: (r) => `${r.act}${r.error ? " ✗" : ""}: ${r.text}${r.note}`,
+  answer: (r) => `${r.n ?? ""}${r.name}${r.heading < 0 ? "" : " › " + r.text} | ${r.right}`,
+  rule: () => "────",
+  footnote: (r) => `${r.n}) ${r.text}`,
+  askWait: (r) => `▍ ${r.text}`,
+  note: () => "?",
+  heading: () => "?",
+  text: () => "?",
+}
+/** An idle ask view of the three-note vault `V` beside a pane. */
+const VIEW: AskView = {
+  question: "how do I open one file",
+  cut: false,
+  target: { host: "openrouter.ai", model: "anthropic/claude-haiku-5-5", ollama: false },
+  state: undefined,
+  cands: [],
+  cost: "",
+  indexing: false,
+  secs: 0,
+  notes: "3 notes",
+  width: 60,
+  pane: true,
+}
 const label = (c: { name: string; heading: number; score: number; queries: number }) =>
   `${c.name}#${c.heading}:${c.score}/${c.queries}`
 
@@ -199,21 +227,14 @@ test("ids equal sectionId: the lead-in and a heading whose key is empty stay apa
     order: picked.map((p) => ids[p.i]!),
     why: Object.fromEntries(picked.map((p) => [ids[p.i]!, p.why])),
   }
-  const rows = askRows({
-    question: "alpha?",
-    cut: false,
-    target: { host: "h" },
-    state,
-    cands: c,
-    cost: "",
-    indexing: false,
-  })
+  const rows = askRows({ ...VIEW, question: "alpha?", state, cands: c })
   const answers = rows.filter((r): r is AnswerRow => r.kind === "answer")
-  expect(answers.map((r) => [r.heading, r.right])).toEqual([
-    [0, "star"],
-    [-1, "intro"],
-    [1, "1/1"],
+  expect(answers.map((r) => [r.heading, r.n, r.right])).toEqual([
+    [0, 1, ""],
+    [-1, 2, ""],
+    [1, undefined, "alpha"],
   ])
+  expect(rows.flatMap((r) => (r.kind === "footnote" ? [`${r.n} ${r.text}`] : []))).toEqual(["1 star", "2 intro"])
 })
 
 describe("askLocate", () => {
@@ -293,46 +314,48 @@ describe("rerank", () => {
 describe("askRows", () => {
   const C = askCandidates(V.ix, V.tree, ["single file", "path", "open"])
   const Q = ["single file", "path", "open"]
-  const base: AskView = {
-    question: "how do I open one file",
-    cut: false,
-    target: { host: "openrouter.ai" },
-    state: undefined,
-    cands: [],
-    cost: "~1.3k tokens",
-    indexing: false,
-  }
+  const base: AskView = { ...VIEW, question: "how do I open one file", cost: "~1.3k tokens" }
   const result: AskState = { question: base.question, phase: "result", queries: Q, model: "anthropic/claude-haiku-5-5" }
-  const show = (rows: SwitchRow[]) =>
-    rows.map((r) => {
-      if (r.kind === "header") return `# ${r.title} ${r.count}`
-      if (r.kind === "askNote") return `~ ${r.text}`
-      if (r.kind === "askAction") return `${r.act}${r.error ? " ✗" : ""}: ${r.text}${r.note}`
-      if (r.kind === "answer") return `${r.name}${r.heading < 0 ? "" : " › " + r.text} | ${r.right}`
-      return "?"
-    })
-  const SEARCHED = "~ searched: single file · path · open"
+  const show = (rows: SwitchRow[]) => rows.map((r) => (SHOW[r.kind] as (r: SwitchRow) => string)(r))
+  const SEARCHED = "~ text searched: single file · path · open"
 
-  test("AI off, too short, idle, no key", () => {
+  test("AI off, too short, a target error, idle", () => {
     expect(show(askRows({ ...base, target: null }))).toEqual([`~ AI off · set "ai" in config.json`])
     expect(show(askRows({ ...base, question: "ab" }))).toEqual(["~ type a question"])
-    expect(show(askRows(base))).toEqual(["ask: ⏎ ask · only the question → openrouter.ai"])
-    expect(show(askRows({ ...base, cut: true }))).toEqual(["ask: ⏎ ask · only the question… → openrouter.ai"])
     expect(show(askRows({ ...base, target: { error: "AI: set OPENROUTER_API_KEY" } }))).toEqual([
-      "~ AI: set OPENROUTER_API_KEY",
+      "~ error AI: set OPENROUTER_API_KEY",
+    ])
+    expect(show(askRows(base))).toEqual(["ask: ⏎ ask · only the question → openrouter.ai"])
+    expect(show(askRows({ ...base, cut: true }))).toEqual([
+      `ask: ⏎ ask · only the first ${QUESTION_MAX} characters → openrouter.ai`,
     ])
   })
-  test("asking, and a result while the index is still building", () => {
-    expect(show(askRows({ ...base, state: { question: base.question, phase: "asking" } }))).toEqual(["~ asking…"])
-    expect(show(askRows({ ...base, state: result, cands: C, indexing: true }))).toEqual(["~ asking…"])
+  test("idle without a pane: two muted notes under the row, wrapped with a 2-column hang", () => {
+    expect(show(askRows({ ...base, pane: false, width: 40 }))).toEqual([
+      "ask: ⏎ ask · only the question → openrouter.ai",
+      "~ · only the question goes out; rerank",
+      "~   adds short excerpts",
+      "~ · nothing is written to disk",
+    ])
   })
-  test("result: Answers with hits/all, the rerank row with its cost, the queries", () => {
+  test("asking: a rule, then the waiting row where the first result goes; seconds from 1 s", () => {
+    const asking: AskState = { question: base.question, phase: "asking", model: "anthropic/claude-haiku-5-5" }
+    expect(show(askRows({ ...base, state: asking }))).toEqual(["────", "▍ asking claude-haiku-5-5"])
+    expect(show(askRows({ ...base, state: asking, secs: 3 })).at(-1)).toBe("▍ asking claude-haiku-5-5 · 3 s")
+    // the index still building: the result waits under the same row
+    expect(show(askRows({ ...base, state: result, cands: C, indexing: true }))).toEqual([
+      "────",
+      "▍ asking claude-haiku-5-5",
+    ])
+  })
+  test("result: Matches, the matched word on the right, the rule, the rerank row with its cost, the queries", () => {
     expect(show(askRows({ ...base, state: result, cands: C }))).toEqual([
-      "# Answers 4",
-      "getting-started › Open a single file | 3/3",
-      "getting-started › Open a folder | 2/3",
-      "README › Quick start | 1/3",
-      "path | 1/3",
+      "# Matches 4",
+      "getting-started › Open a single file | single file",
+      "getting-started › Open a folder | open",
+      "README › Quick start | path",
+      "path | path",
+      "────",
       "rerank: ↻ rerank with excerpts · ~1.3k tokens",
       SEARCHED,
     ])
@@ -344,61 +367,103 @@ describe("askRows", () => {
       ord: 0,
       id: C[0]!.id,
       query: "single file",
+      line: 13,
     })
+    expect(a.n).toBeUndefined()
     expect(a.hits).toEqual([7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
   })
-  test("reranking replaces the rerank row", () => {
-    expect(show(askRows({ ...base, state: { ...result, phase: "reranking" }, cands: C })).at(-2)).toBe("~ reranking…")
+  test("the matched word is cut at 12 columns", () => {
+    const long = askCandidates(V.ix, V.tree, ["a single file opens"])
+    expect(show(askRows({ ...base, state: { ...result, queries: ["a single file opens"] }, cands: long }))[1]).toBe(
+      "getting-started › Open a single file | a single fi…",
+    )
   })
-  test("reranked: the model's order with its why, the rest under Other matches, no rerank row", () => {
+  test("reranking: the rerank row becomes a waiting row naming the excerpts sent", () => {
+    const rows = show(askRows({ ...base, state: { ...result, phase: "reranking" }, cands: C, secs: 2 }))
+    expect(rows.slice(-3)).toEqual(["────", "▍ ranking 4 excerpts · claude-haiku-5-5 · 2 s", SEARCHED])
+  })
+  test("reranked: Answers marked in the model's order, their whys as footnotes under a rule, then Other matches", () => {
     const state: AskState = {
       ...result,
       phase: "reranked",
       order: [C[2]!.id, C[0]!.id],
-      why: { [C[2]!.id]: "quick start runs it" },
+      why: { [C[2]!.id]: "quick start runs it", [C[0]!.id]: "" },
     }
     expect(show(askRows({ ...base, state, cands: C }))).toEqual([
-      "# Answers 2",
-      "README › Quick start | quick start runs it",
-      "getting-started › Open a single file | ",
+      "# Answers 2 | claude-haiku-5-5",
+      "1README › Quick start | ",
+      "2getting-started › Open a single file | ",
+      "────",
+      "1) quick start runs it",
       "# Other matches 2",
-      "getting-started › Open a folder | 2/3",
-      "path | 1/3",
+      "getting-started › Open a folder | open",
+      "path | path",
       SEARCHED,
     ])
     // ids gone after an index refresh: back to the local order
     const gone: AskState = { ...state, order: ["/v/x.md#x#0"] }
-    expect(show(askRows({ ...base, state: gone, cands: C }))[0]).toBe("# Answers 4")
+    expect(show(askRows({ ...base, state: gone, cands: C }))[0]).toBe("# Matches 4")
   })
-  test("nothing found, and an error", () => {
+  test("nothing found: says so, the words searched, then next steps under a rule", () => {
     expect(show(askRows({ ...base, state: result, cands: [] }))).toEqual([
-      "~ nothing found · searched: single file · path · open",
+      "~ text Nothing in your notes",
+      SEARCHED,
+      "────",
+      "~ · the question may not be in this folder (3 notes)",
+      "~ · edit it and ⏎ to ask again, or drop the ? to search names",
+      "~   and text yourself",
     ])
-    expect(
-      show(askRows({ ...base, state: { question: base.question, phase: "error", error: "AI: rate limited" } })),
-    ).toEqual(["ask ✗: AI: rate limited · ⏎ asks again"])
   })
+  test("an error: the headline asks again, whether anything left, where to look (ollama or not)", () => {
+    const failed: AskState = { question: base.question, phase: "error", error: "can't reach localhost:11434" }
+    const ollama: AskView = { ...base, target: { host: "localhost:11434", model: "llama3.2", ollama: true } }
+    expect(show(askRows({ ...ollama, state: failed }))).toEqual([
+      "ask ✗: can't reach localhost:11434",
+      "~ nothing was sent",
+      "────",
+      "~ · is ollama running? ⏎ tries again",
+      "~ · the ai block lives in config.json; r re-reads it",
+    ])
+    expect(show(askRows({ ...base, state: { ...failed, error: "500 from openrouter.ai", sent: true } }))).toEqual([
+      "ask ✗: 500 from openrouter.ai",
+      "~ the question was sent to openrouter.ai",
+      "────",
+      "~ · check the endpoint and key · ⏎ tries again",
+      "~ · the ai block lives in config.json; r re-reads it",
+    ])
+  })
+})
+
+test("askStage follows the rows: every state of the ask", () => {
+  const C = askCandidates(V.ix, V.tree, ["path"])
+  const st: AskState = { question: "q", phase: "result", queries: ["path"] }
+  const v = { ...VIEW, cands: C }
+  expect(askStage({ ...v, target: null })).toBe("off")
+  expect(askStage({ ...v, question: "ab" })).toBe("short")
+  expect(askStage({ ...v, target: { error: "x" } })).toBe("target")
+  expect(askStage(v)).toBe("idle")
+  expect(askStage({ ...v, state: { ...st, phase: "asking" } })).toBe("asking")
+  expect(askStage({ ...v, state: st, indexing: true })).toBe("asking")
+  expect(askStage({ ...v, state: st })).toBe("result")
+  expect(askStage({ ...v, state: st, cands: [] })).toBe("none")
+  expect(askStage({ ...v, state: { ...st, phase: "reranking" } })).toBe("reranking")
+  expect(askStage({ ...v, state: { ...st, phase: "reranked", order: [C[0]!.id] } })).toBe("reranked")
+  expect(askStage({ ...v, state: { ...st, phase: "reranked", order: ["gone"] } })).toBe("result")
+  expect(askStage({ ...v, state: { ...st, phase: "error" } })).toBe("error")
 })
 
 test("askSection: tab goes from an answer to the action row, else to the next section", () => {
   const C = askCandidates(V.ix, V.tree, ["single file", "path", "open"])
   const st: AskState = { question: "q", phase: "result", queries: ["single file", "path", "open"] }
-  const v: AskView = {
-    question: "how do I",
-    cut: false,
-    target: { host: "h" },
-    state: st,
-    cands: C,
-    cost: "~1k tokens",
-    indexing: false,
-  }
-  const rows = askRows(v) // 0 header · 1–4 answers · 5 rerank · 6 searched
-  expect(askSection(rows, 1)).toBe(5)
-  expect(askSection(rows, 4)).toBe(5)
-  expect(askSection(rows, 5)).toBe(1)
-  const rr = askRows({ ...v, state: { ...st, phase: "reranked", order: [C[0]!.id], why: {} } }) // 0 h · 1 · 2 h · 3–5 · 6
-  expect(askSection(rr, 1)).toBe(3)
-  expect(askSection(rr, 4)).toBe(1)
+  const v: AskView = { ...VIEW, question: "how do I", state: st, cands: C }
+  const rows = askRows(v) // 0 header · 1–4 answers · 5 rule · 6 rerank · 7 searched
+  expect(askSection(rows, 1)).toBe(6)
+  expect(askSection(rows, 4)).toBe(6)
+  expect(askSection(rows, 6)).toBe(1)
+  // 0 h · 1 answer · 2 rule · 3 footnote · 4 h · 5–7 · 8 searched
+  const rr = askRows({ ...v, state: { ...st, phase: "reranked", order: [C[0]!.id], why: { [C[0]!.id]: "w" } } })
+  expect(askSection(rr, 1)).toBe(5)
+  expect(askSection(rr, 6)).toBe(1)
 })
 
 test("askTitleNote: nothing when AI is off, index progress, the answering model, else the note count", () => {
@@ -409,8 +474,12 @@ test("askTitleNote: nothing when AI is off, index progress, the answering model,
   expect(askTitleNote({ off: false, state: { ...st, phase: "reranked" }, indexing: null, notes: "6 notes" })).toBe(
     "claude-haiku-5-5",
   )
-  expect(
-    askTitleNote({ off: false, state: { question: "q", phase: "asking" }, indexing: null, notes: "6 notes" }),
-  ).toBe("6 notes")
+  // the model from the moment the request is out; an error goes back to the note count
+  expect(askTitleNote({ off: false, state: { ...st, phase: "asking" }, indexing: null, notes: "6 notes" })).toBe(
+    "claude-haiku-5-5",
+  )
+  expect(askTitleNote({ off: false, state: { ...st, phase: "error" }, indexing: null, notes: "6 notes" })).toBe(
+    "6 notes",
+  )
   expect(askTitleNote({ off: false, state: undefined, indexing: null, notes: "6 notes" })).toBe("6 notes")
 })

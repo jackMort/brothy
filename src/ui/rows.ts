@@ -5,10 +5,11 @@ import { A, type Span, safeLine } from "../lib/spans"
 import { spanWidth, truncate, truncateLeft, width } from "../lib/text"
 import { stem } from "../notes/files"
 import { type OpenRow, tildify } from "../notes/projects"
-import type { SwitchRow } from "../notes/vault"
+import type { AnswerRow, AskActionRow, AskMarkRow, AskNoteRow, SwitchRow } from "../notes/vault"
 import type { Theme } from "../theme/theme"
 import { BOARD_MODES, type ThemeMode } from "../theme/themepick"
 import { chip, inkAt, steamColors } from "./chrome"
+import { CARET, footInk, footnoteRule, markText, RULE } from "./footnote"
 import type { ArtCell } from "./welcome"
 
 /** Wash drawn over the page behind a popup: black over dark themes, white over light ones. */
@@ -22,6 +23,8 @@ export interface PickerItem {
   right?: string
   /** a section title: never highlighted, hovered or activated */
   header?: boolean
+  /** drawn in the row's left padding, its last column a space before the text (an answer's or footnote's `¹`) */
+  mark?: Span
 }
 
 /** `text` with the code points at `hits` drawn in `hit` and bold (`bold`: the rest bold too). */
@@ -82,30 +85,13 @@ export function fitHits(text: string, hits: readonly number[], room: number): { 
  * most a quarter; the matched text gets the rest, cut around its hits, so the match stays in view.
  */
 export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
-  if (r.kind === "header")
-    return { header: true, spans: [{ text: r.title, fg: t.textMuted, attr: A.BOLD }], right: r.count }
-  if (r.kind === "askNote") return { header: true, spans: [{ text: safeLine(r.text), fg: t.textMuted }] }
-  if (r.kind === "askAction")
-    return {
-      spans: [
-        ...(r.error ? [{ text: "✗ ", fg: t.error }] : []),
-        { text: safeLine(r.text), fg: t.text },
-        { text: safeLine(r.note), fg: t.textMuted },
-      ],
-    }
-  if (r.kind === "answer") {
-    const room = w - (r.right ? width(r.right) + 1 : 0)
-    if (r.heading < 0) {
-      const f = fitHits(r.name, [], room)
-      return { spans: hitSpans(f.text, f.hits, t.text, t.primary), right: r.right }
-    }
-    const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
-    const f = fitHits(r.text, r.hits, room - width(name) - 3)
-    return {
-      spans: [{ text: name + " › ", fg: t.textMuted }, ...hitSpans(f.text, f.hits, t.text, t.primary)],
-      right: r.right,
-    }
+  if (isAskItem(r)) return askItem(r, t, w)
+  if (r.kind === "header") {
+    const title: Span = { text: r.title, fg: t.textMuted, attr: A.BOLD }
+    if (r.right === undefined) return { header: true, spans: [title], right: r.count }
+    return { header: true, spans: [title, { text: `  ${r.count}`, fg: t.textMuted }], right: safeLine(r.right) }
   }
+  if (r.kind === "answer") return answerItem(r, t, w)
   const folder = r.kind === "text" ? "" : truncateLeft(r.folder, Math.floor(w / 3))
   const room = w - (folder ? width(folder) + 1 : 0)
   const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
@@ -133,6 +119,66 @@ export function switchItem(r: SwitchRow, t: Theme, w = Infinity): PickerItem {
       }
     case "text":
       return { spans: [{ text: name + "  ", fg: t.text }, ...fit(r.context, r.hits, width(name) + 2, t.textMuted)] }
+  }
+}
+
+/** An ask answer: `note › heading` with its hits, the matched word on the right, a reranked one's mark in the padding. */
+function answerItem(r: AnswerRow, t: Theme, w: number): PickerItem {
+  const mark = r.n ? { mark: { text: markText(r.n), fg: t.primary } } : {}
+  const room = w - (r.right ? width(r.right) + 1 : 0)
+  if (r.heading < 0) {
+    const f = fitHits(r.name, [], room)
+    return { spans: hitSpans(f.text, f.hits, t.text, t.primary), right: r.right, ...mark }
+  }
+  const name = truncate(r.name, Math.max(12, Math.floor(w / 4)))
+  const f = fitHits(r.text, r.hits, room - width(name) - 3)
+  return {
+    spans: [{ text: name + " › ", fg: t.textMuted }, ...hitSpans(f.text, f.hits, t.text, t.primary)],
+    right: r.right,
+    ...mark,
+  }
+}
+
+const NOTE_INK = { text: "text", muted: "note", error: "error" } as const
+type AskItemRow = AskActionRow | AskNoteRow | AskMarkRow
+const ASK_ITEMS = new Set(["askNote", "askAction", "rule", "footnote", "askWait"])
+const isAskItem = (r: SwitchRow): r is AskItemRow => ASK_ITEMS.has(r.kind)
+
+/** An ask row that is not a list hit: a note, the action row, the rule, a footnote, a waiting row. */
+function askItem(r: AskItemRow, t: Theme, w: number): PickerItem {
+  const c = footInk(t)
+  switch (r.kind) {
+    case "askNote": {
+      const fg = c[NOTE_INK[r.tone ?? "muted"]]
+      return {
+        header: true,
+        spans: [...(r.lead ? [{ text: r.lead, fg: c.status }] : []), { text: safeLine(r.text), fg }],
+      }
+    }
+    case "askAction":
+      return {
+        spans: [
+          ...(r.error ? [{ text: "✗ ", fg: c.error, attr: A.BOLD }] : []),
+          { text: safeLine(r.text), fg: c.text },
+          { text: safeLine(r.note), fg: c.note },
+        ],
+      }
+    case "rule":
+      return { header: true, spans: footnoteRule(t, Math.min(RULE, w), null) }
+    case "footnote":
+      return {
+        header: true,
+        mark: { text: markText(r.n), fg: c.mark },
+        spans: [{ text: truncate(safeLine(r.text), w), fg: c.note }],
+      }
+    case "askWait":
+      return {
+        header: true,
+        spans: [
+          { text: CARET, fg: c.caret },
+          { text: ` ${safeLine(r.text)}`, fg: c.status },
+        ],
+      }
   }
 }
 

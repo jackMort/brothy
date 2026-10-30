@@ -16,7 +16,7 @@ const askVault = () =>
     "getting-started.md": `# Getting started\n\nIntro.\n\n## Open a folder\n\nPass a folder path.\n\n${filler(40)}\n\n## Open a single file\n\nSee below.\n\nGive a single file path to brothy.\n`,
   })
 const QUERIES = JSON.stringify({ queries: ["single file", "path", "cli"] })
-/** C-p, `?<question>`, ⏎; call `i` of the stub replies `reply`. Resolves with the frame once Answers show. */
+/** C-p, `?<question>`, ⏎; call `i` of the stub replies `reply`. Resolves with the frame once the Matches show. */
 async function askIt(
   s: Setup,
   ai: ReturnType<typeof aiStub>,
@@ -30,7 +30,7 @@ async function askIt(
   await waitFor(s, () => ai.calls.length === i + 1)
   ai.send(i, reply)
   ai.end(i)
-  return waitFrame(s, (f) => f.includes("Answers"))
+  return waitFrame(s, (f) => f.includes("Matches"))
 }
 
 test("? in C-p: the title is Ask, the row says what leaves and where; too short asks for more", async () => {
@@ -61,30 +61,44 @@ test("without an ai block the Ask row says AI off and ⏎ sends nothing", async 
   expect(ai.calls.length).toBe(0)
 })
 
-test("⏎ sends only the question; the answers are vault places with hits/all and the queries searched", async () => {
+test("⏎ sends only the question; a waiting row under a rule, then Matches with the word that matched", async () => {
   aiConfig(OLLAMA)
   const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
   await keys(s, "C-p", "type:?how do I open one file", "enter")
   await waitFor(s, () => ai.calls.length === 1)
-  expect(await keys(s)).toContain("asking…")
+  let f = await keys(s)
+  expect(f).toContain("────────────────")
+  expect(f).toContain("▍ asking llama3.2")
+  expect(f).not.toContain("asking llama3.2 · 0 s")
   const body = ai.calls[0]!.body
   expect(body.messages.map((m) => m.content)).toEqual([ASK_PROMPT, "how do I open one file"])
   expect(JSON.stringify(body)).not.toMatch(/brothy path|Give a single|README|getting-started/)
   ai.send(0, QUERIES)
   ai.end(0)
-  const f = await waitFrame(s, (fr) => fr.includes("Answers"))
+  f = await waitFrame(s, (fr) => fr.includes("Matches"))
   // the list is narrower beside the peek pane: the note name keeps its quarter, cut with …
   for (const x of [
     "llama3.2",
     "getting-sta… › Open a single file",
-    "2/3",
+    "single file",
     "README › Quick start",
-    "1/3",
     "↻ rerank with excerpts",
     "searched: single file · path · cli",
   ])
     expect(f).toContain(x)
+  expect(f).not.toContain("Answers")
+  expect(f).not.toMatch(/\b[0-9]\/3\b/)
+  expect(f).not.toContain("▍ asking")
   expect(existsSync(join(cacheDir, "brothy"))).toBe(false) // nothing on disk
+})
+
+test("the waiting row counts the seconds from 1 s; the title names the model while asking", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  const f = await waitFrame(s, (fr) => fr.includes("▍ asking llama3.2 · 1 s"), 3000)
+  expect(f.split("\n").find((l) => l.includes("Ask"))).toContain("llama3.2")
 })
 
 test("editing the question aborts the request and goes back to idle; esc aborts too", async () => {
@@ -101,13 +115,17 @@ test("editing the question aborts the request and goes back to idle; esc aborts 
   expect(ai.calls[1]!.signal!.aborted).toBe(true)
 })
 
-test("a failed ask toasts and shows ✗ … · ⏎ asks again; ⏎ asks again", async () => {
+test("a failed ask toasts and keeps the error in the list: what left, and the next steps; ⏎ asks again", async () => {
   aiConfig(OLLAMA)
   const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
   await keys(s, "C-p", "type:?how do I open one file", "enter")
   await waitFor(s, () => ai.calls.length === 1)
   ai.fail(0, "boom")
-  await waitFrame(s, (f) => f.includes("✗ AI: boom · ⏎ asks again"))
+  const f = await waitFrame(s, (fr) => fr.includes("✗ boom"))
+  expect(f).toContain("AI: boom") // the toast
+  expect(f).toContain("the question was sent to localhost:11434")
+  expect(f).toContain("· is ollama running? ⏎ tries again")
+  expect(f).toContain("· the ai block lives in config.json; r re-reads it")
   await keys(s, "enter")
   await waitFor(s, () => ai.calls.length === 2)
 })
@@ -135,7 +153,8 @@ test("an ask while 3 other AI requests run: AI busy, on the toast and the ask ro
   await keys(s, "C-p", "type:?how do I open one file")
   await waitFrame(s, (f) => f.includes("⏎ ask"))
   const f = await keys(s, "enter")
-  expect(f).toContain("AI busy · 3 requests running · ⏎ asks again")
+  expect(f).toContain("✗ AI busy · 3 requests running")
+  expect(f).toContain("nothing was sent")
   await waitFrame(s, (fr) => fr.split("\n").filter((l) => l.includes("AI busy · 3 requests running")).length === 2) // toast + row
   expect(ai.calls.length).toBe(3)
 })
@@ -145,7 +164,7 @@ test("asking the same question again reuses its queries without a request", asyn
   const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
   await askIt(s, ai)
   expect(await keys(s, "type:x", "backspace")).toContain("⏎ ask")
-  expect(await keys(s, "enter")).toContain("Answers")
+  expect(await keys(s, "enter")).toContain("Matches")
   expect(ai.calls.length).toBe(1)
 })
 
@@ -156,7 +175,7 @@ test("excerpts are sent only from the rerank row; the model's order shows with i
   expect(ai.calls.length).toBe(1)
   await keys(s, "tab", "enter") // first answer → the rerank row
   await waitFor(s, () => ai.calls.length === 2)
-  expect(await keys(s)).toContain("reranking…")
+  expect(await keys(s)).toMatch(/▍ ranking \d+ excerpts · llama3\.2/)
   const [sys, user] = ai.calls[1]!.body.messages.map((m) => m.content)
   expect(sys).toBe(RERANK_PROMPT)
   expect(user).toStartWith(
@@ -168,7 +187,15 @@ test("excerpts are sent only from the rerank row; the model's order shows with i
   )
   ai.end(1)
   const f = await waitFrame(s, (fr) => fr.includes("Other matches"))
-  expect(f).toContain("pass the file path")
+  const lines = f.split("\n")
+  const row = (x: string) => lines.find((l) => l.includes(x))!
+  expect(row("Answers")).toContain("llama3.2")
+  expect(row("Open a single file")).toContain("¹ getting-sta")
+  expect(row("¹ pass the file path")).toBeDefined() // the why is a footnote under the rule, not on the answer's row
+  expect(row("Open a single file")).not.toContain("pass the file path")
+  expect(lines.findIndex((l) => l.includes("────────────────"))).toBeLessThan(
+    lines.findIndex((l) => l.includes("¹ pass the file path")),
+  )
   expect(f).not.toContain("↻ rerank with excerpts")
   expect(f).not.toContain("dup")
 })
