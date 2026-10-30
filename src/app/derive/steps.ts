@@ -5,7 +5,7 @@ import { type AskView, askStage, questionOf } from "../../ai/ask"
 import type { Summary } from "../../ai/cache"
 import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
-import type { Change } from "../../ai/delta"
+import type { Change, ChangeMark } from "../../ai/delta"
 import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
 import { plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
@@ -167,9 +167,12 @@ function changeView(s: UI, { file, src, fm }: NoteView, memo: Memo, jobs: Map<st
   return { changes, propsChanged, after, propsKey, cv }
 }
 
-/** The Info view: properties, title, the TL;DR and Changed blocks, its rows and the rows the cursor stops on. */
+/** No change marks: one shared empty list. */
+const NO_MARKS: ChangeMark[] = []
+
+/** The Info view: properties, title, the TL;DR and Changed blocks, its rows and the rows the cursor stops on; the Changed block's marks in Preview. */
 export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: Map<string, Job>) {
-  const { file, src, fm, st } = opened
+  const { file, src, fm, st, doc } = opened
   const props = memo.props(src)
   const links = memo.links(memo.linkTargets(fm.body), s.linkTree, s.openPath)
   // primitives into memo.info, never a fresh object, so the single-entry memo holds
@@ -179,7 +182,8 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
   const { cv } = delta
   const infoRows = memo.info(props, st, links, L.PNW - 2, file?.info ?? null, sv, cv, title)
   const linkRows = memo.linkIdx(infoRows)
-  return { props, title, ...delta, sv, infoRows, linkRows }
+  const marks = cv?.changes && !s.source ? memo.marks(doc.headings, doc.lines.length, cv.changes) : NO_MARKS
+  return { props, title, ...delta, sv, infoRows, linkRows, marks }
 }
 
 /** The panel list's height and its filter row; puts the Files cursor back on the same note when the list changes. */

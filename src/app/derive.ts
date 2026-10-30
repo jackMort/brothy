@@ -14,7 +14,7 @@ import {
 import { textHash } from "../ai/cache"
 import { cleanSummary, noteText } from "../ai/client"
 import { type AIConfig, resolveAI } from "../ai/config"
-import { type Change, type DeltaNote, diffSections, hhmm, parseDelta } from "../ai/delta"
+import { type Change, changeMarks, type DeltaNote, diffSections, hhmm, parseDelta } from "../ai/delta"
 import { freshGlosses, glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
@@ -145,6 +145,7 @@ function panelMemo() {
       return { total: r.total, rows: r.rows.map((x): FileRow => ({ node: x.node, depth: 0, hits: x.hits })) }
     }),
     diff: cached(diffSections),
+    marks: cached(changeMarks),
     partial: cached((raw: string, changes: Change[]) => parseDelta(raw, changes, true)),
     // one object per state of the Changed block, so the Info memo holds while nothing changes
     change: cached(

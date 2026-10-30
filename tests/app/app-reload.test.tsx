@@ -3,7 +3,8 @@ import { expect, test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { DELTA_PROMPT } from "../../src/ai/delta"
-import { bodyRows, keys, OLLAMA, openHelp, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
+import { hex } from "../helpers/theme"
+import { B, bodyRows, keys, OLLAMA, openHelp, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
 
 const { cfgDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
 
@@ -410,4 +411,52 @@ test("the head says not compared for a reload too large to compare", async () =>
   writeFileSync(join(d, "a.md"), big("b"))
   const f = await waitFrame(s, (f) => f.includes("too large to compare"), 4000)
   expect(f.split("\n")[0]).toMatch(/not compared\s*$/)
+})
+
+const MARKED =
+  "# Broth\n\n## One\n\nfirst\n\n## Two\n\nsecond\n\n## Three\n\nthird\n\n## " + "x".repeat(77) + "\n\nlong\n"
+const MARKED_EDIT = MARKED.replace("first", "first!").replace("## Two\n\nsecond\n\n", "").replace("long", "long!")
+
+/** The colour of the span that is exactly `text` on screen row `row`. */
+const fgAt = (s: Awaited<ReturnType<typeof mount>>, row: number, text: string) =>
+  hex(s.captureSpans().lines[row]!.spans.find((sp) => sp.text === text)!.fg)
+
+test("marks: ¹ after a changed heading, a full heading's in the gutter, a removed section's above the next heading", async () => {
+  const d = tmp({ "a.md": MARKED })
+  const s = await mount(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), MARKED_EDIT)
+  const f = await waitFrame(s, (f) => f.includes("reloaded"), 4000)
+  const rows = f.split("\n")
+  const at = (needle: string) => rows.findIndex((r) => r.includes(needle))
+  expect(rows[at("## One")]).toContain("## One¹ ")
+  // Two is gone: its mark sits on the blank row above Three, two columns left of the text, muted
+  const three = at("## Three")
+  expect(rows[three - 1]!.slice(0, 40).trim()).toBe("²")
+  expect(rows[three - 1]!.indexOf("²")).toBe(rows[three]!.indexOf("## Three") - 2)
+  expect(fgAt(s, three - 1, "²")).toBe(B.textMuted)
+  expect(rows[three]).not.toContain("Three³") // Three did not change
+  // a heading that fills the measure: its mark in the gutter
+  const long = at("x".repeat(77))
+  expect(rows[long]!.indexOf("³")).toBe(rows[long]!.indexOf("## x") - 2)
+  expect(fgAt(s, at("## One"), "¹")).toBe(B.primary)
+  // drawn, not rendered: the heading's text matches once, Source and zen draw none
+  expect((await keys(s, "/", "type:One", "enter")).split("\n")[0]).toContain("/One 1/1")
+  expect(await keys(s, "esc", "s")).not.toContain("One¹")
+  expect(await keys(s, "s", "z")).not.toContain("One¹")
+})
+
+test("marks turn muted once explained", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const { s, ai } = await mountAI(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), EDITED)
+  const f = await waitFrame(s, (f) => f.includes("## One¹"), 4000)
+  const one = f.split("\n").findIndex((r) => r.includes("## One¹"))
+  expect(fgAt(s, one, "¹")).toBe(B.primary)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "Sum.\n§1: one reworded\n")
+  ai.end(0)
+  await waitFrame(s, (f) => /Changed since \d\d:\d\d · llama3.2/.test(f))
+  expect(fgAt(s, one, "¹")).toBe(B.textMuted)
 })

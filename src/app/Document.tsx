@@ -1,5 +1,6 @@
 // The document area: the welcome page with no note open, an open error, zen's lines (typewriter gutter, Spotlight and
-// the gloss: a sheet or margin notes, and the heading marks) or the note's lines (find matches, link labels, the drawer's scrim), and the minimap beside it.
+// the gloss: a sheet or margin notes, and the heading marks) or the note's lines (find matches, link labels, the change
+// and ask marks, the drawer's scrim), and the minimap beside it.
 // Not pure: drawn from the app context, and it clamps the welcome page's highlighted row as it draws, so App calls it
 // once per render, before its too-small return.
 import { MouseButton, type MouseEvent } from "@opentui/core"
@@ -9,7 +10,7 @@ import { A, type Span } from "../lib/spans"
 import { superscript, truncate } from "../lib/text"
 import type { Line } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
-import { footInk, markText, placeMark, SIDENOTE_GAP, SIDENOTE_W } from "../ui/footnote"
+import { footInk, type MarkSource, markFor, markText, placeMark, SIDENOTE_GAP, SIDENOTE_W } from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
@@ -219,13 +220,39 @@ function landingMark(d: Derived): { row: number; mark: Span } | null {
   return { row: h.last ?? h.line, mark: { text: markText(l.n), fg: l.moved ? d.t.textMuted : d.t.primary } }
 }
 
-/** The note's lines on screen: find matches marked, link labels over them, dimmed under the drawer's scrim. */
+/** A mark over Preview's rows: after the row's text (else in the gutter), or only in the gutter. */
+type RowMark = { source: MarkSource; mark: Span; gutter: boolean }
+
+/**
+ * The marks on Preview's rows, by row: each changed heading's number (muted once explained), the lead-in's and a removed
+ * section's in the gutter (a removed one muted), an ask landing's; one per row, change first (`markFor`).
+ */
+function rowMarks(d: Derived): Map<number, RowMark> {
+  const c = footInk(d.t)
+  const explained = d.cv?.state === "result"
+  const cands: [number, RowMark][] = d.marks.map((m) => [
+    m.row,
+    {
+      source: "change",
+      mark: { text: markText(m.n), fg: explained || m.kind === "removed" ? c.markStale : c.mark },
+      gutter: m.kind !== "heading",
+    },
+  ])
+  const ask = landingMark(d)
+  if (ask) cands.push([ask.row, { source: "ask", mark: ask.mark, gutter: false }])
+  const out = new Map<number, RowMark>()
+  for (const [row, m] of cands) out.set(row, markFor([...(out.has(row) ? [out.get(row)!] : []), m])!)
+  return out
+}
+
+/** The note's lines on screen: find matches marked, link labels over them, the marks, dimmed under the drawer's scrim. */
 function noteLines(d: Derived) {
   const { s, L, t, view, top } = d
   const { CW, CH } = L
   const scrim = L.mode === "drawer" && L.shown
   const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
-  const landing = landingMark(d)
+  const marks = rowMarks(d)
+  const dim = (spans: Span[]) => (scrim ? dimSpans(spans, t, SCRIM_DIM) : spans)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
       {view.lines.slice(top, top + CH).map((l: Line, i) => {
@@ -236,17 +263,14 @@ function noteLines(d: Derived) {
             if (sp.row === top + i && label.startsWith(lb.typed))
               spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
           })
-        let gutter: Span | null = null
-        if (landing?.row === top + i) {
-          const at = placeMark(spans, CW, landing.mark)
-          if ("inline" in at) spans = at.inline
-          else gutter = at.gutter
-        }
-        const row = <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
-        return gutter ? (
+        const m = marks.get(top + i)
+        const at = m && (m.gutter ? { gutter: m.mark } : placeMark(spans, CW, m.mark))
+        if (at && "inline" in at) spans = at.inline
+        const row = <Row key={top + i} spans={dim(spans)} />
+        return at && "gutter" in at ? (
           <box key={top + i} style={{ height: 1, flexDirection: "row" }}>
             <box style={{ position: "absolute", left: -2, width: 1, height: 1 }}>
-              <Row spans={[gutter]} />
+              <Row spans={dim([at.gutter])} />
             </box>
             {row}
           </box>
