@@ -22,7 +22,7 @@ test("a live reload lists the changed sections in Info and counts them in the to
   const s = await mount(d, "a.md", { size: W120 })
   await keys(s, "3")
   writeFileSync(join(d, "a.md"), EDITED)
-  await waitFrame(s, (f) => f.includes("reloaded · 2 sections changed"), 4000)
+  await waitFrame(s, (f) => f.includes("reloaded · ² sections changed"), 4000)
   const f = s.captureCharFrame()
   expect(f).not.toContain("D explains") // no ai block
   expect(f).toMatch(/Changed · since \d\d:\d\d/)
@@ -36,16 +36,16 @@ test("with an ai block the reload toast names D", async () => {
   const d = tmp({ "a.md": TWO })
   const s = await mount(d, "a.md", { size: W120 })
   writeFileSync(join(d, "a.md"), EDITED)
-  await waitFrame(s, (f) => f.includes("reloaded · 2 sections changed · D explains"), 4000)
+  await waitFrame(s, (f) => f.includes("reloaded · ² sections changed · D explains"), 4000)
 })
 
 test("saves add up against the text the note was opened with", async () => {
   const d = tmp({ "a.md": TWO })
   const s = await mount(d, "a.md", { size: W120 })
   writeFileSync(join(d, "a.md"), TWO.replace("first", "first!"))
-  await waitFrame(s, (f) => f.includes("reloaded · 1 section changed"), 4000)
+  await waitFrame(s, (f) => f.includes("reloaded · ¹ section changed"), 4000)
   writeFileSync(join(d, "a.md"), TWO.replace("first", "first!").replace("second", "second!"))
-  await waitFrame(s, (f) => f.includes("reloaded · 2 sections changed"), 4000)
+  await waitFrame(s, (f) => f.includes("reloaded · ² sections changed"), 4000)
 })
 
 test("a properties-only change and an unchanged save", async () => {
@@ -63,7 +63,7 @@ test("switching notes drops the change list; coming back starts from the text on
   const d = tmp({ "a.md": TWO, "b.md": "# B\n" })
   const s = await mount(d, "a.md", { size: W120 })
   writeFileSync(join(d, "a.md"), EDITED)
-  await waitFrame(s, (f) => f.includes("2 sections changed"), 4000)
+  await waitFrame(s, (f) => f.includes("² sections changed"), 4000)
   await openNote(s, "b")
   expect(await keys(s, "3")).not.toContain("Changed")
   await openNote(s, "a")
@@ -80,6 +80,7 @@ test("D streams an explanation of the changed hunks into Info; the baseline move
   await waitFor(s, () => ai.calls.length === 1)
   const [system, user] = ai.calls[0]!.body.messages
   expect(system!.content).toBe(DELTA_PROMPT)
+  expect(system!.content).toContain("at most 8 words")
   expect(user!.content.startsWith("Note: a\n§1 edited · A › One\n@@\n")).toBe(true)
   expect(user!.content).toContain("+ first, edited")
   expect(user!.content).toContain("§2 added · A › Three")
@@ -262,7 +263,7 @@ test("⏎ on a change row jumps to its heading; removed rows are skipped", async
     join(d, "a.md"),
     LONG.replace("row 3\n", "row 3 edited\n").replace("## Two\n\nsecond\n\n", "").replace("third", "third!"),
   )
-  await waitFrame(s, (f) => f.includes("3 sections changed"), 4000)
+  await waitFrame(s, (f) => f.includes("³ sections changed"), 4000)
   await keys(s, "3")
   // rows: ~ One (stop), − Two (not a stop), ~ Three (stop): j goes from One straight to Three
   const f = await keys(s, "j", "enter")

@@ -3,9 +3,10 @@
  * baseline, the hunks sent to the model, and what of its reply is kept.
  */
 
-import { truncate } from "../lib/text"
-import { type NoteSection, noteSections } from "../markdown/sections"
+import { superscript, truncate } from "../lib/text"
+import { headingKey, type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
+import { type Tail, waitText } from "../ui/footnote"
 import { type ChatReq, cleanReply, cleanSummary, stripThink } from "./client"
 
 /** One line of a diff: unchanged (" "), removed ("-") or added ("+"). */
@@ -102,6 +103,8 @@ export interface Change {
   rewritten: boolean
   /** the section's lines in the new text, heading line included ("" for removed) */
   newText: string
+  /** removed only: the new text's outline index of the nearest earlier section both texts share (-1 the lead-in, null before them all) */
+  after?: number | null
 }
 
 /** Above this many UTF-16 units on either side, a reload is not compared (as the vault's BODY_LIMIT). */
@@ -193,19 +196,20 @@ export function diffSections(before: string, after: string): Change[] | null {
   const removedAfter = removedAnchors(olds, newIds)
   const out: Change[] = []
   let budget = DIFF_BUDGET
-  const pushRemoved = (list: Sec[] | undefined) => {
+  const pushRemoved = (list: Sec[] | undefined, after: number | null) => {
     for (const o of list ?? [])
-      out.push(
-        change("removed", o, {
+      out.push({
+        ...change("removed", o, {
           plus: 0,
           minus: o.lines.length,
           hunks: [{ ops: all("-", o.lines) }],
           rewritten: false,
           newText: "",
         }),
-      )
+        after,
+      })
   }
-  pushRemoved(removedAfter.get(null))
+  pushRemoved(removedAfter.get(null), null)
   for (const n of news) {
     const o = oldById.get(idOf(n))
     const newText = n.lines.join("\n")
@@ -224,14 +228,14 @@ export function diffSections(before: string, after: string): Change[] | null {
       if (cells <= DIFF_CELLS && (budget -= cells) < 0) return null
       out.push(editedChange(o, n, newText, cells))
     }
-    pushRemoved(removedAfter.get(idOf(n)))
+    pushRemoved(removedAfter.get(idOf(n)), n.s.index)
   }
   return out
 }
 
 /** `PROMPTS.delta` (ai/config.ts) is its version; nothing is cached, so a change needs no bump to be safe, but bump it anyway. */
 export const DELTA_PROMPT =
-  'You are shown the sections of a note that changed, as line diffs (`-` removed, `+` added, two spaces = unchanged context), each with an id like §2. First write 1–2 sentences, at most 40 words, on what changed overall and why it matters to a reader. Then one line per section id you can describe, at most 10 of them, the changes that matter most: `§<id>: <at most 12 words>`, optionally followed by ` | "<a short phrase copied exactly from a + line>"`. Plain text, no markdown. Same language as the note.'
+  'You are shown the sections of a note that changed, as line diffs (`-` removed, `+` added, two spaces = unchanged context), each with an id like §2. First write 1–2 sentences, at most 40 words, on what changed overall and why it matters to a reader. Then one line per section id you can describe, at most 10 of them, the changes that matter most: `§<id>: <at most 8 words>`, optionally followed by ` | "<a short phrase copied exactly from a + line>"`. Plain text, no markdown. Same language as the note.'
 /** The user message stays within this many code points (or the target's `maxChars`, if lower), unless the `Note:` line alone is longer. */
 export const DELTA_MAX = 16_000
 /** Lines of a removed section that are sent. */
@@ -372,7 +376,7 @@ export function parseDelta(raw: string, changes: Change[], partial = false): Del
 export function reloadToast(changes: Change[] | null, propsChanged: boolean, ai: boolean): string {
   if (changes === null) return "reloaded · too large to compare"
   const n = changes.length
-  if (n) return `reloaded · ${n} section${n === 1 ? "" : "s"} changed${ai ? " · D explains" : ""}`
+  if (n) return `reloaded · ${superscript(n)} section${n === 1 ? "" : "s"} changed${ai ? " · D explains" : ""}`
   return propsChanged ? "reloaded · properties changed" : "reloaded from disk"
 }
 
@@ -385,3 +389,83 @@ export const hhmm = (at: number) => {
 /** What `findQuote` looks for: Source rows show the Markdown as written; Preview drops list/task markers and inline marks. */
 export const quoteNeedle = (quote: string, source: boolean) =>
   source ? quote : plainLine(quote.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, ""))
+
+/** `+a −r`, one side omitted when zero. */
+export const changeCounts = (c: Pick<Change, "plus" | "minus">) =>
+  [c.plus ? `+${c.plus}` : "", c.minus ? `−${c.minus}` : ""].filter(Boolean).join(" ")
+
+/**
+ * The outline index of change `c`'s heading in `headings` (the note as it is now): -1 for the lead-in, null for a
+ * removed section or a heading no longer there. A heading that moved (rows listed while a request runs come from the
+ * sent text) is found again by its key and occurrence.
+ */
+export function changeHeading(headings: readonly { text: string }[], c: Change): number | null {
+  if (c.status === "removed") return null
+  if (c.index < 0 || headingKey(headings[c.index]?.text ?? "") === c.key) return c.index
+  let seen = 0
+  const i = headings.findIndex((h) => headingKey(h.text) === c.key && seen++ === c.ord)
+  return i < 0 ? null : i
+}
+
+/** Changes past this number draw no mark (the head still counts them). */
+export const MARK_MAX = 99
+
+/** A change's mark in Preview: after its heading's last row, in the gutter of row 0 (lead-in) or where a section was removed. */
+export interface ChangeMark {
+  n: number
+  row: number
+  kind: "heading" | "lead" | "removed"
+}
+
+/**
+ * The marks of `changes` over Preview's rows (`total` of them): a changed heading's on its last row, a lead-in's on row
+ * 0, a removed section's on the last row of the shared section it followed (the blank row above the next heading; row
+ * 0 before them all), one row up while that row already has a mark.
+ */
+export function changeMarks(
+  headings: readonly { text: string; line: number; last?: number }[],
+  total: number,
+  changes: readonly Change[],
+): ChangeMark[] {
+  const marks: ChangeMark[] = []
+  changes.slice(0, MARK_MAX).forEach((c, i) => {
+    const h = changeHeading(headings, c)
+    if (h === null) return
+    const at = headings[h]
+    marks.push({ n: i + 1, row: at ? (at.last ?? at.line) : 0, kind: at ? "heading" : "lead" })
+  })
+  const taken = new Set(marks.map((m) => m.row))
+  changes.slice(0, MARK_MAX).forEach((c, i) => {
+    if (c.status !== "removed") return
+    let row = c.after == null ? 0 : (headings[c.after + 1]?.line ?? total) - 1
+    while (row > 0 && taken.has(row)) row--
+    taken.add(row)
+    marks.push({ n: i + 1, row: Math.max(0, row), kind: "removed" })
+  })
+  return marks
+}
+
+/** The change after (`dir` 1) or before `n` (1-based) that is not a removed section; null at the end. */
+export function stepChange(changes: readonly Change[], n: number, dir: 1 | -1): number | null {
+  for (let i = n - 1 + dir; i >= 0 && i < changes.length; i += dir) if (changes[i]!.status !== "removed") return i + 1
+  return null
+}
+
+/** A landing footnote's text: the model's note, else what the list knows (`edited · +2 −2`, `new section · +3`). */
+export function landText(c: Change, note: DeltaNote | undefined): string {
+  if (note) return note.what
+  if (c.status === "added") return `new section · ${changeCounts(c)}`
+  return `${c.status} · ${changeCounts(c)}`
+}
+
+/**
+ * A landing footnote's tail: `¹ of 3 · ] next` (`[ prev` at the last change, neither when it is the only one), or
+ * while its note is still to come `asking llama3.2 · 3 s · D cancel`. `wait.model` is the display name.
+ */
+export function landTail(changes: readonly Change[], n: number, wait: { model: string; secs: number } | null): Tail {
+  if (wait) return { status: waitText(wait.model, wait.secs), model: wait.model, key: "D", word: "cancel" }
+  const status = `${superscript(n)} of ${changes.length}`
+  if (stepChange(changes, n, 1) !== null) return { status, key: "]", word: "next" }
+  if (stepChange(changes, n, -1) !== null) return { status, key: "[", word: "prev" }
+  return { status }
+}

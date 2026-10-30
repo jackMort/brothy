@@ -6,11 +6,10 @@
 import { closeSync, openSync } from "node:fs"
 import { basename } from "node:path"
 import type { KeyEvent } from "@opentui/core"
-import { type Change, quoteNeedle } from "../ai/delta"
+import { type Change, changeHeading, quoteNeedle } from "../ai/delta"
 import { parseFrontMatter } from "../markdown/frontmatter"
 import { HEADING_STYLES } from "../markdown/heading-style"
 import type { Rendered } from "../markdown/render"
-import { headingKey } from "../markdown/sections"
 import { sourceScan } from "../markdown/source"
 import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
 import { STDIN } from "../notes/workspace"
@@ -19,7 +18,6 @@ import { type EditResult, editorCommand, runEditor, sourceLineAt } from "../syst
 import { MEASURE } from "../ui/layout"
 import { MINI_MIN_W } from "../ui/minimap"
 import { findQuote, stepMatch } from "../ui/nav"
-import { findHeading } from "../ui/panel"
 import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
@@ -342,11 +340,7 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
 /** The rows of change `c`'s section in `view`, `to` exclusive (the lead-in before the first heading for none). */
 export function changeRows(view: Rendered, c: Change) {
   const hs = view.headings
-  // rows listed while a request runs come from the sent text: a heading that moved is found again by key
-  const i =
-    c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key
-      ? c.index
-      : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
+  const i = changeHeading(hs, c) ?? c.index
   const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
   const to = hs[i + 1]?.line ?? view.lines.length
   return { from, to }

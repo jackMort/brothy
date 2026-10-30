@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { cleanReply, noteText } from "../../src/ai/client"
 import {
+  changeCounts,
+  changeHeading,
+  changeMarks,
   DELTA_MAX,
   DELTA_PROMPT,
   DIFF_BUDGET,
@@ -11,12 +14,16 @@ import {
   diffSections,
   hhmm,
   hunks,
+  landTail,
+  landText,
   lineDiff,
+  MARK_MAX,
   MAX_DELTA,
   type Op,
   parseDelta,
   quoteNeedle,
   reloadToast,
+  stepChange,
 } from "../../src/ai/delta"
 import { expectLinear, manyHeadings, SCALE } from "../helpers/perf"
 
@@ -333,8 +340,9 @@ describe("reloadToast", () => {
   test("rows of the spec's table", () => {
     expect(reloadToast([], false, true)).toBe("reloaded from disk")
     expect(reloadToast([], true, true)).toBe("reloaded · properties changed")
-    expect(reloadToast(one, true, false)).toBe("reloaded · 1 section changed")
-    expect(reloadToast([...one, ...one], false, true)).toBe("reloaded · 2 sections changed · D explains")
+    expect(reloadToast(one, true, false)).toBe("reloaded · ¹ section changed")
+    expect(reloadToast([...one, ...one], false, true)).toBe("reloaded · ² sections changed · D explains")
+    expect(reloadToast(Array(12).fill(one[0]), false, false)).toBe("reloaded · ¹² sections changed")
     expect(reloadToast(null, false, true)).toBe("reloaded · too large to compare")
   })
 })
@@ -354,4 +362,115 @@ test("the system prompt is the spec's", () => {
   expect(DELTA_PROMPT.startsWith("You are shown the sections of a note that changed")).toBe(true)
   expect(DELTA_PROMPT.endsWith("Same language as the note.")).toBe(true)
   expect(DELTA_PROMPT).toContain("at most 10 of them") // the reply stays under MAX_DELTA
+  expect(DELTA_PROMPT).toContain("`§<id>: <at most 8 words>`") // two rows of a 30-column Info
+})
+
+describe("Change.after", () => {
+  test("a removed section names the shared section it followed in the new text", () => {
+    const cs = diffSections("# T\n\n## A\n\na\n\n## B\n\nb\n\n## C\n\nc\n", "# T\n\n## A\n\na\n\n## C\n\nc\n")!
+    expect(cs.map((c) => [c.status, c.key, c.after])).toEqual([["removed", "b", 1]])
+  })
+  test("-1 after the lead-in, null before every shared section; only removed sections carry it", () => {
+    expect(diffSections("intro\n\n## A\n\na\n\n## B\n\nb\n", "intro\n\n## B\n\nb\n")![0]!.after).toBe(-1)
+    expect(diffSections("## A\n\na\n\n## B\n\nb\n", "## B\n\nb\n")![0]!.after).toBeNull()
+    expect(diffSections("## A\n\na\n", "## A\n\nb\n")![0]!.after).toBeUndefined()
+  })
+})
+
+describe("changeHeading", () => {
+  const hs = (...t: string[]) => t.map((text) => ({ text }))
+  const [edit] = diffSections("# T\n\n## A\n\na\n\n## B\n\nb\n", "# T\n\n## A\n\na\n\n## B\n\nb!\n")!
+  test("the heading at its index, else found again by key; null when gone", () => {
+    expect(changeHeading(hs("T", "A", "B"), edit!)).toBe(2)
+    expect(changeHeading(hs("T", "New", "A", "B"), edit!)).toBe(3)
+    expect(changeHeading(hs("T", "A"), edit!)).toBeNull()
+  })
+  test("a duplicate heading by its occurrence; the lead-in is -1; a removed section has none", () => {
+    const [dup] = diffSections("## N\n\na\n\n## N\n\nb\n", "## N\n\na\n\n## N\n\nc\n")!
+    expect(changeHeading(hs("X", "Y", "N", "N"), dup!)).toBe(3)
+    const [lead] = diffSections("intro\n\n# A\n", "intro!\n\n# A\n")!
+    expect(changeHeading(hs("A"), lead!)).toBe(-1)
+    const [gone] = diffSections("## A\n\na\n\n## B\n\nb\n", "## A\n\na\n")!
+    expect(changeHeading(hs("A"), gone!)).toBeNull()
+  })
+})
+
+describe("changeMarks", () => {
+  // rows: 0 # T, 1 blank, 2 ## A, 3 blank, 4 a, 5 blank, 6 ## C, 7 blank, 8 c
+  const heads = [
+    { text: "T", line: 0 },
+    { text: "A", line: 2 },
+    { text: "C", line: 6, last: 6 },
+  ]
+  const before = "# T\n\n## A\n\na\n\n## B\n\nb\n\n## C\n\nc\n"
+  test("a heading's mark on its last row; a removed one on the row above the next shared heading", () => {
+    const cs = diffSections(before, "# T\n\n## A\n\na!\n\n## C\n\nc!\n")!
+    expect(cs.map((c) => c.status)).toEqual(["edited", "removed", "edited"])
+    expect(changeMarks(heads, 9, cs)).toEqual([
+      { n: 1, row: 2, kind: "heading" },
+      { n: 3, row: 6, kind: "heading" },
+      { n: 2, row: 5, kind: "removed" },
+    ])
+  })
+  test("a removed last section on the last row; before every shared one on row 0; the lead-in in the gutter of row 0", () => {
+    const last = diffSections("# T\n\n## A\n\na\n\n## C\n\nc\n\n## D\n\nd\n", "# T\n\n## A\n\na\n\n## C\n\nc\n")!
+    expect(changeMarks(heads, 9, last)).toEqual([{ n: 1, row: 8, kind: "removed" }])
+    const first = diffSections("## Z\n\nz\n\n# T\n\nt\n", "# T\n\nt\n")!
+    expect(changeMarks(heads, 9, first)).toEqual([{ n: 1, row: 0, kind: "removed" }])
+    const lead = diffSections("intro\n\n# T\n", "intro!\n\n# T\n")!
+    expect(changeMarks(heads, 9, lead)).toEqual([{ n: 1, row: 0, kind: "lead" }])
+  })
+  test("a removed mark moves up off a row that already has one", () => {
+    // B removed after A, whose heading is the row above C: A's mark is there
+    const tight = [
+      { text: "T", line: 0 },
+      { text: "A", line: 4 },
+      { text: "C", line: 5 },
+    ]
+    const cs = diffSections("# T\n\n## A\n## B\n\nb\n\n## C\n\nc\n", "# T\n\n## A!\n## C\n\nc\n")!
+    expect(cs.map((c) => c.status)).toEqual(["edited", "removed"])
+    expect(changeMarks(tight, 9, cs)).toEqual([
+      { n: 1, row: 4, kind: "heading" },
+      { n: 2, row: 3, kind: "removed" },
+    ])
+  })
+  test("a heading no longer there has no mark; past MARK_MAX none", () => {
+    const [edit] = diffSections("# T\n\n## Gone\n\nx\n", "# T\n\n## Gone\n\ny\n")!
+    expect(changeMarks(heads, 9, [edit!])).toEqual([])
+    const many = Array.from({ length: MARK_MAX + 1 }, () => ({ ...edit!, index: 1, key: "a" }))
+    expect(changeMarks(heads, 9, many)).toHaveLength(MARK_MAX)
+  })
+})
+
+describe("landing", () => {
+  const cs = diffSections(
+    "# T\n\n## A\n\na\n\n## B\n\nb\n\n## C\n\nc\n",
+    "# T\n\n## A\n\na\nmore\n\n## C\n\nc!\n\n## D\n\nd\n",
+  )!
+  test("stepChange skips removed sections and stops at the ends", () => {
+    expect(cs.map((c) => c.status)).toEqual(["edited", "removed", "edited", "added"])
+    expect(stepChange(cs, 1, 1)).toBe(3)
+    expect(stepChange(cs, 3, -1)).toBe(1)
+    expect(stepChange(cs, 4, 1)).toBeNull()
+    expect(stepChange(cs, 1, -1)).toBeNull()
+    expect(stepChange(cs, 0, 1)).toBe(1)
+  })
+  test("landText: the note, else the counts by status", () => {
+    expect(landText(cs[0]!, { what: "one line added" })).toBe("one line added")
+    expect(landText(cs[0]!, undefined)).toBe("edited · +1")
+    expect(landText(cs[2]!, undefined)).toBe("edited · +1 −1")
+    expect(landText(cs[3]!, undefined)).toBe("new section · +3")
+    expect(changeCounts({ plus: 0, minus: 3 })).toBe("−3")
+  })
+  test("landTail: where it is, the key to the next (prev at the last), or the wait", () => {
+    expect(landTail(cs, 1, null)).toEqual({ status: "¹ of 4", key: "]", word: "next" })
+    expect(landTail(cs, 4, null)).toEqual({ status: "⁴ of 4", key: "[", word: "prev" })
+    expect(landTail(cs.slice(0, 1), 1, null)).toEqual({ status: "¹ of 1" })
+    expect(landTail(cs, 1, { model: "llama3.2", secs: 3 })).toEqual({
+      status: "asking llama3.2 · 3 s",
+      model: "llama3.2",
+      key: "D",
+      word: "cancel",
+    })
+  })
 })
