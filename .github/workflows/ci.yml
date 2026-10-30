@@ -28,6 +28,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bunx biome ci .
+      # knip also checks site/: it needs the site's packages installed to see the astro binary
+      - run: cd site && bun install --frozen-lockfile
       - run: bunx knip
       - run: bun test
       - run: bun run build
