@@ -627,7 +627,7 @@ describe("HelpSheet", () => {
     const q = text.find((r) => r.includes("quit"))!
     expect(q).toMatch(/ q {15}quit/)
     expect(hex(rowOf("quit").spans.find((x) => x.text.includes("quit"))!.fg)).toBe(t.textMuted)
-    expect(text.find((r) => r.includes("summarize"))).toContain("…")
+    expect(text.find((r) => r.includes("summarize"))).not.toContain("…") // wrapped, not cut
     // keys and chips share a column edge; the chip's padding cell sits left of it
     expect(q.indexOf("q")).toBe(text.find((r) => r.includes("Global"))!.indexOf("Global"))
   })
