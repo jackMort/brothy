@@ -625,7 +625,7 @@ describe("chat · transport (through summarize)", () => {
 })
 
 test("PROMPT_V is the TL;DR version and stays 1: cached summaries don't turn outdated", () => {
-  expect(PROMPTS).toEqual({ tldr: 1, gloss: 1, delta: 2, ask: 1, rerank: 1 })
+  expect(PROMPTS).toEqual({ tldr: 1, gloss: 1, delta: 3, ask: 1, rerank: 1 })
   expect(PROMPT_V).toBe(PROMPTS.tldr)
   expect(PROMPT_V).toBe(1)
 })

@@ -31,7 +31,7 @@ Press <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key in the app
 | <kbd>j</kbd> <kbd>k</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | move / scroll |
 | <kbd>d</kbd> <kbd>u</kbd> · <kbd>space</kbd> <kbd>b</kbd> | half page · full page |
 | <kbd>g</kbd> <kbd>G</kbd> | top · bottom |
-| <kbd>[</kbd> <kbd>]</kbd> | previous · next heading (zen: section) |
+| <kbd>[</kbd> <kbd>]</kbd> | previous · next heading (zen: section; landed on a change: the previous · next change) |
 | <kbd>/</kbd> | filter notes (panel focused) · find in document (<kbd>↑</kbd> <kbd>↓</kbd> pick a row, <kbd>⏎</kbd> apply, <kbd>esc</kbd> clear) |
 | <kbd>n</kbd> <kbd>N</kbd> | next · previous match |
 | <kbd>s</kbd> | toggle Source / Preview |
@@ -40,7 +40,7 @@ Press <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key in the app
 | <kbd>#</kbd> | heading style: classic · bars · ladder · rules (saved) |
 | <kbd>w</kbd> | full width / 80-column measure (saved) |
 | <kbd>m</kbd> | minimap on / off (saved; needs 110 columns) |
-| <kbd>esc</kbd> | per context: clear find / filter · hide the zen gloss · leave zen · close the drawer |
+| <kbd>esc</kbd> | per context: clear find / filter · hide a change's footnote · hide the zen gloss · leave zen · close the drawer |
 
 ## Zen
 
@@ -58,7 +58,7 @@ Press <kbd>?</kbd> for the hints and <kbd>?</kbd> again for every key in the app
 | <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> | Files · Outline · Info view |
 | <kbd>h</kbd> · <kbd>l</kbd> | focus the panel · peek (Outline) / expand |
 | <kbd>-</kbd> | Files: tidy the tree (collapse all but the open note's path) |
-| <kbd>⏎</kbd> | open, expand or jump (Info: open the link or jump to the changed section; <kbd>j</kbd> <kbd>k</kbd> move between them) |
+| <kbd>⏎</kbd> | open, expand or jump (Info: open the link, go to the changed section, or open `+ n more sections`; <kbd>j</kbd> <kbd>k</kbd> move between them) |
 | <kbd>ctrl+b</kbd> | hide / show the panel (a drawer below 100 columns) |
 
 ## AI
@@ -69,4 +69,4 @@ These need an [`ai` block](/brothy/ai/setup/) in the config.
 | --- | --- |
 | <kbd>a</kbd> | summarize the note into the Info tab (<kbd>a</kbd> again cancels); in zen, gloss the section you are reading, <kbd>a</kbd> again shows more / less |
 | <kbd>A</kbd> | in zen: gloss the section again, replacing the cached one |
-| <kbd>D</kbd> | explain what changed on disk since the note was opened, in the Info tab (<kbd>D</kbd> again cancels; <kbd>⏎</kbd> on a changed section jumps to it) |
+| <kbd>D</kbd> | explain what changed on disk since the note was opened, in the Info tab (below 100 columns in the first change's footnote; <kbd>D</kbd> again cancels, after a failure it retries; <kbd>⏎</kbd> on a changed section goes there) |

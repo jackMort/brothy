@@ -28,7 +28,7 @@ test("a hint waits for its state: n N for a query, f for Preview, e for a note o
   expect(words({ ...NONE, disk: true })).toContain("e edit")
 })
 
-test("AI hints show only with an `ai` block; D also needs changes to explain", () => {
+test("AI hints show only with an `ai` block; D only while the Changed block gives it something to do", () => {
   expect(words({ ...NONE, ai: true }, "panel:info")).toEqual([
     "↑↓ links",
     "⏎ open",
@@ -36,7 +36,10 @@ test("AI hints show only with an `ai` block; D also needs changes to explain", (
     "tab document",
     "? keys",
   ])
-  expect(words(ALL, "panel:info")).toContain("D changes")
+  expect(words(ALL, "panel:info")).toContain("D explain")
+  expect(footerHints("panel:info", ALL, { explainChange: "retry" }).map((h) => `${h.key} ${h.word}`)).toContain(
+    "D retry",
+  )
   expect(words({ ...NONE, ai: true }, "zen")).toContain("a gloss")
   expect(words(NONE, "zen")).not.toContain("a gloss")
 })
@@ -61,7 +64,7 @@ test("spare hints are the optional ones", () => {
       .filter((h) => h.spare)
       .map((h) => h.key)
   expect(spare("doc")).toEqual(["f", "H L", "e", "a"])
-  expect(spare("panel:info")).toEqual(["a", "D"])
+  expect(spare("panel:info")).toEqual(["a"]) // D shows only while it has something to do: it is never dropped first
   expect(spare("theme")).toEqual(["type"])
   expect(spare("switch")).toEqual(["?"])
 })
@@ -93,9 +96,9 @@ test("a typing binding's empty word stays empty", () => {
   expect(footerHints("filter", ALL).map((h) => h.word)).toEqual(["", "", "open", "clear"])
 })
 
-test("popups and typing pin their hints; the document, the panel and zen fade theirs", () => {
+test("popups and typing pin their hints; the document (landed too), the panel and zen fade theirs", () => {
   for (const c of Object.keys(FOOTERS) as (keyof typeof FOOTERS)[])
-    expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "zen" || c.startsWith("panel:")))
+    expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "landing" || c === "zen" || c.startsWith("panel:")))
 })
 
 test("modeOf maps a panel context to its view's mode", () => {

@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import type { Change } from "../../src/ai/delta"
+import { A } from "../../src/lib/spans"
 import { width } from "../../src/lib/text"
 import { headingKey } from "../../src/markdown/sections"
 import type { Stats } from "../../src/markdown/stats"
 import type { FileNode } from "../../src/notes/files"
 import { scanTree } from "../../src/notes/files"
 import { mix, themeByName } from "../../src/theme/theme"
+import { footInk } from "../../src/ui/footnote"
 import {
   type ChangeView,
+  changeHead,
   changeItems,
   extractLinks,
   fileRowSpans,
@@ -19,6 +22,7 @@ import {
   infoSpans,
   linkDest,
   MAX_CHANGE_ROWS,
+  MAX_CHANGE_ROWS_OPEN,
   noteIndex,
   outlineRowSpans,
   outlineRows,
@@ -444,77 +448,167 @@ const SAMPLE = [
   chg("added", "Install on macOS", 9, 0, 1),
   chg("removed", "Pager notes", 0, 14, 2),
 ]
-const idle: ChangeView = { state: "idle", label: "14:02", changes: SAMPLE, summary: "", notes: [] }
-const rowOf = (it: InfoItem) => {
-  if (it.kind === "changes") return "Changed" + it.status
-  if (it.kind === "change") return it.mark + " " + it.text + it.counts
-  return it.kind === "summary" || it.kind === "stat" ? it.text : it.kind
+const idle: ChangeView = {
+  state: "idle",
+  since: "14:02",
+  model: "",
+  secs: 0,
+  changes: SAMPLE,
+  summary: "",
+  notes: [],
+  error: null,
+  open: false,
+  ai: true,
+  earlier: null,
 }
+const spanText = (spans: { text: string }[]) => spans.map((s) => s.text).join("")
+const rowOf = (it: InfoItem) => spanText(infoSpans(it, themeByName("brothy"), 30)).trimEnd()
 
 describe("changeItems", () => {
-  test("idle: label with the baseline time, one row per change, counts right-aligned", () => {
+  test("idle: the label with D explain, a numbered row per change, counts right-aligned, `new` for an added one", () => {
     const items = changeItems(idle, "Welcome", 30)
     expect(items.map(rowOf)).toEqual([
-      "Changed · since 14:02",
-      "~ Why another reader?    +2 −1",
-      "+ Install on macOS          +9",
-      "− Pager notes              −14",
+      "Changed since 14:02  D explain",
+      "¹ Why another reader?    +2 −1",
+      "² Install on macOS         new",
+      "³ Pager notes              −14",
     ])
-    expect(items.filter((i) => i.kind === "change").map((i) => (i as { stop: boolean }).stop)).toEqual([
-      true,
-      true,
-      false,
+    const rows = items.filter((i) => i.kind === "change")
+    expect(rows.map((i) => [i.stop, i.removed, i.at, i.n])).toEqual([
+      [true, false, 0, 1],
+      [true, false, 1, 2],
+      [false, true, 2, 3],
     ])
-    expect(items.filter((i) => i.kind === "change").map((i) => (i as { at: number }).at)).toEqual([0, 1, 2])
   })
-  test("loading: explaining…, the streamed summary and notes so far", () => {
+  test("the head's count: all changes, muted once explained; null when too large", () => {
+    expect(changeHead(idle)).toEqual({ n: 3, muted: false })
+    expect(changeHead({ ...idle, state: "result" })).toEqual({ n: 3, muted: true })
+    expect(changeHead({ ...idle, state: "large", changes: null })).toEqual({ n: null, muted: false })
+    expect(changeHead(null)).toBeNull()
+  })
+  test("AI off: no D in the label", () => {
+    expect(rowOf(changeItems({ ...idle, ai: false }, "W", 30)[0]!)).toBe("Changed since 14:02")
+  })
+  test("waiting: D cancel, the status row in the summary's place, then the rows", () => {
+    const items = changeItems({ ...idle, state: "loading", model: "llama3.2", secs: 3 }, "Welcome", 30)
+    expect(items.map(rowOf).slice(0, 3)).toEqual([
+      "Changed since 14:02   D cancel",
+      "▍ asking llama3.2 · 3 s",
+      "¹ Why another reader?    +2 −1",
+    ])
+    expect(rowOf(changeItems({ ...idle, state: "loading", model: "llama3.2", secs: 0 }, "W", 30)[1]!)).toBe(
+      "▍ asking llama3.2",
+    )
+  })
+  test("streaming: the summary so far ends in the caret; a note shows once its line is in", () => {
     const items = changeItems(
       { ...idle, state: "loading", summary: "Adds macOS", notes: [{ what: "feature list trimmed" }] },
       "Welcome",
       30,
     )
-    expect(items.map(rowOf).slice(0, 4)).toEqual([
-      "Changed · explaining…",
-      "Adds macOS",
-      "~ Why another reader?    +2 −1",
-      "    feature list trimmed",
+    expect(items.map(rowOf).slice(0, 5)).toEqual([
+      "Changed since 14:02   D cancel",
+      "Adds macOS▍",
+      "¹ Why another reader?    +2 −1",
+      "  feature list trimmed",
+      "² Install on macOS         new",
     ])
   })
-  test("result: model name, summary at most 3 rows, one muted line under each explained change", () => {
-    const long = "Adds macOS install steps and drops the old pager notes, then rewrites the intro twice over and again."
+  test("result: the model in the label, no D, summary at most 5 rows, notes at most 2 rows hung by 2", () => {
+    const long =
+      "Adds macOS install steps and drops the old pager notes, then rewrites the intro twice over and again, " +
+      "and again, and once more for luck, with a coda."
     const items = changeItems(
       {
+        ...idle,
         state: "result",
-        label: "claude-haiku-5-5",
-        changes: SAMPLE,
+        model: "claude-haiku-5-5",
         summary: long,
-        notes: [{ what: "feature list trimmed" }, { what: "brew and bun steps" }, undefined],
+        notes: [
+          { what: "feature list trimmed down to the three that matter most" },
+          { what: "brew and bun steps" },
+          undefined,
+        ],
       },
       "Welcome",
       30,
     )
     const rows = items.map(rowOf)
-    expect(rows[0]).toBe("Changed · claude-haiku-5-5")
-    expect(items.slice(1, 4).every((i) => i.kind === "summary" && i.muted)).toBe(true)
-    expect(rows[3]!.endsWith("…")).toBe(true)
-    expect(rows.slice(4)).toEqual([
-      "~ Why another reader?    +2 −1",
-      "    feature list trimmed",
-      "+ Install on macOS          +9",
-      "    brew and bun steps",
-      "− Pager notes              −14",
+    expect(rows[0]).toBe("Changed since 14:02 · claude-…")
+    expect(rows.slice(1, 6).every((r) => r.length > 0)).toBe(true)
+    expect(rows[5]!.endsWith("…")).toBe(true)
+    expect(rows.slice(6)).toEqual([
+      "¹ Why another reader?    +2 −1",
+      "  feature list trimmed down to",
+      "  the three that matter most",
+      "² Install on macOS         new",
+      "  brew and bun steps",
+      "³ Pager notes              −14",
+    ])
+    const marks = items.filter((i) => i.kind === "change").map((i) => i.tone)
+    expect(marks).toEqual(["explained", "explained", "explained"])
+  })
+  test("error: D retry, ✗ and the message in at most 2 rows, then the idle rows", () => {
+    const items = changeItems(
+      { ...idle, state: "error", error: "model “llama3.2” not found · ollama pull llama3.2 first, then retry" },
+      "W",
+      30,
+    )
+    expect(items.map(rowOf).slice(0, 4)).toEqual([
+      "Changed since 14:02    D retry",
+      "✗ model “llama3.2” not found ·",
+      "  ollama pull llama3.2 first,…",
+      "¹ Why another reader?    +2 −1",
+    ])
+  })
+  test("too large: the label, then why, in at most 2 rows; no rows", () => {
+    expect(changeItems({ ...idle, state: "large", changes: null }, "W", 30).map(rowOf)).toEqual([
+      "Changed since 14:02",
+      "too many lines changed to",
+      "compare; nothing to explain",
     ])
   })
   test("the lead-in is named by the note title", () => {
     expect(changeItems({ ...idle, changes: [chg("edited", "", 1, 0, -1)] }, "Welcome", 30).map(rowOf)[1]).toBe(
-      "~ Welcome" + " ".repeat(19) + "+1",
+      "¹ Welcome" + " ".repeat(19) + "+1",
     )
   })
-  test("at most 8 change rows, then + n more sections", () => {
-    const many = Array.from({ length: 11 }, (_, i) => chg("edited", `S${i}`, 1, 0, i))
-    const items = changeItems({ ...idle, changes: many }, "W", 30)
+  test("at most 8 change rows, then a `+ n more` stop that opens them all", () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => chg("edited", `S${i}`, 1, 0, i))
+    const items = changeItems({ ...idle, changes: many(11) }, "W", 30)
     expect(items.filter((i) => i.kind === "change").length).toBe(MAX_CHANGE_ROWS)
-    expect(rowOf(items.at(-1)!)).toBe("+ 3 more sections")
+    expect(rowOf(items.at(-1)!)).toBe("+ 3 more sections        ⏎ all")
+    expect(rowOf(changeItems({ ...idle, changes: many(9) }, "W", 30).at(-1)!)).toBe("+ 1 more section         ⏎ all")
+    const open = changeItems({ ...idle, changes: many(70), open: true }, "W", 30)
+    expect(open.filter((i) => i.kind === "change").length).toBe(MAX_CHANGE_ROWS_OPEN)
+    expect(rowOf(open.at(-1)!)).toBe("show fewer             ⏎ fewer")
+    // a two-digit number: the row stays 30 wide
+    expect(spanText(infoSpans(open.find((i) => i.kind === "change" && i.n === 10)!, themeByName("brothy"), 30))).toBe(
+      `¹⁰ S9${" ".repeat(23)}+1`,
+    )
+  })
+  test("Earlier: under the rows, dimmed, numbered on, summary at most 2 rows and notes 1, not stops", () => {
+    const earlier = {
+      since: "13:40",
+      model: "llama3.2",
+      summary: "The intro was rewritten from scratch, the install steps moved down, and the pager notes went.",
+      notes: [{ what: "intro rewritten from scratch again and again" }],
+      changes: [chg("edited", "Intro", 4, 4)],
+    }
+    const items = changeItems({ ...idle, earlier }, "W", 30)
+    const at = items.findIndex((i) => i.kind === "earlier")
+    expect(items.slice(at).map(rowOf)).toEqual([
+      "Earlier 13:40 · llama3.2",
+      "The intro was rewritten from",
+      "scratch, the install steps…",
+      "⁴ Intro                  +4 −4",
+      "  intro rewritten from scratc…",
+    ])
+    expect(items.slice(at).some((i) => i.kind === "change" && i.stop)).toBe(false)
+    const c = footInk(themeByName("brothy"))
+    expect(infoSpans(items[at + 3]!, themeByName("brothy"), 30).every((s) => !s.fg || s.fg === c.stale)).toBe(true)
+    // a result replaces it
+    expect(changeItems({ ...idle, state: "result", earlier }, "W", 30).some((i) => i.kind === "earlier")).toBe(false)
   })
   test("narrow: long headings are cut with …, rows never exceed the width", () => {
     const items = changeItems(
@@ -522,7 +616,7 @@ describe("changeItems", () => {
       "W",
       20,
     )
-    const row = rowOf(items[1]!)
+    const row = spanText(infoSpans(items[1]!, themeByName("brothy"), 20))
     expect(Bun.stringWidth(row)).toBe(20)
     expect(row).toContain("…")
     expect(row.endsWith("+12 −345")).toBe(true)
@@ -624,11 +718,18 @@ describe("row spans", () => {
     expect(
       text(infoSpans({ kind: "chips", key: "tags", keyW: 5, tags: ["one", "averyverylongtag"], more: true }, t, 12)),
     ).toBe("tags #one #avery… …")
-    expect(infoSpans({ kind: "change", mark: "+", text: "New", counts: " +3", at: 0, stop: true }, t, 20)).toEqual([
-      { text: "+ ", fg: t.success },
-      { text: "New", fg: t.text },
-      { text: " +3", fg: t.textMuted },
+    const row = { kind: "change", n: 2, text: "Gone", counts: "−3", at: 0, stop: true, removed: false } as const
+    expect(infoSpans({ ...row, tone: "fresh" }, t, 12)).toEqual([
+      { text: "²", fg: t.primary },
+      { text: " " },
+      { text: "Gone", fg: t.text, attr: A.NONE },
+      { text: "    " },
+      { text: "−3", fg: t.textMuted },
     ])
+    const removed = infoSpans({ ...row, tone: "fresh", removed: true, stop: false }, t, 12)
+    expect(removed[0]!.fg).toBe(t.textMuted)
+    expect(removed[2]).toEqual({ text: "Gone", fg: t.textMuted, attr: A.STRIKE })
+    expect(infoSpans({ ...row, tone: "explained" }, t, 12)[0]!.fg).toBe(t.textMuted)
     expect(infoSpans({ kind: "blank" }, t, 20)).toEqual([])
   })
 })

@@ -11,19 +11,18 @@ import { folderCounts, folderOf, stem } from "../notes/files"
 import type { View } from "../system/config"
 import { contrastOn, mix, surface } from "../theme/theme"
 import { keepVisible, stripLayout, thumb } from "../ui/nav"
-import { fileRowSpans, infoSpans, outlineRowSpans } from "../ui/panel"
+import { fileRowSpans, type InfoItem, infoSpans, outlineRowSpans } from "../ui/panel"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
-import type { Links } from "./links"
 import { Row } from "./Row"
 import { MAX_DEPTH, WHEEL_ROWS } from "./store"
 
-/** What the panel's clicks do beyond the context: jump to a heading or a change, follow a link. */
-export interface PanelActions extends Pick<Links, "openLink"> {
+/** What the panel's clicks do beyond the context: jump to a heading, open an Info stop. */
+export interface PanelActions {
   /** scroll the document to heading `i` of the shown view */
   outlineGo: (i: number) => void
-  /** scroll to change `at` of the Changed block */
-  jumpChange: (at: number) => void
+  /** what `⏎` does on an Info stop: follow the link, go to the change, open or fold the row */
+  infoGo: (it: InfoItem) => void
 }
 
 /** What the panel's rows are drawn with: the context, this render's derived data, the panel width and the row helpers. */
@@ -173,11 +172,8 @@ function outlineList({ d, AW, panelRow, thumbRows }: PanelKit, { outlineGo }: Pa
   return listEls
 }
 
-/** The Info list (a link, a change row or the TL;DR's stop is clickable), or the read error; it writes its list top and `infoSeen` back. */
-function infoList(
-  { c, d, AW, panelRow, thumbRows, topOf }: PanelKit,
-  { jumpChange, openLink }: PanelActions,
-): ReactNode[] {
+/** The Info list (a link, a change row, `+ n more` or the TL;DR's stop is clickable), or the read error; it writes its list top and `infoSeen` back. */
+function infoList({ c, d, AW, panelRow, thumbRows, topOf }: PanelKit, { infoGo }: PanelActions): ReactNode[] {
   const { set, focusPanel } = c
   const { s, t, file, infoRows, linkRows, LH, sideFocus } = d
   const { openPath } = s
@@ -203,17 +199,14 @@ function infoList(
         panelRow(`info-${idx}`, infoSpans(it, t, AW), {
           sel: sideFocus === "info" && idx === curItem,
           thumb: on(i),
-          onDown:
-            it.kind === "link" || ((it.kind === "change" || it.kind === "frule") && it.stop)
-              ? (e) => {
-                  if (e.button !== MouseButton.LEFT) return
-                  focusPanel()
-                  set({ infoCur: linkRows.indexOf(idx) })
-                  if (it.kind === "link") openLink(it)
-                  else if (it.kind === "change") jumpChange(it.at)
-                  else set({ tldrOpen: !s.tldrOpen })
-                }
-              : undefined,
+          onDown: linkRows.includes(idx)
+            ? (e) => {
+                if (e.button !== MouseButton.LEFT) return
+                focusPanel()
+                set({ infoCur: linkRows.indexOf(idx) })
+                infoGo(it)
+              }
+            : undefined,
         }),
       )
     })

@@ -3,7 +3,7 @@
 
 import { basename, relative } from "node:path"
 import { A, type Span } from "../lib/spans"
-import { spanWidth, truncate, width } from "../lib/text"
+import { spanWidth, superscript, truncate, width } from "../lib/text"
 import { stem } from "../notes/files"
 import type { Theme } from "../theme/theme"
 import { fadeSpans } from "./chrome"
@@ -94,8 +94,12 @@ export function locationParts(
 
 export type ClusterItem =
   | { kind: "search"; query: string; idx: number | null; count: number }
+  | { kind: "changed"; n: number | null; muted: boolean }
   | { kind: "source" }
   | { kind: "wide" }
+
+/** The Changed block in the head: how many sections changed (null: too large to compare), muted once explained. */
+export type HeadChanged = { n: number | null; muted: boolean } | null
 
 /** columns between the cluster's items and between footer hints */
 const GAP = 3
@@ -103,22 +107,32 @@ const GAP = 3
 /** A cluster item's text as drawn (App colors the parts). */
 export function clusterText(it: ClusterItem): string {
   if (it.kind === "search") return `/${it.query} ` + (it.count ? `${it.idx ?? "–"}/${it.count}` : "no match")
+  if (it.kind === "changed") return it.n === null ? "not compared" : `${superscript(it.n)} changed`
   return it.kind
 }
 
 const clusterW = (items: ClusterItem[]) => items.reduce((n, it, i) => n + (i ? GAP : 0) + width(clusterText(it)), 0)
 
 /**
- * The top line's right side, in display order: search (`/q i/n`), `source`, `wide` (not in
- * zen). If it is wider than `room`, `wide` drops first, then `source`, then the query shrinks
- * (cut to 20 columns at most, never below 3 characters plus `…`).
+ * The top line's right side, in display order: search (`/q i/n`), `³ changed` (or `not compared`), `source`, `wide`
+ * (neither of the last two nor changed in zen). If it is wider than `room`, `wide` drops first, then `source`, then
+ * changed, then the query shrinks (cut to 20 columns at most, never below 3 characters plus `…`).
  */
 export function stateCluster(
-  o: { query: string; matchIdx: number | null; count: number; source: boolean; wide: boolean; zen: boolean },
+  o: {
+    query: string
+    matchIdx: number | null
+    count: number
+    source: boolean
+    wide: boolean
+    zen: boolean
+    changed?: HeadChanged
+  },
   room: number,
 ): ClusterItem[] {
   const items: ClusterItem[] = []
   if (o.query) items.push({ kind: "search", query: truncate(o.query, QUERY_MAX), idx: o.matchIdx, count: o.count })
+  if (o.changed && !o.zen) items.push({ kind: "changed", ...o.changed })
   if (o.source) items.push({ kind: "source" })
   if (o.wide && !o.zen) items.push({ kind: "wide" })
   const total = () => clusterW(items)
@@ -227,6 +241,7 @@ export function headerLayout(o: {
   source: boolean
   wide: boolean
   tldr?: "fresh" | "stale" | null
+  changed?: HeadChanged
 }): HeaderLayout {
   const root = o.folder === "." || o.folder === ""
   const panel =
@@ -237,7 +252,15 @@ export function headerLayout(o: {
         }
       : null
   const cluster = stateCluster(
-    { query: o.query, matchIdx: o.matchIdx, count: o.count, source: o.source, wide: o.wide, zen: o.zen },
+    {
+      query: o.query,
+      matchIdx: o.matchIdx,
+      count: o.count,
+      source: o.source,
+      wide: o.wide,
+      zen: o.zen,
+      changed: o.changed,
+    },
     Math.max(0, o.textWidth - SEP - Math.min(width(o.title), TITLE_MIN)),
   )
   const cw = clusterW(cluster)
@@ -302,6 +325,7 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
   const right: Span[] = []
   h.cluster.forEach((it, i) => {
     if (i) right.push({ text: "   " })
+    if (it.kind === "changed") return void right.push(...changedSpans(t, it))
     if (it.kind !== "search") return void right.push({ text: it.kind, fg: it.kind === "source" ? t.info : t.textMuted })
     right.push({ text: `/${it.query} `, fg: t.accent })
     if (!it.count) right.push({ text: "no match", fg: t.error, attr: A.BOLD })
@@ -317,6 +341,15 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
   })
   at(h.clusterCol, right)
   return out
+}
+
+/** `³ changed`: the count primary (muted once explained), the word muted; `not compared` muted. */
+function changedSpans(t: Theme, it: Extract<ClusterItem, { kind: "changed" }>): Span[] {
+  if (it.n === null) return [{ text: "not compared", fg: t.textMuted }]
+  return [
+    { text: superscript(it.n), fg: it.muted ? t.textMuted : t.primary },
+    { text: " changed", fg: t.textMuted },
+  ]
 }
 
 /** The gap row's faint rule: `cols` columns of `─` in border, from column `col`. */

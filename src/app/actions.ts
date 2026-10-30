@@ -6,20 +6,17 @@
 import { closeSync, openSync } from "node:fs"
 import { basename } from "node:path"
 import type { KeyEvent } from "@opentui/core"
-import { type Change, quoteNeedle } from "../ai/delta"
 import { parseFrontMatter } from "../markdown/frontmatter"
 import { HEADING_STYLES } from "../markdown/heading-style"
-import type { Rendered } from "../markdown/render"
-import { headingKey } from "../markdown/sections"
 import { sourceScan } from "../markdown/source"
 import { ancestorsOf, folderCounts, scanTree } from "../notes/files"
 import { STDIN } from "../notes/workspace"
-import { loadConfig } from "../system/config"
+import { loadConfig, type View } from "../system/config"
 import { type EditResult, editorCommand, runEditor, sourceLineAt } from "../system/editor"
 import { MEASURE } from "../ui/layout"
 import { MINI_MIN_W } from "../ui/minimap"
-import { findQuote, stepMatch } from "../ui/nav"
-import { findHeading } from "../ui/panel"
+import { stepMatch } from "../ui/nav"
+import type { InfoItem } from "../ui/panel"
 import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
@@ -27,7 +24,7 @@ import { makeOnKey } from "./dispatch"
 import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { Popups } from "./popups"
-import type { Focus } from "./store"
+import type { Focus, UI } from "./store"
 import type { SwitcherControl } from "./switcher"
 import {
   makeDocActions,
@@ -59,7 +56,7 @@ export type Actions = Record<KeyId, (k: KeyEvent) => void>
 /** The actions over the app context; App registers `onKey` and draws with the rest. */
 export function makeActions(c: AppCtx, f: Features) {
   const keys = makeKeyContext(c, f.links)
-  const moves = makeMoves(c)
+  const moves = makeMoves(c, f.links)
   const actions: Actions = {
     ...makeToggleActions(c, f, keys),
     ...makeGlobalActions(c, f, keys),
@@ -67,15 +64,20 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makeDocActions(c, f.links, moves),
     ...makeZenActions(c, f, moves),
     ...makeOutlineActions(c, moves),
-    ...makeInfoActions(c, f.links, moves),
+    ...makeInfoActions(c, moves),
     ...makeFilesActions(c),
     ...makeFilterActions(c, f.popups, moves),
     ...makePopupActions(c, f),
     ...makeSwitcherActions(c, f),
   }
   const { currentCtx, pokeHints } = keys
-  const { outlineGo, jumpChange } = moves
-  return { currentCtx, pokeHints, outlineGo, jumpChange, onKey: makeOnKey(c, f, actions, keys.docMode) }
+  return {
+    currentCtx,
+    pokeHints,
+    outlineGo: moves.outlineGo,
+    infoGo: moves.infoGo,
+    onKey: makeOnKey(c, f, actions, keys.docMode),
+  }
 }
 
 /** The context the keys and hints go by, and the key hints' fade. */
@@ -103,14 +105,14 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
   /** Context id now: an open popup, else zen, else the panel view or the document. */
   const currentCtx = (): Ctx => {
     const s = ui.current
-    if (s.themePick) return "theme"
-    if (s.zenOrig !== null) return "zenSettings"
-    if (s.opener) return "open"
-    if (s.switcher) return "switch"
-    if (s.prompt) return "prompt"
+    const popup = popupCtx(s)
+    if (popup) return popup
     if (liveLabels()) return "label"
     if (s.help) return "help"
-    return derive().L.zen ? "zen" : docMode()
+    const d = derive()
+    if (d.L.zen) return "zen"
+    const doc = docMode()
+    return doc === "doc" && d.land ? "landing" : doc
   }
   const hintsVisible = () => {
     const s = ui.current
@@ -121,8 +123,17 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
 }
 type KeyContext = ReturnType<typeof makeKeyContext>
 
-/** Moves within the note: to a find match, a heading, an Outline heading, a Changed row. */
-function makeMoves(c: AppCtx) {
+/** The open popup's context (they take every key, in this order), else null. */
+function popupCtx(s: UI): Ctx | null {
+  if (s.themePick) return "theme"
+  if (s.zenOrig !== null) return "zenSettings"
+  if (s.opener) return "open"
+  if (s.switcher) return "switch"
+  return s.prompt ? "prompt" : null
+}
+
+/** Moves within the note and Info: to a find match, a heading, an Outline heading, a Changed row; Info's stops. */
+function makeMoves(c: AppCtx, { openLink, jumpChange }: Pick<Links, "openLink" | "jumpChange">) {
   const { set, derive, flash, setTop, focusDoc, showMatch } = c
 
   const jumpMatch = (dir: 1 | -1) => {
@@ -155,19 +166,27 @@ function makeMoves(c: AppCtx) {
     }
   }
 
-  /** Scroll to change `at` of the Changed block: the reply's quote when it is in that section, else its heading. */
-  const jumpChange = (at: number) => {
-    const { cv, view, s } = derive()
-    const c = cv?.changes[at]
-    if (!c || c.status === "removed") return
-    const { from, to } = changeRows(view, c)
-    const quote = cv?.notes[at]?.quote
-    const line = quote ? findQuote(view.plain, from, to, quoteNeedle(quote, s.source)) : null
-    setTop(line === null ? from : Math.max(from, line - 1))
-    focusDoc()
+  /** `+ n more`: list every change, or fold back to MAX_CHANGE_ROWS; Info's cursor stays on the row. */
+  const toggleChanges = () => {
+    set({ changesOpen: !derive().s.changesOpen })
+    const { linkRows, infoRows } = derive()
+    set({
+      infoCur: Math.max(
+        0,
+        linkRows.findIndex((i) => infoRows[i]?.kind === "cmore"),
+      ),
+    })
   }
 
-  return { jumpMatch, jumpHeading, outlineGo, jumpChange }
+  /** `⏎` or a click on an Info stop: follow the link, go to the change, open or fold `+ n more` or a long TL;DR. */
+  const infoGo = (it: InfoItem) => {
+    if (it.kind === "link") openLink(it)
+    else if (it.kind === "change") jumpChange(it.at)
+    else if (it.kind === "cmore") toggleChanges()
+    else if (it.kind === "frule") set({ tldrOpen: !derive().s.tldrOpen })
+  }
+
+  return { jumpMatch, jumpHeading, outlineGo, infoGo }
 }
 export type Moves = ReturnType<typeof makeMoves>
 
@@ -228,6 +247,12 @@ function makeGlobalActions(
   { pokeHints, currentCtx, hintsVisible }: KeyContext,
 ) {
   const { ui, set, derive, renderer, flash, selectView, focusPanel, focusDoc } = c
+  /** `esc` in the panel: the view's filter first, then back to the document. */
+  const clearPanel = (s: UI, view: View) => {
+    if (view === "files" && s.filter) return set({ filter: "" })
+    if (view === "outline" && s.outlineFilter) return set({ outlineFilter: "" })
+    focusDoc()
+  }
   return {
     switcher: switcher.openSwitcher,
     open: workspace.openOpener,
@@ -241,25 +266,15 @@ function makeGlobalActions(
     theme: popups.openTheme,
     reload: () => {
       const s = ui.current
-      const piped = s.piped
-      const tree = piped ? s.tree : scanTree(s.root)
-      // folders that are gone are forgotten; the open note's path stays open
-      const folders = folderCounts(tree)
-      const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
-      if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
-      let linkTree = tree
-      if (piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
-      else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
       const ai = loadConfig().ai ?? null
       set({
-        tree,
-        linkTree,
-        expanded,
+        ...rescan(s),
         reload: s.reload + 1,
         watchGen: s.watchGen + 1,
         ai,
         summaryErr: {},
         lastAsk: null,
+        delta: s.delta && { ...s.delta, error: null },
       })
       if (ui.current.zen) aiJobs.ensureGlosses()
       switcher.dropIndex()
@@ -267,16 +282,13 @@ function makeGlobalActions(
     },
     clear: () => {
       const { s, sideFocus, sheet } = derive()
-      if (sideFocus) {
-        if (sideFocus === "files" && s.filter) return set({ filter: "" })
-        if (sideFocus === "outline" && s.outlineFilter) return set({ outlineFilter: "" })
-        return focusDoc()
-      }
+      if (sideFocus) return clearPanel(s, sideFocus)
       // a gloss on screen goes first; it stays hidden until the reading line leaves its section (a fading one falls through)
       if (sheet && sheet.fadeAt === null) return set({ gloss: null })
       if (s.landed) set({ landed: null })
       if (s.toast?.kind === "error") set({ toast: null })
       if (s.query) set({ query: "", matchLine: null })
+      else if (s.landing) set({ landing: null })
       else if (derive().L.zen) zen.toggleZen(false)
     },
     // the welcome page shows no hints, so ? opens the sheet at once
@@ -292,6 +304,19 @@ function makeGlobalActions(
       process.exit(0)
     },
   } satisfies Partial<Actions>
+}
+
+/** `r`'s new trees: Files (a piped session keeps its own), the link tree, and the open folders that are still there. */
+function rescan(s: UI) {
+  const tree = s.piped ? s.tree : scanTree(s.root)
+  // folders that are gone are forgotten; the open note's path stays open
+  const folders = folderCounts(tree)
+  const expanded = new Set([...s.expanded].filter((p) => folders.has(p)))
+  if (s.openPath) for (const a of ancestorsOf(tree, s.openPath)) expanded.add(a)
+  let linkTree = tree
+  if (s.piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
+  else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
+  return { tree, linkTree, expanded }
 }
 
 /** `e`: the note in $EDITOR at the top line, the renderer suspended meanwhile. */
@@ -337,17 +362,4 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
       flash(`edited · ${basename(s.openPath)}`)
     },
   } satisfies Partial<Actions>
-}
-
-/** The rows of change `c`'s section in `view`, `to` exclusive (the lead-in before the first heading for none). */
-export function changeRows(view: Rendered, c: Change) {
-  const hs = view.headings
-  // rows listed while a request runs come from the sent text: a heading that moved is found again by key
-  const i =
-    c.index < 0 || headingKey(hs[c.index]?.text ?? "") === c.key
-      ? c.index
-      : (findHeading(hs, c.path.at(-1) ?? "") ?? c.index)
-  const from = i < 0 ? 0 : (hs[i]?.line ?? 0)
-  const to = hs[i + 1]?.line ?? view.lines.length
-  return { from, to }
 }

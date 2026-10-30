@@ -16,7 +16,7 @@ import {
   summaryRequest,
 } from "../ai/client"
 import { type AIConfig, type AITarget, type GlossStyle, PROMPT_V, PROMPTS, resolveAI } from "../ai/config"
-import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta } from "../ai/delta"
+import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta, stepChange } from "../ai/delta"
 import { GLOSS_DWELL, type GlossTarget, glossKey, glossRequest } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
 import { stem } from "../notes/files"
@@ -24,6 +24,7 @@ import { STDIN } from "../notes/workspace"
 import { loadConfig } from "../system/config"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
+import type { Links } from "./links"
 import { type Job, type JobKind, jobKey, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
@@ -373,38 +374,51 @@ function makeSummary(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJo
 
 /** `D`: send the changed hunks of a note and keep the reply. */
 function makeDeltaStart(c: AppCtx, { failText, startJob }: Jobs) {
-  const { ui, set, bump, derive, flash } = c
+  const { ui, set, bump, flash } = c
 
-  /** Send the changed hunks of `path`; on success the baseline moves to the sent text, so later edits list anew. */
-  const startDelta = (
-    path: string,
-    changes: Change[],
-    text: string,
-    props: string,
-    title: string,
-    target: AITarget,
-    model: string,
-  ) => {
-    startJob("delta", path, target, deltaRequest(title, changes, target.maxChars), {
+  /**
+   * Send the changed hunks of `path` (listed since `since`); the explanation before it moves to Earlier. On success the
+   * baseline moves to the sent text, so later edits list anew; a failure stays in the block while the note is the sent
+   * text, the baseline where it was.
+   */
+  const startDelta = (o: {
+    path: string
+    changes: Change[]
+    text: string
+    props: string
+    since: number
+    title: string
+    target: AITarget
+  }) => {
+    const { path, changes, text, props, since, target } = o
+    startJob("delta", path, target, deltaRequest(o.title, changes, target.maxChars), {
       stream: true,
-      begin: () => set({ delta: { path, changes, text, props, result: null } }),
+      begin: () => {
+        const prev = ui.current.delta?.path === path ? ui.current.delta : null
+        const earlier = prev?.result ?? prev?.earlier ?? null
+        set({ delta: { path, changes, text, props, since, result: null, error: null, earlier } })
+      },
       done: (r, job) => {
         const s = ui.current
-        if (s.delta?.path !== path) return bump((x) => x + 1)
+        const dl = s.delta
+        if (dl?.path !== path) return bump((x) => x + 1)
         const out = deltaOutcome(r, job.raw, changes)
-        if (!out) return set({ delta: null })
+        if (!out) return set({ delta: dl.earlier ? dl : null })
         if ("failure" in out) {
-          set({ delta: null })
+          const error = aiMessage(out.failure, {
+            host: target.host,
+            keyEnv: target.keyEnv,
+            key: target.key,
+            noun: "explanation",
+          })
+          set({ delta: { ...dl, error } })
           return flash(failText(target, out.failure, "explanation"), "error")
         }
-        const { parsed } = out
-        // edits made during the request now differ from the moved baseline and list as a new idle
-        // change set; the reply is kept only when it still describes the note as it is
+        // edits made during the request now differ from the moved baseline and list as a new idle change set, the
+        // reply under Earlier
         const baseline = s.baseline?.path === path ? { ...s.baseline, text, props, at: Date.now() } : s.baseline
-        set({
-          baseline,
-          delta: derive().after === text ? { ...s.delta, result: { ...parsed, model: shortModel(model) } } : null,
-        })
+        const result = { ...out.parsed, model: shortModel(job.model), since, changes }
+        set({ baseline, delta: { ...dl, result } })
       },
     })
   }
@@ -413,7 +427,7 @@ function makeDeltaStart(c: AppCtx, { failText, startJob }: Jobs) {
 }
 
 /** `D`: the reload-explain request for the open note's changes. */
-function makeReloadExplain(c: AppCtx, jobs: Jobs) {
+function makeReloadExplain(c: AppCtx, jobs: Jobs, { jumpChange }: Pick<Links, "jumpChange">) {
   const { reloadAI, cancelJob, aiGate } = jobs
   const { ui, set, derive, flash, focusPanel } = c
   const { startDelta } = makeDeltaStart(c, jobs)
@@ -422,7 +436,23 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
   const dropDelta = () => {
     const s = ui.current
     if (s.delta) cancelJob(jobKey("delta", s.delta.path))
-    if (s.baseline || s.delta) set({ baseline: null, delta: null })
+    if (s.baseline || s.delta || s.landing) set({ baseline: null, delta: null, changesOpen: false, landing: null })
+  }
+
+  /** Where `D` shows its explanation: Info; below 100 columns, where Info is a drawer over the note, the first change's footnote. */
+  const showDelta = (d: Derived) => {
+    const first = d.changes && stepChange(d.changes, 0, 1)
+    if (d.L.mode === "drawer" && first) jumpChange(first - 1)
+    else focusPanel("info")
+  }
+
+  /** A `D` running for `path` cancelled (back to the list, Earlier kept); false when none runs. */
+  const cancelDelta = (path: string | null) => {
+    if (!path || !cancelJob(jobKey("delta", path))) return false
+    const dl = ui.current.delta
+    set({ delta: dl?.earlier ? dl : null })
+    flash("explanation cancelled")
+    return true
   }
 
   /** `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. */
@@ -431,31 +461,28 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs) {
     const d = derive()
     const path = d.s.openPath
     // cancel first: a request stays cancellable after its `ai` block goes or the note is reverted
-    if (path && cancelJob(jobKey("delta", path))) {
-      set({ delta: null })
-      return flash("explanation cancelled")
-    }
+    if (cancelDelta(path)) return
     if (!ai) return flash(AI_OFF)
     if (d.changes === null) return flash("too large to compare")
     const base = d.s.baseline?.path === path ? d.s.baseline : null
     if (!path || !base || !d.changes.length) return flash(`no changes since ${hhmm(base?.at ?? Date.now())}`)
     const target = aiGate(ai)
     if (!target) return
-    focusPanel("info")
-    startDelta(path, d.changes, d.after, d.propsKey, d.title, target, ai.model)
+    showDelta(d)
+    startDelta({ path, changes: d.changes, text: d.after, props: d.propsKey, since: base.at, title: d.title, target })
   }
 
   return { dropDelta, explainChange }
 }
 
 /** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */
-export function makeAIJobs(c: AppCtx) {
+export function makeAIJobs(c: AppCtx, links: Pick<Links, "jumpChange">) {
   const jobs = makeJobs(c)
   const { ensureGlosses, glossEntered } = makeGlossSheet(c)
   return {
     ensureGlosses,
     glossEntered,
-    ...makeReloadExplain(c, jobs),
+    ...makeReloadExplain(c, jobs, links),
     ...makeSummary(c, jobs),
     ...makeZenGloss(c, jobs, { ensureGlosses }),
   }

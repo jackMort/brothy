@@ -1,18 +1,34 @@
 // The document area: the welcome page with no note open, an open error, zen's lines (typewriter gutter, Spotlight and
-// the gloss: a sheet or margin notes, and the heading marks) or the note's lines (find matches, link labels, the drawer's scrim), and the minimap beside it.
+// the gloss: a sheet or margin notes, and the heading marks) or the note's lines (find matches, link labels, the change
+// and ask marks, the drawer's scrim), and the minimap beside it.
 // Not pure: drawn from the app context, and it clamps the welcome page's highlighted row as it draws, so App calls it
 // once per render, before its too-small return.
 import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
+import { landTail, landText } from "../ai/delta"
 import { drawnText, glossTail, type MarginNote, marginLayout, sheetRows } from "../ai/gloss"
 import { A, type Span } from "../lib/spans"
 import { superscript, truncate } from "../lib/text"
-import type { Line } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
-import { footInk, markText, placeMark, SIDENOTE_GAP, SIDENOTE_W } from "../ui/footnote"
+import {
+  CARET,
+  footInk,
+  footnoteRule,
+  type MarkSource,
+  markFor,
+  markText,
+  noteSpans,
+  placeMark,
+  SIDENOTE_GAP,
+  SIDENOTE_W,
+  type SideNote,
+  sidenoteLayout,
+  waitText,
+} from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
+import type { ChangeView } from "../ui/panel"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
 import { landedHere } from "./Chrome"
@@ -219,42 +235,153 @@ function landingMark(d: Derived): { row: number; mark: Span } | null {
   return { row: h.last ?? h.line, mark: { text: markText(l.n), fg: l.moved ? d.t.textMuted : d.t.primary } }
 }
 
-/** The note's lines on screen: find matches marked, link labels over them, dimmed under the drawer's scrim. */
+/** A mark over Preview's rows: after the row's text (else in the gutter), or only in the gutter. */
+type RowMark = { source: MarkSource; mark: Span; gutter: boolean }
+
+/**
+ * The marks on Preview's rows, by row: each changed heading's number (muted once explained), the lead-in's and a removed
+ * section's in the gutter (a removed one muted), an ask landing's; one per row, change first (`markFor`).
+ */
+function rowMarks(d: Derived): Map<number, RowMark> {
+  const c = footInk(d.t)
+  const explained = d.cv?.state === "result"
+  const cands: [number, RowMark][] = d.marks.map((m) => [
+    m.row,
+    {
+      source: "change",
+      mark: { text: markText(m.n), fg: explained || m.kind === "removed" ? c.markStale : c.mark },
+      gutter: m.kind !== "heading",
+    },
+  ])
+  const ask = landingMark(d)
+  if (ask) cands.push([ask.row, { source: "ask", mark: ask.mark, gutter: false }])
+  // the landing's quoted line: its number in the gutter, beside the changed text
+  const line = d.land?.row
+  if (line != null)
+    cands.push([line, { source: "change", mark: { text: markText(d.land!.n), fg: c.mark }, gutter: true }])
+  const out = new Map<number, RowMark>()
+  for (const [row, m] of cands) out.set(row, markFor([...(out.has(row) ? [out.get(row)!] : []), m])!)
+  return out
+}
+
+/** Rows a landing footnote needs on screen: below it, the change list is left to Info. */
+const FOOT_MIN_CH = 10
+
+/**
+ * The landing's footnote over the bottom rows (Preview): a blank row, the rule with `¹ of 3 · ] next` (the number in
+ * the mark's colour), then the note behind its number in at most 2 rows: the explanation's, else the counts; `¹ ▍` and
+ * `asking llama3.2 · 3 s · D cancel` while it is still to come. [] when there is none.
+ */
+function landFoot(d: Derived): Span[][] {
+  const { land, L, t, s, cv } = d
+  if (!land || s.source || marginOn(d) || L.CH < FOOT_MIN_CH) return []
+  const c = footInk(t)
+  const mark = cv?.state === "result" ? c.markStale : c.mark
+  const text = land.wait ? "" : landText(land.change, land.note)
+  const rows = noteSpans(text, L.CW, land.n, 2, { mark, text: c.note, caret: c.caret })
+  const sup = markText(land.n)
+  const rule = footnoteRule(t, L.CW, landTail(land.changes, land.n, land.wait)).flatMap((sp) =>
+    sp.text.startsWith(`${sup} of `)
+      ? [
+          { text: sup, fg: mark },
+          { ...sp, text: sp.text.slice(sup.length) },
+        ]
+      : [sp],
+  )
+  return [[], rule, ...rows]
+}
+
+/** The Δ summary pinned on the margin's first row: `Δ ▍` and its status row while waiting, the text (streaming: its caret) after. */
+function summaryNote(cv: ChangeView): SideNote {
+  if (cv.state === "loading" && !cv.summary)
+    return { n: 0, row: 0, text: "", summary: true, status: { status: waitText(cv.model, cv.secs), model: cv.model } }
+  return { n: 0, row: 0, text: cv.state === "loading" ? cv.summary + CARET : cv.summary, summary: true }
+}
+
+/** The Changed block's notes go to the margin: where `side` fits, while `D` runs or once explained (before, the footnote). */
+const marginOn = ({ cv, side }: Derived) => side !== null && (cv?.state === "loading" || cv?.state === "result")
+
+/**
+ * The Changed block's margin (`marginOn`): the Δ summary on row 0, each note beside its mark (a heading's last row, a
+ * removed section's gutter row), numbered as listed; CH rows. Null without.
+ */
+function changeMargin(d: Derived): Span[][] | null {
+  const { t, cv, marks, top, L } = d
+  if (!cv || !marginOn(d)) return null
+  // explained: the numbers muted, as the marks in the text
+  const markStale = cv.state === "result"
+  const notes = marks.flatMap((m): SideNote[] => {
+    const what = cv.notes[m.n - 1]?.what
+    return what ? [{ n: m.n, row: m.row - top, text: what, markStale }] : []
+  })
+  const rows: Span[][] = Array.from({ length: L.CH }, () => [])
+  for (const p of sidenoteLayout(t, [summaryNote(cv), ...notes], L.CH, { open: false }))
+    p.rows.forEach((r, k) => {
+      if (p.row + k < L.CH) rows[p.row + k] = r
+    })
+  return rows
+}
+
+/** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim. */
 function noteLines(d: Derived) {
-  const { s, L, t, view, top } = d
+  const { L, t, view, top } = d
   const { CW, CH } = L
   const scrim = L.mode === "drawer" && L.shown
-  const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
-  const landing = landingMark(d)
+  const marks = rowMarks(d)
+  const dim = (spans: Span[]) => (scrim ? dimSpans(spans, t, SCRIM_DIM) : spans)
+  const foot = landFoot(d)
+  const footAt = CH - foot.length
+  const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
-      {view.lines.slice(top, top + CH).map((l: Line, i) => {
-        let spans = markMatches(l.spans, s.query, t)
-        if (lb)
-          lb.spots.forEach((sp, k) => {
-            const label = lb.labels[k]!
-            if (sp.row === top + i && label.startsWith(lb.typed))
-              spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
-          })
-        let gutter: Span | null = null
-        if (landing?.row === top + i) {
-          const at = placeMark(spans, CW, landing.mark)
-          if ("inline" in at) spans = at.inline
-          else gutter = at.gutter
-        }
-        const row = <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
-        return gutter ? (
-          <box key={top + i} style={{ height: 1, flexDirection: "row" }}>
-            <box style={{ position: "absolute", left: -2, width: 1, height: 1 }}>
-              <Row spans={[gutter]} />
-            </box>
-            {row}
-          </box>
+      {Array.from({ length: foot.length ? CH : Math.min(CH, view.lines.length - top) }, (_, i) =>
+        i >= footAt ? (
+          <Row key={`change-foot-${i - footAt}`} spans={dim(foot[i - footAt]!)} />
         ) : (
-          row
-        )
-      })}
+          lineRow(d, top + i, marks.get(top + i), dim)
+        ),
+      )}
+      {margin ? (
+        <box
+          key="change-side"
+          style={{ position: "absolute", left: CW + SIDENOTE_GAP, top: 0, width: SIDENOTE_W, height: CH }}
+        >
+          {margin.map((spans, i) => (
+            <Row key={i} spans={spans} />
+          ))}
+        </box>
+      ) : null}
     </box>
+  )
+}
+
+/** Line `n` of the note: find matches marked, the `f` labels over its links. */
+function lineSpans({ s, L, t, view, top }: Derived, n: number): Span[] {
+  let spans = markMatches(view.lines[n]?.spans ?? [], s.query, t)
+  const lb = s.labels && s.labels.geo === labelGeo(s, L.CW, view.lines.length, top) ? s.labels : null
+  lb?.spots.forEach((sp, k) => {
+    const label = lb.labels[k]!
+    if (sp.row === n && label.startsWith(lb.typed))
+      spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
+  })
+  return spans
+}
+
+/** Line `n`'s row: its spans, its mark after the text or in the gutter. */
+function lineRow(d: Derived, n: number, m: RowMark | undefined, dim: (spans: Span[]) => Span[]) {
+  let spans = lineSpans(d, n)
+  const at = m && (m.gutter ? { gutter: m.mark } : placeMark(spans, d.L.CW, m.mark))
+  if (at && "inline" in at) spans = at.inline
+  const row = <Row key={n} spans={dim(spans)} />
+  return at && "gutter" in at ? (
+    <box key={n} style={{ height: 1, flexDirection: "row" }}>
+      <box style={{ position: "absolute", left: -2, width: 1, height: 1 }}>
+        <Row spans={dim([at.gutter])} />
+      </box>
+      {row}
+    </box>
+  ) : (
+    row
   )
 }
 

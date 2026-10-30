@@ -5,7 +5,7 @@
 import { isRecord } from "../lib/json"
 
 /** Prompt versions per feature: bump one whenever its prompt changes, and its cached results show as outdated. */
-export const PROMPTS = { tldr: 1, gloss: 1, delta: 2, ask: 1, rerank: 1 } as const
+export const PROMPTS = { tldr: 1, gloss: 1, delta: 3, ask: 1, rerank: 1 } as const
 /** The TL;DR's version (`SYSTEM_PROMPT`); what `summaries.json` entries carry as `v`. */
 export const PROMPT_V = PROMPTS.tldr
 

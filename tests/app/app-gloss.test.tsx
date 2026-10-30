@@ -209,7 +209,7 @@ describe("a gloss on screen", () => {
     expect(at).toBeGreaterThan(zen)
     expect(again).toBeGreaterThan(zen)
     expect(lines[again]).toMatch(/\bA\b/)
-    expect(lines.some((l) => l.includes("clear find · hide gloss · leave zen"))).toBe(true)
+    expect(lines.some((l) => l.includes("clear find · hide gloss · hide a change"))).toBe(true)
   })
 })
 

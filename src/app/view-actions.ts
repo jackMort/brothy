@@ -19,10 +19,10 @@ import type { Popups } from "./popups"
 /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
 const typing = () => {}
 
-/** The document: scrolling, headings, matches, and the link labels. */
+/** The document: scrolling, headings (the changes while landed on one), matches, and the link labels. */
 export function makeDocActions(
   c: AppCtx,
-  { startLabels }: Pick<Links, "startLabels">,
+  { startLabels, landStep }: Pick<Links, "startLabels" | "landStep">,
   { jumpHeading, jumpMatch }: Moves,
 ) {
   const { ui, set, derive, setTop, scrollBy, focusPanel } = c
@@ -31,9 +31,14 @@ export function makeDocActions(
     docHalf: (k) => scrollBy((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
     docPage: (k) => scrollBy((isDown(k) ? 1 : -1) * (derive().L.CH - 2)),
     docEnds: (k) => setTop(k.name === "home" || (k.name === "g" && !k.shift) ? 0 : derive().maxTop),
-    docHeading: (k) => jumpHeading(k.sequence === "]" || k.sequence === "}" ? 1 : -1),
+    docHeading: (k) => {
+      const dir = k.sequence === "]" || k.sequence === "}" ? 1 : -1
+      if (!landStep(dir)) jumpHeading(dir)
+    },
     docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
     back: () => focusPanel(),
+    landWalk: typing,
+    landInfo: typing,
     links: startLabels,
     labelType: typing,
     labelErase: () => {
@@ -113,8 +118,8 @@ export function makeOutlineActions(c: AppCtx, { outlineGo }: Moves) {
   } satisfies Partial<Actions>
 }
 
-/** The Info tab: step through its links and Changed rows, open one; `⏎` on a long TL;DR expands or collapses it. */
-export function makeInfoActions(c: AppCtx, { openLink }: Pick<Links, "openLink">, { jumpChange }: Moves) {
+/** The Info tab: step through its stops (links, Changed rows, `+ n more`, a long TL;DR) and open one. */
+export function makeInfoActions(c: AppCtx, { infoGo }: Moves) {
   const { set, derive } = c
   return {
     infoMove: (k) => {
@@ -135,11 +140,9 @@ export function makeInfoActions(c: AppCtx, { openLink }: Pick<Links, "openLink">
       set({ infoCur: jump ? edge : clamp(infoCur + dir, 0, linkRows.length - 1) })
     },
     infoOpen: () => {
-      const { s, infoRows, linkRows, infoCur } = derive()
+      const { infoRows, linkRows, infoCur } = derive()
       const it = infoRows[linkRows[infoCur] ?? -1]
-      if (it?.kind === "link") openLink(it)
-      else if (it?.kind === "change") jumpChange(it.at)
-      else if (it?.kind === "frule") set({ tldrOpen: !s.tldrOpen })
+      if (it) infoGo(it)
     },
   } satisfies Partial<Actions>
 }

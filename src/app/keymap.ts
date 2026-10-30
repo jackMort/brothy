@@ -21,9 +21,10 @@ export type Mode =
   | "label"
   | "switch"
   | "open"
-/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus). */
+/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change). */
 export type Ctx =
   | "doc"
+  | "landing"
   | `panel:${View}`
   | "filter"
   | "zen"
@@ -64,7 +65,7 @@ export interface FooterState {
   disk: boolean
   /** an `ai` block is configured: AI is off until then */
   ai: boolean
-  /** an `ai` block and changes still to explain */
+  /** the Changed block gives `D` something to do: explain, cancel or retry */
   changes: boolean
   /** an `ai` block and no fresh TL;DR for the open note: the document footer offers `a` */
   tldr: boolean
@@ -106,7 +107,7 @@ const KEYMAP = {
     modes: ["global"],
     keys: ["escape"],
     label: "esc",
-    desc: "clear find · hide gloss · leave zen · panel: clear filter, else back to the document",
+    desc: "clear find · hide gloss · hide a change's footnote · leave zen · panel: clear filter, else back to the document",
   },
   help: { modes: ["global"], keys: ["?"], label: "?", desc: "key hints · twice: all keys", hint: "keys" },
   quit: { modes: ["global"], keys: ["q", "C-c"], label: "q", desc: "quit" },
@@ -136,9 +137,8 @@ const KEYMAP = {
     keys: ["S-d"],
     label: "D",
     desc: "explain what changed on disk",
-    hint: "changes",
+    hint: "explain",
     group: "AI",
-    spare: true,
     when: "changes",
   },
   edit: {
@@ -184,6 +184,9 @@ const KEYMAP = {
     hint: "match",
     when: "query",
   },
+  // hint-only: while landed on a change, `[ ]` (docHeading) walk the changes and `3` (views) opens Info
+  landWalk: { modes: ["doc"], keys: [], label: "[ ]", hint: "changes" },
+  landInfo: { modes: ["doc"], keys: [], label: "3", hint: "all in Info" },
   back: { modes: ["doc"], keys: ["h", "left"], label: "h", desc: "focus the panel" },
   links: {
     modes: ["doc"],
@@ -408,6 +411,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     ["focus", "panel"],
     "help",
   ],
+  landing: ["landWalk", "landInfo", "explainChange", ["clear", "hide"]],
   "panel:files": [
     "filesMove",
     "filesOpen",

@@ -6,7 +6,7 @@ import { landedSpans } from "../ai/ask"
 import type { Span } from "../lib/spans"
 import { spanWidth } from "../lib/text"
 import { fadeSpans } from "../ui/chrome"
-import { tldrHead } from "../ui/panel"
+import { changeHead, tldrHead } from "../ui/panel"
 import {
   fadeStep,
   GHOST_STEPS,
@@ -60,6 +60,7 @@ function topLine(d: Derived): Span[] {
     source: s.source,
     wide: s.wide,
     tldr: tldrHead(d.sv),
+    changed: changeHead(d.cv),
   })
   return topLineSpans(t, logo, h, mainHeadingVisible(view.headings, d.title, top, L.bodyH))
 }

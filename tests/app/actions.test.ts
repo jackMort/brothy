@@ -1,7 +1,6 @@
-// `changeRows`: the rows `⏎` on a Changed row scrolls within, in the view as it is now.
+// `changeRows` (ai/delta.ts): the rows `⏎` on a Changed row scrolls within, in the view as it is now.
 import { expect, test } from "bun:test"
-import { type Change, diffSections } from "../../src/ai/delta"
-import { changeRows } from "../../src/app/actions"
+import { type Change, changeRows, diffSections } from "../../src/ai/delta"
 import { render } from "../../src/markdown/render"
 import { brothy } from "../helpers/theme"
 
