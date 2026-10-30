@@ -1,7 +1,7 @@
 // The `? ?` keys sheet's layout: KEYMAP groups as a chip row and key rows, one column below 100 columns,
 // two from there (whole groups, Global and Panel left, the rest right), scrolled together by rows.
 
-import { clamp } from "../lib/text"
+import { clamp, wrap } from "../lib/text"
 import { BODY_PAD, innerWidth, popupWidth } from "./geometry"
 import { fitWordmark, WORDMARK } from "./status"
 
@@ -42,11 +42,17 @@ export const HELP_COLUMNS: readonly (readonly string[])[] = [
 ]
 const COL_GAP = 4
 
-const groupLines = (g: HelpGroup): HelpLine[] => [
+/** A binding's rows: the description wrapped to `descW`, its continuation rows with empty keys (the hanging indent). */
+function entryLines(e: HelpGroup["entries"][number], descW: number): HelpLine[] {
+  const rows = wrap([{ text: e.desc }], Math.max(1, descW)).map((row) => row.map((s) => s.text).join(""))
+  return (rows.length ? rows : [""]).map((desc, i) => ({ kind: "key" as const, keys: i ? "" : e.keys, desc }))
+}
+const groupLines = (g: HelpGroup, descW: number): HelpLine[] => [
   { kind: "chip", title: g.title },
-  ...g.entries.map((e) => ({ kind: "key" as const, ...e })),
+  ...g.entries.flatMap((e) => entryLines(e, descW)),
 ]
-const join = (gs: HelpGroup[]): HelpLine[] => gs.flatMap((g, i) => (i ? [null, ...groupLines(g)] : groupLines(g)))
+const join = (gs: HelpGroup[], descW: number): HelpLine[] =>
+  gs.flatMap((g, i) => (i ? [null, ...groupLines(g, descW)] : groupLines(g, descW)))
 
 export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, columns = HELP_COLUMNS): HelpLayout {
   const two = W >= HELP_TWO_COLS
@@ -55,16 +61,17 @@ export function helpLayout(groups: readonly HelpGroup[], W: number, H: number, c
   const colW = two ? Math.floor((inner - COL_GAP) / 2) : inner
   const keyW = clamp(colW - DESC_MIN, HELP_KEY_W - 7, HELP_KEY_W)
   const shown = groups.filter((g) => g.entries.length)
+  const descW = colW - keyW
   let cols: HelpLine[][]
-  if (!two) cols = [join(shown)]
+  if (!two) cols = [join(shown, descW)]
   else {
     const picked = columns.map((titles) => titles.flatMap((title) => shown.filter((g) => g.title === title)))
     for (const g of shown) {
       if (picked.some((c) => c.includes(g))) continue
-      const short = join(picked[0]!).length <= join(picked[1]!).length ? 0 : 1
+      const short = join(picked[0]!, descW).length <= join(picked[1]!, descW).length ? 0 : 1
       picked[short]!.push(g)
     }
-    cols = picked.map(join)
+    cols = picked.map((c) => join(c, descW))
   }
   // popup chrome: footer 2, padding 2, title row and its gap 2; the wordmark leaves 3 list rows
   const mark = !!fitWordmark(inner, H - 2 - 4 - 3 - 1)

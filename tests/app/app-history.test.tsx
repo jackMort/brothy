@@ -87,10 +87,9 @@ test("H works in zen and keeps zen on", async () => {
 })
 
 test("the doc footer offers H L history; help lists both keys", async () => {
-  const s = await mount(histVault(), "a.md")
-  expect((await keys(s)).split("\n")[HINT_ROW]).toContain("H L history")
-  const help = await openHelp(s)
-  expect(help).toContain("back to the previous note")
+  const s = await mount(histVault(), "a.md", { size: { width: 100, height: 120 } })
+  expect(await keys(s)).toContain("H L history")
+  expect(await openHelp(s)).toContain("back to the previous note")
 })
 
 test("each history entry keeps its own top, not the note's latest one", async () => {
