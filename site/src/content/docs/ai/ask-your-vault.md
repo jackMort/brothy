@@ -5,10 +5,12 @@ description: "Start a ctrl+p query with ? to ask a question; brothy finds the se
 
 <!-- Mirrors README § AI (Ask your vault): update both. -->
 
-In <kbd>ctrl+p</kbd>, a query starting with `?` is a question.
+In <kbd>ctrl+p</kbd>, a query starting with `?` is a question. With an `ai` block the placeholder says so and the footer shows `? ask`.
 
-1. <kbd>⏎</kbd> on the ask row sends **only the question** (cut at 300 characters). The model returns search terms.
-2. The answers are sections brothy finds itself in the vault index, listed as `Answers` with the terms shown (`searched: …`). <kbd>⏎</kbd> opens the section at its first matching line. The model never names a note, heading or line.
-3. Optionally, `↻ rerank with excerpts` is a second, separate step: only that row, with its token cost shown first, sends the question plus up to 12 candidate sections (note name, heading path and the first 300 characters of each). The model orders them and says why in a few words.
+1. Before you press anything, the pane beside the list (from 100 columns; two muted rows below that) says what <kbd>⏎</kbd> sends and what comes back.
+2. <kbd>⏎</kbd> on the ask row sends **only the question** (cut at 300 characters, and the row says so). While the model works, a rule and `▍ asking llama3.2 · 3 s` sit where the results will appear, and the pane shows exactly what went out.
+3. The model returns search terms. The results are sections brothy finds itself in the vault index, listed as `Matches` with the word that matched on the right and the terms shown (`searched: …`). <kbd>⏎</kbd> opens the section at its first matching line. The model never names a note, heading or line.
+4. Optionally, `↻ rerank with excerpts` is a second, separate step: only that row, with its token cost shown first, sends the question plus up to 12 candidate sections (note name, heading path and the first 300 characters of each). The model's picks become `Answers`, marked `¹ ² ³`, with its reasons as footnotes under a rule; the rest stay below as `Other matches`.
+5. Opening a reranked answer puts its mark after the heading and `¹ <why> · ^p answers` on the footer line until you move. <kbd>ctrl+p</kbd> then reopens the same question with its answers, the next one highlighted; nothing is sent again, and typing starts a new query. If the heading was renamed meanwhile, brothy lands on the matched word instead and says so.
 
-Nothing from the vault leaves without that row. Ask answers are never written to disk, and one ask runs at a time, counted among the 3 concurrent requests.
+Nothing found or a failed request ends in next steps, including whether the question left. Nothing from the vault leaves without the rerank row. Ask answers are never written to disk, and one ask runs at a time, counted among the 3 concurrent requests.

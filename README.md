@@ -329,14 +329,23 @@ and a few words per section; `⏎` on a changed section jumps to it, to the chan
 the reply quoted one. Once explained, the baseline moves forward, so the next edit lists
 anew. A note over 2 MB is not compared (`reloaded · too large to compare`).
 
-**Ask your vault** — in `ctrl+p`, a query starting with `?` is a question. `⏎` on the ask
-row sends **only the question** (cut at 300 characters); the model returns search terms, and
-the answers are sections brothy finds itself in the vault index, listed as `Answers` with the
+**Ask your vault** — in `ctrl+p`, a query starting with `?` is a question (with an `ai` block
+the placeholder says so and the footer shows `? ask`). Before you press anything, the pane (from
+100 columns; two muted rows below that) says what `⏎` sends and what comes back. `⏎` on the ask
+row sends **only the question** (cut at 300 characters, and the row says so); while the model
+works, a rule and `▍ asking llama3.2 · 3 s` sit where the results will appear, and the pane shows
+exactly what went out. The model returns search terms, and the results are sections brothy finds
+itself in the vault index, listed as `Matches` with the word that matched on the right and the
 terms shown (`searched: …`); `⏎` opens the section at its first matching line. The model never
 names a note, heading or line. `↻ rerank with excerpts` is a second, separate step: only that row,
 with its token cost shown first, sends the question plus up to 12 candidate sections (note
-name, heading path and the first 300 characters of each); the model orders them and says why
-in a few words. Nothing from the vault leaves without that row.
+name, heading path and the first 300 characters of each); the model's picks become `Answers`,
+marked `¹ ² ³`, with its reasons as footnotes under a rule, and the rest stay below as `Other
+matches`. Nothing from the vault leaves without that row. Opening a reranked answer puts its
+mark after the heading and `¹ <why> · ^p answers` on the footer line until you move; `ctrl+p`
+then reopens the same question with its answers (nothing is sent again; typing starts a new
+query). If the heading was renamed meanwhile, brothy lands on the matched word instead and says
+so. Nothing found or a failed request ends in next steps, including whether the question left.
 
 **What is sent, and when**
 
