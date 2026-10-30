@@ -1,7 +1,9 @@
-// App: the zen gloss (a and A in zen): the footnote sheet, waiting, outdated notes, the dwell.
+// App: the zen gloss (a and A in zen): the footnote sheet, waiting, outdated notes, the dwell, margin notes.
 import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { mix } from "../../src/theme/theme"
+import { DIM_OTHER } from "../../src/ui/footnote"
 import { hex } from "../helpers/theme"
 import {
   aiStub,
@@ -525,5 +527,82 @@ describe("the dwell and the heading mark", () => {
     seedGloss(join(d, "a.md"), 0, "About it.")
     const f = await keys(await mount(d, "a.md", { size: W120 }), "z")
     expect(f).toContain("▸¹")
+  })
+})
+
+describe("margin notes", () => {
+  const W140 = { width: 140, height: 36 }
+  const W160 = { width: 160, height: 40 }
+
+  test("from 140 columns the note sits in the right margin beside its heading, no sheet at the bottom", async () => {
+    aiConfig(OLLAMA)
+    const d = tmp({ "a.md": GLOSS_MD })
+    seedGloss(join(d, "a.md"), 0, "About the guide.")
+    const f = await keys(await mount(d, "a.md", { size: W140 }), "z")
+    expect(ruleAt(f)).toBe(-1)
+    const lines = f.split("\n")
+    const row = lines.findIndex((l) => l.includes("Guide¹"))
+    expect(lines[row]!.indexOf("¹ About the guide.")).toBe(109)
+  })
+
+  test("139 columns, or a wider measure at 140: the sheet", async () => {
+    aiConfig(OLLAMA)
+    const d = tmp({ "a.md": GLOSS_MD })
+    seedGloss(join(d, "a.md"), 0, "About the guide.")
+    let s = await mount(d, "a.md", { size: { width: 139, height: 36 } })
+    expect(ruleAt(await keys(s, "z"))).toBeGreaterThan(-1)
+    s.renderer.destroy()
+    s = await mount(d, "a.md", { size: W140 })
+    await keys(s, "z")
+    expect(ruleAt(await keys(s, ">"))).toBeGreaterThan(-1)
+  })
+
+  test("at 160 the section above with a fresh gloss shows too, dimmed and numbered first; each note ends before the next", async () => {
+    aiConfig(OLLAMA)
+    const d = tmp({ "a.md": GLOSS_MD })
+    const p = join(d, "a.md")
+    seedGloss(p, 0, said("guide", 30))
+    seedGloss(p, 1, "About apples.")
+    const s = await mount(d, "a.md", { size: W160 })
+    await keys(s, "z", "]")
+    const f = await waitFrame(s, (x) => x.includes("² About apples."))
+    const lines = f.split("\n")
+    const guide = lines.findIndex((l) => l.includes("Guide¹"))
+    const apples = lines.findIndex((l) => l.includes("Apples²"))
+    expect(lines[guide]!.indexOf("¹ guide0")).toBe(119)
+    expect(lines[apples]!.indexOf("² About apples.")).toBe(119)
+    expect(lines[apples - 1]!.slice(119).trim()).toBe("") // one empty row before the next note
+    expect(fgOf(s, "¹")).toBe(mix(B.primary, B.background, DIM_OTHER))
+    expect(fgOf(s, "²")).toBe(B.primary)
+  })
+
+  test("the reading note stays on the first row while its heading is scrolled above", async () => {
+    aiConfig(OLLAMA)
+    const long = Array.from({ length: 30 }, (_, i) => `Paragraph ${i} ${said("x", 8)}`).join("\n\n")
+    const d = tmp({ "a.md": `# Long\n\n${long}\n` })
+    seedGloss(join(d, "a.md"), 0, "About the long one.")
+    const s = await mount(d, "a.md", { size: W140 })
+    await keys(s, "z")
+    const f = await keys(s, ...Array.from({ length: 40 }, () => "j"))
+    expect(f).not.toContain("Long¹")
+    expect(f.split("\n")[2]!.indexOf("¹ About the long one.")).toBe(109)
+  })
+
+  test("an outdated neighbour is not drawn; esc hides the reading note and the neighbours stay", async () => {
+    aiConfig(OLLAMA)
+    const d = tmp({ "a.md": GLOSS_MD })
+    const p = join(d, "a.md")
+    seedGloss(p, 0, "About the guide.")
+    seedGloss(p, 1, "About apples.")
+    seedGloss(p, 2, "About pears.")
+    patchCache((e) => (e.gloss === "About pears." ? { ...e, hash: "stale" } : e))
+    const s = await mount(d, "a.md", { size: W160 })
+    await keys(s, "z", "]")
+    let f = await waitFrame(s, (x) => x.includes("About apples."))
+    expect(f).toContain("About the guide.")
+    expect(f).not.toContain("About pears.")
+    f = await keys(s, "esc")
+    expect(f).not.toContain("About apples.")
+    expect(f).toContain("About the guide.")
   })
 })

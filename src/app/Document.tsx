@@ -1,15 +1,15 @@
 // The document area: the welcome page with no note open, an open error, zen's lines (typewriter gutter, Spotlight and
-// the gloss sheet and its heading mark) or the note's lines (find matches, link labels, the drawer's scrim), and the minimap beside it.
+// the gloss: a sheet or margin notes, and the heading marks) or the note's lines (find matches, link labels, the drawer's scrim), and the minimap beside it.
 // Not pure: drawn from the app context, and it clamps the welcome page's highlighted row as it draws, so App calls it
 // once per render, before its too-small return.
 import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
-import { sheetRows } from "../ai/gloss"
+import { drawnText, glossTail, type MarginNote, marginLayout, sheetRows } from "../ai/gloss"
 import { A, type Span } from "../lib/spans"
-import { truncate } from "../lib/text"
+import { superscript, truncate } from "../lib/text"
 import type { Line } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
-import { footInk, placeMark } from "../ui/footnote"
+import { footInk, placeMark, SIDENOTE_GAP, SIDENOTE_W } from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
@@ -102,16 +102,17 @@ function openError({ s, L, t }: Derived, error: string) {
 
 /**
  * Zen's lines: a 2-column gutter carrying the typewriter marker, Spotlight dimming, and the gloss: a sheet over the bottom
- * rows and a mark after its heading.
+ * rows, or from 140 columns notes in the right margin; either way a mark after each glossed heading.
  */
 function zenLines(d: Derived) {
   const { t, sheet } = d
   const { CW, CH } = d.L
   // a 2-column gutter left of the text carries the typewriter marker
   const gutter = mix(t.textMuted, t.background, 0.4)
+  const side = d.margin === null ? null : glossMargin(d)
   const ink = sheetInk(sheet, t)
-  const bottom = sheet ? sheetRows(t, sheet, CW, CH, ink) : []
-  const marks = sheetMark(d, ink)
+  const bottom = sheet && !side ? sheetRows(t, sheet, CW, CH, ink) : []
+  const marks = side?.marks ?? sheetMark(d, ink)
   const sheetAt = CH - bottom.length
   return (
     <box key="zen-lines" style={{ flexDirection: "row", height: CH, flexShrink: 0 }}>
@@ -124,6 +125,16 @@ function zenLines(d: Derived) {
           return <Row key={n} spans={markedLine(head, zenLine(d, n), marks.get(n), CW)} />
         })}
       </box>
+      {side ? (
+        <box
+          key="gloss-margin"
+          style={{ flexDirection: "column", width: SIDENOTE_GAP + SIDENOTE_W, paddingLeft: SIDENOTE_GAP, height: CH }}
+        >
+          {side.rows.map((spans, i) => (
+            <Row key={i} spans={spans} />
+          ))}
+        </box>
+      ) : null}
     </box>
   )
 }
@@ -150,6 +161,44 @@ function sheetMark({ t, sheet, view }: Derived, ink: (c: string) => string): Map
   if (!sheet || !h) return new Map()
   const c = footInk(t, ink)
   return new Map([[h.last ?? h.line, { text: "¹", fg: sheet.state === "outdated" ? c.markStale : c.mark }]])
+}
+
+/**
+ * The margin: the reading note (sticky on the first row while its section lasts) and the other sections with a fresh
+ * gloss whose heading is on screen, numbered by row; its rows (CH of them) and each drawn heading's mark by view line.
+ */
+function glossMargin({ t, sheet, others, gHere, overflow, view, win, L }: Derived) {
+  const lineOf = (index: number) => (index < 0 ? 0 : (view.headings[index]?.last ?? view.headings[index]?.line ?? 0))
+  const reading: MarginNote[] =
+    sheet && sheet.fadeAt === null
+      ? [
+          {
+            index: sheet.index,
+            row: lineOf(sheet.index) - win.first,
+            text: drawnText(sheet),
+            reading: true,
+            stale: sheet.state === "outdated",
+            status: glossTail(sheet, overflow, sheet.open),
+          },
+        ]
+      : []
+  const rest = others
+    .filter((o) => o.index !== gHere?.index && lineOf(o.index) >= win.lo && lineOf(o.index) < win.hi)
+    .map((o): MarginNote => ({ index: o.index, row: lineOf(o.index) - win.first, text: o.text, reading: false }))
+  const { placed, marks } = marginLayout(t, [...reading, ...rest], L.CH, !!sheet?.open)
+  const rows: Span[][] = Array.from({ length: L.CH }, () => [])
+  for (const p of placed) p.rows.forEach((r, k) => p.row + k < L.CH && (rows[p.row + k] = r))
+  const c = footInk(t)
+  const markFg = (index: number) => {
+    if (index !== reading[0]?.index) return c.markOther
+    return reading[0].stale ? c.markStale : c.mark
+  }
+  const byLine = new Map(
+    marks
+      .filter((m) => m.index >= 0)
+      .map((m): [number, Span] => [lineOf(m.index), { text: superscript(m.n), fg: markFg(m.index) }]),
+  )
+  return { rows, marks: byLine }
 }
 
 /** Line `n` of zen's window: blank outside it, dimmed outside the Spotlight, find matches marked. */

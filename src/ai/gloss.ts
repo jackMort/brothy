@@ -1,5 +1,5 @@
 // Zen gloss, pure: which text is sent for the section under the reading line, how it is asked for and kept, and how its
-// note reads in the bottom sheet (the print language is ui/footnote.ts).
+// note reads, in the bottom sheet or in the margin (the print language is ui/footnote.ts).
 
 import { type Span, safeLine } from "../lib/spans"
 import { truncate } from "../lib/text"
@@ -13,15 +13,18 @@ import {
   MODEL_W,
   noteRows,
   noteSpans,
+  type SideNote,
   type Stale,
+  sidenoteLayout,
   staleTail,
   type Tail,
   waitText,
 } from "../ui/footnote"
 import { cached } from "../ui/nav"
 import { headingPath } from "../ui/zen"
+import { type Glosses, isFresh, textHash } from "./cache"
 import { type ChatReq, cleanSummary, clip } from "./client"
-import type { GlossStyle } from "./config"
+import { type GlossStyle, PROMPTS } from "./config"
 
 /** text rows of the sheet, and expanded (`a` more) */
 export const GLOSS_ROWS = 3
@@ -175,7 +178,7 @@ const sheetWant = (v: GlossView) => {
 }
 
 /** The text a note draws: "" while waiting, a stream ending in its caret. */
-const drawnText = (v: GlossView) => (v.state === "streaming" ? v.text + CARET : v.text)
+export const drawnText = (v: GlossView) => (v.state === "streaming" ? v.text + CARET : v.text)
 
 /** The note's text rows, at most `max`: `¹` and a hanging indent; regenerating keeps the old text dimmed under `¹ ▍`. */
 function sheetText(v: GlossView, CW: number, max: number, c: FootInk): Span[][] {
@@ -198,4 +201,33 @@ export function sheetRows(t: Theme, v: GlossView, CW: number, CH: number, ink?: 
   if (!fit) return []
   const rule = footnoteRule(t, CW, glossTail(v, overflows(v.text, CW, GLOSS_ROWS), v.open), ink)
   return [...(fit.gap ? [[]] : []), rule, ...sheetText(v, CW, fit.text, c)]
+}
+
+/** A note for the margin: its section and where its heading's last row is on screen. */
+export type MarginNote = Omit<SideNote, "n"> & { index: number }
+
+/**
+ * The margin's notes laid out and numbered by row, top to bottom, over the notes actually drawn (an expanded reading
+ * note hides the ones it covers, which take no number): laid out once to find the order, then again with the numbers.
+ * `marks` gives each drawn section its number, for the heading's mark.
+ */
+export function marginLayout(t: Theme, notes: readonly MarginNote[], CH: number, open: boolean) {
+  const first = sidenoteLayout(
+    t,
+    notes.map((x, i) => ({ ...x, n: i + 1 })),
+    CH,
+    { open },
+  )
+  const numbered = first.map((p, k) => ({ ...notes[p.n - 1]!, n: k + 1 }))
+  const placed = sidenoteLayout(t, numbered, CH, { open })
+  return { placed, marks: numbered.map((x) => ({ index: x.index, n: x.n })) }
+}
+
+/** The sections of `src` whose cached gloss in `style` is fresh: the margin's other notes. */
+export function freshGlosses(src: string, path: string, glosses: Glosses, style: GlossStyle) {
+  return sectionsOf(src).flatMap((s) => {
+    const g = glossTarget(src, s.index, path, "")
+    const e = g && glosses[glossKey(g.id, style)]
+    return g && e && isFresh(e, textHash(g.text), PROMPTS.gloss) ? [{ index: s.index, text: e.gloss }] : []
+  })
 }

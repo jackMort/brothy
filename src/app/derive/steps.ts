@@ -14,7 +14,7 @@ import type { OpenRow } from "../../notes/projects"
 import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
 import { projectRoot } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
-import { staleKind, waitSecs } from "../../ui/footnote"
+import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../../ui/footnote"
 import type { layout } from "../../ui/layout"
 import { relocate, remapTop } from "../../ui/nav"
 import type { ChangeView, SummaryView } from "../../ui/panel"
@@ -258,7 +258,14 @@ export function matchState(s: UI, view: Rendered, memo: Memo, matchSeen: DeriveR
 
 // ------------------------------------------------------------- zen
 
-/** Zen gloss: the section under the reading line (`gHere`), its note (`sheet`, null when none), and whether that note overflows its collapsed rows. */
+/** No fresh glosses: a shared empty list, so the margin's memo holds. */
+const NO_FRESH: { index: number; text: string }[] = []
+
+/**
+ * Zen gloss: the section under the reading line (`gHere`), its note (`sheet`, null when none), whether that note
+ * overflows its collapsed rows, the margin's column from 140 columns (`margin`, null: the bottom sheet) and the other
+ * sections with a fresh gloss (`others`, only for the margin).
+ */
 export function glossSheet(
   s: UI,
   L: Layout,
@@ -278,12 +285,20 @@ export function glossSheet(
   const g = L.zen && s.ai ? s.gloss : null
   // the note's own section: the live hash while it is the reading section, else the one taken when it was shown
   const sheet = g ? glossView(s, g, gHere?.id === g.id ? gHash : g.hash, memo, jobs) : null
-  return { gHere, gHash, gStyle, sheet, ...glossPlace(L, sheet) }
+  return { gHere, gHash, gStyle, sheet, ...glossPlace(s, L, src, sheet, memo) }
 }
 
-/** Whether the note overflows its collapsed rows (`a` shows more). */
-function glossPlace(L: Layout, sheet: GlossView | null) {
-  return { overflow: !!sheet && overflows(sheet.text, L.CW, GLOSS_ROWS) }
+/** Where the note goes: the margin's column from 140 columns (null: the sheet), the other sections' fresh glosses there, and whether the note overflows its collapsed rows. */
+function glossPlace(s: UI, L: Layout, src: string, sheet: GlossView | null, memo: Memo) {
+  // zen has no panel: the area is the terminal less a column each side
+  const margin = L.zen && s.ai ? sidenoteAt(L.areaW + 2, 1 + L.padL, L.CW, L.areaW + 1) : null
+  const others =
+    margin === null || !s.glosses
+      ? NO_FRESH
+      : memo.glossFresh(src, s.openPath ?? "", s.glosses, parseGlossStyle(s.ai?.gloss))
+  const [w, rows] = margin === null ? [L.CW, GLOSS_ROWS] : [SIDENOTE_W, SIDENOTE_ROWS]
+  const overflow = !!sheet && overflows(sheet.text, w, rows)
+  return { margin, others, overflow }
 }
 
 /** The note `g` as drawn: waiting or streaming while its job runs, else its cache entry, fresh or outdated against `hash`. */

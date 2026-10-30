@@ -1,12 +1,18 @@
 // The zen gloss's note, pure: a reply kept to its finished sentences, the rule's tail, the bottom sheet, the margin.
 import { describe, expect, test } from "bun:test"
+import { textHash } from "../../src/ai/cache"
+import { PROMPTS } from "../../src/ai/config"
 import {
+  freshGlosses,
   GLOSS_MAX,
   GLOSS_ROWS,
   GLOSS_ROWS_OPEN,
   type GlossView,
+  glossKey,
   glossTail,
+  glossTarget,
   keepSentences,
+  marginLayout,
   overflows,
   sheetFit,
   sheetRows,
@@ -14,7 +20,7 @@ import {
 import type { Span } from "../../src/lib/spans"
 import { width } from "../../src/lib/text"
 import { mix, themeByName } from "../../src/theme/theme"
-import { CARET, DIM_STALE, RULE, SIDENOTE_W } from "../../src/ui/footnote"
+import { CARET, DIM_OTHER, DIM_STALE, RULE, SIDENOTE_W } from "../../src/ui/footnote"
 import { brothy } from "../helpers/theme"
 
 const text = (spans: Span[]) => spans.map((s) => s.text).join("")
@@ -209,4 +215,60 @@ describe("sheetRows", () => {
     expect(overflows("Short.", CW, GLOSS_ROWS)).toBe(false)
     expect(overflows(said("w", 60), SIDENOTE_W, 6)).toBe(true)
   })
+})
+
+describe("marginLayout", () => {
+  const CH = 36
+  const long = said("pear", 40)
+
+  test("numbered by row, top to bottom; the marks name each drawn section", () => {
+    const { placed, marks } = marginLayout(
+      brothy,
+      [
+        { index: 4, row: 20, text: long, reading: true },
+        { index: 1, row: 2, text: long, reading: false },
+      ],
+      CH,
+      false,
+    )
+    expect(placed.map((p) => [p.n, p.row])).toEqual([
+      [1, 2],
+      [2, 20],
+    ])
+    expect(marks).toEqual([
+      { index: 1, n: 1 },
+      { index: 4, n: 2 },
+    ])
+    expect(text(placed[0]!.rows[0]!).startsWith("¹ pear")).toBe(true)
+    expect(placed[0]!.rows[0]![1]!.fg).toBe(mix(brothy.textMuted, brothy.background, DIM_OTHER))
+    expect(placed.flatMap((p) => p.rows).every((r) => width(text(r)) <= SIDENOTE_W)).toBe(true)
+  })
+
+  test("an expanded reading note hides the notes it covers, and they take no number", () => {
+    const notes = [
+      { index: 0, row: 2, text: `${long} ${long}`, reading: true },
+      { index: 1, row: 6, text: long, reading: false },
+      { index: 2, row: 30, text: long, reading: false },
+    ]
+    expect(marginLayout(brothy, notes, CH, false).marks.map((m) => m.index)).toEqual([0, 1, 2])
+    const open = marginLayout(brothy, notes, CH, true)
+    expect(open.marks).toEqual([
+      { index: 0, n: 1 },
+      { index: 2, n: 2 },
+    ])
+    expect(text(open.placed[1]!.rows[0]!).startsWith("² ")).toBe(true)
+  })
+})
+
+test("freshGlosses: the sections with a fresh gloss in the style, outdated and other styles left out", () => {
+  const src = ["# Guide", said("guide", 25), "## Apples", said("apple", 25), "## Pears", said("pear", 25)].join("\n\n")
+  const at = (i: number) => glossTarget(src, i, "/n/a.md", "a")!
+  const entry = (gloss: string, hash: string) => ({ hash, v: PROMPTS.gloss, gloss, model: "m", at: 1 })
+  const glosses = {
+    [glossKey(at(0).id, "explain")]: entry("About the guide.", textHash(at(0).text)),
+    [glossKey(at(1).id, "explain")]: entry("Old apples.", "stale"),
+    [glossKey(at(2).id, "simplify")]: entry("Pears, simply.", textHash(at(2).text)),
+  }
+  expect(freshGlosses(src, "/n/a.md", glosses, "explain")).toEqual([{ index: 0, text: "About the guide." }])
+  expect(freshGlosses(src, "/n/a.md", glosses, "simplify")).toEqual([{ index: 2, text: "Pears, simply." }])
 })
