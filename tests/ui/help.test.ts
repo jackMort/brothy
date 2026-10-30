@@ -60,3 +60,15 @@ test("helpLayout: the wordmark only when the height can spare it; vis fits the p
   const short = helpLayout([g("Global", 2)], 120, 40)
   expect(short.vis).toBe(short.rows)
 })
+
+test("helpLayout: a long description wraps under the description column, keys only on its first row", () => {
+  const long = "gloss: explain the section you're reading (AI) · again: more / less"
+  const l = helpLayout([{ title: "Zen", entries: [{ keys: "a", desc: long }] }], 99, 40)
+  const rows = l.cols[0]!.slice(1)
+  expect(rows.length).toBeGreaterThan(1)
+  expect(rows[0]).toMatchObject({ kind: "key", keys: "a" })
+  for (const r of rows.slice(1)) expect(r).toMatchObject({ kind: "key", keys: "" })
+  const descs = rows.map((r) => (r?.kind === "key" ? r.desc : ""))
+  expect(descs.join(" ")).toBe(long)
+  for (const d of descs) expect(Bun.stringWidth(d)).toBeLessThanOrEqual(l.colW - l.keyW)
+})

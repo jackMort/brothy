@@ -78,7 +78,8 @@ test("? ? at 120 columns: five chip groups in two columns, Global and Panel left
   expect(after.join("\n")).toContain("Keybindings")
   expect(after.some((r) => / {2}AI {2}/.test(r))).toBe(true)
   expect(after.join("\n")).toContain("ask your notes: ^p then ?question")
-  const end = (await keys(s, "G")).split("\n")
+  let end = (await keys(s, "G")).split("\n")
+  for (let i = 0; i < 6 && !end.some((r) => r.includes(" Panel ")); i++) end = (await keys(s, "b")).split("\n")
   const panel = end.findIndex((r) => r.includes(" Panel "))
   expect(panel).toBeGreaterThan(0)
   expect(end[panel]!.indexOf("Panel")).toBe(chipRow.indexOf("Global")) // left column
