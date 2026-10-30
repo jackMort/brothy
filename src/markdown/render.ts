@@ -24,6 +24,8 @@ export interface Heading {
   depth: number
   text: string
   line: number
+  /** Preview only: the heading's last text row (`line` is the first); Source leaves it undefined, so read `last ?? line` */
+  last?: number
 }
 
 export interface Rendered {
@@ -398,7 +400,10 @@ function headingRows(
 ) {
   const { t } = ctx
   const style = ctx.headingStyle
-  const emit = (rows: Span[][]) => emitRows(ctx, rows, { heading: idx })
+  const emit = (rows: Span[][]) => {
+    emitRows(ctx, rows, { heading: idx })
+    ctx.headings[idx]!.last = ctx.lines.length - 1 // before a classic h1's underline row
+  }
   const marked = (mark: Span, w = max) => wrap(styled, w, [...p, mark], [...rest, { text: pad(width(mark.text)) }])
   if (style === "bars" || style === "ladder")
     return emit(marked({ text: (style === "bars" ? BARS : LADDER)[depth - 1]!, fg }))
@@ -847,7 +852,10 @@ export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}
     ctx.lines[0]!.fill === undefined
   ) {
     ctx.lines.shift()
-    ctx.headings.forEach((h) => h.line--)
+    for (const h of ctx.headings) {
+      h.line--
+      if (h.last !== undefined) h.last--
+    }
   }
   return {
     lines: ctx.lines,
