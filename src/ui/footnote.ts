@@ -288,6 +288,8 @@ export interface SideNote {
   /** true: the note being read (kept on row 0 when its heading scrolls above, expands); false: a neighbour of it, dimmed */
   reading?: boolean
   stale?: boolean
+  /** the mark muted, the text not: a note already acted on (an explained change) */
+  markStale?: boolean
   /** the `Δ` summary, pinned on row 0, in the text role */
   summary?: boolean
   /** a status row under the text, right-aligned */
@@ -305,7 +307,7 @@ export interface SidePlaced {
 function sideInk(note: SideNote, c: FootInk) {
   if (note.stale) return { mark: c.markStale, text: c.stale }
   if (note.reading === false) return { mark: c.markOther, text: c.other }
-  return { mark: c.mark, text: note.summary ? c.text : c.note }
+  return { mark: note.markStale ? c.markStale : c.mark, text: note.summary ? c.text : c.note }
 }
 
 /**

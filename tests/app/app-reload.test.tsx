@@ -589,6 +589,10 @@ test("sidenotes where the margin fits (panel hidden): Δ on the first row, notes
   expect(rows[2]!.indexOf("Δ Sum up.")).toBe(123)
   const note = rows.findIndex((r) => r.includes("¹ one line reworded"))
   expect(rows[note]!.indexOf("¹ one line reworded")).toBe(123)
+  // explained: the note's number muted like the mark in the text, the Δ primary
+  const sideMark = s.captureSpans().lines[note]!.spans.find((sp) => sp.text.startsWith("¹"))!
+  expect(hex(sideMark.fg)).toBe(B.textMuted)
+  expect(fgAt(s, 2, "Δ")).toBe(B.primary)
   // beside its heading's row, or under the Δ's rows and a gap when they reach past it
   expect(note).toBe(
     Math.max(

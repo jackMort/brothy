@@ -390,7 +390,7 @@ describe("sidenoteLayout", () => {
     expect(out[1]!.rows[0]![1]!.fg).toBe(t.textMuted)
   })
 
-  test("colours: outdated and neighbouring notes dimmed, a fade over all", () => {
+  test("colours: outdated and neighbouring notes dimmed, a muted mark alone, a fade over all", () => {
     const [stale, other] = sidenoteLayout(t, [note(1, 0, { stale: true }), note(2, 10, { reading: false })], CH, {
       open: false,
     })
@@ -398,6 +398,10 @@ describe("sidenoteLayout", () => {
     expect(stale!.rows[0]![1]!.fg).toBe(c.stale)
     expect(other!.rows[0]![0]!.fg).toBe(c.markOther)
     expect(other!.rows[1]![0]!.fg).toBe(c.other)
+    // an acted-on note: the mark muted, the text as it was
+    const [done] = sidenoteLayout(t, [note(1, 0, { markStale: true })], CH, { open: false })
+    expect(done!.rows[0]![0]!.fg).toBe(c.markStale)
+    expect(done!.rows[0]![1]!.fg).toBe(c.note)
     const faded = sidenoteLayout(t, [note(1, 0)], CH, { open: false, ink: () => "#000000" })
     expect(faded[0]!.rows.flat().every((s) => s.fg === undefined || s.fg === "#000000")).toBe(true)
   })

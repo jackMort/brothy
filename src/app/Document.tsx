@@ -303,9 +303,11 @@ function summaryNote(cv: ChangeView): SideNote {
  */
 function changeMargin({ t, cv, marks, top, L, side }: Derived): Span[][] | null {
   if (side === null || (cv?.state !== "loading" && cv?.state !== "result")) return null
+  // explained: the numbers muted, as the marks in the text
+  const markStale = cv.state === "result"
   const notes = marks.flatMap((m): SideNote[] => {
     const what = cv.notes[m.n - 1]?.what
-    return what ? [{ n: m.n, row: m.row - top, text: what }] : []
+    return what ? [{ n: m.n, row: m.row - top, text: what, markStale }] : []
   })
   const rows: Span[][] = Array.from({ length: L.CH }, () => [])
   for (const p of sidenoteLayout(t, [summaryNote(cv), ...notes], L.CH, { open: false }))
