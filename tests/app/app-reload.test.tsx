@@ -611,3 +611,23 @@ test("sidenotes where the margin fits (panel hidden): Δ on the first row, notes
   expect(f).toContain("Δ Sum up.")
   expect(f.split("\n").some((r) => /─{16} {2,}¹ of 4/.test(r))).toBe(false)
 })
+
+test("waiting counts the seconds on its row from 1 s; the rows below never move", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": TWO })
+  const { s, ai } = await mountAI(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), EDITED)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D")
+  await waitFor(s, () => ai.calls.length === 1)
+  const before = info(await keys(s)).split("\n")
+  expect(before[7]).toBe("  ▍ asking llama3.2")
+  // the shared wait tick redraws on the next whole second
+  const after = info(await waitFrame(s, (f) => f.includes("asking llama3.2 · 1 s"), 2500)).split("\n")
+  expect(after[7]).toBe("  ▍ asking llama3.2 · 1 s")
+  expect(after.slice(8, 10)).toEqual(before.slice(8, 10))
+  ai.send(0, "Short.")
+  const f = info(await waitFrame(s, (f) => f.includes("Short.▍"))).split("\n")
+  expect(f[7]).toBe("  Short.▍") // the first token takes the waiting row's place
+  expect(f.slice(8, 10)).toEqual(before.slice(8, 10))
+})
