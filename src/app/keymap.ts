@@ -107,7 +107,7 @@ const KEYMAP = {
     modes: ["global"],
     keys: ["escape"],
     label: "esc",
-    desc: "clear find · hide gloss · leave zen · panel: clear filter, else back to the document",
+    desc: "clear find · hide gloss · hide a change's footnote · leave zen · panel: clear filter, else back to the document",
   },
   help: { modes: ["global"], keys: ["?"], label: "?", desc: "key hints · twice: all keys", hint: "keys" },
   quit: { modes: ["global"], keys: ["q", "C-c"], label: "q", desc: "quit" },
