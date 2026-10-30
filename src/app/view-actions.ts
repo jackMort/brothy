@@ -2,6 +2,7 @@
 // find, the switcher, the opener, the theme picker and zen settings), one factory per family; `makeActions` composes
 // them. Not pure: they close over the app context and the feature factories.
 import { dirname } from "node:path"
+import type { KeyEvent } from "@opentui/core"
 import { askSection } from "../ai/ask"
 import { clamp } from "../lib/text"
 import { ancestorsOf } from "../notes/files"
@@ -284,6 +285,28 @@ export function makePopupActions(c: AppCtx, { zen, popups }: Features) {
     zsAdjust: (k) => zen.zenEdit(ui.current.zenRow, k.name === "right" || k.name === "l" ? 1 : -1),
     zsSave: zen.applyZen,
     zsRevert: zen.revertZen,
+  } satisfies Partial<Actions>
+}
+
+/** Which way a sheet key moves: `j` `↓` `^n` `⇟` and tab forward, their opposites and shift-tab back. */
+const proofDir = (k: KeyEvent): 1 | -1 => {
+  if (k.name === "tab") return k.shift ? -1 : 1
+  return isDown(k) || (k.ctrl && k.name === "n") ? 1 : -1
+}
+
+/** The Proof sheet: step between its blocks, go to one, `D` explain in place, close. */
+export function makeProofActions(c: AppCtx, { proof, aiJobs }: Pick<Features, "proof" | "aiJobs">) {
+  const { ui, set } = c
+  const { proofAt, proofPage, proofGo } = proof
+  return {
+    proofMove: (k) => {
+      const dir = proofDir(k)
+      if (k.name === "pagedown" || k.name === "pageup") proofPage(dir)
+      else proofAt((ui.current.proof?.hl ?? 0) + dir)
+    },
+    proofGo: () => proofGo(),
+    proofExplain: aiJobs.explainInSheet,
+    proofClose: () => set({ proof: null }),
   } satisfies Partial<Actions>
 }
 

@@ -60,6 +60,7 @@ import {
   type SummaryState,
   type SummaryView,
 } from "../ui/panel"
+import { proofRows } from "../ui/proof"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import { sectionRanges, wordSuffix } from "../ui/zen"
 import {
@@ -72,6 +73,7 @@ import {
   matchState,
   noteView,
   openerList,
+  proofSheet,
   readingWindow,
   scrollState,
   switcherList,
@@ -141,10 +143,12 @@ function panelMemo() {
         title: string,
       ) => infoItems(p, st, l, w, f, undefined, sv ?? undefined, cv ? { view: cv, title } : undefined),
     ),
-    // Info cursor stops: the TL;DR's rule when it overflows, links, change rows (removed sections are not) and `+ n more`
+    // Info cursor stops: the TL;DR's rule when it overflows, the Changed label, links, change rows (removed sections are not) and `+ n more`
     linkIdx: cached((items: InfoItem[]) =>
       items.flatMap((it, i) =>
-        it.kind === "link" || it.kind === "cmore" || ((it.kind === "change" || it.kind === "frule") && it.stop)
+        it.kind === "link" ||
+        it.kind === "cmore" ||
+        ((it.kind === "changes" || it.kind === "change" || it.kind === "frule") && it.stop)
           ? [i]
           : [],
       ),
@@ -157,6 +161,7 @@ function panelMemo() {
     }),
     diff: cached(diffSections),
     marks: cached(changeMarks),
+    proof: cached(proofRows),
     // the landing's quoted row in Preview: where `⏎` scrolled, marked in the gutter
     landRow: cached((view: Rendered, c: Change, quote: string) => {
       const { from, to } = changeRows(view, c)
@@ -391,6 +396,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
       matchIdx: matchIndex(matches, s.matchLine),
       currentHeading,
       land: landingView(s, L, doc, info.cv, memo, jobs.current),
+      proof: proofSheet(s, dims.current.W, dims.current.H, info.cv, info.title, memo),
       side: changeSideAt(s, L),
       sideFocus: (L.shown && s.focus === "panel" ? s.view : null) as View | null,
       oRows,

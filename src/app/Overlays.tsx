@@ -1,5 +1,5 @@
-// The popups over the page: the `? ?` help sheet, the switcher, the Open picker, Find in Document, the `t` theme picker
-// and the zen settings. Not pure: drawn from the app context, with handlers that write the store. Each returns null
+// The popups over the page: the `? ?` help sheet, the switcher, the Open picker, Find in Document, the Proof sheet, the
+// `t` theme picker and the zen settings. Not pure: drawn from the app context, with handlers that write the store. Each returns null
 // while its popup is closed; the components themselves live in overlay.tsx.
 import type { ReactNode } from "react"
 import { askTitleNote } from "../ai/ask"
@@ -29,6 +29,7 @@ import {
   Overlay,
   PickerInput,
   PickerList,
+  ProofSheet,
   Switcher,
   ThemePicker,
   ZenSettings,
@@ -38,6 +39,7 @@ import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { HELP_GROUPS } from "./keymap"
 import type { Popups } from "./popups"
+import type { Proof } from "./proof"
 import { WHEEL_ROWS } from "./store"
 import type { SwitcherControl } from "./switcher"
 import type { WorkspaceControl } from "./workspace"
@@ -203,6 +205,36 @@ export function findOverlay(
         onActivate={(i) => promptSubmit(i)}
       />
     </Overlay>
+  )
+}
+
+/** `D`'s Proof sheet: every changed section with its diff lines. */
+export function proofOverlay(
+  c: AppCtx,
+  d: Derived,
+  { proofAt, proofGo }: Pick<Proof, "proofAt" | "proofGo">,
+): ReactNode {
+  const { set, W, H } = c
+  const { proof: p, cv, t } = d
+  if (!p || !cv?.changes) return null
+  return (
+    <ProofSheet
+      t={t}
+      W={W}
+      H={H}
+      width={p.width}
+      note={`since ${cv.since} · ${plural(cv.changes.length, "section")}`}
+      rows={p.rows}
+      hl={p.hl}
+      top={p.top}
+      height={p.height}
+      room={p.room}
+      markW={p.markW}
+      onClose={() => set({ proof: null })}
+      onScroll={(dir) => proofAt(p.hl + dir)}
+      onHover={(at) => at !== p.hl && proofAt(at)}
+      onActivate={proofGo}
+    />
   )
 }
 

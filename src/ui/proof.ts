@@ -5,7 +5,7 @@ import { type Change, changeCounts, type Hunk, type Op } from "../ai/delta"
 import { A, type Span, safeLine } from "../lib/spans"
 import { clamp, graphemes, superscript, truncate, width } from "../lib/text"
 import type { Theme } from "../theme/theme"
-import { CARET, footInk, noteRows, waitingRow } from "./footnote"
+import { CARET, type FootInk, footInk, noteRows, waitingRow } from "./footnote"
 import { PEEK_MIN_W, popupWidth, splitWidth } from "./geometry"
 import { CHANGE_MSG_ROWS, CHANGE_NOTE_ROWS, CHANGE_SUMMARY_ROWS, type ChangeView } from "./panel"
 
@@ -28,6 +28,9 @@ export type ProofRow =
 
 /** The sheet's width: the screen less its margin, and from PEEK_MIN_W columns the split popup's. */
 export const proofWidth = (W: number) => (W < PEEK_MIN_W ? popupWidth(W, W) : splitWidth(W))
+
+/** Rows the sheet shows at most, on a screen `H` rows tall: it fills the screen less its frame, up to 40. */
+export const proofHeight = (H: number) => Math.max(1, Math.min(H - 6, 40))
 
 /** The mark column's width: the widest number (`¹⁰` is two). */
 export const proofMarkW = (changes: readonly Change[]) => width(superscript(changes.length))
@@ -115,22 +118,20 @@ function headRows(cv: ChangeView, tw: number): ProofRow[] {
   return rows(cv.state === "loading" ? cv.summary + CARET : cv.summary, CHANGE_SUMMARY_ROWS, "summary")
 }
 
-/** A change's header (number, name, counts) and, once explained, its note. */
-function blockHead(cv: ChangeView, c: Change, at: number, title: string, tw: number): ProofRow[] {
+/** A change's header row: its number, the name (the note's title for the lead-in) cut to leave room for the counts. */
+function headerRow(cv: ChangeView, c: Change, at: number, title: string, tw: number): ProofRow {
   const counts = c.status === "added" ? "new" : changeCounts(c)
   const name = safeLine(c.index < 0 || !c.path.length ? title : c.path.at(-1)!)
   const removed = c.status === "removed"
-  const block: ProofRow = {
-    kind: "block",
-    at,
-    name: truncate(name, Math.max(1, tw - (counts ? width(counts) + 1 : 0))),
-    counts,
-    muted: removed || cv.state === "result",
-    removed,
-  }
+  const room = Math.max(1, tw - (counts ? width(counts) + 1 : 0))
+  return { kind: "block", at, name: truncate(name, room), counts, muted: removed || cv.state === "result", removed }
+}
+
+/** A change's header and, once explained, its note. */
+function blockHead(cv: ChangeView, c: Change, at: number, title: string, tw: number): ProofRow[] {
   const what = cv.state === "loading" || cv.state === "result" ? cv.notes[at]?.what : undefined
   const notes = what ? noteRows(what, tw, null, CHANGE_NOTE_ROWS, { cut: "…" }) : []
-  return [block, ...notes.map((text): ProofRow => ({ kind: "note", at, text }))]
+  return [headerRow(cv, c, at, title, tw), ...notes.map((text): ProofRow => ({ kind: "note", at, text }))]
 }
 
 /**
@@ -169,66 +170,90 @@ export function proofTop(rows: readonly ProofRow[], hl: number, top: number, hei
   return clamp(hl === 0 && from + 2 <= height ? 0 : want, 0, max)
 }
 
-/** The sheet's row `r` in `t`, `room` columns wide; `sel`: its block is the highlighted one (the cursor bar, a bold name). */
-export function proofSpans(r: ProofRow, t: Theme, o: { room: number; markW: number; sel: boolean }): Span[] {
-  const c = footInk(t)
-  const indent = (extra = 0) => " ".repeat(2 + o.markW + extra)
-  const lead = (mark: Span | null): Span[] => [{ text: " " }, mark ?? { text: " ".repeat(o.markW) }, { text: " " }]
-  const markCell = (text: string, fg: string, attr: number = A.NONE): Span => ({
-    text: text + " ".repeat(Math.max(0, o.markW - width(text))),
-    fg,
-    attr,
-  })
-  switch (r.kind) {
-    case "summary":
-      return [...lead(r.first ? markCell("Δ", c.mark) : null), { text: r.text, fg: c.text }]
-    case "error":
-      return [...lead(r.first ? markCell("✗", c.error, A.BOLD) : null), { text: r.text, fg: c.status }]
-    case "status":
-      return [
-        { text: " " },
-        ...waitingRow(t, { mark: null, model: r.model, secs: r.secs, status: true, width: o.room - 1 }),
-      ]
-    case "block": {
-      const pad = Math.max(1, o.room - 2 - o.markW - width(r.name) - width(r.counts))
-      return [
-        { text: o.sel ? "▌" : " ", fg: c.mark },
-        markCell(superscript(r.at + 1), r.muted ? c.markStale : c.mark),
-        { text: " " },
-        {
-          text: r.name,
-          fg: r.removed ? c.status : c.text,
-          attr: (r.removed ? A.STRIKE : A.NONE) | (o.sel ? A.BOLD : A.NONE),
-        },
-        { text: " ".repeat(pad) },
-        { text: r.counts, fg: c.status },
-      ]
-    }
-    case "note":
-      return [{ text: indent() }, { text: r.text, fg: c.note }]
-    case "gap":
-      return [{ text: indent(2) }, { text: "…", fg: c.status }]
-    case "rewritten":
-      return [{ text: indent() }, { text: "rewritten · showing the new text", fg: c.status }]
-    case "more":
-      return [
-        { text: indent() },
-        ...sign(r.op, t),
-        { text: ` … ${r.n} more line${r.n === 1 ? "" : "s"}`, fg: c.status },
-      ]
-    case "diff": {
-      const body: Span[] = [
-        ...(r.cutL ? [{ text: "…", fg: c.status }] : []),
-        { text: r.text, fg: r.op === "+" ? c.text : c.status },
-        ...(r.cutR ? [{ text: "…", fg: c.status }] : []),
-      ]
-      return [{ text: indent() }, ...sign(r.op, t), { text: " " }, ...body]
-    }
-  }
+/** What a row is drawn with: the theme's ink, the mark column's width, the row's columns and whether its block has the cursor. */
+interface Draw {
+  t: Theme
+  c: FootInk
+  markW: number
+  room: number
+  sel: boolean
 }
+
+/** `text` padded to the mark column. */
+const markCell = (d: Draw, text: string, fg: string, attr: number = A.NONE): Span => ({
+  text: text + " ".repeat(Math.max(0, d.markW - width(text))),
+  fg,
+  attr,
+})
+
+/** The cursor column, the mark column and its space; `mark` null leaves the mark column blank (a continuation row). */
+const lead = (d: Draw, mark: Span | null): Span[] => [
+  { text: " " },
+  mark ?? { text: " ".repeat(d.markW) },
+  { text: " " },
+]
+
+/** The text column, `extra` further in. */
+const indent = (d: Draw, extra = 0): Span => ({ text: " ".repeat(2 + d.markW + extra) })
 
 /** The diff sign: `−` in error, `+` in success, a blank for context. */
 function sign(op: Op["op"], t: Theme): Span[] {
   if (op === " ") return [{ text: " " }]
   return [{ text: op === "-" ? "−" : "+", fg: op === "-" ? t.error : t.success }]
+}
+
+/** A block's header: the cursor bar when highlighted, the number, the name (bold when highlighted, struck through when removed), the counts at the right edge. */
+function blockSpans(r: Extract<ProofRow, { kind: "block" }>, d: Draw): Span[] {
+  const { c } = d
+  const pad = Math.max(1, d.room - 2 - d.markW - width(r.name) - width(r.counts))
+  const attr = (r.removed ? A.STRIKE : A.NONE) | (d.sel ? A.BOLD : A.NONE)
+  return [
+    { text: d.sel ? "▌" : " ", fg: c.mark },
+    markCell(d, superscript(r.at + 1), r.muted ? c.markStale : c.mark),
+    { text: " " },
+    { text: r.name, fg: r.removed ? c.status : c.text, attr },
+    { text: " ".repeat(pad) },
+    { text: r.counts, fg: c.status },
+  ]
+}
+
+/** A diff line: the sign, then the text (muted unless added) with a muted `…` on each cut side. */
+function diffSpans(r: Extract<ProofRow, { kind: "diff" }>, d: Draw): Span[] {
+  const { c } = d
+  return [
+    indent(d),
+    ...sign(r.op, d.t),
+    { text: " " },
+    ...(r.cutL ? [{ text: "…", fg: c.status }] : []),
+    { text: r.text, fg: r.op === "+" ? c.text : c.status },
+    ...(r.cutR ? [{ text: "…", fg: c.status }] : []),
+  ]
+}
+
+/** The sheet's row `r` in `t`, `room` columns wide; `sel`: its block is the highlighted one (the cursor bar, a bold name). */
+export function proofSpans(r: ProofRow, t: Theme, o: { room: number; markW: number; sel: boolean }): Span[] {
+  const c = footInk(t)
+  const d: Draw = { t, c, ...o }
+  switch (r.kind) {
+    case "summary":
+      return [...lead(d, r.first ? markCell(d, "Δ", c.mark) : null), { text: r.text, fg: c.text }]
+    case "error":
+      return [...lead(d, r.first ? markCell(d, "✗", c.error, A.BOLD) : null), { text: r.text, fg: c.status }]
+    case "status": {
+      const wait = { mark: null, model: r.model, secs: r.secs, status: true, width: o.room - 1 }
+      return [{ text: " " }, ...waitingRow(t, wait)]
+    }
+    case "block":
+      return blockSpans(r, d)
+    case "note":
+      return [indent(d), { text: r.text, fg: c.note }]
+    case "gap":
+      return [indent(d, 2), { text: "…", fg: c.status }]
+    case "rewritten":
+      return [indent(d), { text: "rewritten · showing the new text", fg: c.status }]
+    case "more":
+      return [indent(d), ...sign(r.op, t), { text: ` … ${r.n} more line${r.n === 1 ? "" : "s"}`, fg: c.status }]
+    case "diff":
+      return diffSpans(r, d)
+  }
 }

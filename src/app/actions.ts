@@ -24,6 +24,7 @@ import { makeOnKey } from "./dispatch"
 import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { Popups } from "./popups"
+import type { Proof } from "./proof"
 import type { Focus, UI } from "./store"
 import type { SwitcherControl } from "./switcher"
 import {
@@ -33,6 +34,7 @@ import {
   makeInfoActions,
   makeOutlineActions,
   makePopupActions,
+  makeProofActions,
   makeSwitcherActions,
   makeZenActions,
 } from "./view-actions"
@@ -47,6 +49,7 @@ export interface Features {
   switcher: SwitcherControl
   workspace: WorkspaceControl
   popups: Popups
+  proof: Proof
   edit: ((argv: string[], piped: boolean) => EditResult | void) | undefined
 }
 
@@ -69,6 +72,7 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makeFilterActions(c, f.popups, moves),
     ...makePopupActions(c, f),
     ...makeSwitcherActions(c, f),
+    ...makeProofActions(c, f),
   }
   const { currentCtx, pokeHints } = keys
   return {
@@ -129,6 +133,7 @@ function popupCtx(s: UI): Ctx | null {
   if (s.zenOrig !== null) return "zenSettings"
   if (s.opener) return "open"
   if (s.switcher) return "switch"
+  if (s.proof) return "proof"
   return s.prompt ? "prompt" : null
 }
 
@@ -178,9 +183,10 @@ function makeMoves(c: AppCtx, { openLink, jumpChange }: Pick<Links, "openLink" |
     })
   }
 
-  /** `⏎` or a click on an Info stop: follow the link, go to the change, open or fold `+ n more` or a long TL;DR. */
+  /** `⏎` or a click on an Info stop: follow the link, open the Proof sheet, go to the change, open or fold `+ n more` or a long TL;DR. */
   const infoGo = (it: InfoItem) => {
     if (it.kind === "link") openLink(it)
+    else if (it.kind === "changes") set({ proof: { hl: 0, top: 0 } })
     else if (it.kind === "change") jumpChange(it.at)
     else if (it.kind === "cmore") toggleChanges()
     else if (it.kind === "frule") set({ tldrOpen: !derive().s.tldrOpen })

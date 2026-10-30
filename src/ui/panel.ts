@@ -100,7 +100,7 @@ export type InfoItem =
   | { kind: "blank" }
   | { kind: "foot"; mark: string | null; markStale: boolean; text: string; tone: FootTone; hang?: number }
   | { kind: "frule"; tail: Tail | null; stop: boolean }
-  | { kind: "changes"; since: string; model: string | null; right: Tail | null }
+  | { kind: "changes"; since: string; model: string | null; right: Tail | null; stop: boolean }
   | {
       kind: "change"
       n: number
@@ -428,7 +428,7 @@ function currentRows(cv: ChangeView, changes: readonly Change[], title: string, 
 }
 
 /**
- * The `Changed` block (`SPEC-delta.md` §3): the label with `D`'s word at its right end; the waiting row, the summary or
+ * The `Changed` block (`SPEC-delta.md` §3): the label (a stop that opens the Proof sheet) with `D`'s word at its right end; the waiting row, the summary or
  * the error; a numbered row per change with its note once explained, `+ n more` past MAX_CHANGE_ROWS; then Earlier.
  */
 export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
@@ -437,6 +437,7 @@ export function changeItems(cv: ChangeView, title: string, cols: number): InfoIt
     since: cv.since,
     model: cv.state === "result" ? cv.model : null,
     right: changeKey(cv),
+    stop: !!cv.changes?.length,
   }
   const out = [label, ...(cv.changes ? currentRows(cv, cv.changes, title, cols) : largeRows(cols))]
   const first = (cv.changes?.length ?? 0) + 1

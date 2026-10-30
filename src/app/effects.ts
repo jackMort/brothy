@@ -49,6 +49,8 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, flash }: AppCtx, dr
         const d = derive()
         // a landing the new list no longer has (it shrank past it) goes
         if (d.s.landing && !d.land) set({ landing: null })
+        // so does the Proof sheet when the note no longer differs from its baseline
+        if (d.s.proof && !d.proof) set({ proof: null })
         flash(reloadToast(d.changes, d.propsChanged, !!d.s.ai))
       },
       error: (msg) => flash(msg, "error"),

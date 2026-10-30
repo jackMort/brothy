@@ -15,6 +15,7 @@ import {
   findOverlay,
   helpOverlay,
   openOverlay,
+  proofOverlay,
   switchOverlay,
   themeOverlay,
   themePickView,
@@ -22,6 +23,7 @@ import {
 } from "./app/Overlays"
 import { panelBox } from "./app/Panel"
 import { makePopups } from "./app/popups"
+import { makeProof } from "./app/proof"
 import { type FileRow, initUI, type Job, MIN_H, MIN_W, type Spot, type UI, ZEN_DIM } from "./app/store"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
@@ -101,6 +103,7 @@ export function App({
   const switcher = makeSwitcher(ctx, links)
   const workspace = makeWorkspace(ctx, switcher, aiJobs)
   const popups = makePopups(ctx)
+  const proof = makeProof(ctx, links)
   const { currentCtx, pokeHints, outlineGo, infoGo, onKey } = makeActions(ctx, {
     aiJobs,
     links,
@@ -108,6 +111,7 @@ export function App({
     switcher,
     workspace,
     popups,
+    proof,
     edit: editImpl,
   })
 
@@ -141,6 +145,7 @@ export function App({
   const switchEl = switchOverlay(ctx, d, switcher)
   const openEl = openOverlay(ctx, d, workspace)
   const findEl = findOverlay(ctx, d, popups)
+  const proofEl = proofOverlay(ctx, d, proof)
   const pickView = themePickView(ctx, d)
   // zen gloss: runs when the reading line changes section (not on every scroll tick)
   const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
@@ -161,6 +166,7 @@ export function App({
     progressEl,
     helpEl,
     findEl,
+    proofEl,
     switchEl,
     openEl,
     themeEl,
@@ -231,15 +237,17 @@ function footerWords(d: Derived): Partial<Record<KeyId, string>> {
   const words: Partial<Record<KeyId, string>> = {}
   if (d.sv) words.summarize = words.summarizeHint = tldrWord(d.sv)
   const dWord = changeKey(d.cv)?.word
-  if (dWord) words.explainChange = dWord
+  if (dWord) words.explainChange = words.proofExplain = dWord
   return { ...words, ...stopWords(d.infoRows[d.linkRows[d.infoCur] ?? -1], d.s.tldrOpen) }
 }
 
-/** On Info's cursor row: `↑↓ move  ⏎ more|less` (the TL;DR's stop), `↑↓ changes  ⏎ go to` (a change), `⏎ all|fewer` (`+ n more`). */
+/** On Info's cursor row: `↑↓ move  ⏎ more|less` (the TL;DR's stop), `↑↓ changes  ⏎ proof` (the Changed label), `⏎ go to` (a change), `⏎ all|fewer` (`+ n more`). */
 function stopWords(at: InfoItem | undefined, tldrOpen: boolean): Partial<Record<KeyId, string>> {
   switch (at?.kind) {
     case "frule":
       return { infoMove: "move", infoOpen: tldrOpen ? "less" : "more" }
+    case "changes":
+      return { infoMove: "changes", infoOpen: "proof" }
     case "change":
       return { infoMove: "changes", infoOpen: "go to" }
     case "cmore":
@@ -258,6 +266,7 @@ interface ScreenParts {
   progressEl: ReactNode
   helpEl: ReactNode
   findEl: ReactNode
+  proofEl: ReactNode
   switchEl: ReactNode
   openEl: ReactNode
   themeEl: ReactNode
@@ -301,6 +310,7 @@ function zenScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: S
       {p.progressEl}
       {p.helpEl}
       {p.findEl}
+      {p.proofEl}
       {p.switchEl}
       {p.openEl}
       {p.themeEl}
@@ -331,6 +341,7 @@ function mainScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: 
       {L.shown && !L.inline ? p.panelEl : null}
       {p.helpEl}
       {p.findEl}
+      {p.proofEl}
       {p.switchEl}
       {p.openEl}
       {p.themeEl}

@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test"
-import { FOOTERS, type FooterState, footerHints, HELP_GROUPS, isDown, modeOf, PINNED } from "../../src/app/keymap"
+import {
+  FOOTERS,
+  type FooterState,
+  footerHints,
+  HELP_GROUPS,
+  isDown,
+  keyDef,
+  modeOf,
+  PINNED,
+} from "../../src/app/keymap"
 
 const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true, tldr: true }
 const NONE: FooterState = { query: false, preview: false, disk: false, ai: false, changes: false, tldr: false }
@@ -90,6 +99,14 @@ test("the switcher's footer: `? ask` only with an `ai` block; a question's foote
   for (const [stage, want] of stages) expect(sw(ALL, stage)).toEqual(want)
   // another context ignores the ask
   expect(footerHints("doc", ALL, {}, "idle")).toEqual(footerHints("doc", ALL))
+})
+
+test("the Proof sheet's footer: sections, go to, D only while it has something to do, close; no help rows of its own", () => {
+  expect(words(ALL, "proof")).toEqual(["↑↓ section", "⏎ go to", "D explain", "esc close"])
+  expect(words(NONE, "proof")).toEqual(["↑↓ section", "⏎ go to", "esc close"])
+  expect(footerHints("proof", ALL, { proofExplain: "cancel" }).map((h) => h.word)).toContain("cancel")
+  for (const id of ["proofMove", "proofGo", "proofExplain", "proofClose"] as const)
+    expect(keyDef(id).desc).toBeUndefined()
 })
 
 test("a typing binding's empty word stays empty", () => {
