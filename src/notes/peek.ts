@@ -6,8 +6,9 @@ import { A, type Span } from "../lib/spans"
 import { clamp, plural, truncate, truncateLeft, width, wrap } from "../lib/text"
 import type { Rendered } from "../markdown/render"
 import type { Theme } from "../theme/theme"
+import { footInk, footnoteRule, markText, noteRows } from "../ui/footnote"
 import { innerWidth, LIST_MAX_W, PEEK_MIN_W, paneWidth, popupWidth, splitWidth } from "../ui/geometry"
-import { findQuote } from "../ui/nav"
+import { findQuote, markMatches } from "../ui/nav"
 import type { AnswerRow, NoteDoc, SwitchHit, SwitchRow } from "./vault"
 
 /** outline rows shown around the hit's heading */
@@ -53,6 +54,10 @@ export interface PeekInput {
   minutes?: number
   /** a TL;DR from the cache, only while fresh */
   summary: { text: string; model: string } | undefined
+  /** an ask answer: its matched word, drawn in primary in the body */
+  hit?: string
+  /** a reranked answer: its mark and why, under a rule at the pane's foot */
+  foot?: { n: number; why: string }
 }
 
 const RULE = /^[\s─━]*$/
@@ -110,24 +115,30 @@ export function peekWindow(
   const from = head ? head.line : fm
   let to = from
   for (let size = 0; to < lines.length && size <= PEEK_BYTES; to++) size += lines[to]!.length + 1
-  if (r.kind === "text") to = Math.max(to, Math.min(lines.length, r.line + 1 + PEEK_AFTER))
+  const line = hitLine(r)
+  if (line !== undefined) to = Math.max(to, Math.min(lines.length, line + 1 + PEEK_AFTER))
   return { from, to, base: head ? sec! : 0 }
 }
 
-/** The first body row: after the row's heading (and its underline), at a text hit's line, else the top. */
+/** The source line a text hit, or an answer whose query is on a text line, points at. */
+const hitLine = (r: SwitchRow) => (r.kind === "text" || r.kind === "answer" ? r.line : undefined)
+
+/** The first body row: after the row's heading (and its underline), at a text hit's line (an answer's, one row above it), else the top. */
 function anchorRow(r: SwitchRow, doc: NoteDoc, view: Rendered, base: number): number {
   const heads = view.headings
   const sec = startOf(r, doc)
   if (sec === null) return 0
   const k = sec - base
   const from = (heads[k]?.line ?? -1) + 1
-  if (r.kind !== "text") return from
+  const line = hitLine(r)
+  if (line === undefined) return from
   const end = heads[k + 1]?.line ?? view.lines.length
   const needle = doc.text
-    .slice(doc.starts[r.line] ?? 0, (doc.starts[r.line + 1] ?? doc.text.length + 1) - 1)
+    .slice(doc.starts[line] ?? 0, (doc.starts[line + 1] ?? doc.text.length + 1) - 1)
     .trim()
     .slice(0, NEEDLE_CHARS)
-  return findQuote(view.plain, from, end, needle) ?? from
+  const at = findQuote(view.plain, from, end, needle) ?? from
+  return r.kind === "answer" ? Math.max(from, at - 1) : at
 }
 
 const muted = (text: string, t: Theme): Span => ({ text, fg: t.textMuted })
@@ -192,8 +203,8 @@ function tldrRows(summary: { text: string; model: string }, t: Theme, w: number)
   return out
 }
 
-/** At most `room` rendered rows from row `i` on: leading rules skipped, blank runs collapsed to one, filled rows padded to `w`. */
-function bodyRows(view: Rendered, i: number, w: number, room: number): Span[][] {
+/** At most `room` rendered rows from row `i` on: leading rules skipped, blank runs collapsed to one, filled rows padded to `w`, `hit` in primary. */
+function bodyRows(view: Rendered, i: number, w: number, room: number, t: Theme, hit = ""): Span[][] {
   const out: Span[][] = []
   while (i < view.lines.length && !view.lines[i]!.fill && RULE.test(view.plain[i]!)) i++
   for (let prevBlank = false; i < view.lines.length && out.length < room; i++) {
@@ -207,7 +218,7 @@ function bodyRows(view: Rendered, i: number, w: number, room: number): Span[][] 
           { text: " ".repeat(Math.max(0, w - width(rowText(l.spans)))), bg: l.fill },
         ]
       : l.spans
-    out.push(spans)
+    out.push(markMatches(spans, hit, t, { fg: t.primary }))
   }
   return out
 }
@@ -225,6 +236,21 @@ export function peekLines(p: PeekInput, t: Theme, w: number, h: number): Span[][
   const view = p.view
   if (!view) return out.slice(0, h)
   out.push([], [{ text: "─".repeat(w), fg: t.border }])
-  out.push(...bodyRows(view, anchorRow(r, doc, view, p.base ?? 0), w, h - out.length))
-  return out.slice(0, h)
+  const foot = p.foot ? footRows(p.foot, t, w) : []
+  out.push(...bodyRows(view, anchorRow(r, doc, view, p.base ?? 0), w, h - out.length - foot.length, t, p.hit))
+  return [...out, ...foot].slice(0, h)
+}
+
+/** A reranked answer's why at the pane's foot, under a rule, so it shows even when the list is cut. */
+function footRows(foot: { n: number; why: string }, t: Theme, w: number): Span[][] {
+  const c = footInk(t)
+  const rows = noteRows(foot.why, w, foot.n, 2)
+  const m = markText(foot.n)
+  return [
+    footnoteRule(t, w, null),
+    ...rows.map((row, i) => [
+      ...(i ? [] : [{ text: m, fg: c.mark }]),
+      { text: i ? row : row.slice(m.length), fg: c.note },
+    ]),
+  ]
 }

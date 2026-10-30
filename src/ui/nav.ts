@@ -55,8 +55,8 @@ export function findItems(
   })
 }
 
-/** Paint search matches inside a rendered line. */
-export function markMatches(spans: Span[], q: string, t: Theme): Span[] {
+/** Paint search matches inside a rendered line (`paint`: the find highlight, unless given). */
+export function markMatches(spans: Span[], q: string, t: Theme, paint?: Pick<Span, "fg" | "bg">): Span[] {
   const ranges = matchRanges(spans.map((s) => s.text).join(""), q)
   if (!ranges.length) return spans
   const out: Span[] = []
@@ -74,7 +74,7 @@ export function markMatches(spans: Span[], q: string, t: Theme): Span[] {
       const a = Math.max(r[0] - pos, start)
       const b = Math.min(r[1] - pos, end)
       if (a > start) out.push({ ...s, text: s.text.slice(start, a) })
-      out.push({ ...s, text: s.text.slice(a, b), fg: t.background, bg: t.secondary })
+      out.push({ ...s, text: s.text.slice(a, b), ...(paint ?? { fg: t.background, bg: t.secondary }) })
       start = b
     }
     pos += s.text.length

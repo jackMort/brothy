@@ -1,7 +1,7 @@
 // The steps of `derive()`, one per area, in the order it runs them: each reads the store and the memo and returns its slice.
 // Not pure: `filesCursor`, `scrollState` and `matchState` write back the Files cursor, the scroll entry and the match line.
 
-import { type AskStage, askStage, questionOf } from "../../ai/ask"
+import { type AskView, askStage, questionOf } from "../../ai/ask"
 import { isFresh } from "../../ai/cache"
 import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPTS } from "../../ai/config"
@@ -205,24 +205,34 @@ export function switcherList(s: UI, memo: Memo, ix: VaultIndex, W: number, jobs:
     question && askState?.queries && !s.indexing ? memo.cands(ix, s.linkTree, s.ixVer, askState.queries) : NO_CANDS
   const askCost = question && askCands.length ? memo.cost(question.text, askCands, ix, s.ixVer) : ""
   let swRows: SwitchRow[] = []
-  let stage: AskStage | null = null
+  let askView: AskView | null = null
   if (s.switcher && question) {
     const job = jobs.get(jobKey("ask"))
     const split = switchSplit(W)
     const target = memo.host(s.ai)
     const indexing = s.indexing !== null
-    stage = askStage({ question: question.text, target, state: askState, cands: askCands, indexing })
-    swRows = memo.ask(question.text, question.cut, target, askState, askCands, askCost, indexing, {
+    const at = {
       secs: job ? waitSecs(Date.now(), job.at) : 0,
       notes: plural(folderCounts(s.linkTree).get(s.linkTree.path) ?? 0, "note"),
       width: split.listW - ROW_PAD,
       pane: split.split,
-    })
+    }
+    askView = {
+      question: question.text,
+      cut: question.cut,
+      target,
+      state: askState,
+      cands: askCands,
+      cost: askCost,
+      indexing,
+      ...at,
+    }
+    swRows = memo.ask(question.text, question.cut, target, askState, askCands, askCost, indexing, at)
   } else if (s.switcher) swRows = memo.switch(ix, s.linkTree, s.switcher.q, s.ixVer, s.recent, s.openPath)
   // the highlight always sits on a stop (results change under it while typing or indexing)
   const swAt = s.switcher ? swRows[s.switcher.hl] : undefined
   const swHl = s.switcher && swAt && isStop(swAt) ? s.switcher.hl : firstHit(swRows)
-  return { question, askCands, swRows, swHl, askStage: stage }
+  return { question, askCands, swRows, swHl, askView, askStage: askView && askStage(askView) }
 }
 
 /** The `o` picker's rows and its highlight, never on a header. */

@@ -7,6 +7,7 @@ import {
   ASK_MIN,
   type AskState,
   askLocate,
+  askPaneLines,
   askRequest,
   parseQueries,
   parseRerank,
@@ -308,11 +309,16 @@ function makePeek({ memo, vault, W }: AppCtx) {
     return { path, doc, note, base: win?.base, view }
   }
 
-  /** The peek pane (from PEEK_MIN_W): the highlighted row's note, its TL;DR only while fresh; undefined without one. */
-  const peekPane = ({ s, swRows, swHl, t, L }: Derived) => {
+  /**
+   * The peek pane (from PEEK_MIN_W): the ask's own pane while idle or asking, else the highlighted row's note, its
+   * TL;DR only while fresh, an answer's matched word and why; undefined without one.
+   */
+  const peekPane = ({ s, swRows, swHl, t, L, askView }: Derived) => {
     if (!s.switcher || W < PEEK_MIN_W) return undefined
-    const peekRow = swRows[swHl]
     const peekW = switchSplit(W).peekW
+    const ask = askView && askPaneLines(t, askView, peekW)
+    if (ask) return ask
+    const peekRow = swRows[swHl]
     const { path, doc, note, base, view } = peekNote(peekRow, { s, t }, peekW)
     return peekLines(
       {
@@ -324,6 +330,7 @@ function makePeek({ memo, vault, W }: AppCtx) {
         words: note?.words,
         minutes: note?.minutes,
         summary: freshTldr(path ? s.summaries[path] : undefined, note),
+        ...answerPeek(peekRow, s.switcher.ask),
       },
       t,
       peekW,
@@ -388,6 +395,13 @@ export function hitRows(view: Rendered, source: boolean, row: TextHit) {
   if (source) return { from: view.srcRow?.[row.line] ?? 0, end: Infinity }
   if (row.heading === null) return { from: 0, end: view.headings[0]?.line ?? Infinity }
   return { from: view.headings[row.heading]?.line ?? 0, end: view.headings[row.heading + 1]?.line ?? Infinity }
+}
+
+/** What the peek adds for an ask answer: its matched word, and a reranked one's mark and why. */
+function answerPeek(row: SwitchRow | undefined, ask: AskState | undefined) {
+  if (row?.kind !== "answer") return {}
+  const why = row.n ? ask?.why?.[row.id] : undefined
+  return { hit: row.query, ...(row.n && why ? { foot: { n: row.n, why } } : {}) }
 }
 
 /** A cached TL;DR for the peek, only while fresh for the note as read. */

@@ -107,6 +107,34 @@ test("the ask footer follows the state: idle, asking, Matches, reranked, an erro
   expect(await footer()).toMatch(/⏎ try again\s+⌫ edit\s+esc close/)
 })
 
+test("idle: the pane at 120 says what ⏎ sends; at 80 two muted rows; a long question names the 300 cut", async () => {
+  aiConfig(OLLAMA)
+  let s = await mount(askVault(), "README.md", { size: W120 })
+  let f = await keys(s, "C-p", "type:?how do I open one file")
+  expect(f).toContain("Ask your notes")
+  expect(f).toContain("Nothing is written to disk.")
+  expect(f).not.toContain("· nothing is written to disk")
+  s.renderer.destroy()
+  s = await mount(askVault(), "README.md", { size: { width: 80, height: 24 } })
+  f = await keys(s, "C-p", "type:?how do I open one file")
+  expect(f).toContain("· only the question goes out; rerank adds short excerpts")
+  expect(f).toContain("· nothing is written to disk")
+  f = await keys(s, `type:${"x".repeat(440)}`)
+  expect(f).toContain("only the first 300 characters → localhost:11434")
+})
+
+test("asking: the pane shows the question sent and its length, nothing of the vault", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  const f = await keys(s)
+  expect(f).toContain("sent to localhost:11434")
+  expect(f).toContain("“how do I open one file”")
+  expect(f).toContain("22 characters · nothing else")
+  expect(f).not.toContain("brothy path opens it")
+})
+
 test("? never opens help while the switcher is open", async () => {
   const s = await mount(askVault(), "README.md", { size: W120 })
   const f = await keys(s, "C-p", "type:?")
@@ -260,6 +288,8 @@ test("excerpts are sent only from the rerank row; the model's order shows with i
   )
   expect(f).not.toContain("↻ rerank with excerpts")
   expect(f).not.toContain("dup")
+  // the highlighted answer's why is also at the pane's foot
+  expect(f.split("¹ pass the file path")).toHaveLength(3)
 })
 
 test("a rerank with no known id: AI: no usable ranking, the local order stays", async () => {

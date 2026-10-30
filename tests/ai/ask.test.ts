@@ -6,6 +6,7 @@ import {
   type AskView,
   askCandidates,
   askLocate,
+  askPaneLines,
   askRequest,
   askRows,
   askSection,
@@ -28,10 +29,12 @@ import {
   WHY_W,
 } from "../../src/ai/ask"
 import { cleanReply, fmtTokens, tokens } from "../../src/ai/client"
+import type { Span } from "../../src/lib/spans"
 import { truncate } from "../../src/lib/text"
 import { noteSections, sectionId } from "../../src/markdown/sections"
 import type { FileNode } from "../../src/notes/files"
 import { type AnswerRow, emptyIndex, indexNote, type SwitchRow, type VaultIndex } from "../../src/notes/vault"
+import { brothy } from "../helpers/theme"
 
 describe("questionOf", () => {
   test("a leading ? (after spaces) makes a question; the rest is trimmed; only one ? is taken", () => {
@@ -482,4 +485,26 @@ test("askTitleNote: nothing when AI is off, index progress, the answering model,
     "6 notes",
   )
   expect(askTitleNote({ off: false, state: undefined, indexing: null, notes: "6 notes" })).toBe("6 notes")
+})
+
+test("askPaneLines: idle says what ⏎ sends and what comes back; asking shows exactly what went out", () => {
+  const t = brothy
+  const txt = (rs: Span[][] | null) => (rs ?? []).map((r) => r.map((x) => x.text).join(""))
+  const idle = txt(askPaneLines(t, VIEW, 40))
+  expect(idle[0]).toBe("Ask your notes")
+  expect(idle.join(" ")).toContain("⏎ sends only the question to claude-haiku-5-5 on openrouter.ai.")
+  expect(idle.join(" ")).toContain(`(about ${EXCERPT} characters)`)
+  expect(idle.at(-1)).toBe("Nothing is written to disk.")
+  expect(Math.max(...idle.map((l) => l.length))).toBeLessThanOrEqual(40)
+  const asking: AskState = { question: VIEW.question, phase: "asking", model: "m" }
+  const sent = txt(askPaneLines(t, { ...VIEW, state: asking }, 40))
+  expect(sent[0]).toBe("sent to openrouter.ai")
+  expect(sent).toContain("“how do I open one file”")
+  expect(sent).toContain(`${[...VIEW.question].length} characters · nothing else`)
+  expect(sent.join(" ")).toContain("the model never sees them unless you rerank.")
+  const C = askCandidates(V.ix, V.tree, ["path"])
+  expect(
+    askPaneLines(t, { ...VIEW, state: { ...asking, phase: "result", queries: ["path"] }, cands: C }, 40),
+  ).toBeNull()
+  expect(askPaneLines(t, { ...VIEW, target: null }, 40)).toBeNull()
 })

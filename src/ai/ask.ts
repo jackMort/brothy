@@ -2,7 +2,7 @@
 // or orders excerpts brothy picked (tier 1); every answer is a place the local index found. Pure.
 
 import { isRecord } from "../lib/json"
-import { lineText, safeLine } from "../lib/spans"
+import { A, lineText, type Span, safeLine } from "../lib/spans"
 import { truncate, wrap } from "../lib/text"
 import { headingKey, sectionId } from "../markdown/sections"
 import { type FileNode, SCORE_SUBSEQUENCE, scoreName, stem } from "../notes/files"
@@ -19,6 +19,7 @@ import {
   type SwitchRow,
   type VaultIndex,
 } from "../notes/vault"
+import type { Theme } from "../theme/theme"
 import { MODEL_W, waitText } from "../ui/footnote"
 import { headingPath } from "../ui/zen"
 import { type ChatReq, cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./client"
@@ -477,6 +478,49 @@ export function askRows(v: AskView): SwitchRow[] {
     RULE_ROW,
     tail,
     searched,
+  ]
+}
+
+/** `text` wrapped to `w` columns in `fg`. */
+const para = (text: string, fg: string, w: number): Span[][] => wrap([{ text, fg }], Math.max(4, w))
+
+/**
+ * The pane beside the list (from PEEK_MIN_W) before there are answers to peek: idle, what `⏎` sends and what comes
+ * back; asking, exactly what went out, which is only the question. null for the other stages (the row's peek).
+ */
+export function askPaneLines(t: Theme, v: AskView, w: number): Span[][] | null {
+  const stage = askStage(v)
+  const host = hostOf(v)
+  if (stage === "idle")
+    return [
+      [{ text: "Ask your notes", fg: t.text, attr: A.BOLD }],
+      [],
+      ...para(
+        `⏎ sends only the question to ${askModel(v)} on ${host}. It replies with search words; brothy looks them up here, in your notes.`,
+        t.textMuted,
+        w,
+      ),
+      [],
+      ...para(
+        `Then ↻ rerank can send a short excerpt of each match (about ${EXCERPT} characters) so the model picks the best.`,
+        t.textMuted,
+        w,
+      ),
+      [],
+      ...para("Nothing is written to disk.", t.textMuted, w),
+    ]
+  if (stage !== "asking") return null
+  return [
+    [{ text: truncate(`sent to ${host}`, w), fg: t.textMuted }],
+    [],
+    ...para(`“${v.question}”`, t.text, w),
+    [{ text: `${[...v.question].length} characters · nothing else`, fg: t.textMuted }],
+    [],
+    ...para(
+      "The answers will be sections of your notes, found here; the model never sees them unless you rerank.",
+      t.textMuted,
+      w,
+    ),
   ]
 }
 
