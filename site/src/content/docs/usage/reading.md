@@ -34,7 +34,7 @@ JavaScript, TypeScript, JSX/TSX and Zig fences are highlighted with OpenTUI's tr
 
 ## Live reload
 
-When the open file changes on disk (an editor, Obsidian, a coding agent) brothy reloads it and keeps your place. The Info tab lists the changed sections with `+added −removed` line counts and the toast says `reloaded · 2 sections changed`. The list is local and works without AI; it compares with the text the note had when you opened it, held in memory only. A reload over 2 MB, or one that rewrites too many lines to compare quickly (a formatter run over a long note), says `too large to compare`.
+When the open file changes on disk (an editor, Obsidian, a coding agent) brothy reloads it and keeps your place. Each changed section gets a number after its heading (`¹ ² ³`, a removed one's in the margin where it was), the running head says `³ changed`, the Info tab lists them with `+added −removed` line counts and the toast says `reloaded · ³ sections changed`. <kbd>⏎</kbd> on a listed section goes there, and <kbd>[</kbd> <kbd>]</kbd> then walk the changes. The list is local and works without AI; it compares with the text the note had when you opened it, held in memory only. A reload over 2 MB, or one that rewrites too many lines to compare quickly (a formatter run over a long note), says `too large to compare`.
 
 With an `ai` block, <kbd>D</kbd> [explains the change](/brothy/ai/what-changed/).
 

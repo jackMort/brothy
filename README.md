@@ -102,7 +102,7 @@ until then every link looks unresolved).
 ## Features
 
 **Reading**
-- Preview and raw Source (`s`), find in document (`/` `n` `N`), live reload on save, with the sections that changed listed in Info
+- Preview and raw Source (`s`), find in document (`/` `n` `N`), live reload on save: the sections that changed are numbered in the text (`¹ ² ³`) and listed in Info
 - Obsidian notes: wikilinks, embeds, callouts, `==highlights==`, `%%comments%%`, dataview blocks
 - Syntax-highlighted code, tables that shrink to fit, a quiet progress line
 - Zen (`z`): only the text, with scroll or pages flow, spotlight, typewriter and teleprompter
@@ -120,7 +120,7 @@ until then every link looks unresolved).
 **AI** — opt-in, only on a key press, local models first ([details](#ai), [what is sent](SECURITY.md))
 - `a` TL;DR of the note, streamed into Info and cached
 - `a` in zen: a one- or two-sentence gloss of the section you are reading (`explain`, `simplify` or `translate:<tag>`)
-- `D` explains what changed on disk since you opened the note; `⏎` jumps to a changed section
+- `D` explains what changed on disk since you opened the note; `⏎` lands on a changed section with its note, `[` `]` walk the changes
 - `?` in `ctrl+p` asks your vault a question: the model proposes search terms, brothy finds the sections itself
 - Ollama, LM Studio, OpenAI, OpenRouter, Anthropic, Gemini or any OpenAI-compatible endpoint; keys from the environment only
 
@@ -254,7 +254,7 @@ until then every link looks unresolved).
 | `e` | edit the note in `$VISUAL` / `$EDITOR` (fallback `vi`) at the top line (`+line path`; VS Code, VSCodium and Cursor get `-g path:line`, Sublime Text `path:line`); back here when it exits, and a non-zero exit is reported |
 | `a` | summarize the note with AI into the Info tab (`a` again cancels); in zen, gloss the section you are reading, `a` again shows more / less (see AI); needs an `ai` block in the config |
 | `A` | in zen: gloss the section again, replacing the cached one |
-| `D` | explain what changed on disk since the note was opened, in the Info tab (`D` again cancels; `⏎` on a changed section jumps to it); needs an `ai` block |
+| `D` | explain what changed on disk since the note was opened, in the Info tab (below 100 columns in the first change's footnote; `D` again cancels, after a failure it retries; `⏎` on a changed section goes there); needs an `ai` block |
 | `w` | full width / 80-column measure (saved) |
 | `T` | transparent background: the terminal's own shows through; popups, the drawer and code blocks stay painted (saved) |
 | `m` | minimap on / off (saved; needs 110 columns) |
@@ -268,12 +268,12 @@ until then every link looks unresolved).
 | `j` `k` `↑` `↓` | move / scroll |
 | `d` `u` · `space` `b` | half page · full page |
 | `g` `G` | top · bottom |
-| `[` `]` | previous · next heading (zen: section) |
+| `[` `]` | previous · next heading (zen: section; landed on a change: the previous · next change) |
 | `n` `N` | next · previous match |
 | `f` | label the links on screen; type a label to open the note (and jump to its heading) · `esc` cancels |
-| `⏎` | open, expand or jump (Info: open the link or jump to the changed section; `j` `k` move between them) |
+| `⏎` | open, expand or jump (Info: open the link, go to the changed section, or open `+ n more sections`; `j` `k` move between them) |
 | `ctrl+b` | hide / show the panel (a drawer below 100 columns) |
-| `esc` | per context: clear find / filter · hide the zen gloss · leave zen · close the drawer |
+| `esc` | per context: clear find / filter · hide a change's footnote · hide the zen gloss · leave zen · close the drawer |
 | `t` | theme picker (type to filter, `↑↓` family, `←` `→` / `tab` dark · light, `⏎` apply and save, a click on a specimen applies it, `esc` close) |
 | `H` `L` | back / forward through the notes opened |
 | `r` | rescan files, reload the note and re-read the `ai` block |
@@ -335,13 +335,22 @@ is `ai.gloss`: `"explain"` (default), `"simplify"` or `"translate:<tag>"` (`tran
 `translate:pt-BR`); anything else falls back to `explain`.
 
 **What changed on disk** — when the open note changes on disk (an editor, Obsidian, a coding
-agent), the Info tab lists the changed sections with `+added −removed` line counts
-and the toast says `reloaded · 2 sections changed`. That list is local and works without an
-`ai` block; it compares with the text the note had when you opened it, held in memory only.
-`D` sends only the changed hunks and the reply adds one or two sentences about the change
-and a few words per section; `⏎` on a changed section jumps to it, to the changed line when
-the reply quoted one. Once explained, the baseline moves forward, so the next edit lists
-anew. A note over 2 MB is not compared (`reloaded · too large to compare`).
+agent), each changed section gets a number after its heading (`## How long to simmer¹`; a
+removed section's number sits in the margin where it was), the running head says `³ changed`,
+the Info tab lists them (`¹ How long to simmer  +2 −2`; an added one says `new`, a removed one
+is struck through; past 8 a `+ n more sections` row opens the rest) and the toast says
+`reloaded · ³ sections changed`. All that is local and works without an `ai` block; it
+compares with the text the note had when you opened it, held in memory only. `D` sends only
+the changed hunks: while the model works Info shows `▍ asking <model> · 3 s` where the reply
+will go, then one or two sentences about the change and a few words under each section, and
+the numbers turn muted. `⏎` on a changed section goes there (to the changed line when the reply
+quoted one, with the number beside it) and shows its note in a footnote under a short rule,
+`¹ of 3 · ] next`; `[` `]` walk the changes and `esc` hides it. Below 100 columns `D` goes
+straight to the first change and the explanation arrives in its footnote; with the panel hidden
+and room in the right margin (155 columns, 147 without the minimap) the notes sit beside their
+headings instead. A failure stays in the block (`✗ …`, `D retry`). Once explained, the
+baseline moves forward, so the next edit lists anew and the explanation stays, dimmed, under
+`Earlier`. A note over 2 MB is not compared (`not compared`, `reloaded · too large to compare`).
 
 **Ask your vault** — in `ctrl+p`, a query starting with `?` is a question (with an `ai` block
 the placeholder says so and the footer shows `? ask`). Before you press anything, the pane (from
