@@ -183,8 +183,16 @@ export interface UI {
   tldrOpen: boolean
   /** glosses.json, read on the first zen entry (or zen `a`) with an `ai` block; null: not read yet */
   glosses: Glosses | null
-  /** the zen gloss sheet: its section id, cache key, label, the section's text hash when shown, and when it began fading */
-  gloss: { id: string; key: string; heading: string; hash: string; fadeAt: number | null } | null
+  /** the zen gloss note: its section id and outline index, cache key, label, the section's text hash when shown, when it began fading, and expanded (`a` more) */
+  gloss: {
+    id: string
+    index: number
+    key: string
+    heading: string
+    hash: string
+    fadeAt: number | null
+    open: boolean
+  } | null
   /** what the open note's change list compares against (dropped on leaving the note) */
   baseline: Baseline | null
   /** the explanation running or shown for `baseline.path` */

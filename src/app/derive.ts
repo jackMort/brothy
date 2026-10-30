@@ -7,7 +7,7 @@ import { textHash } from "../ai/cache"
 import { cleanSummary, noteText } from "../ai/client"
 import { type AIConfig, resolveAI } from "../ai/config"
 import { type Change, type DeltaNote, diffSections, parseDelta } from "../ai/delta"
-import { glossTarget } from "../ai/gloss"
+import { freshGlosses, glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
 import { type FrontMatter, type Property, parseFrontMatter, parseProperties } from "../markdown/frontmatter"
@@ -98,6 +98,7 @@ function documentMemo(stdin: string | undefined) {
     gloss: cached(glossTarget),
     glossHash: cached(textHash),
     glossClean: cached(cleanSummary),
+    glossFresh: cached(freshGlosses),
   }
 }
 

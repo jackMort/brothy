@@ -277,6 +277,8 @@ export interface ChatReq {
   maxOut: number
   /** applied to the accumulated stream on every delta: idempotent and cheap */
   clean: (raw: string) => string
+  /** when set, a reply cut short (past `maxOut` or the raw cap, or a `length` finish) is kept through it instead of failing */
+  keep?: (text: string) => string
 }
 /** `raw` is the reply as received, for callers that parse structure (`extractJSON`). */
 export type ChatResult =
@@ -290,11 +292,16 @@ export type SummaryResult =
   | { ok: false; cancelled: true }
 
 const fail = (failure: Failure): ChatResult => ({ ok: false, failure })
+/** A reply cut short, through the request's `keep`. */
+const kept = (raw: string, req: ChatReq): ChatResult => {
+  const text = req.keep?.(req.clean(raw)) ?? ""
+  return text ? { ok: true, text, raw } : fail({ kind: "empty" })
+}
 const finish = (raw: string, req: ChatReq): ChatResult => {
   const text = req.clean(raw)
   if (!text) return fail({ kind: "empty" })
-  if (text.length > req.maxOut) return fail({ kind: "tooLong" })
-  return { ok: true, text, raw }
+  if (text.length <= req.maxOut) return { ok: true, text, raw }
+  return req.keep ? kept(raw, req) : fail({ kind: "tooLong" })
 }
 
 /** Shortest key or header value scrubbed from a message: a shorter one would shred ordinary words. */
@@ -391,18 +398,23 @@ async function jsonResult(res: Response, req: ChatReq, g: Guard): Promise<ChatRe
   return "failure" in r ? fail(r.failure) : finish(r.text, req)
 }
 
-/** Stream events into `acc.raw`: a failure, "done" at the end marker, else null to read on. */
-function takeEvents(evs: AIEvent[], acc: { raw: string }, req: ChatReq, o: ChatOpts): Failure | "done" | null {
+/**
+ * Stream events into `acc.raw`: the result at the end marker, on a failure or when a reply cut short is kept
+ * (`req.keep`), else null to read on.
+ */
+function takeEvents(evs: AIEvent[], acc: { raw: string }, req: ChatReq, o: ChatOpts): ChatResult | null {
   for (const ev of evs) {
-    if (ev.kind === "error") return { kind: "message", message: ev.message }
-    if (ev.kind === "done") return "done"
+    if (ev.kind === "error") return fail({ kind: "message", message: ev.message })
+    if (ev.kind === "done") return finish(acc.raw, req)
     if (ev.kind === "finish") {
-      if (ev.reason === "length") return { kind: "length" }
-      if (ev.reason === "error") return { kind: "message", message: "stream failed" }
+      if (ev.reason === "length") return req.keep ? kept(acc.raw, req) : fail({ kind: "length" })
+      if (ev.reason === "error") return fail({ kind: "message", message: "stream failed" })
       continue
     }
     acc.raw += ev.text
-    if (acc.raw.length > MAX_RAW || req.clean(acc.raw).length > req.maxOut) return { kind: "tooLong" }
+    // the finally in `send` closes the connection
+    if (acc.raw.length > MAX_RAW || req.clean(acc.raw).length > req.maxOut)
+      return req.keep ? kept(acc.raw, req) : fail({ kind: "tooLong" })
     o.onDelta?.(acc.raw)
   }
   return null
@@ -430,10 +442,9 @@ async function streamResult(
     const early = g.ended()
     if (early) return early
     const r = chunk.done ? takeEvents(p.end(), acc, req, o) : (g.poke(), takeEvents(p.push(chunk.value), acc, req, o))
-    if (r && r !== "done") return fail(r)
-    if (r === "done" || chunk.done) break
+    if (r) return r
+    if (chunk.done) return finish(acc.raw, req)
   }
-  return finish(acc.raw, req)
 }
 
 /** The answer by its kind: a redirect or error status fails, a JSON or SSE body is read, anything else is unexpected. */

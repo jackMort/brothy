@@ -70,6 +70,7 @@ export function makeZenActions(c: AppCtx, { aiJobs, zen }: Features, { jumpHeadi
       setTop(toTop ? 0 : derive().maxTop)
     },
     zenGloss: aiJobs.zenGloss,
+    zenRegen: aiJobs.zenRegen,
     zenSection: (k) => {
       stopRolling()
       const dir = k.sequence === "]" || k.sequence === "}" ? 1 : -1
