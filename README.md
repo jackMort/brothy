@@ -252,7 +252,8 @@ until then every link looks unresolved).
 | `-` | Files: tidy the tree (collapse all but the open note's path) |
 | `s` | toggle Source / Preview |
 | `e` | edit the note in `$VISUAL` / `$EDITOR` (fallback `vi`) at the top line (`+line path`; VS Code, VSCodium and Cursor get `-g path:line`, Sublime Text `path:line`); back here when it exits, and a non-zero exit is reported |
-| `a` | summarize the note with AI into the Info tab (`a` again cancels); in zen, gloss the section you are reading (see AI); needs an `ai` block in the config |
+| `a` | summarize the note with AI into the Info tab (`a` again cancels); in zen, gloss the section you are reading, `a` again shows more / less (see AI); needs an `ai` block in the config |
+| `A` | in zen: gloss the section again, replacing the cached one |
 | `D` | explain what changed on disk since the note was opened, in the Info tab (`D` again cancels; `⏎` on a changed section jumps to it); needs an `ai` block |
 | `w` | full width / 80-column measure (saved) |
 | `T` | transparent background: the terminal's own shows through; popups, the drawer and code blocks stay painted (saved) |
@@ -312,11 +313,16 @@ are cached and shown again for free; one made before the note changed is shown m
 `outdated · a to refresh`. One request per note; `a` on a running note cancels it.
 
 **Zen gloss** — in zen, `a` explains the section under the reading line in one or two plain
-sentences, on a muted sheet over the bottom rows of the text (nothing is inserted into the
-document). It fades when the reading line leaves the section. A gloss already made for an
-unchanged section shows by itself when you reach it again, without a request; one made
-before the section changed is muted as `outdated · a`, and only `a` asks for a new one.
-`esc` hides the sheet (the next `esc` leaves zen); `a` while it is loading cancels. The style
+sentences, as a footnote over the bottom rows of the text: a short rule, then `¹` and the
+gloss, with a `¹` after the section's heading (nothing is inserted into the document). From
+140 columns (at the default measure) the note sits in the right margin beside its heading
+instead, with the other sections on screen that have a gloss, dimmed and numbered `¹ ² ³` by
+row. While the model works the rule says `asking <model> · 3 s · a cancel`. A gloss already
+made shows by itself when you stay in its section for a moment (skimming with `]` stays
+quiet), without a request; one made before the section changed is dimmed with
+`edited since · a refresh`. `a` on a gloss on screen shows more of a long one (`a more` /
+`a less`), `A` asks again. A reply longer than 400 characters keeps its finished sentences.
+`esc` hides the note (the next `esc` leaves zen); `a` while it is loading cancels. The style
 is `ai.gloss`: `"explain"` (default), `"simplify"` or `"translate:<tag>"` (`translate:pl`,
 `translate:pt-BR`); anything else falls back to `explain`.
 
