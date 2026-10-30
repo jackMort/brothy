@@ -271,7 +271,7 @@ const KEYMAP = {
     modes: ["info"],
     keys: ["return", "enter"],
     label: "⏎",
-    desc: "Info: open the link · jump to the change",
+    desc: "Info: open the link · jump to the change · the Changed label opens the Proof sheet",
     hint: "open",
   },
 
