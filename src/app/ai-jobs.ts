@@ -5,6 +5,7 @@ import { basename } from "node:path"
 import { type Gloss, isFresh, loadGlosses, saveGlosses, saveSummaries, textHash } from "../ai/cache"
 import {
   aiError,
+  aiMessage,
   type ChatReq,
   type ChatResult,
   chat,
@@ -257,22 +258,37 @@ function makeZenGloss(
 
 /** `a`: the TL;DR request for the open note. */
 function makeSummary(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJob }: Jobs) {
-  const { ui, set, bump, memo, flash, focusPanel } = c
+  const { ui, set, bump, memo, derive, flash, focusPanel } = c
+
+  /** `path`'s failed request forgotten: a new one starts, or it succeeded. */
+  const withoutErr = (path: string) =>
+    Object.fromEntries(Object.entries(ui.current.summaryErr).filter(([p]) => p !== path))
+
+  /** A summary landed out of sight: Info isn't on screen, or it is for another note. */
+  const readyToast = (path: string) => {
+    const d = derive()
+    const here = d.s.openPath === path
+    if (here && d.L.shown && d.s.view === "info") return
+    flash(here ? "TL;DR ready · 3 to read" : `TL;DR ready · ${stem(basename(path))}`)
+  }
 
   /** Send `text` for `path`; the result is cached for that path whatever note is current by then. */
   const startSummary = (path: string, text: string, target: AITarget, model: string) => {
     const hash = textHash(text) // taken now: a note edited meanwhile shows the result as outdated
     startJob("tldr", path, target, summaryRequest(text, target.maxChars), {
       stream: true,
-      begin: () => bump((x) => x + 1),
+      begin: () => set({ summaryErr: withoutErr(path), tldrOpen: false }),
       done: (r) => {
         if (r.ok) {
           const entry = { hash, v: PROMPT_V, summary: r.text, model, at: Date.now() }
           set({ summaries: { ...ui.current.summaries, [path]: entry } })
           if (path !== STDIN) saveSummaries({ [path]: entry }) // a piped document lives for this run only
+          readyToast(path)
         } else if ("failure" in r) {
+          // the error stays in the block (memory only) as well as in the toast
+          const msg = aiMessage(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key })
+          set({ summaryErr: { ...ui.current.summaryErr, [path]: { msg, hash } } })
           const note = ui.current.openPath === path ? undefined : stem(basename(path))
-          bump((x) => x + 1)
           flash(failText(target, r.failure, undefined, note), "error")
         }
       },

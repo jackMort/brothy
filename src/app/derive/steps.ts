@@ -2,9 +2,9 @@
 // Not pure: `filesCursor`, `scrollState` and `matchState` write back the Files cursor, the scroll entry and the match line.
 
 import { questionOf } from "../../ai/ask"
-import { isFresh } from "../../ai/cache"
+import { isFresh, type Summary } from "../../ai/cache"
 import { shortModel } from "../../ai/client"
-import { type GlossStyle, PROMPTS } from "../../ai/config"
+import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
 import { type Change, hhmm } from "../../ai/delta"
 import { type GlossState, type GlossTarget, parseGlossStyle } from "../../ai/gloss"
 import { wrap } from "../../lib/text"
@@ -14,6 +14,7 @@ import type { OpenRow } from "../../notes/projects"
 import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
 import { projectRoot } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
+import { staleKind, waitSecs } from "../../ui/footnote"
 import type { layout } from "../../ui/layout"
 import { relocate, remapTop } from "../../ui/nav"
 import type { ChangeView, SummaryView } from "../../ui/panel"
@@ -61,19 +62,30 @@ export function truncationNote(s: UI, L: Layout) {
     : []
 }
 
-/** The TL;DR block: streaming, the cached summary (fresh or outdated) or none; null without an `ai` block or a readable note. */
+/** The TL;DR block: waiting or streaming, the cached summary (fresh or outdated), a failure, or none; null without an `ai` block or a readable note. */
 function summaryView(s: UI, { file, src }: NoteView, memo: Memo, jobs: Map<string, Job>): SummaryView | null {
   if (!s.ai || !s.openPath || !file || file.error) return null
   const job = jobs.get(jobKey("tldr", s.openPath))
-  if (job) return { text: memo.clean(job.raw), state: "streaming", model: "" }
   const saved = s.summaries[s.openPath]
-  if (saved)
-    return {
-      text: saved.summary,
-      state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated",
-      model: shortModel(saved.model),
-    }
-  return { text: "", state: "none", model: "" }
+  return job ? runningSummary(job, saved, memo) : cachedSummary(s, s.openPath, saved, memo.hash(src), memo)
+}
+
+/** A request running for the open note: waiting (an older summary kept under the caret) or streaming. */
+function runningSummary(job: Job, saved: Summary | undefined, memo: Memo): SummaryView {
+  const text = memo.clean(job.raw)
+  const model = shortModel(job.model)
+  if (text) return memo.summary(text, "streaming", model, 0, null, "", null, false)
+  return memo.summary("", "waiting", model, waitSecs(Date.now(), job.at), null, saved?.summary ?? "", null, false)
+}
+
+/** No request running: the cached summary for `path`, fresh or outdated, or none; and the last failure while the text is the one it failed on. */
+function cachedSummary(s: UI, path: string, saved: Summary | undefined, hash: string, memo: Memo): SummaryView {
+  const err = s.summaryErr[path]
+  const error = err?.hash === hash ? err.msg : null
+  if (!saved) return memo.summary("", "none", "", 0, null, "", error, false)
+  const stale = staleKind(saved, hash, PROMPT_V)
+  const model = shortModel(saved.model)
+  return memo.summary(saved.summary, stale ? "outdated" : "fresh", model, 0, stale, "", error, s.tldrOpen)
 }
 
 /** The Changed block in Info, null while there is nothing to list or explain. */
@@ -149,9 +161,7 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
     links,
     L.PNW - 2,
     file?.info ?? null,
-    sv?.text ?? "",
-    sv?.state ?? "",
-    sv?.model ?? "",
+    sv,
     cv?.state ?? "",
     cv?.label ?? "",
     cv?.changes ?? NO_CHANGES,
@@ -160,7 +170,7 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
     title,
   )
   const linkRows = memo.linkIdx(infoRows)
-  return { props, title, ...delta, infoRows, linkRows }
+  return { props, title, ...delta, sv, infoRows, linkRows }
 }
 
 /** The panel list's height and its filter row; puts the Files cursor back on the same note when the list changes. */

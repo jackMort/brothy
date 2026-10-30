@@ -10,6 +10,18 @@ import { headingKey } from "../markdown/sections"
 import { type Stats, stripCode } from "../markdown/stats"
 import { type FileNode, folderOf, fuzzyHits, isMarkdown, stem } from "../notes/files"
 import { mix, type Theme } from "../theme/theme"
+import {
+  CARET,
+  footInk,
+  footnoteRule,
+  MODEL_W,
+  noteRows,
+  type Stale,
+  staleTail,
+  type Tail,
+  waitingRow,
+  waitText,
+} from "./footnote"
 import { hitSpans } from "./rows"
 
 // ------------------------------------------------------------- formatting
@@ -85,7 +97,8 @@ export type InfoItem =
   | { kind: "more"; n: number }
   | { kind: "stat"; text: string }
   | { kind: "blank" }
-  | { kind: "tldr"; status: string }
+  | { kind: "foot"; mark: string | null; markStale: boolean; text: string; tone: FootTone }
+  | { kind: "frule"; tail: Tail | null; stop: boolean }
   | { kind: "summary"; text: string; muted: boolean }
   | { kind: "changes"; status: string }
   | { kind: "change"; mark: "~" | "+" | "−"; text: string; counts: string; at: number; stop: boolean }
@@ -144,17 +157,109 @@ export function wrapProperty(key: string, value: string | string[], cols: number
   return rows
 }
 
-/** Summary text rows shown at most; the last is cut with `…`. */
-export const SUMMARY_ROWS = 8
-export type SummaryState = "none" | "streaming" | "fresh" | "outdated"
-/** What the Info tab shows for the note's TL;DR; `model` is the display name. */
+/** TL;DR text rows shown collapsed; past them the block is a cursor stop that `⏎` expands. */
+export const SUMMARY_ROWS = 14
+/** Rows an error in the TL;DR block takes at most. */
+const ERROR_ROWS = 3
+/** Info widths from which the waiting tail also says `a cancel` (the footer always does). */
+const CANCEL_TAIL_W = 44
+/** `* `: the mark and its space; continuation rows hang by the same. */
+const HANG = 2
+/** How a `foot` row is drawn: the text role, dimmed (outdated, regenerating), an error, the caret, the `a` hint. */
+type FootTone = "text" | "stale" | "error" | "caret" | "hint"
+export type SummaryState = "none" | "waiting" | "streaming" | "fresh" | "outdated"
+/** What the Info tab shows for the note's TL;DR. */
 export interface SummaryView {
+  /** the cached summary, or the text streamed so far */
   text: string
   state: SummaryState
+  /** the display name: the entry's model, or the running job's */
   model: string
+  /** waiting: whole seconds since the request went out */
+  secs: number
+  /** outdated: why */
+  stale: Stale | null
+  /** waiting over a cached summary (regenerating): its text, dimmed under the caret */
+  old: string
+  /** the last request failed (memory only), with this message */
+  error: string | null
+  /** expanded past SUMMARY_ROWS */
+  open: boolean
 }
 
-const OUTDATED = " · outdated · a to refresh"
+/** `rows` as `foot` items: the first behind the mark, the rest hung under it. */
+const footRows = (rows: string[], tone: FootTone, markStale: boolean, mark: string | null = "*"): InfoItem[] =>
+  rows.map((text, i) => ({ kind: "foot", mark: i ? null : mark, markStale, text, tone }))
+
+/** The rule's tail per state: waiting, streaming, the signature (`⏎ more` on overflow), outdated, error. */
+function tldrTail(sv: SummaryView, cols: number, overflow: boolean): Tail | null {
+  const model = truncate(safeLine(sv.model), MODEL_W)
+  if (sv.error) return { key: "a", word: "retry" }
+  if (sv.state === "waiting")
+    return {
+      status: waitText(sv.model, sv.secs),
+      model,
+      ...(cols >= CANCEL_TAIL_W ? { key: "a", word: "cancel" } : {}),
+    }
+  if (sv.state === "streaming") return { status: model, model, key: "a", word: "cancel" }
+  if (sv.stale) return staleTail(sv.stale, "a")
+  if (overflow) return { key: "⏎", word: sv.open ? "less" : "more", status: model, model, keyFirst: true }
+  return { status: `TL;DR · ${model}`, model }
+}
+
+/** The text's rows at `tw` columns: all of them when open, else SUMMARY_ROWS with the last cut `…`; and whether it overflows. */
+function textRows(text: string, tw: number, open: boolean) {
+  const all = noteRows(text, tw, null, Number.POSITIVE_INFINITY)
+  const overflow = all.length > SUMMARY_ROWS
+  return { rows: open || !overflow ? all : noteRows(text, tw, null, SUMMARY_ROWS, { cut: "…" }), overflow }
+}
+
+/**
+ * The TL;DR block (`FAMILY.md`, footnote look): `*` and the text with a hanging indent, then a closing rule with its tail
+ * (the rule faces the page below it). Waiting reserves the caret row, regenerating keeps the old text dimmed under it,
+ * an error stays above the old text; past SUMMARY_ROWS the rule is a cursor stop. `cols`: Info's text columns.
+ */
+export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
+  const tw = cols - HANG
+  if (sv.state === "none" && !sv.error) return footRows(["a summarize this note"], "hint", true)
+  const out: InfoItem[] = []
+  let overflow = false
+  if (sv.error) {
+    const rows = noteRows(sv.error, tw - HANG, null, ERROR_ROWS, { cut: "…" })
+    out.push(
+      ...footRows(
+        rows.map((r, i) => (i ? "  " : "✗ ") + r),
+        "error",
+        true,
+      ),
+    )
+    out.push(...footRows(textRows(sv.text, tw, false).rows, "stale", true, null))
+  } else if (sv.state === "waiting") {
+    out.push(...footRows([CARET], "caret", !!sv.old))
+    out.push(...footRows(textRows(sv.old, tw, false).rows, "stale", true, null))
+  } else if (sv.state === "streaming") {
+    out.push(...footRows(textRows(sv.text + CARET, tw, false).rows, "text", false))
+  } else {
+    const r = textRows(sv.text, tw, sv.open)
+    overflow = r.overflow
+    out.push(...footRows(r.rows, sv.stale ? "stale" : "text", !!sv.stale))
+  }
+  return [...out, { kind: "frule", tail: tldrTail(sv, cols, overflow), stop: overflow }]
+}
+
+/** The `*` after the title in the running head: fresh, over an outdated (or regenerating, or failed) summary, or none. */
+export function tldrHead(sv: SummaryView | null): "fresh" | "stale" | null {
+  if (!sv || sv.state === "none" || sv.state === "streaming") return null
+  if (sv.state === "waiting") return sv.old ? "stale" : null
+  return sv.state === "fresh" && !sv.error ? "fresh" : "stale"
+}
+
+/** `a`'s footer word for the block: what the key does now. */
+export function tldrWord(sv: SummaryView): string {
+  if (sv.state === "waiting" || sv.state === "streaming") return "cancel"
+  if (sv.error) return "retry"
+  return sv.state === "outdated" ? "refresh" : "summarize"
+}
 
 /** `text` wrapped to `cols`, at most `max` rows; the last is cut with `…` when text is left over. */
 function clippedRows(text: string, cols: number, max: number): string[] {
@@ -162,20 +267,6 @@ function clippedRows(text: string, cols: number, max: number): string[] {
   const shown = rows.slice(0, max)
   if (rows.length > max) shown[max - 1] = truncate(shown[max - 1]! + "…", cols)
   return shown
-}
-
-/** The TL;DR label row (muted suffix by state) and the wrapped text (spec: Mockups, Variant A). */
-export function tldrItems(sv: SummaryView, cols: number): InfoItem[] {
-  const label = "TL;DR"
-  let status = ""
-  if (sv.state === "streaming") status = " · summarizing…"
-  else if (sv.state === "fresh") status = truncate(" · " + sv.model, cols - width(label))
-  else if (sv.state === "outdated") status = width(label + OUTDATED) <= cols ? OUTDATED : " · outdated · a"
-  const out: InfoItem[] = [{ kind: "tldr", status }]
-  if (sv.state === "none") return [...out, { kind: "summary", text: "a to summarize", muted: true }]
-  for (const text of clippedRows(sv.text, cols, SUMMARY_ROWS))
-    out.push({ kind: "summary", text, muted: sv.state === "outdated" })
-  return out
 }
 
 /** Change rows shown at most; the rest are counted in a `+ n more sections` row. */
@@ -343,6 +434,23 @@ export function outlineRowSpans(r: OutlineRow, t: Theme, cols: number): Span[] {
   ]
 }
 
+/** A TL;DR row: the mark (or the hang), then the text in its tone; the caret row is the family's waiting row. */
+function footSpans(it: Extract<InfoItem, { kind: "foot" }>, t: Theme, cols: number): Span[] {
+  const c = footInk(t)
+  if (it.tone === "caret")
+    return waitingRow(t, { mark: "*", model: "", secs: 0, status: false, width: cols, stale: it.markStale })
+  const lead: Span[] = it.mark
+    ? [{ text: it.mark, fg: it.markStale ? c.markStale : c.mark }, { text: " " }]
+    : [{ text: " ".repeat(HANG) }]
+  const cut = it.text.indexOf(" ")
+  if (it.tone === "hint")
+    return [...lead, { text: it.text.slice(0, cut), fg: c.key }, { text: it.text.slice(cut), fg: c.word }]
+  if (it.tone === "error" && it.mark)
+    return [...lead, { text: "✗", fg: c.error, attr: A.BOLD }, { text: it.text.slice(1), fg: c.status }]
+  const fg = { text: c.text, stale: c.stale, error: c.status }[it.tone]
+  return [...lead, { text: it.text, fg }]
+}
+
 /** Info row `it` in `t`, `cols` text columns wide: tags and link targets are cut to fit. */
 export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
   const pad = (k: string, w: number) => k + " ".repeat(Math.max(0, w - width(k)))
@@ -363,11 +471,10 @@ export function infoSpans(it: InfoItem, t: Theme, cols: number): Span[] {
       ]
     case "label":
       return [{ text: it.text, fg: t.textMuted, attr: A.BOLD }]
-    case "tldr":
-      return [
-        { text: "TL;DR", fg: t.textMuted, attr: A.BOLD },
-        { text: it.status, fg: t.textMuted },
-      ]
+    case "foot":
+      return footSpans(it, t, cols)
+    case "frule":
+      return footnoteRule(t, cols, it.tail)
     case "summary":
       return [{ text: it.text, fg: it.muted ? t.textMuted : t.text }]
     case "changes":
