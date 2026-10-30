@@ -205,3 +205,49 @@ test("peekWindow: a text hit past PEEK_BYTES into its section is still inside th
   expect(w.from).toBe(0)
   expect(w.to).toBeGreaterThan(line)
 })
+
+const answerRow = (more: Partial<Extract<SwitchRow, { kind: "answer" }>> = {}): SwitchRow => ({
+  kind: "answer",
+  ...base,
+  heading: 2,
+  text: "Heat levels",
+  key: "heat levels",
+  ord: 0,
+  id: "x",
+  query: "body",
+  hits: [],
+  right: "body",
+  ...more,
+})
+
+test("peekLines: an answer starts at its matched line, the word in primary", () => {
+  const line = SRC.split("\n").indexOf("Heat body.") // source lines count the front matter, as the index does
+  const rs = peekLines(input(answerRow({ line }), { hit: "body" }), t, W, 30)
+  expect(body(rs)[0]).toBe("Heat body.") // the row above is blank, and the pane never starts on one
+  const row = rs.find((r) => text(r) === "Heat body.")!
+  expect(row.find((s) => s.text === "body")!.fg).toBe(t.primary)
+  expect(row.find((s) => s.text.startsWith("Heat"))!.fg).not.toBe(t.primary)
+  // no matched line: from the heading, and nothing painted without a hit word
+  const plain = peekLines(input(answerRow()), t, W, 30)
+  expect(body(plain)[0]).toBe("Heat body.")
+  expect(plain.flat().some((s) => s.fg === t.primary && s.text === "body")).toBe(false)
+})
+
+test("peekLines: a reranked answer's why sits under a rule at the pane's foot, even when the body is long", () => {
+  const rs = peekLines(input(answerRow(), { foot: { n: 2, why: "low and slow is the rule here" } }), t, W, 12)
+  expect(rs).toHaveLength(12)
+  expect(texts(rs.slice(-2))).toEqual(["─".repeat(16), "² low and slow is the rule here"])
+  expect(rs.at(-1)![0]).toEqual({ text: "²", fg: t.primary })
+  expect(rs.at(-1)![1]!.fg).toBe(t.textMuted)
+  expect(texts(peekLines(input(answerRow()), t, W, 12)).slice(-2)).not.toContain("─".repeat(16))
+})
+
+test("peekWindow: an answer's matched line deep in a long section is inside the window", () => {
+  const long =
+    "# Long\n\n" + Array.from({ length: 2000 }, (_, i) => `row ${i} of a very long single section`).join("\n\n") + "\n"
+  const d = indexNote(long, 1, long.length)
+  const lines = normalize(long).split("\n")
+  const line = lines.indexOf("row 1900 of a very long single section")
+  const w = peekWindow(lines, 0, d, { ...(answerRow({ heading: 0, line }) as object), path: "/v/l.md" } as SwitchRow)
+  expect(w.to).toBeGreaterThan(line)
+})

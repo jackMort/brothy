@@ -9,12 +9,13 @@ import { A, type Span } from "../lib/spans"
 import { superscript, truncate } from "../lib/text"
 import type { Line } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
-import { footInk, placeMark, SIDENOTE_GAP, SIDENOTE_W } from "../ui/footnote"
+import { footInk, markText, placeMark, SIDENOTE_GAP, SIDENOTE_W } from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
+import { landedHere } from "./Chrome"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { keyDef, WELCOME_KEYS } from "./keymap"
@@ -210,11 +211,21 @@ function zenLine({ s, t, view, spot, win }: Derived, n: number) {
   return markMatches(spans, s.query, t)
 }
 
+/** An ask landing's mark: the row it sits on (the answered heading's last, Preview only) and its span. */
+function landingMark(d: Derived): { row: number; mark: Span } | null {
+  const l = landedHere(d)
+  const h = l && l.n !== null && !d.s.source ? d.view.headings[l.heading] : undefined
+  if (!l || l.n === null || !h) return null
+  return { row: h.last ?? h.line, mark: { text: markText(l.n), fg: l.moved ? d.t.textMuted : d.t.primary } }
+}
+
 /** The note's lines on screen: find matches marked, link labels over them, dimmed under the drawer's scrim. */
-function noteLines({ s, L, t, view, top }: Derived) {
+function noteLines(d: Derived) {
+  const { s, L, t, view, top } = d
   const { CW, CH } = L
   const scrim = L.mode === "drawer" && L.shown
   const lb = s.labels && s.labels.geo === labelGeo(s, CW, view.lines.length, top) ? s.labels : null
+  const landing = landingMark(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
       {view.lines.slice(top, top + CH).map((l: Line, i) => {
@@ -225,7 +236,23 @@ function noteLines({ s, L, t, view, top }: Derived) {
             if (sp.row === top + i && label.startsWith(lb.typed))
               spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
           })
-        return <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
+        let gutter: Span | null = null
+        if (landing?.row === top + i) {
+          const at = placeMark(spans, CW, landing.mark)
+          if ("inline" in at) spans = at.inline
+          else gutter = at.gutter
+        }
+        const row = <Row key={top + i} spans={scrim ? dimSpans(spans, t, SCRIM_DIM) : spans} />
+        return gutter ? (
+          <box key={top + i} style={{ height: 1, flexDirection: "row" }}>
+            <box style={{ position: "absolute", left: -2, width: 1, height: 1 }}>
+              <Row spans={[gutter]} />
+            </box>
+            {row}
+          </box>
+        ) : (
+          row
+        )
       })}
     </box>
   )

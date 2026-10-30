@@ -341,22 +341,33 @@ export type AnswerRow = {
   query: string
   /** code points of `text` that match `query` */
   hits: number[]
-  /** muted, right-aligned: `hits/all` queries, or the rerank's why */
+  /** the first source line holding `query` in the section, when a text line holds it */
+  line?: number
+  /** muted, right-aligned: the matched word; "" for a reranked answer (its why is a footnote) */
   right: string
+  /** a reranked answer's number, its mark in the row's left padding */
+  n?: number
 }
 /** Ask mode: `⏎` asks (again) or reranks; `error` leads with a ✗ */
 export type AskActionRow = { kind: "askAction"; act: "ask" | "rerank"; text: string; note: string; error?: boolean }
-/** Ask mode: a muted line that is never highlighted (states, `searched: …`) */
-export type AskNoteRow = { kind: "askNote"; text: string }
+/** Ask mode: a line that is never highlighted (states, next steps); `lead` is a muted prefix (`searched: `) */
+export type AskNoteRow = { kind: "askNote"; text: string; tone?: "text" | "muted" | "error"; lead?: string }
+/** Ask mode, never highlighted: the 16-column rule over footnotes and waiting rows, a reranked answer's why, a waiting request */
+export type AskMarkRow =
+  | { kind: "rule" }
+  | { kind: "footnote"; n: number; text: string }
+  | { kind: "askWait"; text: string }
 export type SwitchRow =
-  | { kind: "header"; title: string; count: string }
+  | { kind: "header"; title: string; count: string; right?: string }
   | SwitchHit
   | AnswerRow
   | AskActionRow
   | AskNoteRow
+  | AskMarkRow
 
-/** Rows the highlight can rest on: not section titles, not ask notes. */
-export const isStop = (r: { kind: string }) => r.kind !== "header" && r.kind !== "askNote"
+const NO_STOP = new Set(["header", "askNote", "rule", "footnote", "askWait"])
+/** Rows the highlight can rest on: not section titles, ask notes, rules, footnotes or waiting rows. */
+export const isStop = (r: { kind: string }) => !NO_STOP.has(r.kind)
 
 export const switchRows = (sections: Section[]): SwitchRow[] =>
   sections.flatMap((s): SwitchRow[] => [{ kind: "header", title: s.title, count: s.count }, ...s.hits])

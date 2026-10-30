@@ -254,6 +254,9 @@ export function PickerList({
       {rows.map((it, j) => {
         const sel = top + j === hl && !it.header
         const spans = pickerRowSpans(t, it, sel, fgOn, textW)
+        // a mark sits in the padding, a space between it and the text
+        const markW = it.mark ? sw(it.mark.text) + 1 : 0
+        if (it.mark) spans.unshift({ ...it.mark, fg: sel ? fgOn : it.mark.fg }, { text: " " })
         return (
           <box
             key={sel ? "sel" + j : "row" + j}
@@ -261,7 +264,7 @@ export function PickerList({
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT && !it.header) onActivate?.(top + j)
             }}
-            style={rowBox(sel ? t.primary : undefined)}
+            style={{ ...rowBox(sel ? t.primary : undefined), paddingLeft: Math.max(0, 3 - markW) }}
           >
             <Line spans={spans} />
           </box>
@@ -412,6 +415,7 @@ export function Switcher({
   height,
   note,
   peek,
+  placeholder = "Note, heading or text…",
   onClose,
   onScroll,
   onHover,
@@ -425,6 +429,7 @@ export function Switcher({
   note?: string
   /** peek pane rows for the highlighted row (`peekLines`); shown from PEEK_MIN_W columns */
   peek?: Span[][]
+  placeholder?: string
 }) {
   const g = switchSplit(W)
   const lines = g.split ? peek : undefined
@@ -445,7 +450,7 @@ export function Switcher({
   )
   return (
     <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
-      <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
+      <PickerInput t={t} value={q} placeholder={placeholder} width={width} />
       {lines ? (
         <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={lines} />
       ) : (

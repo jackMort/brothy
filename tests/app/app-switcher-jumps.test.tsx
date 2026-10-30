@@ -6,7 +6,7 @@ import { type aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, wai
 
 const { tmp, aiConfig, mountAI } = useAppHarness()
 
-/** `?<question>`, ⏎; the stub replies with `queries`. Resolves with the frame once Answers show. */
+/** `?<question>`, ⏎; the stub replies with `queries`. Resolves with the frame once the Matches show. */
 async function ask(
   s: Setup,
   ai: ReturnType<typeof aiStub>,
@@ -19,7 +19,7 @@ async function ask(
   await waitFor(s, () => ai.calls.length === 1)
   ai.send(0, JSON.stringify({ queries }))
   ai.end(0)
-  return waitFrame(s, (f) => f.includes("Answers"))
+  return waitFrame(s, (f) => f.includes("Matches"))
 }
 
 const SOUP = `# Soup\n\nIntro.\n\n## Simmering\n\n${filler(40)}\n\nKeep the broth at a gentle simmer.\n`

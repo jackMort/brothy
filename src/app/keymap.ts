@@ -1,5 +1,6 @@
 // The keymap: modes, context ids, every binding, the footer hints per context and the `? ?` sheet's groups. Pure.
 import type { KeyEvent } from "@opentui/core"
+import type { AskStage } from "../ai/ask"
 import type { View } from "../system/config"
 import type { HelpGroup } from "../ui/help"
 import type { HintItem } from "../ui/status"
@@ -347,9 +348,12 @@ const KEYMAP = {
     modes: ["switch"],
     keys: [],
     label: "^p ?",
-    desc: "ask: a ? query finds the section that answers",
+    desc: "ask your notes: ^p then ?question",
     group: "AI",
   },
+  // hint-only: the `?` that starts a question, and `⌫` in ask mode (swErase does it)
+  swAskHint: { modes: ["switch"], keys: [], label: "?", hint: "ask", spare: true, when: "ai" },
+  askErase: { modes: ["switch"], keys: [], label: "⌫", hint: "edit" },
   opType: { modes: ["open"], keys: [], label: "type", hint: "filter · path" },
   opMove: { modes: ["open"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
   opComplete: { modes: ["open"], keys: ["tab"], label: "tab", hint: "complete" },
@@ -422,8 +426,23 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
   theme: ["themeType", "themeMove", "themeMode", "themeApply", "themeClose"],
   zenSettings: ["zsMove", "zsToggle", "zsAdjust", "zsSave", "zsRevert"],
   label: ["labelType", "labelErase", "labelCancel"],
-  switch: ["swType", "swMove", "swSection", "swOpen", "swClose"],
+  switch: ["swType", "swMove", "swSection", "swOpen", "swAskHint", "swClose"],
   open: ["opType", "opMove", "opComplete", "opOpen", "opClose"],
+}
+
+/** The switcher's footer while the query is a question, by what the ask shows (`askStage`). */
+const ASK_FOOTERS: Record<AskStage, Hint[]> = {
+  off: ["swClose"],
+  short: ["askErase", "swClose"],
+  target: ["askErase", "swClose"],
+  idle: [["swOpen", "ask"], "askErase", "swClose"],
+  asking: [["askErase", "edit · cancels"], "swClose"],
+  indexing: ["askErase", "swClose"],
+  result: ["swMove", "swOpen", ["swSection", "rerank"], "swClose"],
+  none: ["askErase", "swClose"],
+  reranking: ["swMove", "swOpen", "swClose"],
+  reranked: ["swMove", "swOpen", "swSection", "swClose"],
+  error: [["swOpen", "try again"], "askErase", "swClose"],
 }
 
 /** Contexts whose hints stay at full colour instead of fading: the popups and typing. */
@@ -432,9 +451,15 @@ export const PINNED: readonly Ctx[] = ["prompt", "theme", "zenSettings", "help",
 /**
  * Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. `words` are the
  * words that follow the state (`a cancel` while the TL;DR runs); they win over the context's and the binding's own.
+ * `ask`: the switcher holds a question, and its footer follows the ask's stage.
  */
-export function footerHints(c: Ctx, on: FooterState, words: Partial<Record<KeyId, string>> = {}): HintItem[] {
-  return FOOTERS[c].flatMap((h) => {
+export function footerHints(
+  c: Ctx,
+  on: FooterState,
+  words: Partial<Record<KeyId, string>> = {},
+  ask?: AskStage | null,
+): HintItem[] {
+  return (c === "switch" && ask ? ASK_FOOTERS[ask] : FOOTERS[c]).flatMap((h) => {
     const [id, word] = Array.isArray(h) ? h : [h, undefined]
     const def = keyDef(id)
     return def.when && !on[def.when]

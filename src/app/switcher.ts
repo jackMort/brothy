@@ -7,6 +7,7 @@ import {
   ASK_MIN,
   type AskState,
   askLocate,
+  askPaneLines,
   askRequest,
   parseQueries,
   parseRerank,
@@ -16,7 +17,7 @@ import {
   rerankRequest,
 } from "../ai/ask"
 import { isFresh, type Summary, textHash } from "../ai/cache"
-import { type Failure, shortModel } from "../ai/client"
+import { aiMessage, type Failure, shortModel } from "../ai/client"
 import type { Rendered } from "../markdown/render"
 import { folderCounts } from "../notes/files"
 import { peekLines, peekWindow, switchSplit } from "../notes/peek"
@@ -40,7 +41,7 @@ import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
-import { jobKey } from "./store"
+import { jobKey, type UI } from "./store"
 
 /** What the ask requests share: dropping a running ask and setting the open switcher's ask state. */
 interface AskDeps {
@@ -66,12 +67,12 @@ function makeAskStart(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs,
     const question = qn.text
     const known = askMemo.current.get(foldSame(question))
     if (known) return setAsk({ question, phase: "result", queries: known.queries, model: known.model })
-    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy }))
+    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy, sent: false, busy: true }))
     if (!target) return
     const asked = sw.q
     // an edit, a close or another ask aborts the job, so `done` never runs for it
     startJob("ask", undefined, target, askRequest(question), {
-      begin: () => setAsk({ question, phase: "asking" }),
+      begin: () => setAsk({ question, phase: "asking", model: ai.model }),
       done: (r) => {
         if (ui.current.switcher?.q !== asked) return
         const queries = r.ok ? parseQueries(r.raw) : null
@@ -83,9 +84,10 @@ function makeAskStart(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs,
         if (r.ok) f = { kind: "invalid" }
         else if ("failure" in r) f = r.failure
         else return
-        const msg = failText(target, f, "answer")
-        flash(msg, "error")
-        setAsk({ question, phase: "error", error: msg })
+        flash(failText(target, f, "answer"), "error")
+        const ctx = { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" as const }
+        // a connection that never opened sent nothing; anything the host answered, or a cut stream, had the question
+        setAsk({ question, phase: "error", error: aiMessage(f, ctx), sent: f.kind !== "network" })
       },
     })
   }
@@ -228,6 +230,7 @@ function makeOpening(c: AppCtx, closeSwitcher: () => void) {
     if (!row || (row.kind !== "note" && row.kind !== "heading" && row.kind !== "text")) return
     const q = ui.current.switcher?.q.trim() ?? ""
     closeSwitcher()
+    set({ lastAsk: null }) // a plain hit opened: C-p starts empty again
     openFile(row.path)
     focusDoc()
     if (row.kind === "note") return
@@ -254,32 +257,69 @@ function makeActivate(
     switchTo,
   }: Opening & Pick<ReturnType<typeof makeAsk>, "askStart" | "askRerank"> & { closeSwitcher: () => void },
 ) {
-  const { ui, derive, flash, openFile, focusDoc, setTop } = c
+  const { ui, set, derive, flash, openFile, focusDoc, setTop } = c
+
+  /** Scroll to where `askLocate` found the answer: its line with the find highlight, else its heading; false when the heading is not in the view. */
+  const landAt = (row: AnswerRow, at: { heading: number; line: number | null }, doc: NoteDoc) => {
+    const heading = at.heading < 0 ? null : at.heading
+    if (at.line !== null) {
+      const hit: TextHit = {
+        kind: "text",
+        path: row.path,
+        name: row.name,
+        folder: "",
+        heading,
+        line: at.line,
+        context: "",
+        hits: [],
+      }
+      jumpToText(hit, row.query, doc)
+      return true
+    }
+    if (heading === null) return true
+    const h = derive().view.headings[heading]
+    if (h) setTop(h.line)
+    return !!h
+  }
 
   /**
-   * Open an Ask answer. The note may have changed since it was indexed: its section is found again
-   * by heading key and occurrence, then the first line there holding the answer's query (find
-   * highlights it); with no such line, the heading; with the heading gone, the note as it was left.
+   * Open an Ask answer. The note may have changed since it was indexed: its section is found again by heading key
+   * and occurrence, then the first line there holding the answer's query (find highlights it); with no such line,
+   * the heading; with the heading renamed, the word wherever it is now (a toast says so); with neither, the note as
+   * it was left. A reranked answer leaves its mark after the heading and its why on the ghost line (`ui.landed`).
    */
   const answerTo = (row: AnswerRow) => {
+    const why = answerWhy(row, ui.current.switcher?.ask)
+    rememberAsk(row)
     closeSwitcher()
     openFile(row.path)
     focusDoc()
+    const found = locateAnswer(row)
+    if (!found) return // the read error is on screen
+    const { at, doc } = found
+    if (!at || !landAt(row, at, doc)) return flash("heading gone")
+    if (at.moved) flash(`heading gone · found “${row.query}” instead`)
+    set({ landed: { path: row.path, n: row.n ?? null, why, moved: at.moved, heading: at.heading } })
+  }
+
+  /** Keep the open question, its answers and which one `row` is, for `C-p` to reopen (`ui.lastAsk`). */
+  const rememberAsk = (row: AnswerRow) => {
+    const sw = ui.current.switcher
+    if (!sw?.ask) return
+    const at = derive()
+      .swRows.filter((r) => r.kind === "answer")
+      .findIndex((r) => r.id === row.id)
+    // a rerank still running is cancelled by the close: its answers stay the local ones
+    const state: AskState = sw.ask.phase === "reranking" ? { ...sw.ask, phase: "result" } : sw.ask
+    set({ lastAsk: { q: sw.q, state, at } })
+  }
+
+  /** The open note indexed as it is now, and where the answer is in it; null when it could not be read. */
+  const locateAnswer = (row: AnswerRow) => {
     const { file } = derive()
-    if (!file || file.error) return // the read error is on screen
+    if (!file || file.error) return null
     const doc = indexNote(file.src, 0, Buffer.byteLength(file.src))
-    const at = askLocate(doc, row)
-    if (!at) return flash("heading gone")
-    const heading = at.heading < 0 ? null : at.heading
-    if (at.line !== null)
-      return jumpToText(
-        { kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] },
-        row.query,
-        doc,
-      )
-    if (heading === null) return
-    const h = derive().view.headings[heading]
-    return h ? setTop(h.line) : flash("heading gone")
+    return { doc, at: askLocate(doc, row) }
   }
 
   /** `⏎` or a click on row `i`: in ask mode it asks, or opens an answer; otherwise the hit opens. */
@@ -307,11 +347,16 @@ function makePeek({ memo, vault, W }: AppCtx) {
     return { path, doc, note, base: win?.base, view }
   }
 
-  /** The peek pane (from PEEK_MIN_W): the highlighted row's note, its TL;DR only while fresh; undefined without one. */
-  const peekPane = ({ s, swRows, swHl, t, L }: Derived) => {
+  /**
+   * The peek pane (from PEEK_MIN_W): the ask's own pane while idle or asking, else the highlighted row's note, its
+   * TL;DR only while fresh, an answer's matched word and why; undefined without one.
+   */
+  const peekPane = ({ s, swRows, swHl, t, L, askView }: Derived) => {
     if (!s.switcher || W < PEEK_MIN_W) return undefined
-    const peekRow = swRows[swHl]
     const peekW = switchSplit(W).peekW
+    const ask = askView && askPaneLines(t, askView, peekW)
+    if (ask) return ask
+    const peekRow = swRows[swHl]
     const { path, doc, note, base, view } = peekNote(peekRow, { s, t }, peekW)
     return peekLines(
       {
@@ -323,6 +368,7 @@ function makePeek({ memo, vault, W }: AppCtx) {
         words: note?.words,
         minutes: note?.minutes,
         summary: freshTldr(path ? s.summaries[path] : undefined, note),
+        ...answerPeek(peekRow, s.switcher.ask),
       },
       t,
       peekW,
@@ -363,10 +409,27 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     set({ switcher: { ...sw, hl, top: keepHitVisible(sw.top, swRows, hl, L.PH) } })
   }
 
+  /** A printable key: appended to the query, or the whole query when the switcher was reopened on the last question. */
+  const swInput = (text: string) => {
+    const sw = ui.current.switcher
+    if (sw) swType(sw.fresh ? text : sw.q + text)
+  }
+
+  /** Reopen on the last question with its answers, nothing sent: the answer after the one opened is highlighted. */
+  const reopenAsk = ({ q, state, at }: NonNullable<UI["lastAsk"]>) => {
+    ui.current.switcher = { q, ask: state, hl: 0, top: 0, fresh: true } // unbumped: only for `derive` below
+    const { swRows, L } = derive()
+    const answers = swRows.flatMap((r, i) => (r.kind === "answer" ? [i] : []))
+    const hl = answers.length ? answers[(at + 1) % answers.length]! : Math.max(0, firstHit(swRows))
+    set({ switcher: { q, ask: state, hl, top: keepHitVisible(0, swRows, hl, L.PH), fresh: true } })
+  }
+
   const openSwitcher = () => {
     ensureLinks()
-    set({ labels: null })
-    swType("")
+    set({ labels: null, landed: null })
+    const last = ui.current.ai ? ui.current.lastAsk : null
+    if (last) reopenAsk(last)
+    else swType("")
     indexVault()
   }
 
@@ -374,6 +437,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     dropAsk,
     closeSwitcher,
     swType,
+    swInput,
     swGo,
     dropIndex,
     openSwitcher,
@@ -388,6 +452,16 @@ export function hitRows(view: Rendered, source: boolean, row: TextHit) {
   if (row.heading === null) return { from: 0, end: view.headings[0]?.line ?? Infinity }
   return { from: view.headings[row.heading]?.line ?? 0, end: view.headings[row.heading + 1]?.line ?? Infinity }
 }
+
+/** What the peek adds for an ask answer: its matched word, and a reranked one's mark and why. */
+function answerPeek(row: SwitchRow | undefined, ask: AskState | undefined) {
+  if (row?.kind !== "answer") return {}
+  const why = answerWhy(row, ask)
+  return { hit: row.query, ...(row.n && why ? { foot: { n: row.n, why } } : {}) }
+}
+
+/** A reranked answer's why ("" before the rerank or when the model gave none). */
+const answerWhy = (row: AnswerRow, ask: AskState | undefined) => (row.n ? (ask?.why?.[row.id] ?? "") : "")
 
 /** A cached TL;DR for the peek, only while fresh for the note as read. */
 function freshTldr(saved: Summary | undefined, note: { hash: string } | null) {

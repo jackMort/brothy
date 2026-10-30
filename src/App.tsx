@@ -134,7 +134,7 @@ export function App({
   const ghostEl = ghostLine(ctx, d, {
     ctx: ctxNow,
     pinned: PINNED.includes(ctxNow),
-    hints: (c) => footerHints(c, footer, footerWords(d)),
+    hints: (c) => footerHints(c, footer, footerWords(d), d.askStage),
   })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo: popups.helpGo })

@@ -2,12 +2,13 @@
 // or orders excerpts brothy picked (tier 1); every answer is a place the local index found. Pure.
 
 import { isRecord } from "../lib/json"
-import { safeLine } from "../lib/spans"
-import { truncate } from "../lib/text"
+import { A, lineText, type Span, safeLine } from "../lib/spans"
+import { truncate, wrap } from "../lib/text"
 import { headingKey, sectionId } from "../markdown/sections"
 import { type FileNode, SCORE_SUBSEQUENCE, scoreName, stem } from "../notes/files"
 import {
   type AnswerRow,
+  type AskNoteRow,
   foldSame,
   headingAt,
   lineOf,
@@ -18,6 +19,8 @@ import {
   type SwitchRow,
   type VaultIndex,
 } from "../notes/vault"
+import type { Theme } from "../theme/theme"
+import { MODEL_W, markText, waitText } from "../ui/footnote"
 import { headingPath } from "../ui/zen"
 import { type ChatReq, cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./client"
 
@@ -210,23 +213,32 @@ export function askCandidates(ix: VaultIndex, tree: FileNode, queries: readonly 
   return out.slice(0, MAX_CANDIDATES).map(({ order: _, ...c }) => c)
 }
 
+/** The first source line in [from, to) of `doc` holding `want` (folded), or null. */
+function lineWith(doc: NoteDoc, want: string, from: number, to: number): number | null {
+  for (let l = from; l < to && l < doc.starts.length; l++) {
+    const end = l + 1 < doc.starts.length ? doc.starts[l + 1]! - 1 : doc.lower.length
+    if (doc.lower.slice(doc.starts[l]!, end).includes(want)) return l
+  }
+  return null
+}
+
 /**
- * Where an answer lands in `doc`, the note as it is now: its section found again by key and
- * occurrence, then the first line there holding `query`. null when the heading is gone.
+ * Where an answer lands in `doc`, the note as it is now: its section found again by key and occurrence, then the
+ * first line there holding `query`. With the heading gone (renamed), the first line of the note holding `query`, in
+ * the section above it (`moved`); null when the word is nowhere either.
  */
 export function askLocate(
   doc: NoteDoc,
   a: { heading: number; key: string; ord: number; query: string },
-): { heading: number; line: number | null } | null {
-  const i = a.heading < 0 ? -1 : keysOf(doc).findIndex((x) => x.key === a.key && x.ord === a.ord)
-  if (a.heading >= 0 && i < 0) return null
-  const [from, to] = sectionLines(doc, i)
+): { heading: number; line: number | null; moved: boolean } | null {
   const want = foldSame(a.query.trim())
-  for (let l = from; l < to && l < doc.starts.length; l++) {
-    const end = l + 1 < doc.starts.length ? doc.starts[l + 1]! - 1 : doc.lower.length
-    if (doc.lower.slice(doc.starts[l]!, end).includes(want)) return { heading: i, line: l }
+  const i = a.heading < 0 ? -1 : keysOf(doc).findIndex((x) => x.key === a.key && x.ord === a.ord)
+  if (a.heading >= 0 && i < 0) {
+    const line = lineWith(doc, want, 0, doc.starts.length)
+    return line === null ? null : { heading: headingAt(doc.headings, line) ?? -1, line, moved: true }
   }
-  return { heading: i, line: null }
+  const [from, to] = sectionLines(doc, i)
+  return { heading: i, line: lineWith(doc, want, from, to), moved: false }
 }
 
 // ------------------------------------------------------------- tier 1
@@ -284,20 +296,24 @@ export interface AskState {
   phase: "asking" | "result" | "reranking" | "reranked" | "error"
   /** tier 0's queries (memoized per question) */
   queries?: string[]
-  /** the model that answered (full id; shown through shortModel) */
+  /** the model asked, then the one that answered (full id; shown through shortModel) */
   model?: string
   /** tier 1: section ids, best first, and each one's why */
   order?: string[]
   why?: Record<string, string>
-  /** the toast of the failed ask */
+  /** the failed ask: what went wrong (`aiMessage`, no `AI:` prefix), and whether the question had reached the host */
   error?: string
+  sent?: boolean
+  /** it never left: MAX_JOBS other requests were running */
+  busy?: boolean
 }
+/** Where `⏎` sends the question (the host, the model, whether it is ollama), why it can't (resolveAI's toast), or null without an `ai` block. */
+export type AskTarget = { host: string; model: string; ollama: boolean } | { error: string } | null
 export interface AskView {
   question: string
   /** the question was cut at QUESTION_MAX */
   cut: boolean
-  /** where tier 0 goes, why it can't (resolveAI's toast), or null without an `ai` block */
-  target: { host: string } | { error: string } | null
+  target: AskTarget
   state: AskState | undefined
   /** askCandidates for `state.queries` on a complete index */
   cands: readonly Candidate[]
@@ -305,64 +321,247 @@ export interface AskView {
   cost: string
   /** the vault index is still building: ranking waits for it */
   indexing: boolean
+  /** whole seconds the running request has waited */
+  secs: number
+  /** the folder's size, `10 notes` */
+  notes: string
+  /** the list's text columns: notes and next steps wrap to them */
+  width: number
+  /** a pane beside the list explains the ask, so the idle row needs no notes under it */
+  pane: boolean
 }
 
-const note = (text: string): SwitchRow => ({ kind: "askNote", text })
+/** What the ask shows: the rows, the footer and the pane follow it. */
+export type AskStage =
+  | "off"
+  | "short"
+  | "target"
+  | "idle"
+  | "asking"
+  | "indexing"
+  | "result"
+  | "none"
+  | "reranking"
+  | "reranked"
+  | "error"
 
-function answer(c: Candidate, right: string): AnswerRow {
+/** The candidates the model picked that are still listed, in its order (ids gone after an index refresh are dropped). */
+function picked(v: Pick<AskView, "state" | "cands">): Candidate[] {
+  if (v.state?.phase !== "reranked") return []
+  const byId = new Map(v.cands.map((c) => [c.id, c]))
+  return (v.state.order ?? []).flatMap((id) => byId.get(id) ?? [])
+}
+
+export function askStage(v: Pick<AskView, "question" | "target" | "state" | "cands" | "indexing">): AskStage {
+  const st = v.state
+  if (!v.target) return "off"
+  if ([...v.question].length < ASK_MIN) return "short"
+  if (!st) return "error" in v.target ? "target" : "idle"
+  if (st.phase === "error") return "error"
+  if (st.phase === "asking") return "asking"
+  if (v.indexing) return "indexing"
+  if (!v.cands.length) return "none"
+  if (picked(v).length) return "reranked"
+  return st.phase === "reranking" ? "reranking" : "result"
+}
+
+/** The model's display name: the one asked or that answered, else the configured one. */
+const askModel = (v: Pick<AskView, "target" | "state">) =>
+  shortModel(v.state?.model ?? (v.target && "model" in v.target ? v.target.model : ""))
+
+const hostOf = (v: Pick<AskView, "target">) => (v.target && "host" in v.target ? v.target.host : "")
+
+/** Columns of the matched word on a row's right. */
+const WORD_W = 12
+const RULE_ROW: SwitchRow = { kind: "rule" }
+
+const note = (text: string, tone?: AskNoteRow["tone"], lead?: string): SwitchRow => ({
+  kind: "askNote",
+  text,
+  ...(tone ? { tone } : {}),
+  ...(lead ? { lead } : {}),
+})
+
+/** `text` (a `· ` bullet) as muted rows of `w` columns, continuation rows hung 2 columns in. */
+const bullets = (text: string, w: number): SwitchRow[] =>
+  wrap([{ text }], Math.max(4, w), [], [{ text: "  " }]).map((r) => note(lineText({ spans: r }).trimEnd()))
+
+function answer(c: Candidate, right: string, n?: number): AnswerRow {
   const { path, name, heading, text, key, ord, id } = c
   const hits = heading < 0 ? [] : (sub(text, c.best.query)?.hits ?? [])
-  return { kind: "answer", path, name, heading, text, key, ord, id, query: c.best.query, hits, right }
+  const line = c.best.line === undefined ? {} : { line: c.best.line }
+  return {
+    kind: "answer",
+    path,
+    name,
+    heading,
+    text,
+    key,
+    ord,
+    id,
+    query: c.best.query,
+    hits,
+    ...line,
+    right,
+    ...(n ? { n } : {}),
+  }
+}
+const matched = (c: Candidate) => answer(c, truncate(c.best.query, WORD_W))
+
+function idleRows(v: AskView): SwitchRow[] {
+  const what = v.cut ? `only the first ${QUESTION_MAX} characters` : "only the question"
+  const row: SwitchRow = { kind: "askAction", act: "ask", text: "⏎ ask", note: ` · ${what} → ${hostOf(v)}` }
+  if (v.pane) return [row]
+  return [
+    row,
+    ...bullets("· only the question goes out; rerank adds short excerpts", v.width),
+    ...bullets("· nothing is written to disk", v.width),
+  ]
 }
 
-/** The switcher's rows for a `?` question, for every state of the spec's UX table. */
-export function askRows(v: AskView): SwitchRow[] {
-  const st = v.state
-  if (!v.target) return [note(`AI off · set "ai" in config.json`)]
-  if ([...v.question].length < ASK_MIN) return [note("type a question")]
-  if (!st) {
-    if ("error" in v.target) return [note(v.target.error)]
-    return [
-      {
-        kind: "askAction",
-        act: "ask",
-        text: "⏎ ask",
-        note: ` · only the question${v.cut ? "…" : ""} → ${v.target.host}`,
-      },
-    ]
-  }
-  if (st.phase === "error")
-    return [{ kind: "askAction", act: "ask", text: `${st.error ?? ""} · ⏎ asks again`, note: "", error: true }]
-  if (st.phase === "asking" || v.indexing) return [note("asking…")]
-  const queries = st.queries ?? []
-  const searched = `searched: ${queries.join(" · ")}`
-  if (!v.cands.length) return [note(`nothing found · ${searched}`)]
-  const hits = (c: Candidate) => `${c.queries}/${queries.length}`
-  const byId = new Map(v.cands.map((c) => [c.id, c]))
-  const top = st.phase === "reranked" ? (st.order ?? []).flatMap((id) => byId.get(id) ?? []) : []
-  if (top.length) {
-    const shown = new Set(top.map((c) => c.id))
-    const rest = v.cands.filter((c) => !shown.has(c.id))
-    return [
-      { kind: "header", title: "Answers", count: String(top.length) },
-      ...top.map((c) => answer(c, st.why?.[c.id] ?? "")),
-      ...(rest.length
-        ? [
-            { kind: "header" as const, title: "Other matches", count: String(rest.length) },
-            ...rest.map((c) => answer(c, hits(c))),
-          ]
-        : []),
-      note(searched),
-    ]
-  }
+/** A failed ask: the headline (`⏎` asks again), whether anything left, then where to look. */
+function askErrorRows(st: AskState, host: string, ollama: boolean, w: number): SwitchRow[] {
+  const check = ollama ? "· is ollama running? ⏎ tries again" : "· check the endpoint and key · ⏎ tries again"
+  const steps = st.busy
+    ? bullets("· wait for one to finish · ⏎ tries again", w)
+    : [...bullets(check, w), ...bullets("· the ai block lives in config.json; r re-reads it", w)]
   return [
-    { kind: "header", title: "Answers", count: String(v.cands.length) },
-    ...v.cands.map((c) => answer(c, hits(c))),
-    st.phase === "reranking"
-      ? note("reranking…")
-      : { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: ` · ${v.cost}` },
-    note(searched),
+    { kind: "askAction", act: "ask", text: st.error ?? "", note: "", error: true },
+    note(st.sent ? `the question was sent to ${host}` : "nothing was sent"),
+    RULE_ROW,
+    ...steps,
   ]
+}
+
+function noneRows(v: AskView, searched: SwitchRow): SwitchRow[] {
+  return [
+    note("Nothing in your notes", "text"),
+    searched,
+    RULE_ROW,
+    ...bullets(`· the question may not be in this folder (${v.notes})`, v.width),
+    ...bullets("· edit it and ⏎ to ask again, or drop the ? to search names and text yourself", v.width),
+  ]
+}
+
+/** Reranked: the model's picks marked ¹ ² ³ with their whys as footnotes under a rule, then the other matches. */
+function rerankedRows(v: AskView, top: Candidate[], searched: SwitchRow): SwitchRow[] {
+  const shown = new Set(top.map((c) => c.id))
+  const rest = v.cands.filter((c) => !shown.has(c.id))
+  const why = v.state?.why ?? {}
+  return [
+    { kind: "header", title: "Answers", count: String(top.length), right: askModel(v) },
+    ...top.map((c, i) => answer(c, "", i + 1)),
+    RULE_ROW,
+    ...top.flatMap((c, i): SwitchRow[] => (why[c.id] ? [{ kind: "footnote", n: i + 1, text: why[c.id]! }] : [])),
+    ...(rest.length
+      ? [{ kind: "header" as const, title: "Other matches", count: String(rest.length) }, ...rest.map(matched)]
+      : []),
+    searched,
+  ]
+}
+
+/** The switcher's rows for a `?` question, for every stage (`askStage`). */
+export function askRows(v: AskView): SwitchRow[] {
+  const stage = askStage(v)
+  const model = askModel(v)
+  const searched = note((v.state?.queries ?? []).join(" · "), "text", "searched: ")
+  const secs = v.secs >= 1 ? ` · ${v.secs} s` : ""
+  switch (stage) {
+    case "off":
+      return [note(`AI off · set "ai" in config.json`)]
+    case "short":
+      return [note("type a question")]
+    case "target":
+      return [note(v.target && "error" in v.target ? v.target.error : "", "error")]
+    case "idle":
+      return idleRows(v)
+    case "asking":
+      return [RULE_ROW, { kind: "askWait", text: waitText(model, v.secs) }]
+    case "indexing":
+      return [RULE_ROW, { kind: "askWait", text: "updating the index" }]
+    case "error":
+      return askErrorRows(v.state!, hostOf(v), !!v.target && "ollama" in v.target && v.target.ollama, v.width)
+    case "none":
+      return noneRows(v, searched)
+    case "reranked":
+      return rerankedRows(v, picked(v), searched)
+  }
+  const tail: SwitchRow =
+    stage === "reranking"
+      ? { kind: "askWait", text: `ranking ${v.cands.length} excerpts · ${truncate(model, MODEL_W)}${secs}` }
+      : { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: ` · ${v.cost}` }
+  return [
+    { kind: "header", title: "Matches", count: String(v.cands.length) },
+    ...v.cands.map(matched),
+    RULE_ROW,
+    tail,
+    searched,
+  ]
+}
+
+/** `text` wrapped to `w` columns in `fg`. */
+const para = (text: string, fg: string, w: number): Span[][] => wrap([{ text, fg }], Math.max(4, w))
+
+/**
+ * The pane beside the list (from PEEK_MIN_W) before there are answers to peek: idle, what `⏎` sends and what comes
+ * back; asking, exactly what went out, which is only the question. null for the other stages (the row's peek).
+ */
+export function askPaneLines(t: Theme, v: AskView, w: number): Span[][] | null {
+  const stage = askStage(v)
+  const host = hostOf(v)
+  if (stage === "idle")
+    return [
+      [{ text: "Ask your notes", fg: t.text, attr: A.BOLD }],
+      [],
+      ...para(
+        `⏎ sends only the question to ${askModel(v)} on ${host}. It replies with search words; brothy looks them up here, in your notes.`,
+        t.textMuted,
+        w,
+      ),
+      [],
+      ...para(
+        `Then ↻ rerank can send a short excerpt of each match (about ${EXCERPT} characters) so the model picks the best.`,
+        t.textMuted,
+        w,
+      ),
+      [],
+      ...para("Nothing is written to disk.", t.textMuted, w),
+    ]
+  if (stage !== "asking") return null
+  return [
+    [{ text: truncate(`sent to ${host}`, w), fg: t.textMuted }],
+    [],
+    ...para(`“${v.question}”`, t.text, w),
+    [{ text: `${[...v.question].length} characters · nothing else`, fg: t.textMuted }],
+    [],
+    ...para(
+      "The answers will be sections of your notes, found here; the model never sees them unless you rerank.",
+      t.textMuted,
+      w,
+    ),
+  ]
+}
+
+/** Where an answer landed: its note, its number and why (null and "" before the rerank), the heading it names. */
+export interface Landed {
+  path: string
+  n: number | null
+  why: string
+  /** the heading was renamed: the word was found elsewhere, so the mark is muted */
+  moved: boolean
+  /** outline index of the heading the running head names; -1 the lead-in */
+  heading: number
+}
+
+/** The ghost line's note after landing: `¹ <why> · ^p answers`, or `^p matches` before the rerank. */
+export function landedSpans(t: Theme, l: Landed): Span[] {
+  const back: Span[] = [
+    { text: "^p", fg: t.text },
+    { text: l.n === null ? " matches" : " answers", fg: t.textMuted },
+  ]
+  if (l.n === null) return back
+  const why: Span[] = l.why ? [{ text: ` ${safeLine(l.why)} ·`, fg: t.textMuted }] : []
+  return [{ text: markText(l.n), fg: l.moved ? t.textMuted : t.primary }, ...why, { text: " " }, ...back]
 }
 
 /** `tab` in ask mode: from an answer to the next action row, else to the next section (wrapping). */
@@ -384,6 +583,6 @@ export function askTitleNote(v: {
   if (v.off) return undefined
   if (v.indexing) return v.indexing
   const p = v.state?.phase
-  if (v.state?.model && (p === "result" || p === "reranking" || p === "reranked")) return shortModel(v.state.model)
+  if (v.state?.model && p !== "error") return shortModel(v.state.model)
   return v.notes
 }

@@ -97,6 +97,7 @@ function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }:
       query: "",
       matchLine: null,
       labels: null,
+      lastAsk: null,
       prompt: null,
       switcher: null,
       opener: null,

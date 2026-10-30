@@ -1,7 +1,7 @@
 // The app's store: the one mutable UI object every handler reads at call time, its parts, the AI jobs the `jobs` ref
 // holds and the app's tunables. No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
 
-import type { AskState, Candidate } from "../ai/ask"
+import type { AskState, Candidate, Landed } from "../ai/ask"
 import { type Glosses, loadSummaries, type Summaries } from "../ai/cache"
 import type { AIConfig } from "../ai/config"
 import type { Change, DeltaNote } from "../ai/delta"
@@ -150,8 +150,12 @@ export interface UI {
   zenCfg: ZenConfig
   /** zen settings popup open: what to restore on esc */
   zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
-  /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
-  switcher: { q: string; hl: number; top: number; ask?: AskState } | null
+  /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked; `fresh`: reopened, the first key typed replaces the query */
+  switcher: { q: string; hl: number; top: number; ask?: AskState; fresh?: boolean } | null
+  /** the question an answer was last opened from, with its answers and that answer's ordinal: `C-p` reopens it (this session) */
+  lastAsk: { q: string; state: AskState; at: number } | null
+  /** an ask answer just opened: its mark after the heading, the head's section, the ghost line's note; dropped by any move, `esc`, `C-p` */
+  landed: Landed | null
   /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */
   opener: { q: string; hl: number; top: number; list: ProjectEntry[] } | null
   /** notes the document had focus with, newest first (this run only) */
@@ -261,6 +265,8 @@ export function initUI(
     zenOrig: null,
     zenRow: 0,
     switcher: null,
+    landed: null,
+    lastAsk: null,
     opener: null,
     recent: openPath ? [openPath] : [],
     history: startHistory(openPath),

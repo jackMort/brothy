@@ -2,7 +2,15 @@
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
 // Its steps, one per area, live in derive/steps.ts.
 import { existsSync } from "node:fs"
-import { type AskState, askCandidates, askRows, type Candidate, rerankCost } from "../ai/ask"
+import {
+  type AskState,
+  type AskTarget,
+  type AskView,
+  askCandidates,
+  askRows,
+  type Candidate,
+  rerankCost,
+} from "../ai/ask"
 import { textHash } from "../ai/cache"
 import { cleanSummary, noteText } from "../ai/client"
 import { type AIConfig, resolveAI } from "../ai/config"
@@ -232,11 +240,11 @@ function pickerMemo() {
 /** Memo builders for the switcher's ask mode: target, candidates, rerank cost and rows. */
 function askRowsMemo() {
   return {
-    /** where an ask would go: null without an `ai` block, else the host or why not */
-    host: cached((ai: AIConfig | null) => {
+    /** where an ask would go: null without an `ai` block, else the host, model and provider, or why not */
+    host: cached((ai: AIConfig | null): AskTarget => {
       if (!ai) return null
       const r = resolveAI(ai, process.env)
-      return "error" in r ? { error: r.error } : { host: r.host }
+      return "error" in r ? { error: r.error } : { host: r.host, model: r.model, ollama: ai.provider === "ollama" }
     }),
     cands: cached((ix: VaultIndex, tree: FileNode, _ver: number, queries: readonly string[]) =>
       askCandidates(ix, tree, queries),
@@ -244,18 +252,37 @@ function askRowsMemo() {
     cost: cached((question: string, cands: readonly Candidate[], ix: VaultIndex, _ver: number) =>
       rerankCost(question, cands, ix),
     ),
-    ask: cached(
-      (
-        question: string,
-        cut: boolean,
-        target: { host: string } | { error: string } | null,
-        state: AskState | undefined,
-        cands: readonly Candidate[],
-        cost: string,
-        indexing: boolean,
-      ) => askRows({ question, cut, target, state, cands, cost, indexing }),
-    ),
+    ask: cachedAsk(),
   }
+}
+
+/** askRows, built again only when an input changed (`at`: the seconds, notes, width and pane, compared by value). */
+function cachedAsk() {
+  const rows = cached(
+    (
+      question: string,
+      cut: boolean,
+      target: AskTarget,
+      state: AskState | undefined,
+      cands: readonly Candidate[],
+      cost: string,
+      indexing: boolean,
+      secs: number,
+      notes: string,
+      width: number,
+      pane: boolean,
+    ) => askRows({ question, cut, target, state, cands, cost, indexing, secs, notes, width, pane }),
+  )
+  return (
+    question: string,
+    cut: boolean,
+    target: AskTarget,
+    state: AskState | undefined,
+    cands: readonly Candidate[],
+    cost: string,
+    indexing: boolean,
+    at: Pick<AskView, "secs" | "notes" | "width" | "pane">,
+  ) => rows(question, cut, target, state, cands, cost, indexing, at.secs, at.notes, at.width, at.pane)
 }
 
 /** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
@@ -298,7 +325,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
     const files = filesList(s, memo)
     const note = truncationNote(s, L)
     const info = infoPanel(s, L, opened, memo, jobs.current)
-    const switcher = switcherList(s, memo, vault.current.ix)
+    const switcher = switcherList(s, memo, vault.current.ix, dims.current.W, jobs.current)
     const scroll = scrollState(s, L, view, memo, scrolls.current)
     const { scrollKey, geo, maxTop, top, tw } = scroll
     const matches = matchState(s, view, memo, matchSeen)

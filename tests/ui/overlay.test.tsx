@@ -3,7 +3,7 @@ import { testRender } from "@opentui/react/test-utils"
 import { A } from "../../src/lib/spans"
 import type { OpenRow } from "../../src/notes/projects"
 import { type SwitchRow, switchRows } from "../../src/notes/vault"
-import { contrast, themeByName, type themes } from "../../src/theme/theme"
+import { contrast, contrastOn, themeByName, type themes } from "../../src/theme/theme"
 import { filterFamilies, paneLines, sampleView, themeSplit } from "../../src/theme/themepick"
 import { helpLayout } from "../../src/ui/help"
 import {
@@ -287,9 +287,9 @@ describe("Switcher", () => {
     }
   })
 
-  test("Switcher in Ask mode: title, answers with hits on the right, action rows, muted notes never filled", async () => {
+  test("Switcher in Ask mode: title, matches with the word on the right, action rows, muted notes never filled", async () => {
     const rows: SwitchRow[] = [
-      { kind: "header", title: "Answers", count: "2" },
+      { kind: "header", title: "Matches", count: "2" },
       {
         kind: "answer",
         path: "/v/g.md",
@@ -301,7 +301,7 @@ describe("Switcher", () => {
         id: "/v/g.md#open a single file#0",
         query: "single file",
         hits: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
-        right: "3/5",
+        right: "single file",
       },
       {
         kind: "answer",
@@ -314,10 +314,10 @@ describe("Switcher", () => {
         id: "/v/r.md##0",
         query: "path",
         hits: [],
-        right: "1/5",
+        right: "path",
       },
       { kind: "askAction", act: "rerank", text: "↻ rerank with excerpts", note: " · ~1.3k tokens" },
-      { kind: "askNote", text: "searched: open file · path" },
+      { kind: "askNote", text: "open file · path", tone: "text", lead: "searched: " },
     ]
     setup = quietAct(
       await testRender(
@@ -344,11 +344,11 @@ describe("Switcher", () => {
     for (const s of [
       "Ask",
       "claude-haiku-5-5",
-      "Answers",
+      "Matches",
       "getting-started › Open a single file",
-      "3/5",
+      "single file",
       "README",
-      "1/5",
+      "path",
       "↻ rerank with excerpts · ~1.3k tokens",
       "searched: open file · path",
     ])
@@ -359,6 +359,57 @@ describe("Switcher", () => {
     expect(
       rowText(setup, "Open a single file").spans.some((sp) => sp.text.includes("single") && hex(sp.fg) === t.primary),
     ).toBe(true)
+  })
+
+  test("Switcher in Ask mode: answer marks sit in the padding, the text column stays; footnotes under a rule", async () => {
+    const answer = (n: number | undefined, name: string, text: string, right: string): SwitchRow => ({
+      kind: "answer",
+      path: `/v/${name}.md`,
+      name,
+      heading: 0,
+      text,
+      key: text.toLowerCase(),
+      ord: 0,
+      id: `/v/${name}.md#${text}#0`,
+      query: "simmer",
+      hits: [],
+      right,
+      ...(n ? { n } : {}),
+    })
+    const rows: SwitchRow[] = [
+      { kind: "header", title: "Answers", count: "2", right: "llama3.2" },
+      answer(1, "stock", "How long to simmer", ""),
+      answer(2, "pho", "Simmer the bones", ""),
+      { kind: "rule" },
+      { kind: "footnote", n: 1, text: "chicken, beef and fish times" },
+      { kind: "footnote", n: 2, text: "six hours for beef bones" },
+      { kind: "header", title: "Other matches", count: "1" },
+      answer(undefined, "stock", "Slow broth", "broth"),
+      { kind: "askWait", text: "asking llama3.2 · 3 s" },
+    ]
+    setup = quietAct(
+      await testRender(<Switcher t={t} W={80} H={24} title="Ask" q="?how" rows={rows} hl={1} top={0} height={10} />, {
+        width: 80,
+        height: 24,
+      }),
+    )
+    await setup.renderOnce()
+    const lines = setup.captureCharFrame().split("\n")
+    const at = (s: string) => lines.find((l) => l.includes(s))!
+    const col = (s: string) => at(s).indexOf(s)
+    // marked and unmarked rows start their text in one column; the mark is two to the left
+    expect(col("stock › How long")).toBe(col("stock › Slow broth"))
+    expect(col("pho › Simmer")).toBe(col("stock › Slow broth"))
+    expect(at("pho › Simmer")[col("pho › Simmer") - 2]).toBe("²")
+    expect(col("chicken, beef")).toBe(col("stock › Slow broth"))
+    expect(at("chicken, beef")[col("chicken, beef") - 2]).toBe("¹")
+    expect(col("────────────────")).toBe(col("stock › Slow broth"))
+    expect(at("Answers")).toContain("llama3.2")
+    expect(at("▍ asking llama3.2 · 3 s")).toBeDefined()
+    // the highlighted answer's mark takes the row's colour, the others stay primary
+    const fgOn = contrastOn(t.primary)
+    expect(hex(rowText(setup, "How long").spans.find((sp) => sp.text.includes("¹"))!.fg)).toBe(fgOn)
+    expect(hex(rowText(setup, "Simmer the").spans.find((sp) => sp.text.includes("²"))!.fg)).toBe(t.primary)
   })
 
   test("Switcher in Ask mode: an error row leads with ✗ in the error color", async () => {
