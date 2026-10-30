@@ -85,14 +85,16 @@ test("no TL;DR block when AI is off, even with a cached summary", async () => {
   expect(head(f)).not.toContain("a*")
 })
 
-test("the a summarize footer hint shows only when an ai block is configured", async () => {
+test("the a summarize footer hint shows only when an ai block is configured, in Info and the document", async () => {
   const d = tmp({ "a.md": "# A\n\nText.\n" })
   let s = await mount(d, "a.md", { size: { width: 160, height: 30 } })
   expect(await keys(s, "3")).not.toContain("summarize")
+  expect(hints(await keys(s, "tab"))).not.toContain("summarize")
   s.renderer.destroy()
   aiConfig(OLLAMA)
   s = await mount(d, "a.md", { size: { width: 160, height: 30 } })
   expect(hints(await keys(s, "3"))).toContain("a summarize")
+  expect(hints(await keys(s, "tab"))).toContain("a summarize")
 })
 
 test("r re-reads the ai block: the a hint appears after adding and goes after removal", async () => {
@@ -165,6 +167,7 @@ test("regenerating keeps the old summary dimmed under the caret until the first 
   expect(f).toContain("* ▍")
   expect(f).toContain("  Old summary.")
   expect(hex(spansOf(s).find((sp) => sp.text.includes("Old summary."))!.fg)).toBe(DIMMED)
+  expect(hints(f)).toContain("a cancel")
   ai.send(0, "Fresh one.")
   ai.end(0)
   await waitFrame(s, (fr) => fr.includes("TL;DR · llama3.2") && fr.includes("* Fresh one.") && !fr.includes("Old"))
@@ -280,9 +283,11 @@ test("a 62-word TL;DR shows whole; a longer one stops at 14 rows, and ⏎ on its
   f = await keys(s, "3")
   expect(ruleRow(f)).toEndWith("⏎ more · llama3.2")
   expect(f).not.toContain("w119")
+  expect(hints(f, 32)).toStartWith(" ↑↓ move   ⏎ more   a summarize")
   f = await keys(s, "enter")
   expect(f).toContain("w119") // the list follows the cursor down to the rule
   expect(ruleRow(f)).toEndWith("⏎ less · llama3.2")
+  expect(hints(f, 32)).toContain("⏎ less")
   f = await keys(s, "enter")
   expect(f).not.toContain("w119")
   expect(ruleRow(f)).toEndWith("⏎ more · llama3.2")
@@ -338,6 +343,7 @@ test("a failure stays in the block with a retry until a, another note or an edit
   let f = await waitFrame(s, (fr) => fr.includes("* ✗ model overloaded"))
   expect(ruleRow(f)).toEndWith("a retry")
   expect(f).toContain("AI: model overloaded")
+  expect(hints(f)).toContain("a retry")
   expect(head(f)).not.toContain("a*")
   // a retries: the error goes at once
   f = await keys(s, "a")
@@ -398,6 +404,20 @@ test("a TL;DR that lands out of sight says so: Info hidden, or another note open
   ai.end(0)
   const f = await waitFrame(s, (fr) => ruleRow(fr).endsWith("TL;DR · llama3.2"))
   expect(f).not.toContain("TL;DR ready")
+})
+
+test("the document footer offers a until the TL;DR is fresh, cancel while it runs", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": "# A\n\nApples.\n" })
+  const { s, ai } = await mountAI(d, "a.md", { size: { width: 160, height: 30 } })
+  expect(hints(await keys(s, "3", "tab"))).toContain("a summarize")
+  await keys(s, "a")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(hints(await keys(s, "tab"))).toContain("a cancel")
+  ai.send(0, "Apples.")
+  ai.end(0)
+  await waitFrame(s, (f) => ruleRow(f).endsWith("TL;DR · llama3.2"))
+  expect(hints(await keys(s, "3", "tab"))).not.toMatch(/ a (summarize|cancel)/)
 })
 
 test("the head's * shows a fresh TL;DR, not in zen; transparent draws the block the same", async () => {

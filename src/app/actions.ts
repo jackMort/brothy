@@ -274,6 +274,7 @@ function makeGlobalActions(
     histBack: () => links.histMove(-1),
     histForward: () => links.histMove(1),
     summarize: aiJobs.summarizeNote,
+    summarizeHint: aiJobs.summarizeNote, // hint only: no keys of its own
     explainChange: aiJobs.explainChange,
     quit: () => {
       workspace.leave()

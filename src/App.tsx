@@ -9,7 +9,7 @@ import { makeCtx, type Timers, type WelcomeState } from "./app/ctx"
 import { docBox, miniBox } from "./app/Document"
 import { type Derived, makeDerive, makeMemo } from "./app/derive"
 import { useAppEffects, useRenderEffects } from "./app/effects"
-import { type FooterState, footerHints, PINNED } from "./app/keymap"
+import { type FooterState, footerHints, type KeyId, PINNED } from "./app/keymap"
 import { makeLinks } from "./app/links"
 import {
   findOverlay,
@@ -34,6 +34,7 @@ import { surface } from "./theme/theme"
 import { INK_STEPS } from "./ui/chrome"
 import { DRAWER_BELOW } from "./ui/layout"
 import { usePointer } from "./ui/overlay"
+import { tldrHead, tldrWord } from "./ui/panel"
 import { fadeStep, GHOST_STEPS, tooSmall } from "./ui/status"
 import { STILL_TICK } from "./ui/welcome"
 
@@ -133,7 +134,7 @@ export function App({
   const ghostEl = ghostLine(ctx, d, {
     ctx: ctxNow,
     pinned: PINNED.includes(ctxNow),
-    hints: (c) => footerHints(c, footer),
+    hints: (c) => footerHints(c, footer, footerWords(d)),
   })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo: popups.helpGo })
@@ -214,14 +215,24 @@ function useDrawerCrossing(s: UI, W: number) {
 }
 
 /** What the footer hints wait for. */
-function footerState({ s, cv }: Derived): FooterState {
+function footerState({ s, cv, sv }: Derived): FooterState {
   return {
     query: !!s.query,
     preview: !s.source,
     disk: s.openPath !== STDIN,
     ai: !!s.ai,
     changes: !!s.ai && !!cv && cv.state !== "result",
+    tldr: !!sv && tldrHead(sv) !== "fresh",
   }
+}
+
+/** The footer words that follow the TL;DR: what `a` does now, and `↑↓ move  ⏎ more|less` on its stop in Info. */
+function footerWords({ sv, infoRows, linkRows, infoCur }: Derived): Partial<Record<KeyId, string>> {
+  if (!sv) return {}
+  const word = tldrWord(sv)
+  const words: Partial<Record<KeyId, string>> = { summarize: word, summarizeHint: word }
+  if (infoRows[linkRows[infoCur] ?? -1]?.kind !== "frule") return words
+  return { ...words, infoMove: "move", infoOpen: sv.open ? "less" : "more" }
 }
 
 /** The parts both screens draw, built every render. */
