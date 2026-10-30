@@ -120,7 +120,7 @@ until then every link looks unresolved).
 **AI** — opt-in, only on a key press, local models first ([details](#ai), [what is sent](SECURITY.md))
 - `a` TL;DR of the note, streamed into Info and cached
 - `a` in zen: a one- or two-sentence gloss of the section you are reading (`explain`, `simplify` or `translate:<tag>`)
-- `D` explains what changed on disk since you opened the note; `⏎` lands on a changed section with its note, `[` `]` walk the changes
+- `D` explains what changed on disk since you opened the note; `⏎` lands on a changed section with its note, `[` `]` walk the changes; `⏎` on the Changed label shows the diff
 - `?` in `ctrl+p` asks your vault a question: the model proposes search terms, brothy finds the sections itself
 - Ollama, LM Studio, OpenAI, OpenRouter, Anthropic, Gemini or any OpenAI-compatible endpoint; keys from the environment only
 
@@ -271,7 +271,7 @@ until then every link looks unresolved).
 | `[` `]` | previous · next heading (zen: section; landed on a change: the previous · next change) |
 | `n` `N` | next · previous match |
 | `f` | label the links on screen; type a label to open the note (and jump to its heading) · `esc` cancels |
-| `⏎` | open, expand or jump (Info: open the link, go to the changed section, or open `+ n more sections`; `j` `k` move between them) |
+| `⏎` | open, expand or jump (Info: open the link, go to the changed section, open the Proof sheet from the `Changed` label, or open `+ n more sections`; `j` `k` move between them) |
 | `ctrl+b` | hide / show the panel (a drawer below 100 columns) |
 | `esc` | per context: clear find / filter · hide a change's footnote · hide the zen gloss · leave zen · close the drawer |
 | `t` | theme picker (type to filter, `↑↓` family, `←` `→` / `tab` dark · light, `⏎` apply and save, a click on a specimen applies it, `esc` close) |
@@ -345,7 +345,10 @@ the changed hunks: while the model works Info shows `▍ asking <model> · 3 s` 
 will go, then one or two sentences about the change and a few words under each section, and
 the numbers turn muted. `⏎` on a changed section goes there (to the changed line when the reply
 quoted one, with the number beside it) and shows its note in a footnote under a short rule,
-`¹ of 3 · ] next`; `[` `]` walk the changes and `esc` hides it. Below 100 columns `D` goes
+`¹ of 3 · ] next`; `[` `]` walk the changes and `esc` hides it. `⏎` on the `Changed` label
+opens the Proof sheet: every changed section with its real lines (`−` removed, `+` added, one
+line of context, long lines cut around the change), the summary and the notes shown once explained;
+`↑` `↓` move between sections, `⏎` goes to one, `D` explains in place and `esc` closes. Below 100 columns `D` goes
 straight to the first change and the explanation arrives in its footnote; with the panel hidden
 and room in the right margin (155 columns, 147 without the minimap) the notes sit beside their
 headings instead. A failure stays in the block (`✗ …`, `D retry`). Once explained, the

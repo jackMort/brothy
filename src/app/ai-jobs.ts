@@ -436,7 +436,8 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs, { jumpChange }: Pick<Links, "j
   const dropDelta = () => {
     const s = ui.current
     if (s.delta) cancelJob(jobKey("delta", s.delta.path))
-    if (s.baseline || s.delta || s.landing) set({ baseline: null, delta: null, changesOpen: false, landing: null })
+    if (s.baseline || s.delta || s.landing || s.proof)
+      set({ baseline: null, delta: null, changesOpen: false, landing: null, proof: null })
   }
 
   /** Where `D` shows its explanation: Info; below 100 columns, where Info is a drawer over the note, the first change's footnote. */
@@ -455,8 +456,11 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs, { jumpChange }: Pick<Links, "j
     return true
   }
 
-  /** `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. */
-  const explainChange = () => {
+  /**
+   * `D`: explain the open note's changes since its baseline; a running explanation is cancelled instead. `show`: take the
+   * reader to where it appears (Info, or the first change's footnote); the Proof sheet shows it in place.
+   */
+  const explainChange = (show: boolean) => {
     const ai = reloadAI()
     const d = derive()
     const path = d.s.openPath
@@ -468,11 +472,11 @@ function makeReloadExplain(c: AppCtx, jobs: Jobs, { jumpChange }: Pick<Links, "j
     if (!path || !base || !d.changes.length) return flash(`no changes since ${hhmm(base?.at ?? Date.now())}`)
     const target = aiGate(ai)
     if (!target) return
-    showDelta(d)
+    if (show) showDelta(d)
     startDelta({ path, changes: d.changes, text: d.after, props: d.propsKey, since: base.at, title: d.title, target })
   }
 
-  return { dropDelta, explainChange }
+  return { dropDelta, explainChange: () => explainChange(true), explainInSheet: () => explainChange(false) }
 }
 
 /** The TL;DR, zen gloss and reload-explain requests: start, stream, cache, cancel. */

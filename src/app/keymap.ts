@@ -21,6 +21,7 @@ export type Mode =
   | "label"
   | "switch"
   | "open"
+  | "proof"
 /** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change). */
 export type Ctx =
   | "doc"
@@ -35,6 +36,7 @@ export type Ctx =
   | "label"
   | "switch"
   | "open"
+  | "proof"
 /** One binding: its keys, how help and the footer show it. */
 export interface KeyDef {
   modes: readonly Mode[]
@@ -269,7 +271,7 @@ const KEYMAP = {
     modes: ["info"],
     keys: ["return", "enter"],
     label: "⏎",
-    desc: "Info: open the link · jump to the change",
+    desc: "Info: open the link · jump to the change · the Changed label opens the Proof sheet",
     hint: "open",
   },
 
@@ -363,6 +365,15 @@ const KEYMAP = {
   opOpen: { modes: ["open"], keys: ["return", "enter"], label: "⏎", hint: "open" },
   opClose: { modes: ["open"], keys: ["escape"], label: "esc", hint: "close" },
   opErase: { modes: ["open"], keys: ["backspace"], label: "⌫" },
+  proofMove: {
+    modes: ["proof"],
+    keys: ["down", "up", "j", "k", "tab", "pagedown", "pageup", "C-n", "C-p"],
+    label: "↑↓",
+    hint: "section",
+  },
+  proofGo: { modes: ["proof"], keys: ["return", "enter"], label: "⏎", hint: "go to" },
+  proofExplain: { modes: ["proof"], keys: ["S-d"], label: "D", hint: "explain", when: "changes" },
+  proofClose: { modes: ["proof"], keys: ["escape"], label: "esc", hint: "close" },
   labelType: { modes: ["label"], keys: [], label: "a–z", desc: "Links: type a label", hint: "follow" },
   labelErase: { modes: ["label"], keys: ["backspace"], label: "⌫", hint: "erase" },
   labelCancel: { modes: ["label"], keys: ["escape"], label: "esc", hint: "cancel" },
@@ -432,6 +443,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
   label: ["labelType", "labelErase", "labelCancel"],
   switch: ["swType", "swMove", "swSection", "swOpen", "swAskHint", "swClose"],
   open: ["opType", "opMove", "opComplete", "opOpen", "opClose"],
+  proof: ["proofMove", "proofGo", "proofExplain", "proofClose"],
 }
 
 /** The switcher's footer while the query is a question, by what the ask shows (`askStage`). */
@@ -450,7 +462,17 @@ const ASK_FOOTERS: Record<AskStage, Hint[]> = {
 }
 
 /** Contexts whose hints stay at full colour instead of fading: the popups and typing. */
-export const PINNED: readonly Ctx[] = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"]
+export const PINNED: readonly Ctx[] = [
+  "prompt",
+  "theme",
+  "zenSettings",
+  "help",
+  "filter",
+  "label",
+  "switch",
+  "open",
+  "proof",
+]
 
 /**
  * Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. `words` are the

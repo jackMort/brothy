@@ -100,7 +100,7 @@ export type InfoItem =
   | { kind: "blank" }
   | { kind: "foot"; mark: string | null; markStale: boolean; text: string; tone: FootTone; hang?: number }
   | { kind: "frule"; tail: Tail | null; stop: boolean }
-  | { kind: "changes"; since: string; model: string | null; right: Tail | null }
+  | { kind: "changes"; since: string; model: string | null; right: Tail | null; stop: boolean }
   | {
       kind: "change"
       n: number
@@ -290,12 +290,12 @@ export function tldrWord(sv: SummaryView): string {
 export const MAX_CHANGE_ROWS = 8
 export const MAX_CHANGE_ROWS_OPEN = 60
 /** Rows of the explanation's summary and of each change's note (Earlier keeps fewer of each). */
-const CHANGE_SUMMARY_ROWS = 5
-const CHANGE_NOTE_ROWS = 2
+export const CHANGE_SUMMARY_ROWS = 5
+export const CHANGE_NOTE_ROWS = 2
 const EARLIER_SUMMARY_ROWS = 2
 const EARLIER_NOTE_ROWS = 1
 /** Rows the error and the too-large notice take at most. */
-const CHANGE_MSG_ROWS = 2
+export const CHANGE_MSG_ROWS = 2
 const LARGE = "too many lines changed to compare; nothing to explain"
 export type ChangeState = "idle" | "loading" | "result" | "error" | "large"
 /** A finished explanation: since when its changes were listed (HH:MM), the model's display name, the reply and its changes. */
@@ -428,7 +428,7 @@ function currentRows(cv: ChangeView, changes: readonly Change[], title: string, 
 }
 
 /**
- * The `Changed` block (`SPEC-delta.md` §3): the label with `D`'s word at its right end; the waiting row, the summary or
+ * The `Changed` block (`SPEC-delta.md` §3): the label (a stop that opens the Proof sheet) with `D`'s word at its right end; the waiting row, the summary or
  * the error; a numbered row per change with its note once explained, `+ n more` past MAX_CHANGE_ROWS; then Earlier.
  */
 export function changeItems(cv: ChangeView, title: string, cols: number): InfoItem[] {
@@ -437,6 +437,7 @@ export function changeItems(cv: ChangeView, title: string, cols: number): InfoIt
     since: cv.since,
     model: cv.state === "result" ? cv.model : null,
     right: changeKey(cv),
+    stop: !!cv.changes?.length,
   }
   const out = [label, ...(cv.changes ? currentRows(cv, cv.changes, title, cols) : largeRows(cols))]
   const first = (cv.changes?.length ?? 0) + 1

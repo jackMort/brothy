@@ -24,6 +24,7 @@ import {
 import { chip, groupColor, keycaps } from "./chrome"
 import { BODY_PAD, innerWidth, PANE_PAD, POPUP_INSET, popupWidth, ROW_PAD, ZEN_POPUP_W } from "./geometry"
 import type { HelpLayout, HelpLine } from "./help"
+import { blockAt, type ProofRow, proofSpans } from "./proof"
 import {
   artSpans,
   hitSpans,
@@ -456,6 +457,66 @@ export function Switcher({
       ) : (
         list
       )}
+    </Overlay>
+  )
+}
+
+/**
+ * `D`'s Proof sheet: the changed sections with their diff lines, `rows` from `top`; the block `hl` has the cursor bar.
+ * Hover and clicks act on the block under the pointer; controlled by App.
+ */
+export function ProofSheet({
+  t,
+  W,
+  H,
+  width,
+  note,
+  rows,
+  hl,
+  top,
+  height,
+  room,
+  markW,
+  onClose,
+  onScroll,
+  onHover,
+  onActivate,
+}: Pick<PopupListProps, "t" | "W" | "H" | "onClose" | "onScroll"> & {
+  width: number
+  /** right of the title: since when, and how many sections */
+  note: string
+  rows: ProofRow[]
+  hl: number
+  top: number
+  height: number
+  /** columns per row, and the mark column's */
+  room: number
+  markW: number
+  /** the pointer moved onto change `at`'s row */
+  onHover?: (at: number) => void
+  /** change `at`'s row was left-clicked */
+  onActivate?: (at: number) => void
+}) {
+  const pointer = usePointer()
+  return (
+    <Overlay t={t} W={W} H={H} width={width} title="What changed" note={note} onClose={onClose} onScroll={onScroll}>
+      <box key="proof-list" style={{ flexDirection: "column", paddingLeft: 4, paddingRight: 4, height }}>
+        {rows.slice(top, top + height).map((r, j) => {
+          const at = blockAt(rows, top + j)
+          return (
+            <box
+              key={j}
+              onMouseOver={(e: MouseEvent) => at !== null && pointer.moved(e) && onHover?.(at)}
+              onMouseDown={(e: MouseEvent) => {
+                if (e.button === MouseButton.LEFT && at !== null) onActivate?.(at)
+              }}
+              style={{ height: 1, flexShrink: 0 }}
+            >
+              <Line spans={proofSpans(r, t, { room, markW, sel: at === hl })} />
+            </box>
+          )
+        })}
+      </box>
     </Overlay>
   )
 }

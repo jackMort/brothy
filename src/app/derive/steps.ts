@@ -7,7 +7,7 @@ import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
 import type { Change, ChangeMark, DeltaNote } from "../../ai/delta"
 import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
-import { plural, wrap } from "../../lib/text"
+import { clamp, plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
 import { folderCounts, SCAN_LIMIT } from "../../notes/files"
 import { switchSplit } from "../../notes/peek"
@@ -16,11 +16,12 @@ import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/v
 import { projectRoot } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
 import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../../ui/footnote"
-import { ROW_PAD } from "../../ui/geometry"
+import { BODY_PAD, innerWidth, ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
 import { MINI_W } from "../../ui/minimap"
 import { relocate, remapTop } from "../../ui/nav"
 import type { ChangeState, ChangeView, SummaryView } from "../../ui/panel"
+import { proofHeight, proofMarkW, proofTop, proofWidth } from "../../ui/proof"
 import { noteTitle } from "../../ui/status"
 import { pageSlice, sectionAt, typewriterTop } from "../../ui/zen"
 import type { DeriveRefs, Memo, ScrollEntry } from "../derive"
@@ -213,6 +214,21 @@ export function landingView(
     row: note?.quote ? memo.landRow(doc, c, note.quote) : null,
     ...landWait(note, jobs.get(jobKey("delta", l.path))),
   }
+}
+
+/**
+ * The Proof sheet on screen (`ui.proof`): its rows at the sheet's width, the highlighted change and the first row shown.
+ * Null while it is closed or the list is gone (too large, or no change left).
+ */
+export function proofSheet(s: UI, W: number, H: number, cv: ChangeView | null, title: string, memo: Memo) {
+  if (!s.proof || !cv?.changes?.length) return null
+  const changes = cv.changes
+  const width = proofWidth(W)
+  const room = innerWidth(width) - BODY_PAD
+  const height = proofHeight(H)
+  const rows = memo.proof(cv, title, room)
+  const hl = clamp(s.proof.hl, 0, changes.length - 1)
+  return { rows, width, room, height, hl, top: proofTop(rows, hl, s.proof.top, height), markW: proofMarkW(changes) }
 }
 
 /**

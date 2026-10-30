@@ -296,7 +296,7 @@ test("help lists D in the AI group; the Info footer shows D explain only with ch
   await waitFrame(s, (f) => f.includes("D explains"), 4000)
   await withClock(new Date(Date.now() + 10_000), async () => {
     // past the toast, so the hints get the whole line; on a change row: ↑↓ changes  ⏎ go to
-    const foot = (await keys(s, "tab", "3")).split("\n")[38]!
+    const foot = (await keys(s, "tab", "3", "j")).split("\n")[38]!
     expect(foot).toContain("D explain")
     expect(foot).toContain("↑↓ changes")
     expect(foot).toContain("⏎ go to")
@@ -313,8 +313,8 @@ test("⏎ on a change row jumps to its heading; removed rows are skipped", async
   )
   await waitFrame(s, (f) => f.includes("³ sections changed"), 4000)
   await keys(s, "3")
-  // rows: ~ One (stop), − Two (not a stop), ~ Three (stop): j goes from One straight to Three
-  const f = await keys(s, "j", "enter")
+  // stops: the label, One, Three (Two is removed, not a stop): from the label j j goes to Three
+  const f = await keys(s, "j", "j", "enter")
   expect(bodyRows(f).split("\n")[0]).toContain("Three")
 })
 
@@ -329,10 +329,10 @@ test("⏎ after D lands on the quoted line", async () => {
   ai.send(0, 'One line changed.\n§1: row forty reworded | "row 40 changed now"\n')
   ai.end(0)
   await waitFrame(s, (f) => f.includes("row forty reworded"))
-  const f = await keys(s, "enter")
+  const f = await keys(s, "j", "enter")
   expect(bodyRows(f).split("\n").slice(0, 3).join("\n")).toContain("row 40 changed now")
   // Source: the same row by its raw text
-  const src = await keys(s, "s", "3", "enter")
+  const src = await keys(s, "s", "3", "j", "enter")
   expect(bodyRows(src).split("\n").slice(0, 3).join("\n")).toContain("row 40 changed now")
 })
 
@@ -347,7 +347,7 @@ test("jump finds the heading again when it moved", async () => {
   // mid-request a new section lands above: Three's outline index shifts by one
   writeFileSync(join(d, "a.md"), LONG.replace("## One", "## Zero\n\nz\n\n## One").replace("third", "third!"))
   await waitFrame(s, (f) => f.includes("Zero"), 4000)
-  const f = await keys(s, "3", "enter") // loading rows: the sent list, one stop (Three)
+  const f = await keys(s, "3", "j", "enter") // loading rows: the sent list, one stop (Three)
   expect(bodyRows(f).split("\n")[0]).toContain("Three")
 })
 
@@ -502,7 +502,7 @@ test("⏎ on a change lands: the footnote under a rule, the quoted line marked; 
   ai.send(0, 'Sum.\n§1: one line reworded | "the new line here"\n§3: three shouts\n')
   ai.end(0)
   await waitFrame(s, (f) => /Changed since \d\d:\d\d · llama3.2/.test(f))
-  let f = await keys(s, "enter")
+  let f = await keys(s, "j", "enter")
   expect(footOf(f)).toEqual({
     rule: "────────────────                                                 ¹ of 4 · ] next",
     note: "¹ one line reworded",
@@ -535,12 +535,12 @@ test("a landing goes with another note and with zen; a search query clears befor
   const s = await mount(d, "a.md", { size: W120 })
   writeFileSync(join(d, "a.md"), WALK_EDIT)
   await waitFrame(s, (f) => f.includes("reloaded"), 4000)
-  expect(footOf(await keys(s, "3", "enter"))?.note).toBe("¹ edited · +1 −1") // AI off: the counts
+  expect(footOf(await keys(s, "3", "j", "enter"))?.note).toBe("¹ edited · +1 −1") // AI off: the counts
   expect(footOf(await keys(s, "/", "type:three", "enter", "esc"))).not.toBeNull()
   expect(footOf(await keys(s, "esc"))).toBeNull()
-  await keys(s, "3", "enter")
+  await keys(s, "3", "j", "enter")
   expect(footOf(await keys(s, "z", "z"))).toBeNull()
-  await keys(s, "3", "enter")
+  await keys(s, "3", "j", "enter")
   await openNote(s, "b")
   await openNote(s, "a")
   expect(footOf(await keys(s))).toBeNull()
@@ -601,7 +601,7 @@ test("sidenotes where the margin fits (panel hidden): Δ on the first row, notes
     ),
   )
   // ⏎ on a change lands without a footnote: the margin carries the notes
-  f = await keys(s, "3", "enter", "C-b")
+  f = await keys(s, "3", "j", "enter", "C-b")
   expect(f.split("\n").some((r) => /─{16} {2,}¹ of 4/.test(r))).toBe(false)
   const two = f.split("\n").findIndex((r) => r.slice(0, 40).trim() === "²")
   expect(f.split("\n")[two]!.slice(123, 153).trim()).toBe("² two went away")
@@ -641,7 +641,7 @@ test("before an explanation a landing at margin widths still gets its footnote",
   const s = await mount(d, "a.md", { size: { width: 160, height: 40 } })
   writeFileSync(join(d, "a.md"), WALK_EDIT)
   await waitFrame(s, (f) => f.includes("reloaded"), 4000)
-  const f = await keys(s, "3", "enter", "C-b")
+  const f = await keys(s, "3", "j", "enter", "C-b")
   expect(footOf(f)).toEqual({
     rule: "────────────────                                                 ¹ of 4 · ] next",
     note: "¹ edited · +1 −1",
@@ -653,7 +653,7 @@ test("a reload whose list no longer has the landing drops it; it does not come b
   const s = await mount(d, "a.md", { size: W120 })
   writeFileSync(join(d, "a.md"), WALK_EDIT)
   await waitFrame(s, (f) => f.includes("reloaded"), 4000)
-  expect(footOf(await keys(s, "3", "enter", "]", "]"))?.note).toBe("⁴ new section · +3")
+  expect(footOf(await keys(s, "3", "j", "enter", "]", "]"))?.note).toBe("⁴ new section · +3")
   // Four is taken out again: three changes left, the landing on ⁴ goes
   writeFileSync(join(d, "a.md"), WALK_EDIT.replace("\n## Four\n\nfour\n", ""))
   await waitFrame(s, (f) => f.includes("³ sections changed"), 4000)

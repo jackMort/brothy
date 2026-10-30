@@ -561,6 +561,13 @@ describe("changeItems", () => {
       "¹ Why another reader?    +2 −1",
     ])
   })
+  test("the label is a stop (it opens the Proof sheet) while there is a list to show, not when too large", () => {
+    const stop = (cv: ChangeView) => (changeItems(cv, "W", 30)[0] as Extract<InfoItem, { kind: "changes" }>).stop
+    expect(stop(idle)).toBe(true)
+    expect(stop({ ...idle, state: "result", summary: "s", model: "m" })).toBe(true)
+    expect(stop({ ...idle, changes: [] })).toBe(false)
+    expect(stop({ ...idle, state: "large", changes: null })).toBe(false)
+  })
   test("too large: the label, then why, in at most 2 rows; no rows", () => {
     expect(changeItems({ ...idle, state: "large", changes: null }, "W", 30).map(rowOf)).toEqual([
       "Changed since 14:02",
