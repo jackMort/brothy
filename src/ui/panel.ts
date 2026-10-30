@@ -290,12 +290,12 @@ export function tldrWord(sv: SummaryView): string {
 export const MAX_CHANGE_ROWS = 8
 export const MAX_CHANGE_ROWS_OPEN = 60
 /** Rows of the explanation's summary and of each change's note (Earlier keeps fewer of each). */
-const CHANGE_SUMMARY_ROWS = 5
-const CHANGE_NOTE_ROWS = 2
+export const CHANGE_SUMMARY_ROWS = 5
+export const CHANGE_NOTE_ROWS = 2
 const EARLIER_SUMMARY_ROWS = 2
 const EARLIER_NOTE_ROWS = 1
 /** Rows the error and the too-large notice take at most. */
-const CHANGE_MSG_ROWS = 2
+export const CHANGE_MSG_ROWS = 2
 const LARGE = "too many lines changed to compare; nothing to explain"
 export type ChangeState = "idle" | "loading" | "result" | "error" | "large"
 /** A finished explanation: since when its changes were listed (HH:MM), the model's display name, the reply and its changes. */
