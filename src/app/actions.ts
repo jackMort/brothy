@@ -264,6 +264,7 @@ function makeGlobalActions(
       }
       // a gloss on screen goes first; it stays hidden until the reading line leaves its section (a fading one falls through)
       if (sheet && sheet.fadeAt === null) return set({ gloss: null })
+      if (s.landed) set({ landed: null })
       if (s.toast?.kind === "error") set({ toast: null })
       if (s.query) set({ query: "", matchLine: null })
       else if (derive().L.zen) zen.toggleZen(false)

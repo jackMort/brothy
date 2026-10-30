@@ -125,6 +125,7 @@ function makeScroll(base: Base) {
   const { ui, set, bump, derive, timers, scrolls, zenBack } = base
   const setTop = (n: number) => {
     zenBack.current = null // an explicit move (keys, find, jump, teleprompter tick) drops the exact restore
+    ui.current.landed = null // and an ask landing's note
     const d = derive()
     scrolls.current.set(d.scrollKey, { top: Math.max(0, Math.min(n, d.maxTop)), geo: d.geo })
     bump((x) => x + 1)

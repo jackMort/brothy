@@ -20,7 +20,7 @@ import {
   type VaultIndex,
 } from "../notes/vault"
 import type { Theme } from "../theme/theme"
-import { MODEL_W, waitText } from "../ui/footnote"
+import { MODEL_W, markText, waitText } from "../ui/footnote"
 import { headingPath } from "../ui/zen"
 import { type ChatReq, cleanReply, cleanSummary, extractJSON, fmtTokens, shortModel, tokens } from "./client"
 
@@ -213,23 +213,32 @@ export function askCandidates(ix: VaultIndex, tree: FileNode, queries: readonly 
   return out.slice(0, MAX_CANDIDATES).map(({ order: _, ...c }) => c)
 }
 
+/** The first source line in [from, to) of `doc` holding `want` (folded), or null. */
+function lineWith(doc: NoteDoc, want: string, from: number, to: number): number | null {
+  for (let l = from; l < to && l < doc.starts.length; l++) {
+    const end = l + 1 < doc.starts.length ? doc.starts[l + 1]! - 1 : doc.lower.length
+    if (doc.lower.slice(doc.starts[l]!, end).includes(want)) return l
+  }
+  return null
+}
+
 /**
- * Where an answer lands in `doc`, the note as it is now: its section found again by key and
- * occurrence, then the first line there holding `query`. null when the heading is gone.
+ * Where an answer lands in `doc`, the note as it is now: its section found again by key and occurrence, then the
+ * first line there holding `query`. With the heading gone (renamed), the first line of the note holding `query`, in
+ * the section above it (`moved`); null when the word is nowhere either.
  */
 export function askLocate(
   doc: NoteDoc,
   a: { heading: number; key: string; ord: number; query: string },
-): { heading: number; line: number | null } | null {
-  const i = a.heading < 0 ? -1 : keysOf(doc).findIndex((x) => x.key === a.key && x.ord === a.ord)
-  if (a.heading >= 0 && i < 0) return null
-  const [from, to] = sectionLines(doc, i)
+): { heading: number; line: number | null; moved: boolean } | null {
   const want = foldSame(a.query.trim())
-  for (let l = from; l < to && l < doc.starts.length; l++) {
-    const end = l + 1 < doc.starts.length ? doc.starts[l + 1]! - 1 : doc.lower.length
-    if (doc.lower.slice(doc.starts[l]!, end).includes(want)) return { heading: i, line: l }
+  const i = a.heading < 0 ? -1 : keysOf(doc).findIndex((x) => x.key === a.key && x.ord === a.ord)
+  if (a.heading >= 0 && i < 0) {
+    const line = lineWith(doc, want, 0, doc.starts.length)
+    return line === null ? null : { heading: headingAt(doc.headings, line) ?? -1, line, moved: true }
   }
-  return { heading: i, line: null }
+  const [from, to] = sectionLines(doc, i)
+  return { heading: i, line: lineWith(doc, want, from, to), moved: false }
 }
 
 // ------------------------------------------------------------- tier 1
@@ -522,6 +531,28 @@ export function askPaneLines(t: Theme, v: AskView, w: number): Span[][] | null {
       w,
     ),
   ]
+}
+
+/** Where an answer landed: its note, its number and why (null and "" before the rerank), the heading it names. */
+export interface Landed {
+  path: string
+  n: number | null
+  why: string
+  /** the heading was renamed: the word was found elsewhere, so the mark is muted */
+  moved: boolean
+  /** outline index of the heading the running head names; -1 the lead-in */
+  heading: number
+}
+
+/** The ghost line's note after landing: `¹ <why> · ^p answers`, or `^p matches` before the rerank. */
+export function landedSpans(t: Theme, l: Landed): Span[] {
+  const back: Span[] = [
+    { text: "^p", fg: t.text },
+    { text: l.n === null ? " matches" : " answers", fg: t.textMuted },
+  ]
+  if (l.n === null) return back
+  const why: Span[] = l.why ? [{ text: ` ${safeLine(l.why)} ·`, fg: t.textMuted }] : []
+  return [{ text: markText(l.n), fg: l.moved ? t.textMuted : t.primary }, ...why, { text: " " }, ...back]
 }
 
 /** `tab` in ask mode: from an answer to the next action row, else to the next section (wrapping). */

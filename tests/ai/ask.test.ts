@@ -13,6 +13,7 @@ import {
   askStage,
   askTitleNote,
   EXCERPT,
+  landedSpans,
   MAX_ASK,
   MAX_CANDIDATES,
   MAX_QUERIES,
@@ -216,9 +217,9 @@ test("ids equal sectionId: the lead-in and a heading whose key is empty stay apa
   expect(new Set(c.map((x) => x.id)).size).toBe(3)
   const doc = v.ix.docs.get("/v/n.md")!
   expect(c.map((x) => askLocate(doc, { ...x, query: "alpha" }))).toEqual([
-    { heading: -1, line: 0 },
-    { heading: 0, line: 4 },
-    { heading: 1, line: 8 },
+    { heading: -1, line: 0, moved: false },
+    { heading: 0, line: 4, moved: false },
+    { heading: 1, line: 8, moved: false },
   ])
   // a rerank keeps each answer once, with its own why
   const ids = c.map((x) => x.id)
@@ -244,20 +245,45 @@ describe("askLocate", () => {
   const c = { heading: 1, key: "usage", ord: 1, query: "CLI" }
   test("the section is found again by key and occurrence, then the first line holding the query", () => {
     const before = indexNote("# Usage\n\nold\n\n# Usage\n\nrun the cli here\n", 1, 1)
-    expect(askLocate(before, c)).toEqual({ heading: 1, line: 6 })
+    expect(askLocate(before, c)).toEqual({ heading: 1, line: 6, moved: false })
     const after = indexNote("# Intro\n\n# Usage\n\nold\n\n# Usage\n\nmore\nrun the cli here\n", 1, 1)
-    expect(askLocate(after, c)).toEqual({ heading: 2, line: 9 })
+    expect(askLocate(after, c)).toEqual({ heading: 2, line: 9, moved: false })
   })
-  test("the heading gone → null; no line with the query → line null; the lead-in stays -1", () => {
+  test("no line with the query → line null; the lead-in stays -1", () => {
     const before = indexNote("# Usage\n\nold\n\n# Usage\n\nrun the cli here\n", 1, 1)
-    expect(askLocate(indexNote("# Usage\n\nonly one\n", 1, 1), c)).toBeNull()
-    expect(askLocate(before, { ...c, query: "absent" })).toEqual({ heading: 1, line: null })
+    expect(askLocate(before, { ...c, query: "absent" })).toEqual({ heading: 1, line: null, moved: false })
     expect(askLocate(indexNote("intro x\n# A\n", 1, 1), { heading: -1, key: "", ord: 0, query: "X" })).toEqual({
       heading: -1,
       line: 0,
+      moved: false,
     })
-    expect(askLocate(before, { heading: -1, key: "", ord: 0, query: "cli" })).toEqual({ heading: -1, line: null })
+    expect(askLocate(before, { heading: -1, key: "", ord: 0, query: "cli" })).toEqual({
+      heading: -1,
+      line: null,
+      moved: false,
+    })
   })
+  test("the heading renamed: the first line holding the word, in the section above it, moved; nowhere → null", () => {
+    const renamed = indexNote("# Usage\n\nold\n\n# Running it\n\nrun the cli here\n", 1, 1)
+    expect(askLocate(renamed, c)).toEqual({ heading: 1, line: 6, moved: true })
+    expect(askLocate(indexNote("cli first\n# Usage\n\nonly one\n", 1, 1), c)).toEqual({
+      heading: -1,
+      line: 0,
+      moved: true,
+    })
+    expect(askLocate(indexNote("# Usage\n\nonly one\n", 1, 1), c)).toBeNull()
+  })
+})
+
+test("landedSpans: the mark, the why and ^p answers; muted when moved; ^p matches before the rerank", () => {
+  const t = brothy
+  const l = { path: "/v/a.md", n: 1, why: "chicken, beef and fish times", moved: false, heading: 2 }
+  const txt = (sp: Span[]) => sp.map((x) => x.text).join("")
+  expect(txt(landedSpans(t, l))).toBe("¹ chicken, beef and fish times · ^p answers")
+  expect(landedSpans(t, l)[0]!.fg).toBe(t.primary)
+  expect(landedSpans(t, { ...l, moved: true })[0]!.fg).toBe(t.textMuted)
+  expect(txt(landedSpans(t, { ...l, why: "" }))).toBe("¹ ^p answers")
+  expect(txt(landedSpans(t, { ...l, n: null, why: "" }))).toBe("^p matches")
 })
 
 describe("rerank", () => {

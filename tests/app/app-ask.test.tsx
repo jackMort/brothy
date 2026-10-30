@@ -6,7 +6,7 @@ import { ASK_PROMPT, RERANK_PROMPT } from "../../src/ai/ask"
 import { GHOST_STEP, HINT_HOLD } from "../../src/ui/status"
 import { aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
 
-const { cacheDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
+const { cacheDir, tmp, mount, openNote, aiConfig, mountAI, writeConfig } = useAppHarness()
 /** Past the startup hints, so the first `?` shows the key hints and the second opens the sheet. */
 const PAST_HINTS = () => new Date(Date.now() + HINT_HOLD + 4 * GHOST_STEP + 10)
 
@@ -354,20 +354,67 @@ test("an answer whose best query is only in the heading opens at the heading, no
   expect(f).not.toContain("/quick start")
 })
 
-test("a heading renamed since indexing: the note opens where it was left and toasts heading gone", async () => {
+test("a heading renamed since indexing: it lands on the word instead, toasts so; the word gone too → heading gone", async () => {
   aiConfig(OLLAMA)
   const ai = aiStub()
   const d = askVault()
   const s = await mount(d, "README.md", { size: W120, fetch: ai.f })
   await askIt(s, ai)
+  const file = join(d, "getting-started.md")
+  writeFileSync(file, readFileSync(file, "utf8").replace("## Open a single file", "## Open one file"))
+  const f = await keys(s, "enter")
+  expect(f).toContain("heading gone · found “single file” instead")
+  expect(f).toContain("Give a single file path to brothy.")
+  expect(f).toContain("/single file 1/1")
+})
+
+test("a heading renamed and its word gone: heading gone, the note where it was left", async () => {
+  aiConfig(OLLAMA)
+  const ai = aiStub()
+  const d = askVault()
+  const s = await mount(d, "README.md", { size: W120, fetch: ai.f })
+  await askIt(s, ai)
+  const file = join(d, "getting-started.md")
   writeFileSync(
-    join(d, "getting-started.md"),
-    readFileSync(join(d, "getting-started.md"), "utf8").replace("## Open a single file", "## Open one file"),
+    file,
+    readFileSync(file, "utf8").replace("## Open a single file", "## Open one").replace("single file path", "path"),
   )
   const f = await keys(s, "enter")
   expect(f).toContain("heading gone")
+  expect(f).not.toContain("found “")
   expect(f).toContain("Getting started")
   expect(f).not.toContain("/single file")
+})
+
+test("landing on a reranked answer: ¹ after the heading, the head names it, the ghost note says why; a move drops both", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await askIt(s, ai)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }] }))
+  ai.end(1)
+  await waitFrame(s, (fr) => fr.includes("Other matches"))
+  let f = await keys(s, "enter")
+  const lines = f.split("\n")
+  expect(lines.find((l) => l.includes("Open a single file¹"))).toBeDefined()
+  expect(lines[0]).toContain("Getting started › Open a single file")
+  expect(lines.at(-3)).toContain("¹ pass the file path · ^p answers")
+  expect(f).toContain("/single file 2/2") // find is untouched by the mark
+  f = await keys(s, "j")
+  expect(f).not.toContain("Open a single file¹")
+  expect(f).not.toContain("^p answers")
+})
+
+test("landing on an unranked match: no mark, the ghost note says ^p matches; esc drops it", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await askIt(s, ai)
+  let f = await keys(s, "enter")
+  expect(f).not.toContain("file¹")
+  expect(f.split("\n").at(-3)).toContain("^p matches")
+  f = await keys(s, "esc")
+  expect(f).not.toContain("^p matches")
 })
 
 test("an answer whose note was deleted opens the read error, with no jump", async () => {
@@ -411,4 +458,21 @@ test("a rerank is sent again after a candidate note's text changed", async () =>
   await keys(s, "tab", "enter")
   await waitFor(s, () => ai.calls.length === 3)
   expect(ai.calls[2]!.body.messages[1]!.content).toContain("or a folder, or stdin")
+})
+
+test("a heading row with no room left (the rules style) carries the landing mark in the gutter, two left of the text", async () => {
+  aiConfig(OLLAMA)
+  writeConfig({ headings: "rules" })
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await askIt(s, ai)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }] }))
+  ai.end(1)
+  await waitFrame(s, (fr) => fr.includes("Other matches"))
+  const lines = (await keys(s, "enter")).split("\n")
+  const row = lines.slice(1).find((l) => l.includes("Open a single file"))!
+  const text = lines.find((l) => l.includes("Give a single file path"))!
+  expect(row).not.toContain("file¹")
+  expect(row[text.indexOf("Give") - 2]).toBe("¹")
 })

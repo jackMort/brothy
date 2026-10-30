@@ -256,32 +256,56 @@ function makeActivate(
     switchTo,
   }: Opening & Pick<ReturnType<typeof makeAsk>, "askStart" | "askRerank"> & { closeSwitcher: () => void },
 ) {
-  const { ui, derive, flash, openFile, focusDoc, setTop } = c
+  const { ui, set, derive, flash, openFile, focusDoc, setTop } = c
+
+  /** Scroll to where `askLocate` found the answer: its line with the find highlight, else its heading; false when the heading is not in the view. */
+  const landAt = (row: AnswerRow, at: { heading: number; line: number | null }, doc: NoteDoc) => {
+    const heading = at.heading < 0 ? null : at.heading
+    if (at.line !== null) {
+      const hit: TextHit = {
+        kind: "text",
+        path: row.path,
+        name: row.name,
+        folder: "",
+        heading,
+        line: at.line,
+        context: "",
+        hits: [],
+      }
+      jumpToText(hit, row.query, doc)
+      return true
+    }
+    if (heading === null) return true
+    const h = derive().view.headings[heading]
+    if (h) setTop(h.line)
+    return !!h
+  }
 
   /**
-   * Open an Ask answer. The note may have changed since it was indexed: its section is found again
-   * by heading key and occurrence, then the first line there holding the answer's query (find
-   * highlights it); with no such line, the heading; with the heading gone, the note as it was left.
+   * Open an Ask answer. The note may have changed since it was indexed: its section is found again by heading key
+   * and occurrence, then the first line there holding the answer's query (find highlights it); with no such line,
+   * the heading; with the heading renamed, the word wherever it is now (a toast says so); with neither, the note as
+   * it was left. A reranked answer leaves its mark after the heading and its why on the ghost line (`ui.landed`).
    */
   const answerTo = (row: AnswerRow) => {
+    const why = answerWhy(row, ui.current.switcher?.ask)
     closeSwitcher()
     openFile(row.path)
     focusDoc()
+    const found = locateAnswer(row)
+    if (!found) return // the read error is on screen
+    const { at, doc } = found
+    if (!at || !landAt(row, at, doc)) return flash("heading gone")
+    if (at.moved) flash(`heading gone · found “${row.query}” instead`)
+    set({ landed: { path: row.path, n: row.n ?? null, why, moved: at.moved, heading: at.heading } })
+  }
+
+  /** The open note indexed as it is now, and where the answer is in it; null when it could not be read. */
+  const locateAnswer = (row: AnswerRow) => {
     const { file } = derive()
-    if (!file || file.error) return // the read error is on screen
+    if (!file || file.error) return null
     const doc = indexNote(file.src, 0, Buffer.byteLength(file.src))
-    const at = askLocate(doc, row)
-    if (!at) return flash("heading gone")
-    const heading = at.heading < 0 ? null : at.heading
-    if (at.line !== null)
-      return jumpToText(
-        { kind: "text", path: row.path, name: row.name, folder: "", heading, line: at.line, context: "", hits: [] },
-        row.query,
-        doc,
-      )
-    if (heading === null) return
-    const h = derive().view.headings[heading]
-    return h ? setTop(h.line) : flash("heading gone")
+    return { doc, at: askLocate(doc, row) }
   }
 
   /** `⏎` or a click on row `i`: in ask mode it asks, or opens an answer; otherwise the hit opens. */
@@ -373,7 +397,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
 
   const openSwitcher = () => {
     ensureLinks()
-    set({ labels: null })
+    set({ labels: null, landed: null })
     swType("")
     indexVault()
   }
@@ -400,9 +424,12 @@ export function hitRows(view: Rendered, source: boolean, row: TextHit) {
 /** What the peek adds for an ask answer: its matched word, and a reranked one's mark and why. */
 function answerPeek(row: SwitchRow | undefined, ask: AskState | undefined) {
   if (row?.kind !== "answer") return {}
-  const why = row.n ? ask?.why?.[row.id] : undefined
+  const why = answerWhy(row, ask)
   return { hit: row.query, ...(row.n && why ? { foot: { n: row.n, why } } : {}) }
 }
+
+/** A reranked answer's why ("" before the rerank or when the model gave none). */
+const answerWhy = (row: AnswerRow, ask: AskState | undefined) => (row.n ? (ask?.why?.[row.id] ?? "") : "")
 
 /** A cached TL;DR for the peek, only while fresh for the note as read. */
 function freshTldr(saved: Summary | undefined, note: { hash: string } | null) {

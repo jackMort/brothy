@@ -2,6 +2,7 @@
 // toast, row H-2) and the progress line (row H-1). Not pure: drawn from the app context; the spans come from status.ts.
 import { basename, dirname, resolve } from "node:path"
 import type { ReactNode } from "react"
+import { landedSpans } from "../ai/ask"
 import type { Span } from "../lib/spans"
 import { spanWidth } from "../lib/text"
 import { fadeSpans } from "../ui/chrome"
@@ -30,6 +31,10 @@ import { Row } from "./Row"
 /** The text column's left edge on screen: the frame, the inline panel and its gap, then the measure's padding. */
 const textLeft = ({ L }: Derived) => 1 + (L.inline ? L.SW + 1 : 0) + L.padL
 
+/** The ask landing's note while its note is open, outside zen. */
+export const landedHere = ({ s, L }: Pick<Derived, "s" | "L">) =>
+  s.landed && s.landed.path === s.openPath && !L.zen ? s.landed : null
+
 /** Row 0's spans: the logo at column 0, the folder over the panel, `Title › section` from the text's left edge, the state cluster at its right edge. */
 function topLine(d: Derived): Span[] {
   const { s, L, t, file, view, top, matches, currentHeading } = d
@@ -46,7 +51,8 @@ function topLine(d: Derived): Span[] {
     // a note reached through a link outside the opened folder is named from its vault's root
     folder: dirname(notePath(s.root, s.linkRoot, s.openPath)),
     title: d.title,
-    trail: headingPath(view.headings, currentHeading),
+    // an ask landing names the answered section until the next move
+    trail: headingPath(view.headings, landedHere(d)?.heading ?? currentHeading),
     query: s.prompt ? "" : s.query,
     matchIdx: d.matchIdx,
     count: matches.length,
@@ -111,7 +117,10 @@ export function ghostLine(
     const st = fadeStep(Date.now() - s.hintAt, HINT_HOLD)
     hintK = st === null ? null : st / (GHOST_STEPS + 1)
   }
-  const toast = toastSpans(t, s.toast, Date.now(), c.W - 2)
+  const toastNow = toastSpans(t, s.toast, Date.now(), c.W - 2)
+  // a toast wins over an ask landing's note; the hints shrink to fit beside either
+  const landed = landedHere(d)
+  const toast = toastNow.length || !landed ? toastNow : landedSpans(t, landed)
   const hinted =
     hintK === null
       ? []

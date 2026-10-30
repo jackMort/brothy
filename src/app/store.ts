@@ -1,7 +1,7 @@
 // The app's store: the one mutable UI object every handler reads at call time, its parts, the AI jobs the `jobs` ref
 // holds and the app's tunables. No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
 
-import type { AskState, Candidate } from "../ai/ask"
+import type { AskState, Candidate, Landed } from "../ai/ask"
 import { type Glosses, loadSummaries, type Summaries } from "../ai/cache"
 import type { AIConfig } from "../ai/config"
 import type { Change, DeltaNote } from "../ai/delta"
@@ -152,6 +152,8 @@ export interface UI {
   zenOrig: { cfg: ZenConfig; zen: boolean; source: boolean } | null
   /** `C-p` popup: query, highlighted row, first visible row; `ask` while a `?` question has been asked */
   switcher: { q: string; hl: number; top: number; ask?: AskState } | null
+  /** an ask answer just opened: its mark after the heading, the head's section, the ghost line's note; dropped by any move, `esc`, `C-p` */
+  landed: Landed | null
   /** `o` popup: query, highlighted row, first visible row, the recents read when it opened */
   opener: { q: string; hl: number; top: number; list: ProjectEntry[] } | null
   /** notes the document had focus with, newest first (this run only) */
@@ -249,6 +251,7 @@ export function initUI(
     zenOrig: null,
     zenRow: 0,
     switcher: null,
+    landed: null,
     opener: null,
     recent: openPath ? [openPath] : [],
     history: startHistory(openPath),
