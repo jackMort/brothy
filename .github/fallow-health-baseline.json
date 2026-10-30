@@ -36,7 +36,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 3
+        "count": 2
       }
     },
     "src/ai/config.ts": {
@@ -296,11 +296,6 @@
       "complexity_moderate": {
         "count": 1
       },
-      "crap_moderate": {
-        "count": 1
-      }
-    },
-    "src/ai/client.ts\u0000what": {
       "crap_moderate": {
         "count": 1
       }

@@ -28,6 +28,8 @@ import { type Job, type JobKind, jobKey, type UI } from "./store"
 const MAX_JOBS = 3
 /** streamed summary text re-renders at most this often (ms) */
 const AI_FRAME = 100
+/** a job with no text yet redraws once a second, so its waiting row counts */
+const WAIT_TICK = 1000
 
 /** Toasts every AI action shares. */
 export const AI_OFF = `AI off · set "ai" in config.json`
@@ -58,6 +60,21 @@ function makeRunner(c: AppCtx) {
     }, AI_FRAME)
   }
 
+  /** One redraw per second while some job has no text yet, on the next whole second of the soonest; never calls the network. */
+  const ensureWaitTick = () => {
+    if (timers.current.wait) return
+    const now = Date.now()
+    const waiting = [...jobs.current.values()].filter((j) => !j.live)
+    if (!waiting.length) return
+    const next = Math.min(...waiting.map((j) => WAIT_TICK - ((now - j.at) % WAIT_TICK)))
+    timers.current.wait = setTimeout(() => {
+      timers.current.wait = undefined
+      if (!alive.current) return
+      bump((x) => x + 1)
+      ensureWaitTick()
+    }, next)
+  }
+
   /** Abort job `key` and forget it; false when none runs. */
   const cancelJob = (key: string) => {
     const job = jobs.current.get(key)
@@ -70,12 +87,14 @@ function makeRunner(c: AppCtx) {
   /** Send `req` to `target` as job `<kind>:<id>` (`jobKey`); `run` says whether it streams and what follows. */
   const startJob = (kind: JobKind, id: string | undefined, target: AITarget, req: ChatReq, run: JobRun) => {
     const key = jobKey(kind, id)
-    const job: Job = { kind, raw: "", abort: new AbortController() }
+    const job: Job = { kind, raw: "", abort: new AbortController(), at: Date.now(), model: target.model, live: false }
     jobs.current.set(key, job)
+    ensureWaitTick()
     run.begin?.()
     const onDelta = run.stream
       ? (raw: string) => {
           job.raw = raw
+          if (!job.live) job.live = req.clean(raw) !== ""
           aiRedraw()
         }
       : undefined

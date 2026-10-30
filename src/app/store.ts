@@ -58,11 +58,17 @@ type DeltaState = {
 export type JobKind = "tldr" | "gloss" | "delta" | "ask"
 /** The `jobs` key of a job: `<kind>:<id>`, or the bare kind without an id. */
 export const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
-/** A request in flight: its kind, the raw text streamed so far and how to cancel it. */
+/** A request in flight: its kind, the raw text streamed so far, how to cancel it, and what its waiting row shows. */
 export interface Job {
   kind: JobKind
   raw: string
   abort: AbortController
+  /** `Date.now()` at the start: the seconds of `asking <model> · N s` */
+  at: number
+  /** the model asked, kept so the waiting row survives the `ai` block's removal */
+  model: string
+  /** the cleaned stream is no longer empty; stays false for a request that doesn't stream */
+  live: boolean
 }
 /** No changes or notes: shared empty lists, so the Info memo holds */
 export const NO_CHANGES: Change[] = []
