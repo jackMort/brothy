@@ -307,9 +307,17 @@ network traffic brothy has. Up to 3 requests run at once, over every feature bel
 says `AI busy · 3 requests running` and sends nothing.
 
 **TL;DR** — `a` sends the current note (body without front matter and `%%comments%%`, cut
-to `maxChars`); the 2–3 sentence summary streams in at the top of the Info tab. Summaries
-are cached and shown again for free; one made before the note changed is shown muted as
-`outdated · a to refresh`. One request per note; `a` on a running note cancels it.
+to `maxChars`); the 2–3 sentence summary streams in at the top of the Info tab as a
+footnote: `*`, the text, and a rule signed `TL;DR · <model>`. Up to 14 rows show; a longer
+one ends `⏎ more`, and `⏎` on its rule shows the rest. While the model works the block
+says `asking <model> · 3 s` (an older summary stays dimmed under it until the first words
+arrive). Summaries are cached and shown again for free; one made before the note changed
+is dimmed with `edited since · a refresh`. A failed request leaves its error in the block
+with `a retry` until you retry, open another note, edit the note or press `r`. A `*` after
+the title in the top line says the note has a TL;DR (muted when it is outdated), the
+document footer offers `a summarize` until it is fresh, and one that lands while Info is
+out of sight says `TL;DR ready · 3 to read`. One request per note; `a` on a running note
+cancels it.
 
 **Zen gloss** — in zen, `a` explains the section under the reading line in one or two plain
 sentences, on a muted sheet over the bottom rows of the text (nothing is inserted into the
