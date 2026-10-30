@@ -111,6 +111,7 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
       if (zenBack.current) scrolls.current.set(zenBack.current.key, { ...zenBack.current })
       zenBack.current = null
       clearTimeout(timers.current.gloss)
+      clearTimeout(timers.current.dwell)
     }
     set({
       zen: on,

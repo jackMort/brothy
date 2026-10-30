@@ -1,14 +1,15 @@
 // The document area: the welcome page with no note open, an open error, zen's lines (typewriter gutter, Spotlight and
-// the gloss sheet) or the note's lines (find matches, link labels, the drawer's scrim), and the minimap beside it.
+// the gloss sheet and its heading mark) or the note's lines (find matches, link labels, the drawer's scrim), and the minimap beside it.
 // Not pure: drawn from the app context, and it clamps the welcome page's highlighted row as it draws, so App calls it
 // once per render, before its too-small return.
 import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
-import { GLOSS_ROWS, glossRows, glossRule } from "../ai/gloss"
+import { sheetRows } from "../ai/gloss"
 import { A, type Span } from "../lib/spans"
 import { truncate } from "../lib/text"
 import type { Line } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
+import { footInk, placeMark } from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
@@ -99,41 +100,56 @@ function openError({ s, L, t }: Derived, error: string) {
   )
 }
 
-/** Zen's lines: a 2-column gutter carrying the typewriter marker, Spotlight dimming, and the gloss sheet over the bottom rows. */
+/**
+ * Zen's lines: a 2-column gutter carrying the typewriter marker, Spotlight dimming, and the gloss: a sheet over the bottom
+ * rows and a mark after its heading.
+ */
 function zenLines(d: Derived) {
   const { t, sheet } = d
   const { CW, CH } = d.L
   // a 2-column gutter left of the text carries the typewriter marker
   const gutter = mix(t.textMuted, t.background, 0.4)
-  const sheetRows = sheet ? glossSheet(sheet, t, CW) : []
-  const sheetAt = CH - sheetRows.length
+  const ink = sheetInk(sheet, t)
+  const bottom = sheet ? sheetRows(t, sheet, CW, CH, ink) : []
+  const marks = sheetMark(d, ink)
+  const sheetAt = CH - bottom.length
   return (
-    <box key="zen-lines" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
-      {Array.from({ length: CH }, (_, i) => {
-        const r = i - sheetAt
-        if (r >= 0) return <Row key={"gloss" + r} spans={[{ text: "  " }, ...sheetRows[r]!]} />
-        const n = d.win.first + i
-        return <Row key={n} spans={[{ text: d.tw && n === d.top ? "▸ " : "  ", fg: gutter }, ...zenLine(d, n)]} />
-      })}
+    <box key="zen-lines" style={{ flexDirection: "row", height: CH, flexShrink: 0 }}>
+      <box key="zen-text" style={{ flexDirection: "column", width: CW + 2, height: CH, flexShrink: 0 }}>
+        {Array.from({ length: CH }, (_, i) => {
+          const r = i - sheetAt
+          if (r >= 0) return <Row key={"gloss" + r} spans={[{ text: "  " }, ...bottom[r]!]} />
+          const n = d.win.first + i
+          const head = { text: d.tw && n === d.top ? "▸" : " ", fg: gutter }
+          return <Row key={n} spans={markedLine(head, zenLine(d, n), marks.get(n), CW)} />
+        })}
+      </box>
     </box>
   )
 }
 
-/** The gloss sheet's rows: a rule and GLOSS_ROWS muted rows, faded toward the background as the sheet fades out. */
-function glossSheet(sheet: NonNullable<Derived["sheet"]>, t: Theme, CW: number): Span[][] {
-  const k = sheet.fadeAt === null ? 0 : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
-  const ink = (color: typeof t.text) => mix(color, t.background, k)
-  const rule = glossRule(sheet.state, sheet.heading, CW)
-  const glossed = glossRows(sheet.text, CW)
-  const rows: Span[][] = [
-    [
-      { text: rule[0], fg: ink(t.border) },
-      { text: rule[1], fg: ink(t.textMuted) },
-      { text: rule[2], fg: ink(t.border) },
-    ],
-  ]
-  for (let r = 0; r < GLOSS_ROWS; r++) rows.push([{ text: glossed[r] ?? "", fg: ink(t.textMuted) }])
-  return rows
+/** A zen row: the gutter's first column, then the line; a heading's mark right after its text, else in the gutter. */
+function markedLine(head: Span, spans: Span[], mark: Span | undefined, CW: number): Span[] {
+  if (!mark) return [{ ...head, text: `${head.text} ` }, ...spans]
+  const placed = placeMark(spans, CW, mark)
+  return "inline" in placed ? [{ ...head, text: `${head.text} ` }, ...placed.inline] : [head, placed.gutter, ...spans]
+}
+
+/** The sheet's fade: toward the background as it fades out (the note and its heading's mark together). */
+function sheetInk(sheet: Derived["sheet"], t: Theme) {
+  const k =
+    !sheet || sheet.fadeAt === null
+      ? 0
+      : (fadeStep(Date.now() - sheet.fadeAt, 0) ?? GHOST_STEPS + 1) / (GHOST_STEPS + 1)
+  return (color: string) => mix(color, t.background, k)
+}
+
+/** The sheet's mark: `¹` on its heading's last row (a muted one when outdated), by view line. */
+function sheetMark({ t, sheet, view }: Derived, ink: (c: string) => string): Map<number, Span> {
+  const h = sheet ? view.headings[sheet.index] : undefined
+  if (!sheet || !h) return new Map()
+  const c = footInk(t, ink)
+  return new Map([[h.last ?? h.line, { text: "¹", fg: sheet.state === "outdated" ? c.markStale : c.mark }]])
 }
 
 /** Line `n` of zen's window: blank outside it, dimmed outside the Spotlight, find matches marked. */
