@@ -23,6 +23,7 @@ import {
   waitText,
 } from "./footnote"
 import { hitSpans } from "./rows"
+import type { HeadChanged } from "./status"
 
 // ------------------------------------------------------------- formatting
 
@@ -329,6 +330,10 @@ export interface ChangeView {
 }
 /** How a change row is drawn: listed, explained (its number muted), or under Earlier (all dimmed, not a stop). */
 type ChangeTone = "fresh" | "explained" | "earlier"
+
+/** The running head's count: how many sections changed (null: too large to compare), muted once explained. */
+export const changeHead = (cv: ChangeView | null): HeadChanged =>
+  cv && { n: cv.changes?.length ?? null, muted: cv.state === "result" }
 
 /** `D` at the label's right end and in the footer: what it does now; nothing with AI off, once explained or too large. */
 export function changeKey(cv: ChangeView | null): Tail | null {

@@ -388,3 +388,26 @@ test("past 8 changes a `+ n more` stop opens and folds the rest", async () => {
   expect(open.split("\n")[38]).toContain("⏎ fewer")
   expect(info(await keys(s, "enter"))).toContain("+ 2 more sections")
 })
+
+test("the running head counts the changes (AI off too), in Source as well; zen has none", async () => {
+  const d = tmp({ "a.md": TWO })
+  const s = await mount(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), EDITED)
+  const f = await waitFrame(s, (f) => f.includes("reloaded"), 4000)
+  expect(f.split("\n")[0]).toMatch(/² changed\s*$/)
+  expect((await keys(s, "s")).split("\n")[0]).toMatch(/² changed {3}source\s*$/)
+  expect((await keys(s, "s", "z")).split("\n")[0]).not.toContain("changed")
+})
+
+test("the head says not compared for a reload too large to compare", async () => {
+  const big = (tag: string) =>
+    Array.from(
+      { length: 5 },
+      (_, k) => `## S${k}\n\n` + Array.from({ length: 1000 }, (_, i) => `${tag}${k}-${i}`).join("\n"),
+    ).join("\n\n")
+  const d = tmp({ "a.md": big("a") })
+  const s = await mount(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), big("b"))
+  const f = await waitFrame(s, (f) => f.includes("too large to compare"), 4000)
+  expect(f.split("\n")[0]).toMatch(/not compared\s*$/)
+})

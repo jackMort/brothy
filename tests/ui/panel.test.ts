@@ -11,6 +11,7 @@ import { mix, themeByName } from "../../src/theme/theme"
 import { footInk } from "../../src/ui/footnote"
 import {
   type ChangeView,
+  changeHead,
   changeItems,
   extractLinks,
   fileRowSpans,
@@ -478,6 +479,12 @@ describe("changeItems", () => {
       [true, false, 1, 2],
       [false, true, 2, 3],
     ])
+  })
+  test("the head's count: all changes, muted once explained; null when too large", () => {
+    expect(changeHead(idle)).toEqual({ n: 3, muted: false })
+    expect(changeHead({ ...idle, state: "result" })).toEqual({ n: 3, muted: true })
+    expect(changeHead({ ...idle, state: "large", changes: null })).toEqual({ n: null, muted: false })
+    expect(changeHead(null)).toBeNull()
   })
   test("AI off: no D in the label", () => {
     expect(rowOf(changeItems({ ...idle, ai: false }, "W", 30)[0]!)).toBe("Changed since 14:02")

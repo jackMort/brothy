@@ -120,6 +120,21 @@ describe("stateCluster", () => {
     expect(stateCluster({ ...base, zen: true }, 100).map(clusterText)).toEqual(["/periphery 3/9", "source"])
     expect(stateCluster({ ...base, query: "", source: false }, 100).map(clusterText)).toEqual(["wide"])
   })
+  test("changed: after search, before source; dropped after source, before the query shrinks; never in zen", () => {
+    const changed = { n: 3, muted: false }
+    const all = { ...base, changed }
+    expect(stateCluster(all, 100).map(clusterText)).toEqual(["/periphery 3/9", "³ changed", "source", "wide"])
+    expect(stateCluster(all, 38).map(clusterText)).toEqual(["/periphery 3/9", "³ changed", "source"])
+    expect(stateCluster(all, 30).map(clusterText)).toEqual(["/periphery 3/9", "³ changed"])
+    expect(stateCluster(all, 20).map(clusterText)).toEqual(["/periphery 3/9"])
+    expect(stateCluster({ ...all, zen: true }, 100).map(clusterText)).toEqual(["/periphery 3/9", "source"])
+    expect(clusterText(stateCluster({ ...base, query: "", changed: { n: null, muted: false } }, 100)[0]!)).toBe(
+      "not compared",
+    )
+    expect(clusterText(stateCluster({ ...base, query: "", changed: { n: 12, muted: true } }, 100)[0]!)).toBe(
+      "¹² changed",
+    )
+  })
 })
 
 describe("progressLabel", () => {
@@ -462,6 +477,35 @@ describe("row spans", () => {
     })
     const none = topLineSpans(t, "watching", headerLayout({ ...o, count: 0 }), false)
     expect(none.find((s) => s.text === "no match")).toEqual({ text: "no match", fg: t.error, attr: 1 })
+  })
+
+  test("topLineSpans: `³ changed` with the count primary (muted once explained), `not compared` muted", () => {
+    const o = {
+      inline: false,
+      SW: 20,
+      textLeft: 2,
+      textWidth: 60,
+      zen: false,
+      gap: true,
+      vault: "vault",
+      folder: ".",
+      title: "Title",
+      trail: [],
+      query: "",
+      matchIdx: null,
+      count: 0,
+      source: false,
+      wide: false,
+    }
+    const spans = (changed: { n: number | null; muted: boolean }) =>
+      topLineSpans(t, "watching", headerLayout({ ...o, changed }), false)
+    expect(text(spans({ n: 3, muted: false })).endsWith("Title" + " ".repeat(46) + "³ changed")).toBe(true)
+    expect(spans({ n: 3, muted: false }).slice(-2)).toEqual([
+      { text: "³", fg: t.primary },
+      { text: " changed", fg: t.textMuted },
+    ])
+    expect(spans({ n: 3, muted: true }).at(-2)).toEqual({ text: "³", fg: t.textMuted })
+    expect(spans({ n: null, muted: false }).at(-1)).toEqual({ text: "not compared", fg: t.textMuted })
   })
 
   test("gapSpans: a border rule over the text column", () => {
