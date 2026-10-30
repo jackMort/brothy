@@ -39,7 +39,7 @@ test("unsupported / undrawn: what the player can't replay is reported", () => {
     "\x1b[1J",
     "\x1b]",
   ])
-  expect(undrawn("─━┈▌ ok ╌ ▒")).toEqual(["╌", "▒"])
+  expect(undrawn("─━┈▌▍ ok ╌ ▒")).toEqual(["╌", "▒"])
 })
 
 test("Screen replays cursor moves, clear and truecolor SGR into cells", () => {

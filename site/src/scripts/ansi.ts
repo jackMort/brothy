@@ -23,6 +23,7 @@ export const BOX: Record<string, string> = {
 export const BLOCK: Record<string, [number, number]> = {
   "▌": [0, 0.5],
   "▐": [0.5, 1],
+  "▍": [0, 0.375],
   "▎": [0, 0.25],
   "▏": [0, 0.125],
   "▕": [0.875, 1],
