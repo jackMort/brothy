@@ -635,3 +635,15 @@ test("waiting counts the seconds on its row from 1 s; the rows below never move"
   expect(f[7]).toBe("  Short.▍") // the first token takes the waiting row's place
   expect(f.slice(8, 10)).toEqual(before.slice(8, 10))
 })
+
+test("before an explanation a landing at margin widths still gets its footnote", async () => {
+  const d = tmp({ "a.md": WALK })
+  const s = await mount(d, "a.md", { size: { width: 160, height: 40 } })
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("reloaded"), 4000)
+  const f = await keys(s, "3", "enter", "C-b")
+  expect(footOf(f)).toEqual({
+    rule: "────────────────                                                 ¹ of 4 · ] next",
+    note: "¹ edited · +1 −1",
+  })
+})

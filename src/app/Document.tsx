@@ -272,8 +272,9 @@ const FOOT_MIN_CH = 10
  * the mark's colour), then the note behind its number in at most 2 rows: the explanation's, else the counts; `¹ ▍` and
  * `asking llama3.2 · 3 s · D cancel` while it is still to come. [] when there is none.
  */
-function landFoot({ land, L, t, s, cv, side }: Derived): Span[][] {
-  if (!land || s.source || side !== null || L.CH < FOOT_MIN_CH) return []
+function landFoot(d: Derived): Span[][] {
+  const { land, L, t, s, cv } = d
+  if (!land || s.source || marginOn(d) || L.CH < FOOT_MIN_CH) return []
   const c = footInk(t)
   const mark = cv?.state === "result" ? c.markStale : c.mark
   const text = land.wait ? "" : landText(land.change, land.note)
@@ -297,12 +298,16 @@ function summaryNote(cv: ChangeView): SideNote {
   return { n: 0, row: 0, text: cv.state === "loading" ? cv.summary + CARET : cv.summary, summary: true }
 }
 
+/** The Changed block's notes go to the margin: where `side` fits, while `D` runs or once explained (before, the footnote). */
+const marginOn = ({ cv, side }: Derived) => side !== null && (cv?.state === "loading" || cv?.state === "result")
+
 /**
- * The Changed block's margin (Preview, where `side` fits) while `D` runs or once explained: the Δ summary on row 0, each
- * note beside its mark (a heading's last row, a removed section's gutter row), numbered as listed; CH rows. Null without.
+ * The Changed block's margin (`marginOn`): the Δ summary on row 0, each note beside its mark (a heading's last row, a
+ * removed section's gutter row), numbered as listed; CH rows. Null without.
  */
-function changeMargin({ t, cv, marks, top, L, side }: Derived): Span[][] | null {
-  if (side === null || (cv?.state !== "loading" && cv?.state !== "result")) return null
+function changeMargin(d: Derived): Span[][] | null {
+  const { t, cv, marks, top, L } = d
+  if (!cv || !marginOn(d)) return null
   // explained: the numbers muted, as the marks in the text
   const markStale = cv.state === "result"
   const notes = marks.flatMap((m): SideNote[] => {
