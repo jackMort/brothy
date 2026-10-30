@@ -47,6 +47,8 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, flash }: AppCtx, dr
         clearTimeout(timers.current.logo)
         timers.current.logo = setTimeout(() => bump((x) => x + 1), LOGO_HOLD + 20)
         const d = derive()
+        // a landing the new list no longer has (it shrank past it) goes
+        if (d.s.landing && !d.land) set({ landing: null })
         flash(reloadToast(d.changes, d.propsChanged, !!d.s.ai))
       },
       error: (msg) => flash(msg, "error"),

@@ -647,3 +647,18 @@ test("before an explanation a landing at margin widths still gets its footnote",
     note: "¹ edited · +1 −1",
   })
 })
+
+test("a reload whose list no longer has the landing drops it; it does not come back", async () => {
+  const d = tmp({ "a.md": WALK })
+  const s = await mount(d, "a.md", { size: W120 })
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("reloaded"), 4000)
+  expect(footOf(await keys(s, "3", "enter", "]", "]"))?.note).toBe("⁴ new section · +3")
+  // Four is taken out again: three changes left, the landing on ⁴ goes
+  writeFileSync(join(d, "a.md"), WALK_EDIT.replace("\n## Four\n\nfour\n", ""))
+  await waitFrame(s, (f) => f.includes("³ sections changed"), 4000)
+  expect(footOf(await keys(s))).toBeNull()
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("⁴ sections changed"), 4000)
+  expect(footOf(await keys(s))).toBeNull()
+})
