@@ -11,6 +11,7 @@ import { A, type Span } from "../lib/spans"
 import { superscript, truncate } from "../lib/text"
 import { contrastOn, mix, type Theme } from "../theme/theme"
 import {
+  CARET,
   footInk,
   footnoteRule,
   type MarkSource,
@@ -20,10 +21,14 @@ import {
   placeMark,
   SIDENOTE_GAP,
   SIDENOTE_W,
+  type SideNote,
+  sidenoteLayout,
+  waitText,
 } from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
+import type { ChangeView } from "../ui/panel"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
 import { landedHere } from "./Chrome"
@@ -267,8 +272,8 @@ const FOOT_MIN_CH = 10
  * the mark's colour), then the note behind its number in at most 2 rows: the explanation's, else the counts; `¹ ▍` and
  * `asking llama3.2 · 3 s · D cancel` while it is still to come. [] when there is none.
  */
-function landFoot({ land, L, t, s, cv }: Derived): Span[][] {
-  if (!land || s.source || L.CH < FOOT_MIN_CH) return []
+function landFoot({ land, L, t, s, cv, side }: Derived): Span[][] {
+  if (!land || s.source || side !== null || L.CH < FOOT_MIN_CH) return []
   const c = footInk(t)
   const mark = cv?.state === "result" ? c.markStale : c.mark
   const text = land.wait ? "" : landText(land.change, land.note)
@@ -285,6 +290,31 @@ function landFoot({ land, L, t, s, cv }: Derived): Span[][] {
   return [[], rule, ...rows]
 }
 
+/** The Δ summary pinned on the margin's first row: `Δ ▍` and its status row while waiting, the text (streaming: its caret) after. */
+function summaryNote(cv: ChangeView): SideNote {
+  if (cv.state === "loading" && !cv.summary)
+    return { n: 0, row: 0, text: "", summary: true, status: { status: waitText(cv.model, cv.secs), model: cv.model } }
+  return { n: 0, row: 0, text: cv.state === "loading" ? cv.summary + CARET : cv.summary, summary: true }
+}
+
+/**
+ * The Changed block's margin (Preview, where `side` fits) while `D` runs or once explained: the Δ summary on row 0, each
+ * note beside its mark (a heading's last row, a removed section's gutter row), numbered as listed; CH rows. Null without.
+ */
+function changeMargin({ t, cv, marks, top, L, side }: Derived): Span[][] | null {
+  if (side === null || (cv?.state !== "loading" && cv?.state !== "result")) return null
+  const notes = marks.flatMap((m): SideNote[] => {
+    const what = cv.notes[m.n - 1]?.what
+    return what ? [{ n: m.n, row: m.row - top, text: what }] : []
+  })
+  const rows: Span[][] = Array.from({ length: L.CH }, () => [])
+  for (const p of sidenoteLayout(t, [summaryNote(cv), ...notes], L.CH, { open: false }))
+    p.rows.forEach((r, k) => {
+      if (p.row + k < L.CH) rows[p.row + k] = r
+    })
+  return rows
+}
+
 /** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim. */
 function noteLines(d: Derived) {
   const { L, t, view, top } = d
@@ -294,6 +324,7 @@ function noteLines(d: Derived) {
   const dim = (spans: Span[]) => (scrim ? dimSpans(spans, t, SCRIM_DIM) : spans)
   const foot = landFoot(d)
   const footAt = CH - foot.length
+  const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
       {Array.from({ length: foot.length ? CH : Math.min(CH, view.lines.length - top) }, (_, i) =>
@@ -303,6 +334,16 @@ function noteLines(d: Derived) {
           lineRow(d, top + i, marks.get(top + i), dim)
         ),
       )}
+      {margin ? (
+        <box
+          key="change-side"
+          style={{ position: "absolute", left: CW + SIDENOTE_GAP, top: 0, width: SIDENOTE_W, height: CH }}
+        >
+          {margin.map((spans, i) => (
+            <Row key={i} spans={spans} />
+          ))}
+        </box>
+      ) : null}
     </box>
   )
 }

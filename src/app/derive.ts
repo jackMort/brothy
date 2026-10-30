@@ -63,6 +63,7 @@ import {
 import { WELCOME_RECENTS } from "../ui/welcome"
 import { sectionRanges, wordSuffix } from "../ui/zen"
 import {
+  changeSideAt,
   filesCursor,
   filesList,
   glossSheet,
@@ -390,6 +391,7 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
       matchIdx: matchIndex(matches, s.matchLine),
       currentHeading,
       land: landingView(s, L, doc, info.cv, memo, jobs.current),
+      side: changeSideAt(s, L),
       sideFocus: (L.shown && s.focus === "panel" ? s.view : null) as View | null,
       oRows,
       outlineCur: clamp(s.outlineCur, 0, oRows.length - 1),

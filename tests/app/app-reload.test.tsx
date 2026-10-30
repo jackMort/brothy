@@ -568,3 +568,46 @@ test("D below 100 columns lands on the first change instead of opening the drawe
   expect(footOf(f)?.rule).toMatch(/¹ of 4 · \] next$/)
   expect(await keys(s, "3")).toContain("¹Files")
 })
+
+test("sidenotes where the margin fits (panel hidden): Δ on the first row, notes beside their marks; else the footnote", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "a.md": WALK })
+  const { s, ai } = await mountAI(d, "a.md", { size: { width: 160, height: 40 } })
+  writeFileSync(join(d, "a.md"), WALK_EDIT)
+  await waitFrame(s, (f) => f.includes("D explains"), 4000)
+  await keys(s, "D", "C-b")
+  await waitFor(s, () => ai.calls.length === 1)
+  let f = await keys(s)
+  let rows = f.split("\n")
+  // text 40–119, the minimap from 156: the margin starts at 123
+  expect(rows[2]!.indexOf("Δ ▍")).toBe(123)
+  expect(rows[3]).toMatch(/asking llama3.2/)
+  ai.send(0, 'Sum up.\n§1: one line reworded | "the new line here"\n§2: two went away\n')
+  ai.end(0)
+  f = await waitFrame(s, (f) => f.includes("Δ Sum up."))
+  rows = f.split("\n")
+  expect(rows[2]!.indexOf("Δ Sum up.")).toBe(123)
+  const note = rows.findIndex((r) => r.includes("¹ one line reworded"))
+  expect(rows[note]!.indexOf("¹ one line reworded")).toBe(123)
+  // beside its heading's row, or under the Δ's rows and a gap when they reach past it
+  expect(note).toBe(
+    Math.max(
+      rows.findIndex((r) => r.includes("## One¹")),
+      4,
+    ),
+  )
+  // ⏎ on a change lands without a footnote: the margin carries the notes
+  f = await keys(s, "3", "enter", "C-b")
+  expect(f.split("\n").some((r) => /─{16} {2,}¹ of 4/.test(r))).toBe(false)
+  const two = f.split("\n").findIndex((r) => r.slice(0, 40).trim() === "²")
+  expect(f.split("\n")[two]!.slice(123, 153).trim()).toBe("² two went away")
+  // 150 columns with the minimap on: no room, the footnote instead
+  s.resize(150, 40)
+  f = await keys(s)
+  expect(f).not.toContain("Δ Sum up.")
+  expect(f.split("\n").some((r) => /─{16} {2,}¹ of 4/.test(r))).toBe(true)
+  // the minimap off gives the margin its room back (from 147 columns)
+  f = await keys(s, "m")
+  expect(f).toContain("Δ Sum up.")
+  expect(f.split("\n").some((r) => /─{16} {2,}¹ of 4/.test(r))).toBe(false)
+})

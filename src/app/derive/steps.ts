@@ -18,6 +18,7 @@ import type { Theme } from "../../theme/theme"
 import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../../ui/footnote"
 import { ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
+import { MINI_W } from "../../ui/minimap"
 import { relocate, remapTop } from "../../ui/nav"
 import type { ChangeState, ChangeView, SummaryView } from "../../ui/panel"
 import { noteTitle } from "../../ui/status"
@@ -212,6 +213,17 @@ export function landingView(
     row: note?.quote ? memo.landRow(doc, c, note.quote) : null,
     ...landWait(note, jobs.get(jobKey("delta", l.path))),
   }
+}
+
+/**
+ * The column of the Changed block's sidenotes in Preview (`sidenoteAt` on the screen's geometry: the text's left edge,
+ * its measure, the right edge less the minimap), null where they don't fit: the landing's footnote is used instead.
+ */
+export function changeSideAt(s: UI, L: Layout) {
+  if (s.source || L.zen) return null
+  const left = 1 + (L.inline ? L.SW + 1 : 0)
+  const W = L.areaW + 1 + left
+  return sidenoteAt(W, left + L.padL, L.CW, W - 1 - (L.mini ? MINI_W : 0))
 }
 
 /** The landing's note still to come while `D` runs: the model and the seconds its footnote shows. */
