@@ -415,6 +415,7 @@ export function Switcher({
   height,
   note,
   peek,
+  placeholder = "Note, heading or text…",
   onClose,
   onScroll,
   onHover,
@@ -428,6 +429,7 @@ export function Switcher({
   note?: string
   /** peek pane rows for the highlighted row (`peekLines`); shown from PEEK_MIN_W columns */
   peek?: Span[][]
+  placeholder?: string
 }) {
   const g = switchSplit(W)
   const lines = g.split ? peek : undefined
@@ -448,7 +450,7 @@ export function Switcher({
   )
   return (
     <Overlay t={t} W={W} H={H} width={width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
-      <PickerInput t={t} value={q} placeholder="Note, heading or text…" width={width} />
+      <PickerInput t={t} value={q} placeholder={placeholder} width={width} />
       {lines ? (
         <SplitPane key="split" t={t} rows={height} listW={listW} paneW={g.peekW} list={list} lines={lines} />
       ) : (

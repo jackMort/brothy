@@ -303,6 +303,8 @@ export function makeSwitcherActions(c: AppCtx, { switcher, workspace }: Features
       if (ui.current.switcher) swType(erase(ui.current.switcher.q))
     },
     swAsk: typing, // a `?` query is typed like any other
+    swAskHint: typing,
+    askErase: typing, // swErase does it
     opType: typing,
     opMove: (k) => {
       const { opRows, opHl } = derive()

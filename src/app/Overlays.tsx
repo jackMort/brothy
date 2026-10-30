@@ -124,6 +124,7 @@ export function switchOverlay(
           : notesLabel
       }
       peek={peek}
+      placeholder={s.ai ? "Note, heading or text… · ? asks your notes" : undefined}
       onClose={closeSwitcher}
       onScroll={(dir) => swGo(stepRow(swRows, swHl, dir))}
       onHover={hoverRow(c, "switcher", swHl)}

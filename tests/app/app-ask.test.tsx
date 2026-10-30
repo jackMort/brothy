@@ -3,9 +3,12 @@ import { expect, test } from "bun:test"
 import { existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ASK_PROMPT, RERANK_PROMPT } from "../../src/ai/ask"
-import { aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
+import { GHOST_STEP, HINT_HOLD } from "../../src/ui/status"
+import { aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
 
 const { cacheDir, tmp, mount, openNote, aiConfig, mountAI } = useAppHarness()
+/** Past the startup hints, so the first `?` shows the key hints and the second opens the sheet. */
+const PAST_HINTS = () => new Date(Date.now() + HINT_HOLD + 4 * GHOST_STEP + 10)
 
 // ------------------------------------------------------------- ? in C-p: ask
 
@@ -43,6 +46,65 @@ test("? in C-p: the title is Ask, the row says what leaves and where; too short 
   expect(f).toContain("⏎ ask · only the question → localhost:11434")
   expect(f).not.toContain("Go to")
   await waitFrame(s, (fr) => fr.includes("2 notes")) // after the index build's "indexing n/m"
+})
+
+test("with an ai block Go to says ? asks, and its footer has a spare `? ask`, dropped first when short", async () => {
+  aiConfig(OLLAMA)
+  let s = await mount(askVault(), "README.md", { size: W120 })
+  let f = await keys(s, "C-p")
+  expect(f).toContain("Note, heading or text… · ? asks your notes")
+  expect(f.split("\n").at(-3)).toContain("? ask")
+  s.renderer.destroy()
+  s = await mount(askVault(), "README.md", { size: { width: 60, height: 24 } })
+  f = await keys(s, "C-p")
+  expect(f.split("\n").at(-3)).toContain("esc close")
+  expect(f.split("\n").at(-3)).not.toContain("? ask")
+})
+
+test("without an ai block Go to never mentions ?", async () => {
+  const s = await mount(askVault(), "README.md", { size: W120 })
+  const f = await keys(s, "C-p")
+  expect(f).toContain("Note, heading or text…")
+  expect(f).not.toContain("? asks your notes")
+  expect(f.split("\n").at(-3)).not.toContain("? ask")
+})
+
+test("the help sheet names ask in the AI group", async () => {
+  const s = await mount(askVault(), "README.md", { size: W120 })
+  await withClock(PAST_HINTS(), async () => {
+    await keys(s, "?")
+    expect(await keys(s, "?")).toContain("ask your notes: ^p then ?question")
+  })
+})
+
+test("the ask footer follows the state: idle, asking, Matches, reranked, an error", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  const footer = async () => (await keys(s)).split("\n").at(-3)!
+  await keys(s, "C-p", "type:?ho")
+  expect(await footer()).toMatch(/⌫ edit\s+esc close/)
+  await keys(s, "type:w do I open one file")
+  expect(await footer()).toMatch(/⏎ ask\s+⌫ edit\s+esc close/)
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(await footer()).toMatch(/⌫ edit · cancels\s+esc close/)
+  ai.send(0, QUERIES)
+  ai.end(0)
+  await waitFrame(s, (f) => f.includes("Matches"))
+  expect(await footer()).toMatch(/↑↓ select\s+⏎ open\s+tab rerank\s+esc close/)
+  await keys(s, "tab", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  expect(await footer()).toMatch(/↑↓ select\s+⏎ open\s+esc close/)
+  ai.send(1, JSON.stringify({ answers: [{ id: "c1", why: "pass the file path" }] }))
+  ai.end(1)
+  await waitFrame(s, (f) => f.includes("Other matches"))
+  expect(await footer()).toMatch(/↑↓ select\s+⏎ open\s+tab section\s+esc close/)
+  await keys(s, "type:x")
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 3)
+  ai.fail(2, "boom")
+  await waitFrame(s, (f) => f.includes("✗ boom"))
+  expect(await footer()).toMatch(/⏎ try again\s+⌫ edit\s+esc close/)
 })
 
 test("? never opens help while the switcher is open", async () => {

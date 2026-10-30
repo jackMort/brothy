@@ -48,7 +48,29 @@ test("spare hints are the optional ones", () => {
   expect(spare("doc")).toEqual(["f", "H L", "e"])
   expect(spare("panel:info")).toEqual(["a", "D"])
   expect(spare("theme")).toEqual(["type"])
-  expect(spare("switch")).toEqual([])
+  expect(spare("switch")).toEqual(["?"])
+})
+
+test("the switcher's footer: `? ask` only with an `ai` block; a question's footer follows the ask's stage", () => {
+  const sw = (on: FooterState, ask?: Parameters<typeof footerHints>[2]) =>
+    footerHints("switch", on, ask).map((h) => `${h.key} ${h.word}`)
+  expect(sw(ALL)).toEqual(["type search", "↑↓ select", "tab section", "⏎ open", "? ask", "esc close"])
+  expect(sw(NONE)).not.toContain("? ask")
+  const stages: [Parameters<typeof footerHints>[2], string[]][] = [
+    ["off", ["esc close"]],
+    ["short", ["⌫ edit", "esc close"]],
+    ["target", ["⌫ edit", "esc close"]],
+    ["idle", ["⏎ ask", "⌫ edit", "esc close"]],
+    ["asking", ["⌫ edit · cancels", "esc close"]],
+    ["result", ["↑↓ select", "⏎ open", "tab rerank", "esc close"]],
+    ["none", ["⌫ edit", "esc close"]],
+    ["reranking", ["↑↓ select", "⏎ open", "esc close"]],
+    ["reranked", ["↑↓ select", "⏎ open", "tab section", "esc close"]],
+    ["error", ["⏎ try again", "⌫ edit", "esc close"]],
+  ]
+  for (const [stage, want] of stages) expect(sw(ALL, stage)).toEqual(want)
+  // another context ignores the ask
+  expect(footerHints("doc", ALL, "idle")).toEqual(footerHints("doc", ALL))
 })
 
 test("a typing binding's empty word stays empty", () => {
