@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   type AIEvent,
   aiError,
+  aiMessage,
   buildRequest,
   chat,
   cleanReply,
@@ -456,6 +457,30 @@ describe("aiError", () => {
     expect(aiError({ kind: "empty" }, { ...C, noun: "gloss", note: "Why another reader?" })).toBe(
       "AI · Why another reader?: empty gloss",
     )
+  })
+})
+
+describe("aiMessage", () => {
+  const C = { host: "localhost:11434", noun: "explanation" as const }
+  test.each([
+    [{ kind: "status", status: 500 }, "500 from localhost:11434"],
+    [{ kind: "status", status: 401 }, "unauthorized · set keyEnv"],
+    [{ kind: "message", message: "model not loaded" }, "model not loaded"],
+    [{ kind: "length" }, "explanation cut short"],
+    [{ kind: "tooLong" }, "explanation too long"],
+    [{ kind: "unexpected" }, "unexpected reply from localhost:11434"],
+    [{ kind: "network" }, "can't reach localhost:11434"],
+    [{ kind: "redirect" }, "localhost:11434 redirects · set baseURL to the final URL"],
+    [{ kind: "idle" }, "no answer for 60 s"],
+    [{ kind: "total" }, "no explanation after 180 s"],
+    [{ kind: "empty" }, "empty explanation"],
+    [{ kind: "invalid" }, "no usable explanation"],
+  ] as const)("%p", (f, want) => expect(aiMessage(f, C)).toBe(want))
+  test("is the toast without its prefix, whichever note the request was for", () => {
+    const f = { kind: "empty" } as const
+    expect(aiMessage(f, { ...C, note: "groceries" })).toBe("empty explanation")
+    expect(aiError(f, { ...C, note: "groceries" })).toBe(`AI · groceries: ${aiMessage(f, C)}`)
+    expect(aiError(f, C)).toBe(`AI: ${aiMessage(f, C)}`)
   })
 })
 

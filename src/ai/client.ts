@@ -221,37 +221,37 @@ function statusError(f: Extract<Failure, { kind: "status" }>, ctx: ErrCtx): stri
   return f.message?.trim() ? serverText(f.message, ctx) : `${f.status} from ${ctx.host}`
 }
 
-/** The error toast for a failure (spec: Errors table). */
-export function aiError(f: Failure, ctx: ErrCtx): string {
+/** What failed, without the toast's `AI: ` / `AI · <note>: ` prefix: the text an AI block shows where its reply would be. */
+export function aiMessage(f: Failure, ctx: ErrCtx): string {
   const noun = ctx.noun ?? "summary"
-  const what = (): string => {
-    switch (f.kind) {
-      case "status":
-        return statusError(f, ctx)
-      case "message":
-        return serverText(f.message, ctx)
-      case "length":
-        return `${noun} cut short`
-      case "tooLong":
-        return `${noun} too long`
-      case "unexpected":
-        return `unexpected reply from ${ctx.host}`
-      case "network":
-        return `can't reach ${ctx.host}`
-      case "redirect":
-        return `${ctx.host} redirects · set baseURL to the final URL`
-      case "idle":
-        return `no answer for ${IDLE_MS / 1000} s`
-      case "total":
-        return `no ${noun} after ${TOTAL_MS / 1000} s`
-      case "empty":
-        return `empty ${noun}`
-      case "invalid":
-        return `no usable ${noun}`
-    }
+  switch (f.kind) {
+    case "status":
+      return statusError(f, ctx)
+    case "message":
+      return serverText(f.message, ctx)
+    case "length":
+      return `${noun} cut short`
+    case "tooLong":
+      return `${noun} too long`
+    case "unexpected":
+      return `unexpected reply from ${ctx.host}`
+    case "network":
+      return `can't reach ${ctx.host}`
+    case "redirect":
+      return `${ctx.host} redirects · set baseURL to the final URL`
+    case "idle":
+      return `no answer for ${IDLE_MS / 1000} s`
+    case "total":
+      return `no ${noun} after ${TOTAL_MS / 1000} s`
+    case "empty":
+      return `empty ${noun}`
+    case "invalid":
+      return `no usable ${noun}`
   }
-  return (ctx.note ? `AI · ${ctx.note}: ` : "AI: ") + what()
 }
+
+/** The error toast for a failure (spec: Errors table). */
+export const aiError = (f: Failure, ctx: ErrCtx) => (ctx.note ? `AI · ${ctx.note}: ` : "AI: ") + aiMessage(f, ctx)
 
 /** A request with no bytes for this long fails as `idle`. */
 export const IDLE_MS = 60_000
