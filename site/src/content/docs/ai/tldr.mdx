@@ -3,7 +3,11 @@ title: TL;DR
 description: "Press a to stream a short summary of the note into the Info tab."
 ---
 
-<!-- Mirrors README § AI (TL;DR): update both. -->
+{/* Mirrors README § AI (TL;DR): update both. */}
+
+import Shot from "../../../components/Shot.astro"
+
+<Shot name="tldr" alt="The Info tab with a TL;DR footnote signed TL;DR · llama3.2" />
 
 <kbd>a</kbd> sends the current note (body without front matter and `%%comments%%`, cut to `maxChars`); the 2–3 sentence summary streams in at the top of the Info tab as a footnote: `*`, the text, and a rule signed `TL;DR · <model>`.
 

@@ -3,7 +3,11 @@ title: What changed
 description: "The sections changed on disk are numbered in the text and listed in Info; D asks a model to explain the change."
 ---
 
-<!-- Mirrors README § AI (What changed on disk): update both. -->
+{/* Mirrors README § AI (What changed on disk): update both. */}
+
+import Shot from "../../../components/Shot.astro"
+
+<Shot name="changed" alt="A reloaded note with changed sections numbered after their headings and the explanation in the right margin" />
 
 When the open note changes on disk (an editor, Obsidian, a coding agent), each changed section gets a number after its heading (`## How long to simmer¹`; a removed section's number sits in the margin where it was), the running head says `³ changed`, the Info tab lists them (`¹ How long to simmer  +2 −2`; an added one says `new`, a removed one is struck through; past 8 a `+ n more sections` row opens the rest) and the toast says `reloaded · ³ sections changed`. All that is local and works **without** an `ai` block; it compares with the text the note had when you opened it, held in memory only.
 
@@ -23,6 +27,8 @@ When the open note changes on disk (an editor, Obsidian, a coding agent), each c
 - Explanations are never written to disk.
 
 ## The Proof sheet
+
+<Shot name="proof" alt="The What changed sheet: the summary, then each changed section with its note and its removed and added lines" />
 
 <kbd>⏎</kbd> on the `Changed` label in Info opens **What changed**, a popup with every changed section and its real lines, as written: `−` for a removed line, `+` for an added one, a line of context around them, `…` between hunks. A line wider than the popup is cut around the change. An added or removed section shows its first 20 lines, then `… 12 more lines`; a section too big to compare line by line shows its new text under `rewritten · showing the new text`. It works without an `ai` block.
 

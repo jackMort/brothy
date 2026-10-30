@@ -307,6 +307,20 @@ request starts from an explicit key, goes to the configured endpoint only, and i
 network traffic brothy has. Up to 3 requests run at once, over every feature below; a 4th
 says `AI busy · 3 requests running` and sends nothing.
 
+<table>
+<tr>
+<td><img src="docs/tldr.png" alt="The Info tab with a TL;DR footnote signed TL;DR · llama3.2"></td>
+<td><img src="docs/ask.png" alt="Ask in Ctrl-P: two reranked answers with their reasons, other matches below, the answer in the peek pane"></td>
+</tr>
+<tr>
+<td><img src="docs/changed.png" alt="A reloaded note with changed sections numbered after their headings and the explanation in the right margin"></td>
+<td><img src="docs/proof.png" alt="The What changed sheet: the summary, then each changed section with its note and its removed and added lines"></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/gloss.png" alt="Zen mode with a gloss of the section being read in the right margin"></td>
+</tr>
+</table>
+
 **TL;DR** — `a` sends the current note (body without front matter and `%%comments%%`, cut
 to `maxChars`); the 2–3 sentence summary streams in at the top of the Info tab as a
 footnote: `*`, the text, and a rule signed `TL;DR · <model>`. Up to 14 rows show; a longer
