@@ -40,12 +40,12 @@
     "@opentui/core": "0.5.17",
     "@opentui/react": "0.5.17",
     "marked": "^18.1.0",
-    "react": "^19.3.0"
+    "react": "^19.3.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
     "@types/react": "^19.3.0",
-    "bun-types": "^1.4.3",
+    "bun-types": "^1.4.4",
     "knip": "6.43.0",
     "typescript": "^7.0.2"
   }
