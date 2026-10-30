@@ -24,6 +24,7 @@ export interface Timers {
   hints?: ReturnType<typeof setTimeout>
   logo?: ReturnType<typeof setTimeout>
   ai?: ReturnType<typeof setTimeout>
+  wait?: ReturnType<typeof setTimeout>
   gloss?: ReturnType<typeof setTimeout>
   steam?: ReturnType<typeof setTimeout>
 }
