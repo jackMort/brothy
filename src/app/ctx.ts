@@ -178,6 +178,9 @@ function makeNoteOpening(base: Base) {
       matchLine: null,
       expanded,
       listTop: { ...s.listTop, outline: 0, info: 0 },
+      // a failed TL;DR is shown until its note is left
+      summaryErr: Object.fromEntries(Object.entries(s.summaryErr).filter(([p]) => p !== s.openPath)),
+      tldrOpen: false,
     })
     // the Files cursor jumps to the ● row and scrolls it into view
     const { rows, LH } = derive()

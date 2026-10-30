@@ -279,7 +279,7 @@ describe("asking for a gloss", () => {
     const f = await keys(s, "a")
     await waitFor(s, () => ai.calls.length === 1)
     expect(ai.calls[0]!.body.messages[0]!.content).not.toStartWith("Explain this section")
-    expect(f).toContain("summarizing")
+    expect(f).toContain("asking llama3.2")
     expect(f).not.toContain("gloss")
   })
 

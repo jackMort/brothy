@@ -32,6 +32,8 @@ export function noteTitle(props: readonly (readonly [string, string | string[]])
 export interface Location {
   folder: string
   title: string
+  /** `*` after the title: the note has a TL;DR */
+  mark: "" | "*"
   ancestors: string[]
   section: string
 }
@@ -49,21 +51,29 @@ const AFTER_LOGO = 2
 const locWidth = (l: Location) =>
   (l.folder ? width(l.folder) + SEP : 0) +
   width(l.title) +
+  width(l.mark) +
   l.ancestors.reduce((n, a) => n + SEP + width(a), 0) +
   (l.section ? SEP + width(l.section) : 0)
 
 /**
- * The top line's `folder / Title › ancestors › section`, fitted to `room` columns. `trail` is
+ * The top line's `folder / Title* › ancestors › section`, fitted to `room` columns. `trail` is
  * the heading path, outermost first, ending with the section. A first entry equal to the title
  * is dropped. Room is made in this order: folder (left segments first, then all of it),
  * ancestors (outermost first), section (cut, never below 8 columns, else dropped), then the
- * title is cut.
+ * title is cut; the `mark` stays.
  */
-export function locationParts(dir: string, title: string, trail: string[], room: number): Location {
+export function locationParts(
+  dir: string,
+  title: string,
+  trail: string[],
+  room: number,
+  mark: "" | "*" = "",
+): Location {
   const path = trail.length && sameText(trail[0]!, title) ? trail.slice(1) : trail.slice()
   const l: Location = {
     folder: dir === "." ? "" : dir,
     title,
+    mark,
     ancestors: path.slice(0, -1),
     section: path.at(-1) ?? "",
   }
@@ -78,7 +88,7 @@ export function locationParts(dir: string, title: string, trail: string[], room:
     const left = room - (locWidth(l) - width(l.section))
     l.section = left >= SECTION_MIN ? truncate(l.section, left) : ""
   }
-  if (locWidth(l) > room) l.title = truncate(l.title, room)
+  if (locWidth(l) > room) l.title = truncate(l.title, room - width(l.mark))
   return l
 }
 
@@ -184,6 +194,8 @@ export interface HeaderLayout {
   panel: { col: number; text: string } | null
   /** `Title › section` (and the immediate folder when there is no panel column) from the text's left edge */
   head: Location & { col: number }
+  /** the TL;DR mark's colour: primary while fresh, muted over an outdated one */
+  tldr: "fresh" | "stale" | null
   cluster: ClusterItem[]
   clusterCol: number
   clusterWidth: number
@@ -195,7 +207,8 @@ export interface HeaderLayout {
  * Row 0 beyond the logo (always column 0): the folder over the panel column (inline panel only),
  * then from the text's left edge `Title › section` with the state cluster right-aligned to the
  * text's right edge. Without a panel column the immediate folder leads the title and is the
- * first thing dropped; zen never shows a folder. `folder` is relative to the vault (`.` = root).
+ * first thing dropped; zen never shows a folder, nor the `*` after the title that says the note
+ * has a TL;DR (`tldr`). `folder` is relative to the vault (`.` = root).
  */
 export function headerLayout(o: {
   inline: boolean
@@ -213,6 +226,7 @@ export function headerLayout(o: {
   count: number
   source: boolean
   wide: boolean
+  tldr?: "fresh" | "stale" | null
 }): HeaderLayout {
   const root = o.folder === "." || o.folder === ""
   const panel =
@@ -229,10 +243,12 @@ export function headerLayout(o: {
   const cw = clusterW(cluster)
   const room = o.textWidth - cw - (cluster.length ? SEP : 0)
   const immediate = panel || o.zen || root ? "." : o.folder.split("/").at(-1)!
-  const head = locationParts(immediate, o.title, o.trail, room)
+  const tldr = o.zen ? null : (o.tldr ?? null)
+  const head = locationParts(immediate, o.title, o.trail, room, tldr ? "*" : "")
   return {
     panel,
     head: { ...head, col: o.textLeft },
+    tldr,
     cluster,
     clusterCol: o.textLeft + o.textWidth - cw,
     clusterWidth: cw,
@@ -279,6 +295,7 @@ export function topLineSpans(t: Theme, logo: LogoState, h: HeaderLayout | null, 
   const left: Span[] = []
   if (loc.folder) left.push({ text: loc.folder, fg: t.textMuted }, { text: " / ", fg: t.borderSubtle })
   left.push(titleDim ? { text: loc.title, fg: t.textMuted } : { text: loc.title, fg: t.text, attr: A.BOLD })
+  if (loc.mark) left.push({ text: loc.mark, fg: h.tldr === "fresh" ? t.primary : t.textMuted })
   for (const a of loc.ancestors) left.push({ text: " › ", fg: t.borderSubtle }, { text: a, fg: t.textMuted })
   if (loc.section) left.push({ text: " › ", fg: t.borderSubtle }, { text: loc.section, fg: t.secondary })
   at(loc.col, left)

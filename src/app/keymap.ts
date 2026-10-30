@@ -65,6 +65,8 @@ export interface FooterState {
   ai: boolean
   /** an `ai` block and changes still to explain */
   changes: boolean
+  /** an `ai` block and no fresh TL;DR for the open note: the document footer offers `a` */
+  tldr: boolean
 }
 
 /**
@@ -127,6 +129,7 @@ const KEYMAP = {
     spare: true,
     when: "ai",
   },
+  summarizeHint: { modes: ["doc"], keys: [], label: "a", hint: "summarize", spare: true, when: "tldr" },
   explainChange: {
     modes: ["global"],
     keys: ["S-d"],
@@ -397,6 +400,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     "links",
     "histBack",
     "edit",
+    "summarizeHint",
     ["focus", "panel"],
     "help",
   ],
@@ -425,14 +429,17 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
 /** Contexts whose hints stay at full colour instead of fading: the popups and typing. */
 export const PINNED: readonly Ctx[] = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"]
 
-/** Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. */
-export function footerHints(c: Ctx, on: FooterState): HintItem[] {
+/**
+ * Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. `words` are the
+ * words that follow the state (`a cancel` while the TL;DR runs); they win over the context's and the binding's own.
+ */
+export function footerHints(c: Ctx, on: FooterState, words: Partial<Record<KeyId, string>> = {}): HintItem[] {
   return FOOTERS[c].flatMap((h) => {
     const [id, word] = Array.isArray(h) ? h : [h, undefined]
     const def = keyDef(id)
     return def.when && !on[def.when]
       ? []
-      : [{ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: def.spare }]
+      : [{ key: def.short ?? def.label, word: words[id] ?? word ?? def.hint ?? "", spare: def.spare }]
   })
 }
 

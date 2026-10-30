@@ -177,6 +177,10 @@ export interface UI {
   ai: AIConfig | null
   /** summaries.json, loaded once at start, keyed by absolute note path */
   summaries: Summaries
+  /** the last TL;DR request that failed, per path, with the note's text hash then (memory only; a later edit drops it) */
+  summaryErr: Record<string, { msg: string; hash: string }>
+  /** the TL;DR expanded past SUMMARY_ROWS (reset on a note change and a new request) */
+  tldrOpen: boolean
   /** glosses.json, read on the first zen entry (or zen `a`) with an `ai` block; null: not read yet */
   glosses: Glosses | null
   /** the zen gloss note: its section id and outline index, cache key, label, the section's text hash when shown, when it began fading, and expanded (`a` more) */
@@ -269,6 +273,8 @@ export function initUI(
     hintAt: null,
     hintCtx: "doc",
     summaries: loadSummaries(),
+    summaryErr: {},
+    tldrOpen: false,
     glosses: null,
     gloss: null,
     baseline: null,

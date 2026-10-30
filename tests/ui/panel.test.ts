@@ -24,7 +24,10 @@ import {
   outlineRows,
   resolveLink,
   SUMMARY_ROWS,
+  type SummaryView,
+  tldrHead,
   tldrItems,
+  tldrWord,
   wrapProperty,
 } from "../../src/ui/panel"
 import { useTmp } from "../helpers/tmp"
@@ -261,79 +264,165 @@ describe("findHeading", () => {
 })
 
 describe("TL;DR block", () => {
-  const TEXT =
-    "A tour of brothy, a terminal Markdown reader with Files, Outline and Info beside a calm text column. It covers live reload, find, themes and installing with bun."
-  const rows = (items: ReturnType<typeof tldrItems>) =>
-    items.map((it) => {
-      if (it.kind === "tldr") return "TL;DR" + it.status
-      return it.kind === "summary" ? it.text : `<${it.kind}>`
-    })
+  // the study's 62-word reply
+  const BROTH =
+    "A good broth takes patience: bones and cold water held where the surface barely moves, never a rolling boil. Chicken simmers for 3 to 4 hours, beef for 8 to 12 and fish for only 45 minutes before it turns bitter. Skim the grey foam in the first hour, keep the fat, and salt only at the end, since the pot reduces."
+  const sv = (o: Partial<SummaryView> = {}): SummaryView => ({
+    text: BROTH,
+    state: "fresh",
+    model: "llama3.2",
+    secs: 0,
+    stale: null,
+    old: "",
+    error: null,
+    open: false,
+    ...o,
+  })
+  const t = themeByName("brothy")
+  const text = (spans: { text: string }[]) => spans.map((x) => x.text).join("")
+  /** each row as drawn at `cols` */
+  const drawn = (items: InfoItem[], cols = 30) => items.map((it) => text(infoSpans(it, t, cols)))
+  const feet = (items: InfoItem[]) => items.filter((it) => it.kind === "foot")
+  const rule = (items: InfoItem[]) => items.at(-1) as Extract<InfoItem, { kind: "frule" }>
 
-  test("none: label and a muted hint", () => {
-    expect(tldrItems({ text: "", state: "none", model: "" }, 30)).toEqual([
-      { kind: "tldr", status: "" },
-      { kind: "summary", text: "a to summarize", muted: true },
+  test("none: one hint row, no rule", () => {
+    const items = tldrItems(sv({ text: "", state: "none", model: "" }), 30)
+    expect(drawn(items)).toEqual(["* a summarize this note"])
+    const spans = infoSpans(items[0]!, t, 30)
+    expect(spans.map((x) => x.fg)).toEqual([t.textMuted, undefined, t.text, t.textMuted])
+  })
+  test("fresh: * and a hanging indent, then the rule with its signature", () => {
+    const items = tldrItems(sv(), 30)
+    const rows = drawn(items)
+    expect(rows[0]).toBe("* A good broth takes patience:")
+    expect(rows[1]).toBe("  bones and cold water held")
+    expect(rows.at(-1)).toBe(`${"─".repeat(13)} TL;DR · llama3.2`)
+    expect(rows.every((r) => width(r) <= 30)).toBe(true)
+    expect(infoSpans(items[0]!, t, 30)[0]).toEqual({ text: "*", fg: t.primary })
+    expect(rule(items)).toMatchObject({ stop: false })
+  })
+  test("a long model is cut before the signature; control characters never pass", () => {
+    const long = drawn(tldrItems(sv({ model: "a-very-long-model-name-that-overflows" }), 30)).at(-1)!
+    expect(long).toStartWith("────")
+    expect(long).toContain("TL;DR · a-very-")
+    expect(long).toEndWith("…")
+    expect(width(long)).toBe(30)
+    const rows = drawn(tldrItems(sv({ text: "bad\x1b[2Jtext", model: "m\x1b" }), 30))
+    expect(rows.join("")).not.toContain("\x1b")
+  })
+  test("the 62-word reply shows whole: 12 rows at 30 columns, 10 at 34 and 38", () => {
+    for (const [cols, n] of [
+      [30, 12],
+      [34, 10],
+      [38, 10],
+    ] as const) {
+      const items = tldrItems(sv(), cols)
+      expect(feet(items).length).toBe(n)
+      expect(drawn(items, cols).join("")).not.toContain("…")
+      expect(rule(items).stop).toBe(false)
+    }
+  })
+  test("past 14 rows: the 14th ends …, the rule is a stop saying ⏎ more; open shows every row and ⏎ less", () => {
+    const long = "word ".repeat(200)
+    const shut = tldrItems(sv({ text: long }), 30)
+    expect(feet(shut).length).toBe(SUMMARY_ROWS)
+    const rows = drawn(shut)
+    expect(rows[SUMMARY_ROWS - 1]).toEndWith("…")
+    expect(rows.at(-1)).toEndWith("⏎ more · llama3.2")
+    expect(rule(shut).stop).toBe(true)
+    const open = tldrItems(sv({ text: long, open: true }), 30)
+    expect(feet(open).length).toBeGreaterThan(SUMMARY_ROWS)
+    expect(feet(open).length).toBeLessThanOrEqual(Math.ceil(1200 / 28))
+    expect(drawn(open).at(-1)).toEndWith("⏎ less · llama3.2")
+  })
+  test("outdated: text dimmed, mark muted, the tail says why and how to refresh", () => {
+    const edited = tldrItems(sv({ state: "outdated", stale: "edited" }), 30)
+    expect(feet(edited).every((it) => it.tone === "stale" && it.markStale)).toBe(true)
+    expect(drawn(edited).at(-1)).toBe(`${"─".repeat(5)} edited since · a refresh`)
+    expect(infoSpans(edited[1]!, t, 30).at(-1)!.fg).toBe(mix(t.textMuted, t.background, 0.4))
+    expect(drawn(tldrItems(sv({ state: "outdated", stale: "version" }), 30)).at(-1)).toEndWith(
+      "older version · a refresh",
+    )
+  })
+  test("waiting: the caret row and the seconds on the tail from 1 s; regenerating keeps the old text dimmed", () => {
+    const at = (secs: number) => drawn(tldrItems(sv({ text: "", state: "waiting", secs }), 30))
+    expect(at(0)).toEqual(["* ▍", `${"─".repeat(14)} asking llama3.2`])
+    expect(at(3)).toEqual(["* ▍", `${"─".repeat(8)} asking llama3.2 · 3 s`])
+    const caret = infoSpans(tldrItems(sv({ text: "", state: "waiting" }), 30)[0]!, t, 30)
+    expect(caret.map((x) => x.fg)).toEqual([t.primary, undefined, t.text])
+    const regen = tldrItems(sv({ text: "", state: "waiting", old: BROTH, secs: 1 }), 30)
+    expect(drawn(regen).slice(0, 2)).toEqual(["* ▍", "  A good broth takes patience:"])
+    expect(
+      feet(regen)
+        .slice(1)
+        .every((it) => it.tone === "stale" && it.mark === null),
+    ).toBe(true)
+    expect(infoSpans(regen[0]!, t, 30)[0]!.fg).toBe(t.textMuted)
+    expect(drawn(regen).at(-1)).toEndWith("asking llama3.2 · 1 s")
+    expect(drawn(tldrItems(sv({ text: "", state: "waiting", secs: 3 }), 44), 44).at(-1)).toEndWith(
+      "asking llama3.2 · 3 s · a cancel",
+    )
+  })
+  test("streaming: the text so far ends in the caret; the tail names the model and a cancel", () => {
+    const items = tldrItems(sv({ text: "Apples are", state: "streaming" }), 30)
+    expect(drawn(items)).toEqual(["* Apples are▍", `${"─".repeat(10)} llama3.2 · a cancel`])
+    const capped = tldrItems(sv({ text: "word ".repeat(200), state: "streaming" }), 30)
+    expect(feet(capped).length).toBe(SUMMARY_ROWS)
+    expect(rule(capped).stop).toBe(false)
+  })
+  test("error: ✗ and the message in at most 3 rows, the old text dimmed under it, a retry", () => {
+    const items = tldrItems(sv({ state: "none", text: "", error: "500 from localhost:11434" }), 30)
+    expect(drawn(items)).toEqual(["* ✗ 500 from localhost:11434", `${"─".repeat(16)}       a retry`])
+    const spans = infoSpans(items[0]!, t, 30)
+    expect(spans.map((x) => [x.text, x.fg])).toEqual([
+      ["*", t.textMuted],
+      [" ", undefined],
+      ["✗", t.error],
+      [" 500 from localhost:11434", t.textMuted],
     ])
+    const long = drawn(tldrItems(sv({ state: "none", text: "", error: "word ".repeat(40) }), 30))
+    expect(long.length).toBe(4)
+    expect(long[1]).toStartWith("    word")
+    expect(long[2]).toEndWith("…")
+    const over = tldrItems(sv({ error: "empty summary" }), 30)
+    expect(drawn(over).slice(0, 2)).toEqual(["* ✗ empty summary", "  A good broth takes patience:"])
+    expect(
+      feet(over)
+        .slice(1)
+        .every((it) => it.tone === "stale"),
+    ).toBe(true)
   })
-  test("fresh at 30 columns matches the mockup", () => {
-    expect(rows(tldrItems({ text: TEXT, state: "fresh", model: "claude-haiku-5-5" }, 30))).toEqual([
-      "TL;DR · claude-haiku-5-5",
-      "A tour of brothy, a terminal",
-      "Markdown reader with Files,",
-      "Outline and Info beside a calm",
-      "text column. It covers live",
-      "reload, find, themes and",
-      "installing with bun.",
-    ])
+  test("a narrow panel shrinks the rule to 4 first, then cuts the model, then drops the key, never the status first", () => {
+    const tail = (o: Partial<SummaryView>, cols: number) => drawn(tldrItems(sv(o), cols), cols).at(-1)!
+    const edited = { state: "outdated", stale: "edited" } as const
+    expect(tail(edited, 29)).toBe(`${"─".repeat(4)} edited since · a refresh`)
+    expect(tail(edited, 22)).toBe(`${"─".repeat(9)} edited since`)
+    expect(tail(edited, 14)).toBe(`${"─".repeat(4)} edited s…`)
+    expect(tail({ text: "x", state: "streaming" }, 22)).toBe(`${"─".repeat(4)} llama… · a cancel`)
+    expect(tail({ text: "", state: "waiting", secs: 3 }, 22)).toBe(`${"─".repeat(4)} asking lla… · 3 s`)
+    for (const cols of [12, 14, 18, 22, 30]) expect(width(tail(edited, cols))).toBe(cols)
   })
-  test("outdated at 38 columns matches the drawer mockup, muted", () => {
-    const items = tldrItems({ text: TEXT, state: "outdated", model: "m" }, 38)
-    expect(rows(items)).toEqual([
-      "TL;DR · outdated · a to refresh",
-      "A tour of brothy, a terminal Markdown",
-      "reader with Files, Outline and Info",
-      "beside a calm text column. It covers",
-      "live reload, find, themes and",
-      "installing with bun.",
-    ])
-    expect(items.slice(1).every((it) => it.kind === "summary" && it.muted)).toBe(true)
-  })
-  test("outdated suffix shortens when the full one doesn't fit", () => {
-    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 30)[0]).toEqual({
-      kind: "tldr",
-      status: " · outdated · a",
-    })
-    expect(tldrItems({ text: "x", state: "outdated", model: "m" }, 31)[0]).toEqual({
-      kind: "tldr",
-      status: " · outdated · a to refresh",
-    })
-  })
-  test("streaming label; fresh text not muted", () => {
-    const items = tldrItems({ text: "Partial", state: "streaming", model: "" }, 30)
-    expect(items).toEqual([
-      { kind: "tldr", status: " · summarizing…" },
-      { kind: "summary", text: "Partial", muted: false },
-    ])
-  })
-  test("a long model name is cut to the width", () => {
-    const [label] = tldrItems({ text: "x", state: "fresh", model: "a-very-long-model-name-that-overflows" }, 30)
-    expect(label).toEqual({ kind: "tldr", status: " · a-very-long-model-nam…" })
-  })
-  test("at most 8 text rows, the last cut with …", () => {
-    const items = tldrItems({ text: "word ".repeat(200), state: "fresh", model: "m" }, 30)
-    expect(items.length).toBe(1 + SUMMARY_ROWS)
-    const last = items.at(-1)!
-    expect(last.kind === "summary" && last.text.endsWith("…") && Bun.stringWidth(last.text) <= 30).toBe(true)
-  })
-  test("control characters never reach a row", () => {
-    const items = tldrItems({ text: "bad\x1b[2Jtext", state: "fresh", model: "m" }, 30)
-    expect(rows(items)[1]).not.toContain("\x1b")
+  test("the head mark and a's word follow the state", () => {
+    expect(tldrHead(null)).toBeNull()
+    expect(tldrHead(sv())).toBe("fresh")
+    expect(tldrHead(sv({ state: "outdated", stale: "edited" }))).toBe("stale")
+    expect(tldrHead(sv({ error: "x" }))).toBe("stale")
+    expect(tldrHead(sv({ state: "none", text: "", error: "x" }))).toBeNull()
+    expect(tldrHead(sv({ state: "waiting", text: "" }))).toBeNull()
+    expect(tldrHead(sv({ state: "waiting", text: "", old: "Old." }))).toBe("stale")
+    expect(tldrHead(sv({ state: "streaming" }))).toBeNull()
+    expect(tldrWord(sv())).toBe("summarize")
+    expect(tldrWord(sv({ state: "none", text: "" }))).toBe("summarize")
+    expect(tldrWord(sv({ state: "outdated", stale: "edited" }))).toBe("refresh")
+    expect(tldrWord(sv({ error: "x" }))).toBe("retry")
+    expect(tldrWord(sv({ state: "waiting" }))).toBe("cancel")
+    expect(tldrWord(sv({ state: "streaming" }))).toBe("cancel")
   })
   test("infoItems puts the block and a blank row before Properties; nothing when AI is off", () => {
     const props: [string, string][] = [["title", "Welcome"]]
-    const on = infoItems(props, STATS, [], 30, null, 0, { text: "", state: "none", model: "" })
-    expect(on.slice(0, 3).map((i) => i.kind)).toEqual(["tldr", "summary", "blank"])
-    expect(on[3]!.kind).toBe("prop")
+    const on = infoItems(props, STATS, [], 30, null, 0, sv({ text: "", state: "none" }))
+    expect(on.slice(0, 2).map((i) => i.kind)).toEqual(["foot", "blank"])
+    expect(on[2]!.kind).toBe("prop")
     expect(infoItems(props, STATS, [], 30, null, 0)[0]!.kind).toBe("prop")
   })
 })
@@ -452,11 +541,11 @@ test("infoItems puts the Changed block under the TL;DR and above the properties"
     30,
     null,
     0,
-    { text: "Sum.", state: "fresh", model: "m" },
+    { text: "Sum.", state: "fresh", model: "m", secs: 0, stale: null, old: "", error: null, open: false },
     { view: idle, title: "T" },
   )
   const kinds = items.map((i) => i.kind)
-  expect(kinds.indexOf("tldr")).toBeLessThan(kinds.indexOf("changes"))
+  expect(kinds.indexOf("frule")).toBeLessThan(kinds.indexOf("changes"))
   expect(kinds.indexOf("changes")).toBeLessThan(kinds.indexOf("prop"))
 })
 

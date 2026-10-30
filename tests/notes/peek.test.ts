@@ -86,19 +86,23 @@ test("peekLines: a text hit starts at its line", () => {
   expect(body(peekLines(input(answer), t, W, 30))[0]).toBe("Stock body.")
 })
 
-test("peekLines: a fresh TL;DR is shown as Info draws it, at most PEEK_TLDR rows", () => {
+test("peekLines: a fresh TL;DR is * and at most PEEK_TLDR rows hung under it, no label or model", () => {
   const rs = peekLines(input(note, { summary: { text: "A tour of what brothy renders.", model: "haiku" } }), t, W, 30)
-  const at = rs.findIndex((r) => text(r) === "TL;DR · haiku")
+  const at = rs.findIndex((r) => text(r) === "* A tour of what brothy renders.")
   expect(at).toBeGreaterThan(0)
-  expect(rs[at]![0]).toEqual({ text: "TL;DR", fg: t.textMuted, attr: 1 })
-  expect(rs[at + 1]).toEqual([{ text: "A tour of what brothy renders.", fg: t.text }])
+  expect(rs[at]).toEqual([
+    { text: "*", fg: t.primary },
+    { text: " A tour of what brothy renders.", fg: t.text },
+  ])
+  expect(text(rs[at - 1]!)).toBe("") // after a blank row
+  expect(texts(rs).some((x) => x.includes("haiku") || x.includes("TL;DR"))).toBe(false)
   const long = peekLines(input(note, { summary: { text: "word ".repeat(60), model: "m" } }), t, W, 30)
-  const from = long.findIndex((r) => text(r).startsWith("TL;DR")) + 1
+  const from = long.findIndex((r) => text(r).startsWith("* word"))
   const sum = texts(long.slice(from, from + PEEK_TLDR + 1))
-  expect(sum.slice(0, PEEK_TLDR).every((x) => x.startsWith("word"))).toBe(true)
-  expect(sum[PEEK_TLDR - 1]!.endsWith("…")).toBe(true)
+  expect(sum.slice(1, PEEK_TLDR).every((x) => x.startsWith("  word"))).toBe(true)
+  expect(sum[PEEK_TLDR - 1]!.endsWith(" …")).toBe(true)
   expect(sum[PEEK_TLDR]).toBe("")
-  expect(texts(peekLines(input(note), t, W, 30)).some((x) => x.startsWith("TL;DR"))).toBe(false)
+  expect(texts(peekLines(input(note), t, W, 30)).some((x) => x.startsWith("* "))).toBe(false)
 })
 
 test("peekLines: header and action rows peek nothing; an unindexed note says indexing…", () => {

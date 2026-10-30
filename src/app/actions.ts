@@ -250,7 +250,8 @@ function makeGlobalActions(
       let linkTree = tree
       if (piped) linkTree = s.linkLazy ? s.linkTree : scanTree(s.root)
       else if (s.linkRoot) linkTree = scanTree(s.linkRoot)
-      set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1, ai: loadConfig().ai ?? null })
+      const ai = loadConfig().ai ?? null
+      set({ tree, linkTree, expanded, reload: s.reload + 1, watchGen: s.watchGen + 1, ai, summaryErr: {} })
       if (ui.current.zen) aiJobs.ensureGlosses()
       switcher.dropIndex()
       flash("reloaded")
@@ -273,6 +274,7 @@ function makeGlobalActions(
     histBack: () => links.histMove(-1),
     histForward: () => links.histMove(1),
     summarize: aiJobs.summarizeNote,
+    summarizeHint: aiJobs.summarizeNote, // hint only: no keys of its own
     explainChange: aiJobs.explainChange,
     quit: () => {
       workspace.leave()

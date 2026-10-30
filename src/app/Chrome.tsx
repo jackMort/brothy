@@ -5,6 +5,7 @@ import type { ReactNode } from "react"
 import type { Span } from "../lib/spans"
 import { spanWidth } from "../lib/text"
 import { fadeSpans } from "../ui/chrome"
+import { tldrHead } from "../ui/panel"
 import {
   fadeStep,
   GHOST_STEPS,
@@ -52,6 +53,7 @@ function topLine(d: Derived): Span[] {
     count: matches.length,
     source: s.source,
     wide: s.wide,
+    tldr: tldrHead(d.sv),
   })
   return topLineSpans(t, logo, h, mainHeadingVisible(view.headings, d.title, top, L.bodyH))
 }

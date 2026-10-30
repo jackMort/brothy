@@ -66,13 +66,20 @@ describe("locationParts", () => {
     expect(at(200)).toEqual({
       folder: "Reading/Calm",
       title: "Calm Technology",
+      mark: "",
       ancestors: ["The periphery"],
       section: "Status",
     })
   })
   test("the folder loses segments from the left, then goes", () => {
     expect(at(50).folder).toBe("…/Calm")
-    expect(at(40)).toEqual({ folder: "", title: "Calm Technology", ancestors: ["The periphery"], section: "Status" })
+    expect(at(40)).toEqual({
+      folder: "",
+      title: "Calm Technology",
+      mark: "",
+      ancestors: ["The periphery"],
+      section: "Status",
+    })
   })
   test("then the ancestors, outermost first", () => expect(at(30).ancestors).toEqual([]))
   test("then the section is cut, never below 8 columns, then dropped", () => {
@@ -84,6 +91,14 @@ describe("locationParts", () => {
     expect(locationParts("", "日本語のノート", [], 9).title).toBe("日本語の…")
   })
   test("a note at the root has no folder", () => expect(locationParts(".", "a", [], 80).folder).toBe(""))
+  test("the TL;DR mark counts one column and stays: the title is cut one column earlier", () => {
+    expect(locationParts(".", "Slow broth", [], 80, "*")).toMatchObject({ title: "Slow broth", mark: "*" })
+    expect(locationParts(".", "Calm Technology", [], 11, "*")).toMatchObject({ title: "Calm Tech…", mark: "*" })
+    expect(locationParts(".", "Calm Technology", [], 11).title).toBe("Calm Techn…")
+    const l = locationParts("", "Calm Technology", ["Status"], 26, "*")
+    expect(l.section).toBe("Status") // 15 + 1 + 3 + 6 = 25 fits
+    expect(locationParts("", "Calm Technology", ["Status quo"], 27, "*").section).toBe("Status …")
+  })
 })
 
 describe("stateCluster", () => {
@@ -298,6 +313,25 @@ describe("headerLayout", () => {
   })
   test("a root note has no folder in drawer width", () => {
     expect(at(80, { folder: "." }).head.folder).toBe("")
+  })
+  test("a TL;DR puts * after the title, coloured by freshness; none in zen, the cluster unaffected", () => {
+    const plain = at(120, { query: "tool", matchIdx: 3, count: 25 })
+    const l = at(120, { query: "tool", matchIdx: 3, count: 25, tldr: "fresh" })
+    expect(l.head.mark).toBe("*")
+    expect(l.tldr).toBe("fresh")
+    expect(l.cluster).toEqual(plain.cluster)
+    expect(l.head.col + sw(head(l)) + 1).toBeLessThanOrEqual(l.clusterCol - 3)
+    expect(at(120).head.mark).toBe("")
+    const z = at(80, { zen: true, inline: false, tldr: "stale" })
+    expect(z.head.mark).toBe("")
+    expect(z.tldr).toBeNull()
+    const t = themeByName("brothy")
+    const spans = topLineSpans(t, "watching", at(120, { tldr: "stale", folder: "." }), false)
+    const i = spans.findIndex((x) => x.text === "*")
+    expect(spans[i - 1]!.text).toBe(l.head.title)
+    expect(spans[i]!.fg).toBe(t.textMuted)
+    const fresh = topLineSpans(t, "watching", at(120, { tldr: "fresh", folder: "." }), false)
+    expect(fresh.find((x) => x.text === "*")!.fg).toBe(t.primary)
   })
   test("zen has no panel and no folder", () => {
     const l = at(80, { zen: true, inline: false })

@@ -173,7 +173,7 @@ function outlineList({ d, AW, panelRow, thumbRows }: PanelKit, { outlineGo }: Pa
   return listEls
 }
 
-/** The Info list (a link or change row is clickable), or the read error; it writes its list top and `infoSeen` back. */
+/** The Info list (a link, a change row or the TL;DR's stop is clickable), or the read error; it writes its list top and `infoSeen` back. */
 function infoList(
   { c, d, AW, panelRow, thumbRows, topOf }: PanelKit,
   { jumpChange, openLink }: PanelActions,
@@ -204,13 +204,14 @@ function infoList(
           sel: sideFocus === "info" && idx === curItem,
           thumb: on(i),
           onDown:
-            it.kind === "link" || (it.kind === "change" && it.stop)
+            it.kind === "link" || ((it.kind === "change" || it.kind === "frule") && it.stop)
               ? (e) => {
                   if (e.button !== MouseButton.LEFT) return
                   focusPanel()
                   set({ infoCur: linkRows.indexOf(idx) })
                   if (it.kind === "link") openLink(it)
-                  else jumpChange(it.at)
+                  else if (it.kind === "change") jumpChange(it.at)
+                  else set({ tldrOpen: !s.tldrOpen })
                 }
               : undefined,
         }),
