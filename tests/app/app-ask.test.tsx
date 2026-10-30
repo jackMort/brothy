@@ -4,6 +4,7 @@ import { existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "nod
 import { join } from "node:path"
 import { ASK_PROMPT, RERANK_PROMPT } from "../../src/ai/ask"
 import { GHOST_STEP, HINT_HOLD } from "../../src/ui/status"
+import { brothy, hex } from "../helpers/theme"
 import { aiStub, filler, keys, OLLAMA, type Setup, useAppHarness, W120, waitFor, waitFrame, withClock } from "./helpers"
 
 const { cacheDir, tmp, mount, openNote, aiConfig, mountAI, writeConfig } = useAppHarness()
@@ -475,4 +476,63 @@ test("a heading row with no room left (the rules style) carries the landing mark
   const text = lines.find((l) => l.includes("Give a single file path"))!
   expect(row).not.toContain("file¹")
   expect(row[text.indexOf("Give") - 2]).toBe("¹")
+})
+
+test("back to the answers: after landing, C-p reopens the question with its answers, the next one highlighted, nothing sent", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await askIt(s, ai)
+  await keys(s, "enter") // the first match
+  let f = await keys(s, "C-p")
+  f = await waitFrame(s, (fr) => fr.includes("Matches"))
+  expect(f).toContain("?how do I open one file")
+  expect(ai.calls.length).toBe(1)
+  // the answer after the one opened: the list's second answer row
+  const rows = s.captureSpans().lines.map((l) => ({
+    text: l.spans.map((x) => x.text).join(""),
+    on: l.spans.some((sp) => hex(sp.bg) === brothy.primary),
+  }))
+  const answers = rows.filter((r) => /› .*\b(single file|path|cli)\s+│/.test(r.text))
+  expect(answers.map((r) => r.on)).toEqual([false, true, false])
+  // typing replaces the whole query; ⌫ edits it
+  f = await keys(s, "type:?why")
+  expect(f).toContain("?why")
+  expect(f).not.toContain("?how do I open one file")
+  f = await keys(s, "backspace")
+  expect(f).toContain("?wh")
+})
+
+test("back to the answers: ⌫ edits a reopened question; r, or opening a plain hit, forgets it", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await askIt(s, ai)
+  await keys(s, "enter")
+  await keys(s, "C-p")
+  await waitFrame(s, (fr) => fr.includes("Matches"))
+  expect(await keys(s, "backspace")).toContain("?how do I open one fil")
+  await keys(s, "esc", "C-p")
+  await waitFrame(s, (fr) => fr.includes("Matches")) // leaving without landing keeps it
+  await keys(s, "esc", "r")
+  expect(await keys(s, "C-p")).not.toContain("?how do I")
+  await keys(s, "esc")
+  // land again (the queries come from memory), then a plain hit replaces the question and forgets it
+  await keys(s, "C-p", "type:?how do I open one file", "enter")
+  await waitFrame(s, (fr) => fr.includes("Matches"))
+  await keys(s, "enter", "C-p")
+  await waitFrame(s, (fr) => fr.includes("Matches"))
+  await keys(s, "type:README")
+  await waitFrame(s, (fr) => fr.includes("Go to"))
+  await keys(s, "enter")
+  expect(await keys(s, "C-p")).not.toContain("?how do I")
+  expect(ai.calls.length).toBe(1)
+})
+
+test("without an ai block C-p never reopens the last question", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(askVault(), "README.md", { size: W120 })
+  await askIt(s, ai)
+  await keys(s, "enter")
+  writeConfig({ ai: null })
+  await keys(s, "r")
+  expect(await keys(s, "C-p")).toContain("Go to")
 })

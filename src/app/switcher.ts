@@ -41,7 +41,7 @@ import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import type { Links } from "./links"
-import { jobKey } from "./store"
+import { jobKey, type UI } from "./store"
 
 /** What the ask requests share: dropping a running ask and setting the open switcher's ask state. */
 interface AskDeps {
@@ -230,6 +230,7 @@ function makeOpening(c: AppCtx, closeSwitcher: () => void) {
     if (!row || (row.kind !== "note" && row.kind !== "heading" && row.kind !== "text")) return
     const q = ui.current.switcher?.q.trim() ?? ""
     closeSwitcher()
+    set({ lastAsk: null }) // a plain hit opened: C-p starts empty again
     openFile(row.path)
     focusDoc()
     if (row.kind === "note") return
@@ -289,6 +290,7 @@ function makeActivate(
    */
   const answerTo = (row: AnswerRow) => {
     const why = answerWhy(row, ui.current.switcher?.ask)
+    rememberAsk(row)
     closeSwitcher()
     openFile(row.path)
     focusDoc()
@@ -298,6 +300,18 @@ function makeActivate(
     if (!at || !landAt(row, at, doc)) return flash("heading gone")
     if (at.moved) flash(`heading gone · found “${row.query}” instead`)
     set({ landed: { path: row.path, n: row.n ?? null, why, moved: at.moved, heading: at.heading } })
+  }
+
+  /** Keep the open question, its answers and which one `row` is, for `C-p` to reopen (`ui.lastAsk`). */
+  const rememberAsk = (row: AnswerRow) => {
+    const sw = ui.current.switcher
+    if (!sw?.ask) return
+    const at = derive()
+      .swRows.filter((r) => r.kind === "answer")
+      .findIndex((r) => r.id === row.id)
+    // a rerank still running is cancelled by the close: its answers stay the local ones
+    const state: AskState = sw.ask.phase === "reranking" ? { ...sw.ask, phase: "result" } : sw.ask
+    set({ lastAsk: { q: sw.q, state, at } })
   }
 
   /** The open note indexed as it is now, and where the answer is in it; null when it could not be read. */
@@ -395,10 +409,27 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     set({ switcher: { ...sw, hl, top: keepHitVisible(sw.top, swRows, hl, L.PH) } })
   }
 
+  /** A printable key: appended to the query, or the whole query when the switcher was reopened on the last question. */
+  const swInput = (text: string) => {
+    const sw = ui.current.switcher
+    if (sw) swType(sw.fresh ? text : sw.q + text)
+  }
+
+  /** Reopen on the last question with its answers, nothing sent: the answer after the one opened is highlighted. */
+  const reopenAsk = ({ q, state, at }: NonNullable<UI["lastAsk"]>) => {
+    ui.current.switcher = { q, ask: state, hl: 0, top: 0, fresh: true } // unbumped: only for `derive` below
+    const { swRows, L } = derive()
+    const answers = swRows.flatMap((r, i) => (r.kind === "answer" ? [i] : []))
+    const hl = answers.length ? answers[(at + 1) % answers.length]! : Math.max(0, firstHit(swRows))
+    set({ switcher: { q, ask: state, hl, top: keepHitVisible(0, swRows, hl, L.PH), fresh: true } })
+  }
+
   const openSwitcher = () => {
     ensureLinks()
     set({ labels: null, landed: null })
-    swType("")
+    const last = ui.current.ai ? ui.current.lastAsk : null
+    if (last) reopenAsk(last)
+    else swType("")
     indexVault()
   }
 
@@ -406,6 +437,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     dropAsk,
     closeSwitcher,
     swType,
+    swInput,
     swGo,
     dropIndex,
     openSwitcher,

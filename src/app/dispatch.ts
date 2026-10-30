@@ -34,7 +34,7 @@ function makePopupKey({ workspace, switcher, popups }: Features, actions: Action
     {
       mode: "switch",
       open: (s) => !!s.switcher,
-      type: (s, text) => s.switcher && switcher.swType(s.switcher.q + text),
+      type: (_, text) => switcher.swInput(text),
     },
     { mode: "prompt", open: (s) => !!s.prompt, type: (s, text) => s.prompt && promptType(s.prompt.value + text) },
   ]
