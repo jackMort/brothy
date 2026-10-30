@@ -5,13 +5,11 @@ import {
   GLOSS_MAX,
   glossKey,
   glossRequest,
-  glossRows,
-  glossRule,
   glossSystem,
   glossTarget,
+  keepSentences,
   parseGlossStyle,
 } from "../../src/ai/gloss"
-import { width } from "../../src/lib/text"
 import { noteSections } from "../../src/markdown/sections"
 import { expectLinear, manyHeadings, SCALE } from "../helpers/perf"
 
@@ -57,10 +55,11 @@ test("glossRequest: the user message names the note and the heading path", () =>
   expect(glossRequest("explain", "Fruit", [], "Intro.", 48_000).user).toBe("Note: Fruit\nSection: Fruit\n\nIntro.")
 })
 
-test("glossRequest: plain text by cleanSummary, at most GLOSS_MAX characters", () => {
+test("glossRequest: plain text by cleanSummary, a longer reply kept to GLOSS_MAX characters", () => {
   const r = glossRequest("simplify", "Fruit", ["Apples"], "Apples are red.", 48_000)
   expect(r.maxOut).toBe(GLOSS_MAX)
   expect(r.clean).toBe(cleanSummary)
+  expect(r.keep).toBe(keepSentences)
 })
 
 test("glossRequest clips to min(maxChars, 12 000) code points", () => {
@@ -114,34 +113,6 @@ test("glossTarget: duplicate headings get different ids", () => {
 
 test("glossKey appends the style", () => {
   expect(glossKey("/n/a.md#apples#0", "translate:pl")).toBe("/n/a.md#apples#0#translate:pl")
-})
-
-test("glossRule: dotted rule with the label, exactly the width; long headings are cut", () => {
-  const r = glossRule("result", "Why another reader?", 56)
-  expect(r[0]).toBe("┈ ")
-  expect(r[1]).toBe("gloss · Why another reader?")
-  expect(r[2]).toMatch(/^ ┈+$/)
-  expect(width(r.join(""))).toBe(56)
-  expect(glossRule("loading", "H", 40)[1]).toBe("gloss · H · explaining…")
-  expect(glossRule("outdated", "H", 40)[1]).toBe("gloss · H · outdated · a")
-  const cut = glossRule("outdated", "A very long heading that cannot possibly fit here", 40)
-  expect(cut[1].endsWith("… · outdated · a")).toBe(true)
-  expect(width(cut.join(""))).toBe(40)
-  expect(glossRule("result", "bad\x1b[2Jheading", 40)[1]).not.toContain("\x1b")
-})
-
-test("glossRows: wraps to the width, at most 3 rows, the last cut with …", () => {
-  expect(glossRows("Pagers print Markdown raw.", 40)).toEqual(["Pagers print Markdown raw."])
-  const rows = glossRows(said("word", 40), 30)
-  expect(rows.length).toBe(3)
-  expect(rows[2]!.endsWith("…")).toBe(true)
-  for (const r of rows) expect(width(r)).toBeLessThanOrEqual(30)
-  expect(glossRows("", 30)).toEqual([])
-})
-
-test("glossRows: one huge token stays inside the width; control characters never pass", () => {
-  for (const r of glossRows("x".repeat(200), 30)) expect(width(r)).toBeLessThanOrEqual(30)
-  expect(glossRows("a\x1b[31mred\x07", 30).join("")).not.toMatch(/[\x00-\x1f\x7f]/)
 })
 
 test("glossTarget stays linear in the number of headings", () => {

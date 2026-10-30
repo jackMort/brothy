@@ -159,11 +159,12 @@ export function useRenderEffects(
     ctxSeen.current = ctxNow
     pokeHints(ctxNow)
   })
-  // zen gloss: runs when the reading line changes section (not on every scroll tick)
+  // zen gloss: runs when the reading line changes section (not on every scroll tick); at once on entering zen
   useEffect(() => {
     if (glossAt === glossSeen.current) return
+    const first = glossSeen.current === null
     glossSeen.current = glossAt
-    glossEntered()
+    glossEntered(first)
   })
   // the sample's code block colours in once the highlighter answers (its cache serves every theme after that)
   useEffect(() => colourIn(c, sample, hlSample))

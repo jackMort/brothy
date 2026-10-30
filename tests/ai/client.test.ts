@@ -740,6 +740,60 @@ describe("chat", () => {
       raw: "123456",
     })
   })
+  describe("keep: a reply cut short is kept instead of failing", () => {
+    const keep = (s: string) => s.slice(0, 4)
+    test("past maxOut: the stream closes, keep(clean(raw)) is the text, the overflowing delta never reaches onDelta", async () => {
+      let signal: AbortSignal | null | undefined
+      // the stream never closes: only the cap ends it, and what follows is never read
+      const body = stream([delta("123"), delta("456789"), delta("never")], false)
+      const f = (async (_u: unknown, init: RequestInit) => (
+        (signal = init.signal), new Response(body, sse)
+      )) as unknown as typeof fetch
+      const seen: string[] = []
+      const r = await chat(T, { ...REQ, maxOut: 5, keep }, { fetch: f, onDelta: (raw) => seen.push(raw) })
+      expect(r).toEqual({ ok: true, text: "1234", raw: "123456789" })
+      expect(seen).toEqual(["123"])
+      expect(signal?.aborted).toBe(true)
+    })
+    test("without keep the same reply is tooLong", async () => {
+      const f = reply(stream([delta("123"), delta("456789")], false))
+      expect(await chat(T, { ...REQ, maxOut: 5 }, { fetch: f })).toEqual({ ok: false, failure: { kind: "tooLong" } })
+    })
+    test("a length finish: kept with text, empty without", async () => {
+      const cut = `data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n`
+      expect(await chat(T, { ...REQ, keep }, { fetch: reply(stream([delta("partial"), cut])) })).toEqual({
+        ok: true,
+        text: "part",
+        raw: "partial",
+      })
+      expect(await chat(T, { ...REQ, keep }, { fetch: reply(stream([cut])) })).toEqual({
+        ok: false,
+        failure: { kind: "empty" },
+      })
+    })
+    test("a JSON 200 reply over maxOut: kept with keep, tooLong without", async () => {
+      const json = () =>
+        reply(JSON.stringify({ choices: [{ message: { content: "123456789" } }] }), {
+          headers: { "content-type": "application/json" },
+        })
+      expect(await chat(T, { ...REQ, maxOut: 5, keep }, { fetch: json() })).toEqual({
+        ok: true,
+        text: "1234",
+        raw: "123456789",
+      })
+      expect(await chat(T, { ...REQ, maxOut: 5 }, { fetch: json() })).toEqual({
+        ok: false,
+        failure: { kind: "tooLong" },
+      })
+    })
+    test("keep returning nothing is empty", async () => {
+      const f = reply(stream([delta("123456")], false))
+      expect(await chat(T, { ...REQ, maxOut: 5, keep: () => "" }, { fetch: f })).toEqual({
+        ok: false,
+        failure: { kind: "empty" },
+      })
+    })
+  })
   test("empty is judged on the cleaned text", async () => {
     expect(
       await chat(T, { ...REQ, clean: () => "" }, { fetch: reply(stream([delta("words"), "data: [DONE]\n\n"])) }),

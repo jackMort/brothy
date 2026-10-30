@@ -220,11 +220,12 @@ const KEYMAP = {
     modes: ["zen"],
     keys: ["a"],
     label: "a",
-    desc: "gloss: explain the section you're reading (AI)",
+    desc: "gloss: explain the section you're reading (AI) · again: more / less",
     hint: "gloss",
     spare: true,
     when: "ai",
   },
+  zenRegen: { modes: ["zen"], keys: ["S-a"], label: "A", desc: "gloss: ask again, replacing the cached one (AI)" },
 
   outlineMove: {
     modes: ["outline"],

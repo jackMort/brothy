@@ -26,6 +26,8 @@ export interface Timers {
   ai?: ReturnType<typeof setTimeout>
   wait?: ReturnType<typeof setTimeout>
   gloss?: ReturnType<typeof setTimeout>
+  /** a cached gloss waits GLOSS_DWELL before it shows */
+  dwell?: ReturnType<typeof setTimeout>
   steam?: ReturnType<typeof setTimeout>
 }
 
