@@ -3,8 +3,6 @@ title: Pipes & editor
 description: "Read Markdown from a pipe with brothy -, and open the note in your editor with e."
 ---
 
-<!-- Mirrors README § Quick start (From a pipe) and Keys (e): update both. -->
-
 ## Reading a pipe
 
 `curl -s … | brothy` or `brothy - < note.md` shows the piped text as a single document titled `stdin` (up to 5 MB; more stops with `brothy: input too large (limit 5 MB)`). Keys are read from `/dev/tty`, so stdout and a controlling terminal are still required.

@@ -3,7 +3,7 @@ title: What is sent
 description: "Exactly what each AI key sends, and what never leaves your machine."
 ---
 
-<!-- Mirrors README § AI (What is sent) and SECURITY.md: update both. -->
+<!-- Mirrors SECURITY.md (what is sent): update both. -->
 
 | Key | Request | Sent |
 | --- | --- | --- |

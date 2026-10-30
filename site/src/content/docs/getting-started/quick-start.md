@@ -3,8 +3,6 @@ title: Quick start
 description: "Open a folder, a single note or a pipe, and learn the four keys that get you around."
 ---
 
-<!-- Mirrors README § Quick start: update both. -->
-
 ```sh
 brothy                # browse the current folder
 brothy ~/notes        # browse a folder

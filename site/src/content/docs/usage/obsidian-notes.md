@@ -3,8 +3,6 @@ title: Obsidian notes
 description: "Wikilinks, embeds, callouts, highlights, comments and dataview blocks read cleanly."
 ---
 
-<!-- Mirrors README § Screen (Obsidian notes): update both. -->
-
 brothy renders the Obsidian syntax that matters when reading:
 
 - **Callouts** (`> [!warning] Title`) get an icon, a title and a bar in the kind's color. `-` and `+` folds show `▾` and stay open.

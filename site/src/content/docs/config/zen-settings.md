@@ -3,8 +3,6 @@ title: Zen settings
 description: "The zen block of config.json and its defaults."
 ---
 
-<!-- Mirrors README § Config (zen): update both. -->
-
 The `zen` key holds the settings of [zen mode](/brothy/usage/zen-mode/). Change them with <kbd>Z</kbd> or by hand; missing or invalid fields fall back to the defaults. Zen itself always starts off.
 
 | Field | Values | Default |

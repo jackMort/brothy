@@ -3,8 +3,6 @@ title: config.json
 description: "Where brothy keeps its settings and what each key does."
 ---
 
-<!-- Mirrors README § Config: update both. -->
-
 `~/.config/brothy/config.json` (or `$XDG_CONFIG_HOME/brothy/config.json` when that is an absolute path) holds:
 
 | Key | Value |

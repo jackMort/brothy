@@ -3,8 +3,6 @@ title: Reading
 description: "Preview and Source, find, code highlighting, live reload, the minimap and the mouse."
 ---
 
-<!-- Mirrors README § Screen (Preview, Source, Minimap) and Features: update both. -->
-
 ## Preview
 
 Headings (H1 underlined, H2 and deeper with dim `#` markers), wrapped paragraphs, bold, italic and strikethrough, inline code, links, quotes, nested and ordered lists, task lists, box-drawn tables with alignment, and code blocks with a background and a language label. Text is wrapped at 80 columns at most and centred. Tables shrink to fit; columns that cannot fit at all are replaced by a final `…` column.

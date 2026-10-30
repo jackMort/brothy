@@ -3,8 +3,6 @@ title: All themes
 description: "The 42 themes in 22 families, and where the palettes come from."
 ---
 
-<!-- Mirrors README § Screen (Themes) and Credits: update both. -->
-
 22 families: 20 with a dark theme and a `-light` twin, and 2 dark-only (synthwave84, vesper).
 
 **Dark**: brothy, catppuccin, dracula, tokyonight, gruvbox, solarized, rosepine, everforest, kanagawa, nord, github, one-dark, flexoki, ayu, cyberdream, iceberg, melange, nightfox, nightowl, oxocarbon, synthwave84, vesper

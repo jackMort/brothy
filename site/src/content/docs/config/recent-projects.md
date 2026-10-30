@@ -3,8 +3,6 @@ title: Recent projects
 description: "projects.json, the list behind the o picker and the welcome page."
 ---
 
-<!-- Mirrors README § Config (projects.json): update both. -->
-
 Recent projects live beside `config.json` in `projects.json`: up to 20 entries, newest first, each with the folder (`root`), the note open when it was left (`lastNote`), its Preview line (`top`) and when (`at`).
 
 The start and every workspace opened with <kbd>o</kbd> are recorded, and updated when you switch away or quit. A single note is recorded under its vault (or folder). A piped document is never recorded.

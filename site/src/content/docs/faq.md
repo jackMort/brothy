@@ -3,8 +3,6 @@ title: FAQ
 description: "Short answers about platforms, fonts, AI, Obsidian and what brothy is not."
 ---
 
-<!-- Mirrors README § Alternatives, Install and AI: update both. -->
-
 ## Does it run on Windows?
 
 No: macOS and Linux only (x64 and arm64 binaries).

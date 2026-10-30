@@ -3,8 +3,6 @@ title: Install
 description: "Download the brothy binary for macOS or Linux, or build it from source with Bun."
 ---
 
-<!-- Mirrors README § Install: update both. -->
-
 Requirements: macOS or Linux (Windows is not supported) and a terminal with true color and Unicode.
 
 ## Binary

@@ -3,8 +3,6 @@ title: Set up a provider
 description: "Turn on the opt-in AI features with an ai block in config.json: local models first, or a hosted provider."
 ---
 
-<!-- Mirrors README § AI: update both. -->
-
 AI is off until you add an `ai` block to `config.json`. Nothing is ever sent on its own: every request starts from an explicit key, goes to the configured endpoint only, and is the only network traffic brothy has. Up to 3 requests run at once, over every feature; a 4th says `AI busy · 3 requests running` and sends nothing.
 
 Local first: no key, nothing leaves your machine.
