@@ -5,6 +5,7 @@ import { basename } from "node:path"
 import { type Gloss, isFresh, loadGlosses, saveGlosses, saveSummaries, textHash } from "../ai/cache"
 import {
   aiError,
+  aiMessage,
   type ChatReq,
   type ChatResult,
   chat,
@@ -16,12 +17,13 @@ import {
 } from "../ai/client"
 import { type AIConfig, type AITarget, type GlossStyle, PROMPT_V, PROMPTS, resolveAI } from "../ai/config"
 import { type Change, type DeltaParse, deltaRequest, hhmm, parseDelta } from "../ai/delta"
-import { type GlossTarget, glossKey, glossRequest } from "../ai/gloss"
+import { GLOSS_DWELL, type GlossTarget, glossKey, glossRequest } from "../ai/gloss"
 import { safeLine } from "../lib/spans"
 import { stem } from "../notes/files"
 import { STDIN } from "../notes/workspace"
 import { loadConfig } from "../system/config"
 import type { AppCtx } from "./ctx"
+import type { Derived } from "./derive"
 import { type Job, type JobKind, jobKey, type UI } from "./store"
 
 /** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
@@ -146,16 +148,16 @@ export type Jobs = ReturnType<typeof makeJobs>
 
 // ------------------------------------------------------------- jobs
 
-/** The zen gloss sheet: the cache read once, fading out, showing a fresh or streaming gloss when the reading line enters its section. */
+/** The zen gloss note: the cache read once, fading out, showing a cached or streaming gloss when the reading line enters its section. */
 function makeGlossSheet(c: AppCtx) {
-  const { ui, set, derive, jobs, runFade } = c
+  const { ui, set, derive, jobs, timers, alive, runFade } = c
 
   /** glosses.json is read once, and only when zen meets an `ai` block (auto-show needs it). */
   const ensureGlosses = () => {
     if (ui.current.ai && ui.current.glosses === null) set({ glosses: loadGlosses() })
   }
 
-  /** The reading line left the sheet's section: fade it out over GHOST_STEPS, then drop it. */
+  /** The reading line left the note's section: fade it out over GHOST_STEPS, then drop it. */
   const fadeGloss = () => {
     const g = ui.current.gloss
     if (!g || g.fadeAt !== null) return
@@ -168,19 +170,39 @@ function makeGlossSheet(c: AppCtx) {
     )
   }
 
-  /** The reading line entered another section (or note, or zen): fade the old sheet; show a fresh cached gloss or a running stream. */
-  const glossEntered = () => {
-    const { s, gHere, gHash, gStyle } = derive()
+  /**
+   * The reading line entered another section (or note, or zen): fade the old note. A running request for the new section
+   * shows at once; a cached gloss, fresh or outdated, after GLOSS_DWELL so skimming with `]` stays quiet (at once when
+   * zen was just entered: `immediate`).
+   */
+  const glossEntered = (immediate: boolean) => {
+    clearTimeout(timers.current.dwell)
+    const d = derive()
+    const { s, gHere } = d
     const g = s.gloss
     if (g && g.id !== gHere?.id) fadeGloss()
     if (!gHere || !s.ai || !s.glosses || (g?.id === gHere.id && g.fadeAt === null)) return
-    const key = glossKey(gHere.id, gStyle)
-    // outdated or missing glosses never appear by themselves: they need `a`
-    if (jobs.current.has(jobKey("gloss", gHere.id)) || freshGloss(s, key, gHash))
-      set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
+    if (jobs.current.has(jobKey("gloss", gHere.id))) return showGloss(set, d)
+    if (!s.glosses[glossKey(gHere.id, d.gStyle)]) return
+    if (immediate) return showGloss(set, d)
+    const id = gHere.id
+    timers.current.dwell = setTimeout(() => {
+      const now = derive()
+      const shown = now.s.gloss?.id === id && now.s.gloss.fadeAt === null
+      if (alive.current && now.gHere?.id === id && !shown) showGloss(set, now)
+    }, GLOSS_DWELL)
   }
 
   return { ensureGlosses, glossEntered }
+}
+
+/** Show the reading section's note, collapsed, as `d` derives it. */
+function showGloss(set: AppCtx["set"], { gHere, gHash, gStyle }: Derived) {
+  if (!gHere) return
+  const key = glossKey(gHere.id, gStyle)
+  set({
+    gloss: { id: gHere.id, index: gHere.index, key, heading: gHere.heading, hash: gHash, fadeAt: null, open: false },
+  })
 }
 
 /** Send one section to the AI as a gloss and cache the reply. */
@@ -193,7 +215,8 @@ function makeStartGloss(c: AppCtx, { failText, startJob }: Pick<Jobs, "failText"
     const key = glossKey(g.id, style)
     startJob("gloss", g.id, target, glossRequest(style, title, g.trail, g.text, target.maxChars), {
       stream: true,
-      begin: () => set({ gloss: { id: g.id, key, heading: g.heading, hash, fadeAt: null } }),
+      begin: () =>
+        set({ gloss: { id: g.id, index: g.index, key, heading: g.heading, hash, fadeAt: null, open: false } }),
       done: (r) => {
         if (r.ok) {
           const entry: Gloss = { hash, v: PROMPTS.gloss, gloss: r.text, model, at: Date.now() }
@@ -201,7 +224,7 @@ function makeStartGloss(c: AppCtx, { failText, startJob }: Pick<Jobs, "failText"
           // sectionId starts with the open path, and STDIN is the only relative one: a piped document lives for this run only
           if (!g.id.startsWith(`${STDIN}#`)) saveGlosses({ [key]: entry })
         } else if ("failure" in r) {
-          // the sheet closes; the cached gloss returns only when the reading line re-enters the section (or on `a`)
+          // the note closes; the cached gloss returns only when the reading line re-enters the section (or on `a`)
           if (ui.current.gloss?.id === g.id) set({ gloss: null })
           const reading = derive().gHere?.id === g.id
           bump((x) => x + 1)
@@ -214,7 +237,10 @@ function makeStartGloss(c: AppCtx, { failText, startJob }: Pick<Jobs, "failText"
   return startGloss
 }
 
-/** zen `a`: gloss the section under the reading line. */
+/** A gloss request about to go: the `ai` block, this derive and its reading section. */
+type GlossAsk = { ai: AIConfig; d: Derived; gHere: GlossTarget }
+
+/** zen `a` and `A`: gloss the section under the reading line. */
 function makeZenGloss(
   c: AppCtx,
   jobs: Jobs,
@@ -224,7 +250,7 @@ function makeZenGloss(
   const { reloadAI, cancelJob, aiGate } = jobs
   const startGloss = makeStartGloss(c, jobs)
 
-  /** Cancel the gloss running for section `id` and close its sheet; false when none runs. */
+  /** Cancel the gloss running for section `id` and close its note; false when none runs. */
   const cancelGloss = (id: string) => {
     if (!cancelJob(jobKey("gloss", id))) return false
     if (ui.current.gloss?.id === id) set({ gloss: null })
@@ -232,47 +258,91 @@ function makeZenGloss(
     return true
   }
 
-  /** zen `a`: gloss the section under the reading line, or show its fresh cached gloss; a running gloss is cancelled instead. */
+  /** What a gloss request needs: AI on, the cache read, a section to gloss; null after toasting why not. */
+  const glossReady = (ai: AIConfig | null): GlossAsk | null => {
+    if (!ai) {
+      flash(AI_OFF)
+      return null
+    }
+    ensureGlosses()
+    const d = derive()
+    if (d.gHere) return { ai, d, gHere: d.gHere }
+    flash("nothing to gloss here")
+    return null
+  }
+
+  /** Ask for the reading section's gloss (busy and `resolveAI` toast instead). */
+  const askGloss = ({ ai, d, gHere }: GlossAsk) => {
+    const target = aiGate(ai)
+    if (target) startGloss(gHere, d.gStyle, d.title, target, ai.model)
+  }
+
+  /**
+   * zen `a`: a running gloss is cancelled; a fresh one on screen shows more or less of itself; a fresh one hidden (esc,
+   * an error, a cancel) comes back without a request; otherwise (outdated or missing) the press is the explicit ask.
+   */
   const zenGloss = () => {
     const ai = reloadAI()
     const section = derive().gHere
     // cancel first: a request stays cancellable after its `ai` block goes
     if (section && cancelGloss(section.id)) return flash("gloss cancelled")
-    if (!ai) return flash(AI_OFF)
-    ensureGlosses()
-    const { s, gHere, gHash, gStyle, title } = derive()
-    if (!gHere) return flash("nothing to gloss here")
-    const key = glossKey(gHere.id, gStyle)
-    const shown = s.gloss?.id === gHere.id && s.gloss.fadeAt === null
-    // a fresh gloss that isn't on screen (esc, an error, a cancel) comes back without a request
-    if (!shown && freshGloss(s, key, gHash))
-      return set({ gloss: { id: gHere.id, key, heading: gHere.heading, hash: gHash, fadeAt: null } })
-    // on screen (fresh or outdated), outdated or missing: the press is the explicit ask
-    const target = aiGate(ai)
-    if (target) startGloss(gHere, gStyle, title, target, ai.model)
+    const ready = glossReady(ai)
+    if (!ready) return
+    const { d, gHere } = ready
+    const g = d.s.gloss
+    if (g?.id === gHere.id && g.fadeAt === null && d.sheet?.state === "result") {
+      if (!d.overflow && !g.open) return flash("nothing more · A asks again")
+      return set({ gloss: { ...g, open: !g.open } })
+    }
+    if (freshGloss(d.s, glossKey(gHere.id, d.gStyle), d.gHash)) return showGloss(set, d)
+    askGloss(ready)
   }
 
-  return { zenGloss }
+  /** zen `A`: ask again, replacing the cached gloss; nothing while one runs (its rule says `a cancel`). */
+  const zenRegen = () => {
+    const ai = reloadAI()
+    const section = derive().gHere
+    if (section && c.jobs.current.has(jobKey("gloss", section.id))) return
+    const ready = glossReady(ai)
+    if (ready) askGloss(ready)
+  }
+
+  return { zenGloss, zenRegen }
 }
 
 /** `a`: the TL;DR request for the open note. */
 function makeSummary(c: AppCtx, { reloadAI, cancelJob, aiGate, failText, startJob }: Jobs) {
-  const { ui, set, bump, memo, flash, focusPanel } = c
+  const { ui, set, bump, memo, derive, flash, focusPanel } = c
+
+  /** `path`'s failed request forgotten: a new one starts, or it succeeded. */
+  const withoutErr = (path: string) =>
+    Object.fromEntries(Object.entries(ui.current.summaryErr).filter(([p]) => p !== path))
+
+  /** A summary landed out of sight: Info isn't on screen, or it is for another note. */
+  const readyToast = (path: string) => {
+    const d = derive()
+    const here = d.s.openPath === path
+    if (here && d.L.shown && d.s.view === "info") return
+    flash(here ? "TL;DR ready · 3 to read" : `TL;DR ready · ${stem(basename(path))}`)
+  }
 
   /** Send `text` for `path`; the result is cached for that path whatever note is current by then. */
   const startSummary = (path: string, text: string, target: AITarget, model: string) => {
     const hash = textHash(text) // taken now: a note edited meanwhile shows the result as outdated
     startJob("tldr", path, target, summaryRequest(text, target.maxChars), {
       stream: true,
-      begin: () => bump((x) => x + 1),
+      begin: () => set({ summaryErr: withoutErr(path), tldrOpen: false }),
       done: (r) => {
         if (r.ok) {
           const entry = { hash, v: PROMPT_V, summary: r.text, model, at: Date.now() }
           set({ summaries: { ...ui.current.summaries, [path]: entry } })
           if (path !== STDIN) saveSummaries({ [path]: entry }) // a piped document lives for this run only
+          readyToast(path)
         } else if ("failure" in r) {
+          // the error stays in the block (memory only) as well as in the toast
+          const msg = aiMessage(r.failure, { host: target.host, keyEnv: target.keyEnv, key: target.key })
+          set({ summaryErr: { ...ui.current.summaryErr, [path]: { msg, hash } } })
           const note = ui.current.openPath === path ? undefined : stem(basename(path))
-          bump((x) => x + 1)
           flash(failText(target, r.failure, undefined, note), "error")
         }
       },

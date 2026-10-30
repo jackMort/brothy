@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test"
 import { FOOTERS, type FooterState, footerHints, HELP_GROUPS, isDown, modeOf, PINNED } from "../../src/app/keymap"
 
-const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true }
-const NONE: FooterState = { query: false, preview: false, disk: false, ai: false, changes: false }
+const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true, tldr: true }
+const NONE: FooterState = { query: false, preview: false, disk: false, ai: false, changes: false, tldr: false }
 const words = (on: FooterState, c: Parameters<typeof footerHints>[0] = "doc") =>
   footerHints(c, on).map((h) => `${h.key} ${h.word}`)
 
@@ -16,6 +16,7 @@ test("document hints: short keys, a context's own word over the binding's", () =
     "f links",
     "H L history",
     "e edit",
+    "a summarize",
     "tab panel",
     "? keys",
   ])
@@ -40,23 +41,37 @@ test("AI hints show only with an `ai` block; D also needs changes to explain", (
   expect(words(NONE, "zen")).not.toContain("a gloss")
 })
 
+test("the document offers a only while the note has no fresh TL;DR; state words win over the binding's", () => {
+  expect(words({ ...NONE, ai: true })).not.toContain("a summarize")
+  expect(words({ ...NONE, ai: true, tldr: true })).toContain("a summarize")
+  const say = (c: Parameters<typeof footerHints>[0], w: Parameters<typeof footerHints>[2]) =>
+    footerHints(c, { ...NONE, ai: true, tldr: true }, w).map((h) => `${h.key} ${h.word}`)
+  expect(say("doc", { summarizeHint: "cancel" })).toContain("a cancel")
+  expect(say("panel:info", { infoMove: "move", infoOpen: "more", summarize: "retry" }).slice(0, 3)).toEqual([
+    "↑↓ move",
+    "⏎ more",
+    "a retry",
+  ])
+  expect(say("panel:outline", { infoMove: "less" })[0]).toBe("↑↓ move") // words go to their own binding only
+})
+
 test("spare hints are the optional ones", () => {
   const spare = (c: Parameters<typeof footerHints>[0]) =>
     footerHints(c, ALL)
       .filter((h) => h.spare)
       .map((h) => h.key)
-  expect(spare("doc")).toEqual(["f", "H L", "e"])
+  expect(spare("doc")).toEqual(["f", "H L", "e", "a"])
   expect(spare("panel:info")).toEqual(["a", "D"])
   expect(spare("theme")).toEqual(["type"])
   expect(spare("switch")).toEqual(["?"])
 })
 
 test("the switcher's footer: `? ask` only with an `ai` block; a question's footer follows the ask's stage", () => {
-  const sw = (on: FooterState, ask?: Parameters<typeof footerHints>[2]) =>
-    footerHints("switch", on, ask).map((h) => `${h.key} ${h.word}`)
+  const sw = (on: FooterState, ask?: Parameters<typeof footerHints>[3]) =>
+    footerHints("switch", on, {}, ask).map((h) => `${h.key} ${h.word}`)
   expect(sw(ALL)).toEqual(["type search", "↑↓ select", "tab section", "⏎ open", "? ask", "esc close"])
   expect(sw(NONE)).not.toContain("? ask")
-  const stages: [Parameters<typeof footerHints>[2], string[]][] = [
+  const stages: [Parameters<typeof footerHints>[3], string[]][] = [
     ["off", ["esc close"]],
     ["short", ["⌫ edit", "esc close"]],
     ["target", ["⌫ edit", "esc close"]],
@@ -70,7 +85,7 @@ test("the switcher's footer: `? ask` only with an `ai` block; a question's foote
   ]
   for (const [stage, want] of stages) expect(sw(ALL, stage)).toEqual(want)
   // another context ignores the ask
-  expect(footerHints("doc", ALL, "idle")).toEqual(footerHints("doc", ALL))
+  expect(footerHints("doc", ALL, {}, "idle")).toEqual(footerHints("doc", ALL))
 })
 
 test("a typing binding's empty word stays empty", () => {

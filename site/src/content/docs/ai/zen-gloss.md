@@ -5,11 +5,15 @@ description: "Press a in zen to get a one- or two-sentence gloss of the section 
 
 <!-- Mirrors README § AI (Zen gloss): update both. -->
 
-In [zen](/brothy/usage/zen-mode/), <kbd>a</kbd> explains the section under the reading line in one or two plain sentences, on a muted sheet over the bottom rows of the text. Nothing is inserted into the document. The sheet fades when the reading line leaves the section.
+In [zen](/brothy/usage/zen-mode/), <kbd>a</kbd> explains the section under the reading line in one or two plain sentences, as a footnote over the bottom rows of the text: a short rule, then `¹` and the gloss, with a `¹` after the section's heading. Nothing is inserted into the document. The note fades when the reading line leaves the section.
 
-- A gloss already made for an unchanged section shows by itself when you reach it again, without a request.
-- One made before the section changed is muted as `outdated · a`; only <kbd>a</kbd> asks for a new one.
-- <kbd>esc</kbd> hides the sheet (the next <kbd>esc</kbd> leaves zen); <kbd>a</kbd> while it is loading cancels.
+- From 140 columns (at the default measure) the note sits in the right margin beside its heading instead, with the other sections on screen that have a gloss, dimmed and numbered `¹ ² ³` by row.
+- While the model works the rule says `asking <model> · 3 s · a cancel`.
+- A gloss already made shows by itself when you stay in its section for a moment (skimming with <kbd>]</kbd> stays quiet), without a request.
+- One made before the section changed is dimmed with `edited since · a refresh`; <kbd>a</kbd> asks for a new one.
+- <kbd>a</kbd> on a gloss on screen shows more of a long one (`a more` / `a less`); <kbd>A</kbd> asks again.
+- A reply longer than 400 characters keeps its finished sentences.
+- <kbd>esc</kbd> hides the note (the next <kbd>esc</kbd> leaves zen); <kbd>a</kbd> while it is loading cancels.
 - Glosses are cached in `~/.cache/brothy/glosses.json`; a piped document's are not.
 
 ## Style

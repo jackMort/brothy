@@ -104,6 +104,8 @@ function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }:
       focus: "doc",
       drawerOpen: false,
       reloadedAt: null,
+      summaryErr: {},
+      tldrOpen: false,
       recent: w.openPath ? [w.openPath] : [],
       history: startHistory(w.openPath),
       reload: s.reload + 1,

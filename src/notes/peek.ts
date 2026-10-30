@@ -3,7 +3,7 @@
 // from where the row points. App renders the `peekWindow` of the note; nothing here reads a file or calls AI.
 
 import { A, type Span } from "../lib/spans"
-import { clamp, plural, truncate, truncateLeft, width, wrap } from "../lib/text"
+import { clamp, plural, truncate, truncateLeft, width } from "../lib/text"
 import type { Rendered } from "../markdown/render"
 import type { Theme } from "../theme/theme"
 import { footInk, footnoteRule, markText, noteRows } from "../ui/footnote"
@@ -13,7 +13,7 @@ import type { AnswerRow, NoteDoc, SwitchHit, SwitchRow } from "./vault"
 
 /** outline rows shown around the hit's heading */
 const PEEK_OUTLINE = 5
-/** TL;DR rows, the last cut with `…` */
+/** TL;DR rows, the last cut with ` …` */
 export const PEEK_TLDR = 3
 /** source the pane renders from where it starts, cut at a line: far more than its rows ever show */
 export const PEEK_BYTES = 32 * 1024
@@ -193,14 +193,21 @@ function outlineRows(doc: NoteDoc, r: SwitchHit | AnswerRow, t: Theme, w: number
   return out
 }
 
-/** A TL;DR as Info draws it, after a blank row: the label and model, then PEEK_TLDR rows, the last cut with `…`. */
-function tldrRows(summary: { text: string; model: string }, t: Theme, w: number): Span[][] {
-  const out: Span[][] = [[], [{ text: "TL;DR", fg: t.textMuted, attr: A.BOLD }, muted(" · " + summary.model, t)]]
-  const rows = wrap([{ text: summary.text }], w).map((x) => rowText(x).trimEnd())
-  const shown = rows.slice(0, PEEK_TLDR)
-  if (rows.length > PEEK_TLDR) shown[PEEK_TLDR - 1] = truncate(shown[PEEK_TLDR - 1]! + " " + rows[PEEK_TLDR]!, w)
-  for (const s of shown) out.push([{ text: s, fg: t.text }])
-  return out
+/** A TL;DR as Info draws it, after a blank row: `*` and PEEK_TLDR rows hung under it, the last cut with ` …`. */
+function tldrRows(summary: { text: string }, t: Theme, w: number): Span[][] {
+  const c = footInk(t)
+  const rows = noteRows(summary.text, w, "*", PEEK_TLDR)
+  return [
+    [],
+    ...rows.map((r, i): Span[] =>
+      i
+        ? [{ text: r, fg: c.text }]
+        : [
+            { text: r.slice(0, 1), fg: c.mark },
+            { text: r.slice(1), fg: c.text },
+          ],
+    ),
+  ]
 }
 
 /** At most `room` rendered rows from row `i` on: leading rules skipped, blank runs collapsed to one, filled rows padded to `w`, `hit` in primary. */

@@ -31,7 +31,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "src/ai/config.ts": {
@@ -274,11 +274,6 @@
     },
     "src/App.tsx\u0000App": {
       "complexity_moderate": {
-        "count": 1
-      }
-    },
-    "src/ai/client.ts\u0000streamResult": {
-      "crap_moderate": {
         "count": 1
       }
     },

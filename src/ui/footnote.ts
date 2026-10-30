@@ -308,21 +308,34 @@ function sideInk(note: SideNote, c: FootInk) {
   return { mark: c.mark, text: note.summary ? c.text : c.note }
 }
 
-/** One note's rows: at most `max` of text, then its status row, all within `room` (text first gives way to the status). */
-function sideRows(note: SideNote, max: number, room: number, c: FootInk): Span[][] {
-  const mark = note.summary ? "Δ" : note.n
+/**
+ * `noteRows`' rows as spans: the mark in `fg.mark` on the first row, the text in `fg.text`, a caret ending the last row in
+ * `caret`. An empty `text` is the waiting row, `¹ ▍`; a `text` ending in CARET streams (its last rows show).
+ */
+export function noteSpans(
+  text: string,
+  width_: number,
+  mark: Mark,
+  max: number,
+  fg: { mark: string; text: string; caret: string },
+): Span[][] {
   const m = markText(mark)
-  const fg = sideInk(note, c)
-  const status = note.status && room >= 2 ? statusRow(note.status, SIDENOTE_W, c) : []
-  const textRows = Math.min(max, status.length ? room - 1 : room)
-  const rows = note.text
-    ? noteRows(note.text, SIDENOTE_W, mark, textRows, { tail: note.text.endsWith(CARET) })
-    : [`${m} ${CARET}`]
-  const out = rows.map((r, i) => {
+  const rows = text ? noteRows(text, width_, mark, max, { tail: text.endsWith(CARET) }) : [`${m} ${CARET}`]
+  return rows.map((r, i) => {
     const body = i ? r : r.slice(m.length)
     const spans: Span[] = i ? [] : [{ text: m, fg: fg.mark }]
     if (!body.endsWith(CARET)) return [...spans, { text: body, fg: fg.text }]
-    return [...spans, { text: body.slice(0, -CARET.length), fg: fg.text }, { text: CARET, fg: c.caret }]
+    return [...spans, { text: body.slice(0, -CARET.length), fg: fg.text }, { text: CARET, fg: fg.caret }]
+  })
+}
+
+/** One note's rows: at most `max` of text, then its status row, all within `room` (text first gives way to the status). */
+function sideRows(note: SideNote, max: number, room: number, c: FootInk): Span[][] {
+  const status = note.status && room >= 2 ? statusRow(note.status, SIDENOTE_W, c) : []
+  const textRows = Math.min(max, status.length ? room - 1 : room)
+  const out = noteSpans(note.text, SIDENOTE_W, note.summary ? "Δ" : note.n, textRows, {
+    ...sideInk(note, c),
+    caret: c.caret,
   })
   return status.length ? [...out, status] : out
 }

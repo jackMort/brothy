@@ -99,7 +99,7 @@ describe("peekPane", () => {
     expect(out).not.toContain("TL;DR")
   })
 
-  test("a fresh TL;DR shows with its short model; an outdated one is left out", () => {
+  test("a fresh TL;DR shows under its mark, without the model; an outdated one is left out", () => {
     const fresh = peekSetup(noteRow, (hash) => ({
       hash,
       v: PROMPT_V,
@@ -108,8 +108,8 @@ describe("peekPane", () => {
       at: 1,
     }))
     const out = text(switcherOver({ docs: [[fresh.path, fresh.doc]] }).sw.peekPane(fresh.d))
-    expect(out).toContain("TL;DR · llama3.2")
-    expect(out).toContain("Beta is about peeking.")
+    expect(out).toContain("* Beta is about peeking.")
+    expect(out).not.toContain("llama3.2")
     const stale = peekSetup(noteRow, () => ({
       hash: "not-the-hash",
       v: PROMPT_V,

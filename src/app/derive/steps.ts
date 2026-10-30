@@ -2,11 +2,11 @@
 // Not pure: `filesCursor`, `scrollState` and `matchState` write back the Files cursor, the scroll entry and the match line.
 
 import { type AskView, askStage, questionOf } from "../../ai/ask"
-import { isFresh } from "../../ai/cache"
+import type { Summary } from "../../ai/cache"
 import { shortModel } from "../../ai/client"
-import { type GlossStyle, PROMPTS } from "../../ai/config"
+import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
 import { type Change, hhmm } from "../../ai/delta"
-import { type GlossState, type GlossTarget, parseGlossStyle } from "../../ai/gloss"
+import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
 import { plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
 import { folderCounts, SCAN_LIMIT } from "../../notes/files"
@@ -15,7 +15,7 @@ import type { OpenRow } from "../../notes/projects"
 import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
 import { projectRoot } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
-import { waitSecs } from "../../ui/footnote"
+import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../../ui/footnote"
 import { ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
 import { relocate, remapTop } from "../../ui/nav"
@@ -64,19 +64,30 @@ export function truncationNote(s: UI, L: Layout) {
     : []
 }
 
-/** The TL;DR block: streaming, the cached summary (fresh or outdated) or none; null without an `ai` block or a readable note. */
+/** The TL;DR block: waiting or streaming, the cached summary (fresh or outdated), a failure, or none; null without an `ai` block or a readable note. */
 function summaryView(s: UI, { file, src }: NoteView, memo: Memo, jobs: Map<string, Job>): SummaryView | null {
   if (!s.ai || !s.openPath || !file || file.error) return null
   const job = jobs.get(jobKey("tldr", s.openPath))
-  if (job) return { text: memo.clean(job.raw), state: "streaming", model: "" }
   const saved = s.summaries[s.openPath]
-  if (saved)
-    return {
-      text: saved.summary,
-      state: isFresh(saved, memo.hash(src)) ? "fresh" : "outdated",
-      model: shortModel(saved.model),
-    }
-  return { text: "", state: "none", model: "" }
+  return job ? runningSummary(job, saved, memo) : cachedSummary(s, s.openPath, saved, memo.hash(src), memo)
+}
+
+/** A request running for the open note: waiting (an older summary kept under the caret) or streaming. */
+function runningSummary(job: Job, saved: Summary | undefined, memo: Memo): SummaryView {
+  const text = memo.clean(job.raw)
+  const model = shortModel(job.model)
+  if (text) return memo.summary(text, "streaming", model, 0, null, "", null, false)
+  return memo.summary("", "waiting", model, waitSecs(Date.now(), job.at), null, saved?.summary ?? "", null, false)
+}
+
+/** No request running: the cached summary for `path`, fresh or outdated, or none; and the last failure while the text is the one it failed on. */
+function cachedSummary(s: UI, path: string, saved: Summary | undefined, hash: string, memo: Memo): SummaryView {
+  const err = s.summaryErr[path]
+  const error = err?.hash === hash ? err.msg : null
+  if (!saved) return memo.summary("", "none", "", 0, null, "", error, false)
+  const stale = staleKind(saved, hash, PROMPT_V)
+  const model = shortModel(saved.model)
+  return memo.summary(saved.summary, stale ? "outdated" : "fresh", model, 0, stale, "", error, s.tldrOpen)
 }
 
 /** The Changed block in Info, null while there is nothing to list or explain. */
@@ -152,9 +163,7 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
     links,
     L.PNW - 2,
     file?.info ?? null,
-    sv?.text ?? "",
-    sv?.state ?? "",
-    sv?.model ?? "",
+    sv,
     cv?.state ?? "",
     cv?.label ?? "",
     cv?.changes ?? NO_CHANGES,
@@ -163,7 +172,7 @@ export function infoPanel(s: UI, L: Layout, opened: NoteView, memo: Memo, jobs: 
     title,
   )
   const linkRows = memo.linkIdx(infoRows)
-  return { props, title, ...delta, infoRows, linkRows }
+  return { props, title, ...delta, sv, infoRows, linkRows }
 }
 
 /** The panel list's height and its filter row; puts the Files cursor back on the same note when the list changes. */
@@ -279,7 +288,14 @@ export function matchState(s: UI, view: Rendered, memo: Memo, matchSeen: DeriveR
 
 // ------------------------------------------------------------- zen
 
-/** Zen gloss: the section under the reading line and the sheet on screen. */
+/** No fresh glosses: a shared empty list, so the margin's memo holds. */
+const NO_FRESH: { index: number; text: string }[] = []
+
+/**
+ * Zen gloss: the section under the reading line (`gHere`), its note (`sheet`, null when none), whether that note
+ * overflows its collapsed rows, the margin's column from 140 columns (`margin`, null: the bottom sheet) and the other
+ * sections with a fresh gloss (`others`, only for the margin).
+ */
 export function glossSheet(
   s: UI,
   L: Layout,
@@ -296,23 +312,47 @@ export function glossSheet(
     L.zen && glossing && s.openPath && file && !file.error ? memo.gloss(src, currentHeading, s.openPath, title) : null
   const gHash = memo.glossHash(gHere?.text ?? "")
   const gStyle: GlossStyle = parseGlossStyle(s.ai?.gloss)
-  let sheet: { state: GlossState; heading: string; text: string; fadeAt: number | null } | null = null
   const g = L.zen && s.ai ? s.gloss : null
-  if (g) {
-    const job = jobs.get(jobKey("gloss", g.id))
-    const e = s.glosses?.[g.key]
-    // the sheet's own section: the live hash while it is the reading section, else the one taken when it was shown
-    const hash = gHere?.id === g.id ? gHash : g.hash
-    if (job) sheet = { state: "loading", heading: g.heading, text: memo.glossClean(job.raw), fadeAt: g.fadeAt }
-    else if (e)
-      sheet = {
-        state: isFresh(e, hash, PROMPTS.gloss) ? "result" : "outdated",
-        heading: g.heading,
-        text: e.gloss,
-        fadeAt: g.fadeAt,
-      }
+  // the note's own section: the live hash while it is the reading section, else the one taken when it was shown
+  const sheet = g ? glossView(s, g, gHere?.id === g.id ? gHash : g.hash, memo, jobs) : null
+  return { gHere, gHash, gStyle, sheet, ...glossPlace(s, L, src, sheet, memo) }
+}
+
+/** Where the note goes: the margin's column from 140 columns (null: the sheet), the other sections' fresh glosses there, and whether the note overflows its collapsed rows. */
+function glossPlace(s: UI, L: Layout, src: string, sheet: GlossView | null, memo: Memo) {
+  // zen has no panel: the area is the terminal less a column each side
+  const margin = L.zen && s.ai ? sidenoteAt(L.areaW + 2, 1 + L.padL, L.CW, L.areaW + 1) : null
+  const others =
+    margin === null || !s.glosses
+      ? NO_FRESH
+      : memo.glossFresh(src, s.openPath ?? "", s.glosses, parseGlossStyle(s.ai?.gloss))
+  const [w, rows] = margin === null ? [L.CW, GLOSS_ROWS] : [SIDENOTE_W, SIDENOTE_ROWS]
+  const overflow = !!sheet && overflows(sheet.text, w, rows)
+  return { margin, others, overflow }
+}
+
+/** The note `g` as drawn: waiting or streaming while its job runs, else its cache entry, fresh or outdated against `hash`. */
+function glossView(
+  s: UI,
+  g: NonNullable<UI["gloss"]>,
+  hash: string,
+  memo: Memo,
+  jobs: Map<string, Job>,
+): GlossView | null {
+  const job = jobs.get(jobKey("gloss", g.id))
+  const e = s.glosses?.[g.key]
+  const base = { index: g.index, open: g.open, fadeAt: g.fadeAt }
+  if (job) {
+    const text = memo.glossClean(job.raw)
+    const state = text ? "streaming" : "waiting"
+    // regenerating: the old text stays, dimmed, under the caret row until the first token
+    const old = e?.gloss ?? ""
+    return { ...base, state, text, old, model: shortModel(job.model), secs: waitSecs(Date.now(), job.at), stale: null }
   }
-  return { gHere, gHash, gStyle, sheet }
+  if (!e) return null
+  const stale = staleKind(e, hash, PROMPTS.gloss)
+  const state = stale ? "outdated" : "result"
+  return { ...base, state, text: e.gloss, old: "", model: shortModel(e.model), secs: 0, stale }
 }
 
 /** The rows on screen: the section ranges, Spotlight's bright section, the window, the page and the Teleprompter flag. */

@@ -70,6 +70,7 @@ export function makeZenActions(c: AppCtx, { aiJobs, zen }: Features, { jumpHeadi
       setTop(toTop ? 0 : derive().maxTop)
     },
     zenGloss: aiJobs.zenGloss,
+    zenRegen: aiJobs.zenRegen,
     zenSection: (k) => {
       stopRolling()
       const dir = k.sequence === "]" || k.sequence === "}" ? 1 : -1
@@ -112,7 +113,7 @@ export function makeOutlineActions(c: AppCtx, { outlineGo }: Moves) {
   } satisfies Partial<Actions>
 }
 
-/** The Info tab: step through its links and Changed rows, open one. */
+/** The Info tab: step through its links and Changed rows, open one; `⏎` on a long TL;DR expands or collapses it. */
 export function makeInfoActions(c: AppCtx, { openLink }: Pick<Links, "openLink">, { jumpChange }: Moves) {
   const { set, derive } = c
   return {
@@ -134,10 +135,11 @@ export function makeInfoActions(c: AppCtx, { openLink }: Pick<Links, "openLink">
       set({ infoCur: jump ? edge : clamp(infoCur + dir, 0, linkRows.length - 1) })
     },
     infoOpen: () => {
-      const { infoRows, linkRows, infoCur } = derive()
+      const { s, infoRows, linkRows, infoCur } = derive()
       const it = infoRows[linkRows[infoCur] ?? -1]
       if (it?.kind === "link") openLink(it)
       else if (it?.kind === "change") jumpChange(it.at)
+      else if (it?.kind === "frule") set({ tldrOpen: !s.tldrOpen })
     },
   } satisfies Partial<Actions>
 }

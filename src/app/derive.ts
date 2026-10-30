@@ -15,7 +15,7 @@ import { textHash } from "../ai/cache"
 import { cleanSummary, noteText } from "../ai/client"
 import { type AIConfig, resolveAI } from "../ai/config"
 import { type Change, type DeltaNote, diffSections, parseDelta } from "../ai/delta"
-import { glossTarget } from "../ai/gloss"
+import { freshGlosses, glossTarget } from "../ai/gloss"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
 import { type FrontMatter, type Property, parseFrontMatter, parseProperties } from "../markdown/frontmatter"
@@ -33,6 +33,7 @@ import { STDIN } from "../notes/workspace"
 import type { View } from "../system/config"
 import { type Theme, themes } from "../theme/theme"
 import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
+import type { Stale } from "../ui/footnote"
 import { layout } from "../ui/layout"
 import { miniInk } from "../ui/minimap"
 import { cached, findLines, matchIndex } from "../ui/nav"
@@ -47,6 +48,7 @@ import {
   outlineRows,
   resolveLink,
   type SummaryState,
+  type SummaryView,
 } from "../ui/panel"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import { sectionRanges, wordSuffix } from "../ui/zen"
@@ -88,9 +90,23 @@ function documentMemo(stdin: string | undefined) {
     note: cached(noteText),
     hash: cached((src: string) => textHash(noteText(src))),
     clean: cached(cleanSummary),
+    // one object per state of the TL;DR block, so the Info memo holds while nothing changes
+    summary: cached(
+      (
+        text: string,
+        state: SummaryState,
+        model: string,
+        secs: number,
+        stale: Stale | null,
+        old: string,
+        error: string | null,
+        open: boolean,
+      ): SummaryView => ({ text, state, model, secs, stale, old, error, open }),
+    ),
     gloss: cached(glossTarget),
     glossHash: cached(textHash),
     glossClean: cached(cleanSummary),
+    glossFresh: cached(freshGlosses),
   }
 }
 
@@ -108,9 +124,7 @@ function panelMemo() {
         l: LinkRef[],
         w: number,
         f: FileMeta | null,
-        sText: string,
-        sState: SummaryState | "",
-        sModel: string,
+        sv: SummaryView | null,
         cState: ChangeState | "",
         cLabel: string,
         cChanges: readonly Change[],
@@ -125,15 +139,17 @@ function panelMemo() {
           w,
           f,
           undefined,
-          sState ? { text: sText, state: sState, model: sModel } : undefined,
+          sv ?? undefined,
           cState
             ? { view: { state: cState, label: cLabel, changes: cChanges, summary: cSummary, notes: cNotes }, title }
             : undefined,
         ),
     ),
-    // Info cursor stops: links and change rows (removed sections are not stops)
+    // Info cursor stops: the TL;DR's rule when it overflows, links and change rows (removed sections are not stops)
     linkIdx: cached((items: InfoItem[]) =>
-      items.flatMap((it, i) => (it.kind === "link" || (it.kind === "change" && it.stop) ? [i] : [])),
+      items.flatMap((it, i) =>
+        it.kind === "link" || ((it.kind === "change" || it.kind === "frule") && it.stop) ? [i] : [],
+      ),
     ),
     rows: cached(visibleRows),
     outline: cached(outlineRows),

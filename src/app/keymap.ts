@@ -66,6 +66,8 @@ export interface FooterState {
   ai: boolean
   /** an `ai` block and changes still to explain */
   changes: boolean
+  /** an `ai` block and no fresh TL;DR for the open note: the document footer offers `a` */
+  tldr: boolean
 }
 
 /**
@@ -128,6 +130,7 @@ const KEYMAP = {
     spare: true,
     when: "ai",
   },
+  summarizeHint: { modes: ["doc"], keys: [], label: "a", hint: "summarize", spare: true, when: "tldr" },
   explainChange: {
     modes: ["global"],
     keys: ["S-d"],
@@ -221,11 +224,12 @@ const KEYMAP = {
     modes: ["zen"],
     keys: ["a"],
     label: "a",
-    desc: "gloss: explain the section you're reading (AI)",
+    desc: "gloss: explain the section you're reading (AI) · again: more / less",
     hint: "gloss",
     spare: true,
     when: "ai",
   },
+  zenRegen: { modes: ["zen"], keys: ["S-a"], label: "A", desc: "gloss: ask again, replacing the cached one (AI)" },
 
   outlineMove: {
     modes: ["outline"],
@@ -400,6 +404,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     "links",
     "histBack",
     "edit",
+    "summarizeHint",
     ["focus", "panel"],
     "help",
   ],
@@ -442,14 +447,23 @@ const ASK_FOOTERS: Record<AskStage, Hint[]> = {
 /** Contexts whose hints stay at full colour instead of fading: the popups and typing. */
 export const PINNED: readonly Ctx[] = ["prompt", "theme", "zenSettings", "help", "filter", "label", "switch", "open"]
 
-/** Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so; `ask`: the switcher holds a question. */
-export function footerHints(c: Ctx, on: FooterState, ask?: AskStage | null): HintItem[] {
+/**
+ * Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. `words` are the
+ * words that follow the state (`a cancel` while the TL;DR runs); they win over the context's and the binding's own.
+ * `ask`: the switcher holds a question, and its footer follows the ask's stage.
+ */
+export function footerHints(
+  c: Ctx,
+  on: FooterState,
+  words: Partial<Record<KeyId, string>> = {},
+  ask?: AskStage | null,
+): HintItem[] {
   return (c === "switch" && ask ? ASK_FOOTERS[ask] : FOOTERS[c]).flatMap((h) => {
     const [id, word] = Array.isArray(h) ? h : [h, undefined]
     const def = keyDef(id)
     return def.when && !on[def.when]
       ? []
-      : [{ key: def.short ?? def.label, word: word ?? def.hint ?? "", spare: def.spare }]
+      : [{ key: def.short ?? def.label, word: words[id] ?? word ?? def.hint ?? "", spare: def.spare }]
   })
 }
 
