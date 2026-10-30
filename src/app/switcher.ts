@@ -67,7 +67,7 @@ function makeAskStart(c: AppCtx, { reloadAI, aiGate, failText, startJob }: Jobs,
     const question = qn.text
     const known = askMemo.current.get(foldSame(question))
     if (known) return setAsk({ question, phase: "result", queries: known.queries, model: known.model })
-    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy, sent: false }))
+    const target = aiGate(ai, (busy) => setAsk({ question, phase: "error", error: busy, sent: false, busy: true }))
     if (!target) return
     const asked = sw.q
     // an edit, a close or another ask aborts the job, so `done` never runs for it

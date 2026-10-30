@@ -246,6 +246,8 @@ test("an ask while 3 other AI requests run: AI busy, on the toast and the ask ro
   const f = await keys(s, "enter")
   expect(f).toContain("✗ AI busy · 3 requests running")
   expect(f).toContain("nothing was sent")
+  expect(f).toContain("· wait for one to finish · ⏎ tries again")
+  expect(f).not.toContain("is ollama running?")
   await waitFrame(s, (fr) => fr.split("\n").filter((l) => l.includes("AI busy · 3 requests running")).length === 2) // toast + row
   expect(ai.calls.length).toBe(3)
 })
@@ -484,6 +486,7 @@ test("back to the answers: after landing, C-p reopens the question with its answ
   await askIt(s, ai)
   await keys(s, "enter") // the first match
   let f = await keys(s, "C-p")
+  expect(f).not.toContain("▍ asking") // while the index updates nothing is asked
   f = await waitFrame(s, (fr) => fr.includes("Matches"))
   expect(f).toContain("?how do I open one file")
   expect(ai.calls.length).toBe(1)

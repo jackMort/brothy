@@ -77,6 +77,7 @@ test("the switcher's footer: `? ask` only with an `ai` block; a question's foote
     ["target", ["⌫ edit", "esc close"]],
     ["idle", ["⏎ ask", "⌫ edit", "esc close"]],
     ["asking", ["⌫ edit · cancels", "esc close"]],
+    ["indexing", ["⌫ edit", "esc close"]],
     ["result", ["↑↓ select", "⏎ open", "tab rerank", "esc close"]],
     ["none", ["⌫ edit", "esc close"]],
     ["reranking", ["↑↓ select", "⏎ open", "esc close"]],

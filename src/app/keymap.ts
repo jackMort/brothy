@@ -437,6 +437,7 @@ const ASK_FOOTERS: Record<AskStage, Hint[]> = {
   target: ["askErase", "swClose"],
   idle: [["swOpen", "ask"], "askErase", "swClose"],
   asking: [["askErase", "edit · cancels"], "swClose"],
+  indexing: ["askErase", "swClose"],
   result: ["swMove", "swOpen", ["swSection", "rerank"], "swClose"],
   none: ["askErase", "swClose"],
   reranking: ["swMove", "swOpen", "swClose"],

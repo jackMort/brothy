@@ -371,10 +371,10 @@ describe("askRows", () => {
     const asking: AskState = { question: base.question, phase: "asking", model: "anthropic/claude-haiku-5-5" }
     expect(show(askRows({ ...base, state: asking }))).toEqual(["────", "▍ asking claude-haiku-5-5"])
     expect(show(askRows({ ...base, state: asking, secs: 3 })).at(-1)).toBe("▍ asking claude-haiku-5-5 · 3 s")
-    // the index still building: the result waits under the same row
+    // the index still updating (a reopened question): nothing is asked, the result waits for it
     expect(show(askRows({ ...base, state: result, cands: C, indexing: true }))).toEqual([
       "────",
-      "▍ asking claude-haiku-5-5",
+      "▍ updating the index",
     ])
   })
   test("result: Matches, the matched word on the right, the rule, the rerank row with its cost, the queries", () => {
@@ -460,6 +460,14 @@ describe("askRows", () => {
       "~ · check the endpoint and key · ⏎ tries again",
       "~ · the ai block lives in config.json; r re-reads it",
     ])
+    // busy: it never left, and the next step is to wait, not to check the setup
+    const busy: AskState = { ...failed, error: "AI busy · 3 requests running", sent: false, busy: true }
+    expect(show(askRows({ ...ollama, state: busy }))).toEqual([
+      "ask ✗: AI busy · 3 requests running",
+      "~ nothing was sent",
+      "────",
+      "~ · wait for one to finish · ⏎ tries again",
+    ])
   })
 })
 
@@ -472,7 +480,8 @@ test("askStage follows the rows: every state of the ask", () => {
   expect(askStage({ ...v, target: { error: "x" } })).toBe("target")
   expect(askStage(v)).toBe("idle")
   expect(askStage({ ...v, state: { ...st, phase: "asking" } })).toBe("asking")
-  expect(askStage({ ...v, state: st, indexing: true })).toBe("asking")
+  expect(askStage({ ...v, state: st, indexing: true })).toBe("indexing")
+  expect(askStage({ ...v, state: { ...st, phase: "asking" }, indexing: true })).toBe("asking")
   expect(askStage({ ...v, state: st })).toBe("result")
   expect(askStage({ ...v, state: st, cands: [] })).toBe("none")
   expect(askStage({ ...v, state: { ...st, phase: "reranking" } })).toBe("reranking")
@@ -533,4 +542,11 @@ test("askPaneLines: idle says what ⏎ sends and what comes back; asking shows e
     askPaneLines(t, { ...VIEW, state: { ...asking, phase: "result", queries: ["path"] }, cands: C }, 40),
   ).toBeNull()
   expect(askPaneLines(t, { ...VIEW, target: null }, 40)).toBeNull()
+  const waiting: AskView = {
+    ...VIEW,
+    state: { ...asking, phase: "result", queries: ["path"] },
+    cands: C,
+    indexing: true,
+  }
+  expect(askPaneLines(t, waiting, 40)).toBeNull() // nothing went out while the index updates
 })

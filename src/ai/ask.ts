@@ -304,6 +304,8 @@ export interface AskState {
   /** the failed ask: what went wrong (`aiMessage`, no `AI:` prefix), and whether the question had reached the host */
   error?: string
   sent?: boolean
+  /** it never left: MAX_JOBS other requests were running */
+  busy?: boolean
 }
 /** Where `⏎` sends the question (the host, the model, whether it is ollama), why it can't (resolveAI's toast), or null without an `ai` block. */
 export type AskTarget = { host: string; model: string; ollama: boolean } | { error: string } | null
@@ -336,6 +338,7 @@ export type AskStage =
   | "target"
   | "idle"
   | "asking"
+  | "indexing"
   | "result"
   | "none"
   | "reranking"
@@ -355,7 +358,8 @@ export function askStage(v: Pick<AskView, "question" | "target" | "state" | "can
   if ([...v.question].length < ASK_MIN) return "short"
   if (!st) return "error" in v.target ? "target" : "idle"
   if (st.phase === "error") return "error"
-  if (st.phase === "asking" || v.indexing) return "asking"
+  if (st.phase === "asking") return "asking"
+  if (v.indexing) return "indexing"
   if (!v.cands.length) return "none"
   if (picked(v).length) return "reranked"
   return st.phase === "reranking" ? "reranking" : "result"
@@ -417,12 +421,15 @@ function idleRows(v: AskView): SwitchRow[] {
 
 /** A failed ask: the headline (`⏎` asks again), whether anything left, then where to look. */
 function askErrorRows(st: AskState, host: string, ollama: boolean, w: number): SwitchRow[] {
+  const check = ollama ? "· is ollama running? ⏎ tries again" : "· check the endpoint and key · ⏎ tries again"
+  const steps = st.busy
+    ? bullets("· wait for one to finish · ⏎ tries again", w)
+    : [...bullets(check, w), ...bullets("· the ai block lives in config.json; r re-reads it", w)]
   return [
     { kind: "askAction", act: "ask", text: st.error ?? "", note: "", error: true },
     note(st.sent ? `the question was sent to ${host}` : "nothing was sent"),
     RULE_ROW,
-    ...bullets(ollama ? "· is ollama running? ⏎ tries again" : "· check the endpoint and key · ⏎ tries again", w),
-    ...bullets("· the ai block lives in config.json; r re-reads it", w),
+    ...steps,
   ]
 }
 
@@ -470,6 +477,8 @@ export function askRows(v: AskView): SwitchRow[] {
       return idleRows(v)
     case "asking":
       return [RULE_ROW, { kind: "askWait", text: waitText(model, v.secs) }]
+    case "indexing":
+      return [RULE_ROW, { kind: "askWait", text: "updating the index" }]
     case "error":
       return askErrorRows(v.state!, hostOf(v), !!v.target && "ollama" in v.target && v.target.ollama, v.width)
     case "none":
