@@ -50,7 +50,7 @@ export interface Features {
   workspace: WorkspaceControl
   popups: Popups
   proof: Proof
-  edit: ((argv: string[], piped: boolean) => EditResult | void) | undefined
+  edit: ((argv: string[], piped: boolean) => EditResult | void | Promise<EditResult | void>) | undefined
 }
 
 /** One action per KEYMAP id; each family's factory returns its part. */
@@ -329,7 +329,7 @@ function rescan(s: UI) {
 function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
   const { ui, set, derive, memo, renderer, flash } = c
   return {
-    edit: () => {
+    edit: async () => {
       const s = ui.current
       if (!s.openPath) return flash("no note to edit", "error")
       if (s.openPath === STDIN) return flash("stdin · nothing to edit")
@@ -356,12 +356,12 @@ function makeEditAction(c: AppCtx, { edit: editImpl }: Features) {
           }))
       let res: EditResult | void
       try {
-        res = run(argv, s.piped)
+        res = await run(argv, s.piped)
       } catch (e) {
         return flash(`cannot run ${argv[0]}: ${errText(e)}`, "error")
       }
       if (res && "error" in res) return flash(res.error, "error")
-      set({ reload: s.reload + 1 }) // a failed editor may still have saved
+      set({ reload: ui.current.reload + 1 }) // a failed editor may still have saved
       const ed = basename(argv[0]!)
       if (res && res.code !== 0)
         return flash(res.signal ? `${ed} ended by ${res.signal}` : `${ed} exited with ${res.code}`, "error")

@@ -64,16 +64,18 @@ export interface EditorIO {
   openTTY: () => number
   close: (fd: number) => void
   spawn: (argv: string[], stdin: "inherit" | number) => { exitCode: number | null; signalCode?: string | number | null }
-  suspend: () => void
-  resume: () => void
+  /** resolves once the terminal is handed back (OpenTUI's `suspend` finishes asynchronously) */
+  suspend: () => Promise<void>
+  resume: () => Promise<void>
 }
 
 /**
- * Run the editor with the renderer suspended around the blocking spawn. A piped session's stdin is
- * the drained pipe, so its editor reads keys from /dev/tty; without one it does not run. A spawn
- * that throws (no such editor) still resumes the renderer.
+ * Run the editor with the renderer suspended around the blocking spawn: the spawn waits for the
+ * suspend to finish, and the resume is awaited after it. A piped session's stdin is the drained
+ * pipe, so its editor reads keys from /dev/tty; without one it does not run. A spawn that throws
+ * (no such editor) still resumes the renderer.
  */
-export function runEditor(argv: string[], piped: boolean, io: EditorIO): EditResult {
+export async function runEditor(argv: string[], piped: boolean, io: EditorIO): Promise<EditResult> {
   let fd: number | undefined
   if (piped) {
     try {
@@ -82,12 +84,12 @@ export function runEditor(argv: string[], piped: boolean, io: EditorIO): EditRes
       return { error: "no terminal for the editor" }
     }
   }
-  io.suspend()
+  await io.suspend()
   try {
     const r = io.spawn(argv, fd ?? "inherit")
     return { code: r.exitCode, signal: r.signalCode == null ? null : String(r.signalCode) }
   } finally {
-    io.resume()
+    await io.resume()
     if (fd !== undefined) io.close(fd)
   }
 }

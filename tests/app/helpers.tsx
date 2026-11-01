@@ -56,24 +56,41 @@ export const waitFrame = (s: Setup, pred: (f: string) => boolean, ms = 2000) =>
  */
 const ESC_HOLD = 30
 
-/** Press `ks` in order (names as in the snapshot script: `tab`, `enter`, `esc`, `type:<text>`, `C-<key>`, or one key); resolves with the frame. */
+/** The keys sent by name; anything else is `type:<text>`, `C-<key>` or one key. */
+const NAMED: Record<string, (s: Setup) => unknown> = {
+  tab: (s) => s.mockInput.pressTab(),
+  enter: (s) => s.mockInput.pressEnter(),
+  esc: (s) => (s.mockInput.pressEscape(), sleep(ESC_HOLD)),
+  down: (s) => s.mockInput.pressArrow("down"),
+  up: (s) => s.mockInput.pressArrow("up"),
+  left: (s) => s.mockInput.pressArrow("left"),
+  right: (s) => s.mockInput.pressArrow("right"),
+  space: (s) => s.mockInput.pressKey(" "),
+  backspace: (s) => s.mockInput.pressBackspace(),
+}
+
+/** Send one key by name (as in the snapshot script: `tab`, `enter`, `esc`, `type:<text>`, `C-<key>`, or one key). */
+async function press(s: Setup, k: string) {
+  const named = NAMED[k]
+  if (named) await named(s)
+  else if (k.startsWith("type:")) await s.mockInput.typeText(k.slice(5))
+  else if (k.startsWith("C-")) s.mockInput.pressKey(k.slice(2), { ctrl: true })
+  else s.mockInput.pressKey(k)
+}
+
+/**
+ * Press `ks` in order (names as in `press`); resolves with the frame, or "" once a key ended the app (`q`, `C-c`):
+ * a destroyed renderer no longer renders.
+ */
 export async function keys(s: Setup, ...ks: string[]) {
   for (const k of ks) {
-    if (k === "tab") s.mockInput.pressTab()
-    else if (k === "enter") s.mockInput.pressEnter()
-    else if (k === "esc") {
-      s.mockInput.pressEscape()
-      await sleep(ESC_HOLD)
-    } else if (k === "down" || k === "up" || k === "left" || k === "right") s.mockInput.pressArrow(k)
-    else if (k === "space") s.mockInput.pressKey(" ")
-    else if (k === "backspace") s.mockInput.pressBackspace()
-    else if (k.startsWith("type:")) await s.mockInput.typeText(k.slice(5))
-    else if (k.startsWith("C-")) s.mockInput.pressKey(k.slice(2), { ctrl: true })
-    else s.mockInput.pressKey(k)
+    if (s.renderer.isDestroyed) return ""
+    await press(s, k)
     await sleep(5)
-    await s.renderOnce()
+    if (!s.renderer.isDestroyed) await s.renderOnce()
   }
   await sleep(20)
+  if (s.renderer.isDestroyed) return ""
   await s.renderOnce()
   return s.captureCharFrame()
 }

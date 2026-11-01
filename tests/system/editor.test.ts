@@ -114,32 +114,40 @@ describe("runEditor", () => {
       },
       close: (fd) => void log.push(`close ${fd}`),
       spawn: (argv, stdin) => (log.push(`spawn ${argv.join(" ")} < ${stdin}`), spawn(argv, stdin)),
-      suspend: () => void log.push("suspend"),
-      resume: () => void log.push("resume"),
+      suspend: async () => void log.push("suspend"),
+      resume: async () => void log.push("resume"),
     }
     return { log, fake }
   }
 
-  test("the renderer is suspended around the spawn, which inherits stdin; the exit comes back", () => {
+  test("the renderer is suspended around the spawn, which inherits stdin; the exit comes back", async () => {
     const { log, fake } = io(7, () => ({ exitCode: 2, signalCode: null }))
-    expect(runEditor(["vi", "+1", "/a.md"], false, fake)).toEqual({ code: 2, signal: null })
+    expect(await runEditor(["vi", "+1", "/a.md"], false, fake)).toEqual({ code: 2, signal: null })
     expect(log).toEqual(["suspend", "spawn vi +1 /a.md < inherit", "resume"])
   })
-  test("a piped session gives the editor /dev/tty for keys and closes it after", () => {
+  test("the spawn waits until the suspend has finished, and the run until the resume has", async () => {
     const { log, fake } = io(7)
-    expect(runEditor(["vi", "/a.md"], true, fake)).toEqual({ code: 0, signal: null })
+    const later = (step: string) => () => Bun.sleep(5).then(() => void log.push(step))
+    const run = runEditor(["vi", "/a.md"], false, { ...fake, suspend: later("suspended"), resume: later("resumed") })
+    expect(log).toEqual([]) // OpenTUI hands the terminal back asynchronously: nothing spawns before that
+    expect(await run).toEqual({ code: 0, signal: null })
+    expect(log).toEqual(["suspended", "spawn vi /a.md < inherit", "resumed"])
+  })
+  test("a piped session gives the editor /dev/tty for keys and closes it after", async () => {
+    const { log, fake } = io(7)
+    expect(await runEditor(["vi", "/a.md"], true, fake)).toEqual({ code: 0, signal: null })
     expect(log).toEqual(["open 7", "suspend", "spawn vi /a.md < 7", "resume", "close 7"])
   })
-  test("without a terminal to open, a piped session runs nothing", () => {
+  test("without a terminal to open, a piped session runs nothing", async () => {
     const { log, fake } = io(null)
-    expect(runEditor(["vi", "/a.md"], true, fake)).toEqual({ error: "no terminal for the editor" })
+    expect(await runEditor(["vi", "/a.md"], true, fake)).toEqual({ error: "no terminal for the editor" })
     expect(log).toEqual([])
   })
-  test("a spawn that throws (no such editor) still resumes and closes", () => {
+  test("a spawn that throws (no such editor) still resumes and closes", async () => {
     const { log, fake } = io(7, () => {
       throw new Error("not found")
     })
-    expect(() => runEditor(["nope", "/a.md"], true, fake)).toThrow("not found")
+    await expect(runEditor(["nope", "/a.md"], true, fake)).rejects.toThrow("not found")
     expect(log).toEqual(["open 7", "suspend", "spawn nope /a.md < 7", "resume", "close 7"])
   })
 })

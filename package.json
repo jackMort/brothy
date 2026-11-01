@@ -37,8 +37,8 @@
     "fallow:gate": "bunx fallow@3.37.0 --health-baseline .github/fallow-health-baseline.json --baseline-mode identity --fail-on-stale-baseline"
   },
   "dependencies": {
-    "@opentui/core": "0.5.17",
-    "@opentui/react": "0.5.17",
+    "@opentui/core": "0.8.1",
+    "@opentui/react": "0.8.1",
     "marked": "^18.1.0",
     "react": "^19.3.1"
   },

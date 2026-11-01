@@ -51,7 +51,7 @@ export interface AppProps {
   /** injected by tests; the CLI uses the global fetch */
   fetch?: typeof fetch
   /** runs the editor and waits (tests stub it; the default is `runEditor`); `piped`: keys come from /dev/tty */
-  edit?: (argv: string[], piped: boolean) => EditResult | void
+  edit?: (argv: string[], piped: boolean) => EditResult | void | Promise<EditResult | void>
   /** Markdown piped on stdin: the only document, with no Files tree, watcher or project record */
   stdin?: string
   /** ms after mount before a piped document's links start scanning in the background (tests delay it) */
