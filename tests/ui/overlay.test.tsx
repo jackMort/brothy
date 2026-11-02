@@ -4,7 +4,7 @@ import { egoGraph } from "../../src/graph/ego"
 import { forceLayout } from "../../src/graph/layout"
 import { buildLinks } from "../../src/graph/links"
 import { graphPicture } from "../../src/graph/picture"
-import { graphFoot, graphNote, graphRows, sheetGeo } from "../../src/graph/sheet"
+import { graphFoot, graphHead, graphRows, sheetGeo } from "../../src/graph/sheet"
 import { A } from "../../src/lib/spans"
 import type { OpenRow } from "../../src/notes/projects"
 import { type SwitchRow, switchRows } from "../../src/notes/vault"
@@ -781,7 +781,7 @@ describe("GraphSheet", () => {
   const term = { pixels: false, mux: false, cellW: 8, cellH: 16 }
   const draw = async (W: number, H: number) => {
     const geo = sheetGeo(W, H)
-    const picture = graphPicture(ego, forceLayout(ego, 1), geo, term, "braille", t, 1, new Set())
+    const { mode, labels, rows } = graphPicture(ego, forceLayout(ego, 1), geo, term, "braille", t, 1, new Set())
     setup = quietAct(
       await testRender(
         <GraphSheet
@@ -789,13 +789,13 @@ describe("GraphSheet", () => {
           W={W}
           H={H}
           title="Graph · Broth"
-          note={graphNote(ego, 2)}
+          note={graphHead("Broth", ego, 2, geo.width).note}
           foot={graphFoot(ego, 2, 6, null)}
           geo={geo}
           rows={graphRows(ego, "", false)}
           hl={0}
           top={0}
-          picture={picture}
+          picture={{ mode, labels, rows }}
           image={null}
           onClose={() => {}}
           onScroll={() => {}}

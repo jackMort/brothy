@@ -89,7 +89,9 @@ export interface Job {
 }
 /**
  * The Graph sheet while open: the centre note, the centres walked from (`h` goes back), the focused list row and the
- * first one shown, the filter and whether it is being typed, `+ n more` open, and the terminal as read at open.
+ * first one shown, the filter and whether it is being typed, `+ n more` open, the terminal as read at open, whether a
+ * key put the focus on its row (`keyed`: a click on it opens; one on a row hover or a reset focused centres on it), and
+ * the last click that centred (a second one on the same spot within GRAPH_DOUBLE_MS opens that note).
  */
 export interface GraphState {
   centre: string
@@ -100,7 +102,11 @@ export interface GraphState {
   typing: boolean
   open: boolean
   term: GraphTerm
+  keyed: boolean
+  click: GraphClick | null
 }
+/** A click that centred on `path`: where (`spot`, a list row or a picture cell) and when (`Date.now()`). */
+type GraphClick = { spot: string; path: string; at: number }
 /** The sheet's image and the raster it was made from (a new raster makes a new one, the old one is disposed). */
 export type GraphImage = { px: Uint8Array | null; img: NativeImage | null }
 /** No changes or notes: shared empty lists, so the Info memo holds */

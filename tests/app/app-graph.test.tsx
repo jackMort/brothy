@@ -2,8 +2,8 @@
 import { expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { setRendererCapabilities } from "@opentui/core/testing"
-import { KITCHEN } from "../helpers/vault"
-import { keys, useAppHarness, waitFrame } from "./helpers"
+import { hubFiles, KITCHEN } from "../helpers/vault"
+import { keys, panelShown, useAppHarness, waitFrame, withClock } from "./helpers"
 
 const { tmp, mount, writeConfig, savedConfig, configFile } = useAppHarness()
 
@@ -105,11 +105,14 @@ test("H in the sheet closes it and steps history", async () => {
   expect(f.split("\n")[0]).toContain("Broth")
 })
 
-test("^g with no note open says so; in zen it does nothing", async () => {
+test("^g with no note open says so; in zen it does nothing (esc then leaves zen, no sheet to close)", async () => {
   const empty = await mount(tmp({ "notes.txt": "x" }), undefined, { size: SIZE })
   expect(await keys(empty, "C-g")).toContain("no note open")
   const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
-  expect(sheet(await keys(s, "z", "C-g"))).toBeNull()
+  expect(panelShown(await keys(s, "z", "C-g"))).toBe(false)
+  const f = await keys(s, "esc")
+  expect(sheet(f)).toBeNull()
+  expect(panelShown(f)).toBe(true)
 })
 
 test("p with braille saved where the terminal shows images: pixels, saved", async () => {
@@ -178,19 +181,82 @@ test("/ filters the list; nothing matching says so and ⏎ does nothing; esc cle
   expect(sheet(await keys(s, "esc"))).toBeNull()
 })
 
-test("a click on a list row centres on it; a click on the focused row opens it", async () => {
+/** The screen cell of `name` on its list row. */
+const rowCell = (f: string, name: string): [number, number] => {
+  const rows = f.split("\n")
+  const y = rows.findIndex((r) => r.includes(`${name}`) && r.includes("│"))
+  return [rows[y]!.lastIndexOf(name), y]
+}
+
+test("hover focuses a row and a click on it centres there; a slower second click walks on, never opens", async () => {
   const { s } = await opened()
-  let rows = s.captureCharFrame().split("\n")
-  let y = rows.findIndex((r) => r.includes("← Garnish"))
-  await s.mockMouse.click(rows[y]!.indexOf("Garnish"), y)
+  const [x, y] = rowCell(s.captureCharFrame(), "Garnish")
+  await s.mockMouse.moveTo(x, y)
+  expect(barRow(await keys(s))).toBe("▌← Garnish")
+  await s.mockMouse.click(x, y)
   let f = await keys(s)
   expect(sheet(f)![0]).toContain("Graph · Garnish")
-  rows = f.split("\n")
-  y = rows.findIndex((r) => r.includes("▌→ Broth"))
-  await s.mockMouse.click(rows[y]!.indexOf("Broth"), y)
+  f = await withClock(new Date(Date.now() + 1000), async () => {
+    await s.mockMouse.click(x, y)
+    return keys(s)
+  })
+  expect(sheet(f)).not.toBeNull()
+  expect(sheet(f)![0]).not.toContain("Graph · Garnish")
+})
+
+test("a click on the row j k focused opens it, the pointer moved onto it first", async () => {
+  const { s } = await opened()
+  const f = await keys(s, "j", "j")
+  expect(barRow(f)).toBe("▌← Garnish")
+  const [x, y] = rowCell(f, "Garnish")
+  await s.mockMouse.moveTo(x, y)
+  await s.mockMouse.click(x, y)
+  const after = await keys(s)
+  expect(sheet(after)).toBeNull()
+  expect(after.split("\n")[0]).toContain("Garnish")
+})
+
+test("a double-click on a row opens that note", async () => {
+  const { s } = await opened()
+  const [x, y] = rowCell(s.captureCharFrame(), "Simmering")
+  await s.mockMouse.doubleClick(x, y)
+  const f = await keys(s)
+  expect(sheet(f)).toBeNull()
+  expect(f.split("\n")[0]).toContain("Simmering")
+})
+
+test("a click on + n more lists the rest, as ⏎ does", async () => {
+  const d = tmp(hubFiles())
+  const s = await mount(d, "Hub.md", { size: SIZE })
+  await keys(s, "C-g", "-")
+  let f = await waitFrame(s, (x) => x.includes("+ 7 more"), 4000)
+  const [x, y] = rowCell(f, "+ 7 more")
+  await s.mockMouse.click(x, y)
   f = await keys(s)
+  expect(listRows(f).join("\n")).toContain("⏎ fewer")
+})
+
+test("⏎ on a note reached from a Files preview: H comes back to the previewed note", async () => {
+  const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
+  await keys(s, "tab", "j")
+  await waitFrame(s, (f) => f.split("\n")[0]!.includes("Garnish")) // previewed after OPEN_DELAY
+  await keys(s, "C-g")
+  await waitFrame(s, (f) => f.includes("Graph · Garnish") && f.includes("of 6 notes"), 4000)
+  let f = await keys(s, "enter")
   expect(sheet(f)).toBeNull()
   expect(f.split("\n")[0]).toContain("Broth")
+  f = await keys(s, "H")
+  expect(f.split("\n")[0]).toContain("Garnish")
+})
+
+test("^g while the index builds: every note's links once it is done, the build's rows meanwhile", async () => {
+  const s = await mount(tmp(hubFiles()), "Hub.md", { size: SIZE })
+  s.mockInput.pressKey("g", { ctrl: true })
+  await s.renderOnce() // before the first note is read
+  expect(listRows(s.captureCharFrame())[0]).toBe("▍ indexing notes")
+  const f = await waitFrame(s, (x) => x.includes("of 76 notes"), 6000)
+  expect(sheet(f)![0]).toMatch(/← 0 · → 25 · depth 2/)
+  expect(listRows(f)[0]).toBe("▌→ n00")
 })
 
 test("below 100 columns the picture takes the width and the row under it names the focused note", async () => {

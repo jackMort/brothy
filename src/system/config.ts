@@ -127,7 +127,7 @@ export function loadConfig(): Config {
 
 /**
  * Merge `patch` into the file: top-level keys replace, except object-valued ones (`sidebar`,
- * `zen`) merge one level, so a patch of one field leaves what another instance saved. Returns
+ * `zen`, `graph`) merge one level, so a patch of one field leaves what another instance saved. Returns
  * whether the file was written; false means it exists but doesn't parse (left alone) or the
  * write failed (read-only home).
  */

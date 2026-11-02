@@ -3,12 +3,10 @@ import { createTerminalCapabilities } from "@opentui/core/testing"
 import { egoGraph } from "../../src/graph/ego"
 import { buildLinks } from "../../src/graph/links"
 import {
-  firstStop,
   type GraphRow,
   graphFoot,
   graphHead,
   graphMode,
-  graphNote,
   graphRowSpans,
   graphRows,
   graphTerm,
@@ -33,8 +31,11 @@ test("graphRows: each neighbour with the depth-2 notes it brought in under it, t
   expect(graphRows(ego, "", false).map(show)).toEqual(["↔ Stock", "  → Bones", "← Garnish", "→ Simmering", "→ Nowhere"])
 })
 
-test("graphRows: an orphan says so; the filter keeps what matches; nothing matching says so", () => {
-  expect(graphRows(egoGraph(g, "/v/Lonely.md", 2), "", false).map(show)).toEqual(["no links to or from this note"])
+test("graphRows: an orphan says so (while the index builds, that it is); the filter keeps what matches; nothing matching says so", () => {
+  const lonely = egoGraph(g, "/v/Lonely.md", 2)
+  expect(graphRows(lonely, "", false).map(show)).toEqual(["no links to or from this note"])
+  expect(graphRows(lonely, "", false, true).map(show)).toEqual(["▍ indexing notes"])
+  expect(graphRows(ego, "", false, true).map(show)).toEqual(graphRows(ego, "", false).map(show))
   expect(graphRows(ego, "sim", false).map(show)).toEqual(["→ Simmering"])
   expect(graphRows(ego, "zz", false).map(show)).toEqual(["no match"])
 })
@@ -54,13 +55,13 @@ test("stops: unresolved rows and notes are passed over; the ends hold", () => {
   expect(nextStop(rows, 3, 1)).toBe(3)
   expect(nextStop(rows, 0, -1)).toBe(0)
   expect(nextStop(rows, 1, 1)).toBe(2)
-  expect(firstStop([{ kind: "note", text: "x" }])).toBe(0)
+  expect(nextStop([{ kind: "note", text: "x" }], 0, 1)).toBe(0)
   expect(isGraphStop(undefined)).toBe(false)
 })
 
-test("graphNote and graphFoot", () => {
-  expect(graphNote(ego, 2)).toBe("← 2 · → 2 · 1 unresolved · depth 2")
-  expect(graphNote(egoGraph(g, "/v/Lonely.md", 1), 1)).toBe("← 0 · → 0 · depth 1")
+test("graphHead's note and graphFoot", () => {
+  expect(graphHead("Broth", ego, 2, 108).note).toBe("← 2 · → 2 · 1 unresolved · depth 2")
+  expect(graphHead("Lonely", egoGraph(g, "/v/Lonely.md", 1), 1, 108).note).toBe("← 0 · → 0 · depth 1")
   expect(graphFoot(ego, 2, 6, null)).toBe("depth 2 · 5 of 6 notes")
   expect(graphFoot(egoGraph(g, "/v/Lonely.md", 2), 2, 6, null)).toBe("depth 2 · 1 of 6 notes")
   expect(graphFoot(ego, 2, 6, [25, 900])).toBe("▍ indexing notes · 25 of 900")

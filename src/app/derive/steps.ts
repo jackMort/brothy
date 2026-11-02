@@ -249,9 +249,10 @@ export function graphSheet(
   const g = s.graph
   if (!g) return null
   const geo = memo.graphGeo(W, H)
-  const links = memo.graphLinks(ix, s.linkTree, s.ixVer, s.openPath === STDIN ? STDIN : null, targets)
+  const ver = memo.graphVer(s.ixVer, s.indexing !== null)
+  const links = memo.graphLinks(ix, s.linkTree, ver, s.openPath === STDIN ? STDIN : null, targets)
   const ego = memo.ego(links, g.centre, s.graphDepth)
-  const rows = memo.graphRows(ego, g.q, g.open)
+  const rows = memo.graphRows(ego, g.q, g.open, s.indexing !== null)
   // -1: no row to rest on (no links, no match), so no row is drawn focused
   const hl = isGraphStop(rows[g.hl]) ? g.hl : rows.findIndex(isGraphStop)
   const at = rows[hl]

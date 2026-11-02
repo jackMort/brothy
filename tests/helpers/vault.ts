@@ -59,6 +59,11 @@ export const KITCHEN: Record<string, string> = {
 
 /** A hub linking to 25 notes `n00`–`n24`, each linking to two leaves of its own: past both caps. */
 export function hubVault() {
+  return vaultOf(hubFiles())
+}
+
+/** hubVault's notes by "rel" (76 in all). */
+export function hubFiles(): Record<string, string> {
   const pad = (i: number) => String(i).padStart(2, "0")
   const files: Record<string, string> = {
     "Hub.md": `# Hub\n${Array.from({ length: 25 }, (_, i) => `[[n${pad(i)}]]`).join(" ")}\n`,
@@ -68,5 +73,5 @@ export function hubVault() {
     files[`a${pad(i)}.md`] = "# a\n"
     files[`b${pad(i)}.md`] = "# b\n"
   }
-  return vaultOf(files)
+  return files
 }

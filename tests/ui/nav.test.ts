@@ -20,6 +20,7 @@ import {
   selectedText,
   stepMatch,
   stripLayout,
+  throttleVer,
   thumb,
   visibleLinks,
 } from "../../src/ui/nav"
@@ -127,6 +128,23 @@ test("cached recomputes only when an argument changes", () => {
   f(1, {})
   f(2, {})
   expect(calls).toBe(3)
+})
+
+test("throttleVer: while busy at most one new version per window, the last one once it is done; at once when idle", () => {
+  let now = 1000
+  const ver = throttleVer(400, () => now)
+  expect(ver(1, false)).toBe(1)
+  expect(ver(2, true)).toBe(1) // a build began 0 ms after the last one
+  now += 100
+  expect(ver(3, true)).toBe(1)
+  now += 300
+  expect(ver(4, true)).toBe(4) // the window passed: one rebuild, for every chunk since
+  now += 50
+  expect(ver(5, true)).toBe(4)
+  expect(ver(6, false)).toBe(6) // the build ended: the complete index, at once
+  expect(ver(7, false)).toBe(7)
+  const fresh = throttleVer(400, () => now)
+  expect(fresh(9, true)).toBe(9) // nothing held yet: the first call always takes it
 })
 
 test("keepVisible scrolls a list window only as far as needed", () => {

@@ -51,7 +51,7 @@ import { filterFamilies, paneLines, sampleView } from "../theme/themepick"
 import type { Stale } from "../ui/footnote"
 import { layout } from "../ui/layout"
 import { miniInk } from "../ui/minimap"
-import { cached, findLines, findQuote, matchIndex } from "../ui/nav"
+import { cached, findLines, findQuote, matchIndex, throttleVer } from "../ui/nav"
 import {
   type ChangeState,
   type ChangeView,
@@ -299,11 +299,16 @@ function askRowsMemo() {
   }
 }
 
+/** How often the link graph is rebuilt while the index is being built (each rebuild reads every note's links). */
+const GRAPH_REBUILD_MS = 400
+
 /** Memo builders for the Graph sheet: geometry, the link graph, the ego graph, its rows, layout and picture. */
 function graphMemo() {
   return {
     graphGeo: cached(sheetGeo),
-    // `_ver`: the index is changed in place; ixVer says when
+    /** `ixVer` for the link graph: while the index builds, one rebuild per GRAPH_REBUILD_MS, not one per chunk */
+    graphVer: throttleVer(GRAPH_REBUILD_MS),
+    // `_ver`: the index is changed in place; graphVer says when
     graphLinks: cached(
       (ix: VaultIndex, tree: FileNode, _ver: number, live: string | null, targets: readonly string[] | null) =>
         buildLinks(ix, tree, live && targets ? { path: live, targets } : null),

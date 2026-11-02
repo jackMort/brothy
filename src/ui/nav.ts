@@ -321,6 +321,23 @@ export function cached<A extends unknown[], R>(fn: (...a: A) => R): (...a: A) =>
   }
 }
 
+/**
+ * A version that follows `ver` at once while not `busy`, and at most once per `ms` while it is: a memo keyed on it is
+ * rebuilt at that pace while a build changes its input in place, and once more when the build ends.
+ */
+export function throttleVer(ms: number, now: () => number = Date.now): (ver: number, busy: boolean) => number {
+  let held = Number.NaN
+  let at = Number.NEGATIVE_INFINITY
+  return (ver, busy) => {
+    const t = now()
+    if (ver !== held && (!busy || t - at >= ms)) {
+      held = ver
+      at = t
+    }
+    return held
+  }
+}
+
 /** Copy-on-select text: rows are padded to their width, so trailing spaces and blank edge rows go. */
 export function selectedText(raw: string) {
   const lines = raw.split("\n").map((l) => l.trimEnd())

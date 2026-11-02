@@ -58,9 +58,13 @@ const rowOf = (n: EgoNode, i: number | null): GraphRow => ({
   depth: n.depth === 2 ? 2 : 1,
 })
 
-/** Each depth-1 note with the depth-2 notes it brought in under it, the unresolved last; past the cap `+ n more` (open: the rest listed). */
-export function graphRows(ego: Ego, q: string, open: boolean): GraphRow[] {
-  if (ego.nodes.length === 1 && !ego.rest.length) return [{ kind: "note", text: "no links to or from this note" }]
+/**
+ * Each depth-1 note with the depth-2 notes it brought in under it, the unresolved last; past the cap `+ n more` (open:
+ * the rest listed). No links: says so, or, while the index is still being built, that it is.
+ */
+export function graphRows(ego: Ego, q: string, open: boolean, indexing = false): GraphRow[] {
+  if (ego.nodes.length === 1 && !ego.rest.length)
+    return [{ kind: "note", text: indexing ? "▍ indexing notes" : "no links to or from this note" }]
   const rows: GraphRow[] = []
   ego.nodes.forEach((n, i) => {
     if (n.depth === 1) rows.push(rowOf(n, i), ...ego.nodes.flatMap((m, k) => (m.parent === i ? [rowOf(m, k)] : [])))
@@ -81,9 +85,6 @@ export function nextStop(rows: readonly GraphRow[], cur: number, dir: 1 | -1): n
   return cur
 }
 
-/** The first stop, else row 0. */
-export const firstStop = (rows: readonly GraphRow[]) => Math.max(0, rows.findIndex(isGraphStop))
-
 /** Right of the title, longest first: `← 9 · → 6 · 2 unresolved · depth 2`, without `unresolved`, `depth 2` alone. */
 function noteForms(ego: Ego, depth: 1 | 2): string[] {
   const { back, out, unresolved } = ego.counts
@@ -92,9 +93,6 @@ function noteForms(ego: Ego, depth: 1 | 2): string[] {
   const all = [...counts, ...(unresolved ? [`${unresolved} unresolved`] : []), d]
   return [all, [...counts, d], [d]].map((p) => p.join(" · "))
 }
-
-/** Right of the title: `← 9 · → 6 · 2 unresolved · depth 2`. */
-export const graphNote = (ego: Ego, depth: 1 | 2): string => noteForms(ego, depth)[0]!
 
 /** `esc` and the two cells before it, right of the title row */
 const ESC_W = 5

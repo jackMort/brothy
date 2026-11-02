@@ -5,6 +5,7 @@ import { existsSync } from "node:fs"
 import { NativeImage } from "@opentui/core"
 import { nearestNode, type Picture } from "../graph/picture"
 import { type GraphTerm, graphMode, graphTerm, isGraphStop, nextStop } from "../graph/sheet"
+import { keep } from "../notes/history"
 import { STDIN } from "../notes/workspace"
 import type { GraphRender } from "../system/config"
 import { keepVisible } from "../ui/nav"
@@ -15,6 +16,11 @@ import type { GraphImage, GraphState } from "./store"
 import type { SwitcherControl } from "./switcher"
 
 type PointerKind = "hover" | "click"
+
+/** A second click on the same spot within this many ms is a double-click: it opens the note the first one centred on. */
+const GRAPH_DOUBLE_MS = 400
+/** A new centre, list or depth: the focus on its first stop, put there by no key. */
+const FRESH = { hl: 0, top: 0, keyed: false } as const
 
 /** Opening the sheet, and `H` `L` out of it. */
 function makeGraphOpen(
@@ -41,7 +47,7 @@ function makeGraphOpen(
     const term = graphTerm(renderer.capabilities, renderer.resolution, renderer.terminalWidth, renderer.terminalHeight)
     set({
       labels: null,
-      graph: { centre: s.openPath, walk: [], hl: 0, top: 0, q: "", typing: false, open: false, term },
+      graph: { centre: s.openPath, walk: [], ...FRESH, q: "", typing: false, open: false, term, click: null },
     })
     muxToast(term)
   }
@@ -62,14 +68,20 @@ function makeGraphMoves(c: AppCtx) {
     if (g) set({ graph: { ...g, ...patch } })
   }
 
-  /** Focus list row `hl` when the focus can rest there, scrolled into view. */
-  const graphAt = (hl: number) => {
+  /** Focus list row `hl` when the focus can rest there, scrolled into view; `keyed`: by a key (a click on it opens). */
+  const focusAt = (hl: number, keyed: boolean) => {
     const v = derive().graph
-    if (v && isGraphStop(v.rows[hl])) put({ hl, top: keepVisible(v.top, hl, Math.max(1, v.geo.listH), v.rows.length) })
+    if (v && isGraphStop(v.rows[hl]))
+      put({ hl, keyed, top: keepVisible(v.top, hl, Math.max(1, v.geo.listH), v.rows.length) })
   }
+  /** `↑↓ j k` and the wheel. */
   const graphMove = (dir: 1 | -1) => {
     const v = derive().graph
-    if (v) graphAt(nextStop(v.rows, v.hl, dir))
+    if (v) focusAt(nextStop(v.rows, v.hl, dir), true)
+  }
+  /** The pointer moved onto row `hl`: focus it, unless it has the focus already (a key's focus stays a key's). */
+  const graphHover = (hl: number) => {
+    if (hl !== derive().graph?.hl) focusAt(hl, false)
   }
 
   /** The focused row's note, when there is one to open or centre on. */
@@ -79,12 +91,16 @@ function makeGraphMoves(c: AppCtx) {
     return r?.kind === "node" && r.dir !== "unresolved" ? r : null
   }
 
-  /** `l`: the focused note becomes the centre; the one before goes on the walk. */
-  const graphCentre = () => {
+  /** Note `path` becomes the centre; the one before goes on the walk. */
+  const centreOn = (path: string) => {
     const g = ui.current.graph
+    if (g && path !== g.centre)
+      put({ centre: path, walk: [...g.walk, g.centre], ...FRESH, q: "", typing: false, open: false })
+  }
+  /** `l`: the focused note becomes the centre. */
+  const graphCentre = () => {
     const r = focused()
-    if (g && r && r.path !== g.centre)
-      put({ centre: r.path, walk: [...g.walk, g.centre], hl: 0, top: 0, q: "", typing: false, open: false })
+    if (r) centreOn(r.path)
   }
 
   /** `h`: back to the centre before, the focus on the note just left. */
@@ -92,7 +108,17 @@ function makeGraphMoves(c: AppCtx) {
     const g = ui.current.graph
     const prev = g?.walk.at(-1)
     if (!g || prev === undefined) return
-    const next: GraphState = { ...g, centre: prev, walk: g.walk.slice(0, -1), hl: 0, top: 0, open: false }
+    const next: GraphState = {
+      ...g,
+      centre: prev,
+      walk: g.walk.slice(0, -1),
+      hl: 0,
+      top: 0,
+      q: "",
+      typing: false,
+      open: false,
+      keyed: true,
+    }
     ui.current.graph = next // unbumped: only for `derive` below
     const v = derive().graph!
     const hl = Math.max(
@@ -102,31 +128,37 @@ function makeGraphMoves(c: AppCtx) {
     set({ graph: { ...next, hl, top: keepVisible(0, hl, Math.max(1, v.geo.listH), v.rows.length) } })
   }
 
-  /** `⏎` (or a click on the focused row): `+ n more` opens or folds the rest; a note opens and the sheet closes. */
+  /** Close the sheet and read note `path`; the note it was opened on stays in history, even a Files preview. */
+  const openNote = (path: string) => {
+    if (path !== STDIN && !existsSync(path)) return flash("note gone")
+    set({ graph: null, history: keep(ui.current.history) })
+    openFile(path)
+    focusDoc()
+  }
+
+  /** `⏎` (or a click on a row a key focused, or on `+ n more`): `+ n more` opens or folds the rest; a note opens. */
   const graphGo = (at?: number) => {
     const v = derive().graph
     const g = ui.current.graph
     const r = v?.rows[at ?? v.hl]
     if (!g || !r) return
     if (r.kind === "more") return put({ open: !g.open })
-    if (r.kind !== "node" || r.dir === "unresolved") return
-    if (r.path !== STDIN && !existsSync(r.path)) return flash("note gone")
-    set({ graph: null })
-    openFile(r.path)
-    focusDoc()
+    if (r.kind === "node" && r.dir !== "unresolved") openNote(r.path)
   }
 
   /** `esc`: the filter first, then the sheet. */
   const graphClose = () => {
     const g = ui.current.graph
-    if (g?.q || g?.typing) return put({ q: "", typing: false, hl: 0, top: 0 })
+    if (g?.q || g?.typing) return put({ q: "", typing: false, ...FRESH })
     set({ graph: null })
   }
 
-  const graphType = (q: string) => put({ q, hl: 0, top: 0 })
+  const graphType = (q: string) => put({ q, ...FRESH })
   return {
-    graphAt,
     graphMove,
+    graphHover,
+    centreOn,
+    openNote,
     graphCentre,
     graphBack,
     graphGo,
@@ -146,7 +178,7 @@ function makeGraphSettings(c: AppCtx) {
   const graphDepth = (depth: 1 | 2) => {
     const g = ui.current.graph
     if (!g || depth === ui.current.graphDepth) return
-    set({ graphDepth: depth, graph: { ...g, hl: 0, top: 0 } })
+    set({ graphDepth: depth, graph: { ...g, ...FRESH } })
     if (persist({ graph: { depth } })) flash(`graph · depth ${depth}`)
   }
 
@@ -170,22 +202,41 @@ function makeGraphSettings(c: AppCtx) {
   return { graphDepth, graphRenderer, pixelsFailed }
 }
 
-/** The pointer: hover focuses, a click focuses and centres, a click on the focused row (or `+ n more`) is `⏎`. */
+/**
+ * The pointer: hover focuses; a click centres on its note, but opens the one a key focused, and `+ n more` is `⏎`; a
+ * second click on the same spot soon after (a double-click) opens the note the first one centred on.
+ */
 function makeGraphPointer(
   c: AppCtx,
-  { graphAt, graphCentre, graphGo }: Pick<GraphMoves, "graphAt" | "graphCentre" | "graphGo">,
+  { graphHover, centreOn, openNote, graphGo }: Pick<GraphMoves, "graphHover" | "centreOn" | "openNote" | "graphGo">,
 ) {
-  const { ui, derive } = c
+  const { ui, set, derive } = c
 
-  const pick = (at: number) => {
+  /** The note a click on `spot` just before centred on, when this one makes it a double-click. */
+  const doubled = (spot: string) => {
+    const last = ui.current.graph?.click
+    return last && last.spot === spot && Date.now() - last.at <= GRAPH_DOUBLE_MS ? last.path : null
+  }
+
+  /** A single click on row `at` at `spot`: `⏎` on `+ n more` or the row a key focused, else centre on its note. */
+  const pick = (at: number, spot: string) => {
     const v = derive().graph
     const r = v?.rows[at]
-    if (!v || !isGraphStop(r)) return
-    if (at === v.hl || r?.kind === "more") return graphGo(at)
-    graphAt(at)
-    graphCentre()
+    if (!v || !r || !isGraphStop(r)) return
+    if (r.kind !== "node" || (at === v.hl && ui.current.graph?.keyed)) return graphGo(at)
+    centreOn(r.path)
+    const g = ui.current.graph
+    if (g) set({ graph: { ...g, click: { spot, path: r.path, at: Date.now() } } })
   }
-  const graphRow = (at: number, kind: PointerKind) => (kind === "click" ? pick(at) : graphAt(at))
+
+  /** A click on row `at` (-1: none) at `spot`, a list row or a picture cell. */
+  const click = (at: number, spot: string) => {
+    const twice = doubled(spot)
+    return twice ? openNote(twice) : pick(at, spot)
+  }
+
+  const graphRow = (at: number, kind: PointerKind) =>
+    kind === "click" ? click(at, `row ${at - (derive().graph?.top ?? 0)}`) : graphHover(at)
 
   /** Cell (col, row) of the picture: the nearest node within 2 cells, through its list row. */
   const graphPointer = (col: number, row: number, kind: PointerKind) => {
@@ -194,7 +245,8 @@ function makeGraphPointer(
     if (!v || !g) return
     const i = nearestNode(v.picture.at, col, row, g.term.cellH / g.term.cellW)
     const at = i === null ? -1 : v.rows.findIndex((r) => r.kind === "node" && r.i === i)
-    if (at >= 0) graphRow(at, kind)
+    if (kind === "click") click(at, `cell ${col},${row}`)
+    else if (at >= 0) graphHover(at)
   }
   return { graphRow, graphPointer }
 }

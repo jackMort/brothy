@@ -565,9 +565,10 @@ function PixelLayer({
 /**
  * What the sheet draws of a Picture: never its raster. React's development build diffs a component's changed props
  * for its performance track and walks a typed array index by index: a megabyte raster in a prop froze each new
- * picture for seconds (`bun run start` runs that build). The image arrives made, as `image`.
+ * picture for seconds (`bun run start` runs that build). The image arrives made, as `image`; `rgba?: never` keeps a
+ * whole Picture from being passed.
  */
-type SheetPicture = Pick<Picture, "mode" | "labels" | "rows">
+type SheetPicture = Pick<Picture, "mode" | "labels" | "rows"> & { rgba?: never }
 
 /** The picture: braille rows, or the image with text labels; the pointer is reported by cell within it. */
 function GraphPicture({
@@ -639,18 +640,19 @@ function GraphList({
         ))}
       </box>
       <box style={{ width: geo.listW, flexDirection: "column", paddingLeft: 2, paddingRight: 2, flexShrink: 0 }}>
-        {rows.slice(top, top + geo.listH).map((r, j) => (
+        {/* every slot, rows or not: the second click of a double-click lands where the list may have grown shorter */}
+        {Array.from({ length: geo.listH }, (_, j) => rows[top + j]).map((r, j) => (
           <box
             key={j}
             onMouseOver={(e: MouseEvent) => {
-              if (pointer.moved(e)) onRow(top + j, "hover")
+              if (r && pointer.moved(e)) onRow(top + j, "hover")
             }}
             onMouseDown={(e: MouseEvent) => {
               if (e.button === MouseButton.LEFT) onRow(top + j, "click")
             }}
             style={{ height: 1, flexShrink: 0 }}
           >
-            <Line spans={graphRowSpans(r, t, room, top + j === hl)} />
+            {r ? <Line spans={graphRowSpans(r, t, room, top + j === hl)} /> : null}
           </box>
         ))}
         <box style={{ flexGrow: 1 }} />
