@@ -9,7 +9,8 @@ export const MINI_COLS = 2
 export const MINI_W = MINI_COLS + 2
 export const MINI_MIN_W = 110
 
-const BIT = [
+/** Braille dot bits by [dot row][dot column]; the graph uses them too. */
+export const BIT = [
   [0x01, 0x08],
   [0x02, 0x10],
   [0x04, 0x20],
