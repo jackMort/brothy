@@ -1,8 +1,11 @@
 // Popups and the empty state: Overlay frames the picker, switcher, theme, open, help and zen popups and Welcome; the
 // pure rows they draw live in rows.ts. All controlled by App.
-import { MouseButton, type MouseEvent, RGBA } from "@opentui/core"
+import { MouseButton, type MouseEvent, type NativeImage, RGBA } from "@opentui/core"
 import { useRenderer } from "@opentui/react"
 import type { ReactNode } from "react"
+import type { Label } from "../graph/labels"
+import { labelInk, type Picture } from "../graph/picture"
+import { type GraphRow, graphRowSpans, type SheetGeo } from "../graph/sheet"
 import { type Span, safe, safeLine } from "../lib/spans"
 import { spanWidth, width as sw, truncate, truncateLeft } from "../lib/text"
 import { switchSplit } from "../notes/peek"
@@ -516,6 +519,206 @@ export function ProofSheet({
             </box>
           )
         })}
+      </box>
+    </Overlay>
+  )
+}
+
+type PointerKind = "hover" | "click"
+
+/** The image under the labels: each label a text box on the panel colour, which also cuts the edges it crosses. */
+function PixelLayer({
+  t,
+  geo,
+  labels,
+  image,
+  onImageError,
+}: {
+  t: Theme
+  geo: SheetGeo
+  labels: readonly Label[]
+  image: NativeImage
+  onImageError: () => void
+}) {
+  return (
+    <>
+      <image
+        source={image}
+        fit="fill"
+        onError={onImageError}
+        style={{ position: "absolute", left: 0, top: 0, width: geo.cols, height: geo.rows }}
+      />
+      {labels.map((l) => {
+        const ink = labelInk(t, l.tone)
+        return (
+          <text key={l.i} wrapMode="none" style={{ position: "absolute", left: l.col, top: l.row, zIndex: 2 }}>
+            <span fg={ink.fg} bg={ink.bg ?? t.backgroundPanel} attributes={ink.attr ?? 0}>
+              {safe(l.text)}
+            </span>
+          </text>
+        )
+      })}
+    </>
+  )
+}
+
+/** The picture: braille rows, or the image with text labels; the pointer is reported by cell within it. */
+function GraphPicture({
+  t,
+  geo,
+  picture,
+  image,
+  onPicture,
+  onImageError,
+}: {
+  t: Theme
+  geo: SheetGeo
+  picture: Picture
+  image: NativeImage | null
+  onPicture: (col: number, row: number, kind: PointerKind) => void
+  onImageError: () => void
+}) {
+  const pointer = usePointer()
+  const cell = (e: MouseEvent): [number, number] => [
+    e.x - (e.currentTarget?.screenX ?? 0),
+    e.y - (e.currentTarget?.screenY ?? 0),
+  ]
+  const pixels = picture.mode === "pixels" && image !== null
+  return (
+    <box
+      key={pixels ? "graph-px" : "graph-br"}
+      onMouseMove={(e: MouseEvent) => {
+        if (pointer.moved(e)) onPicture(...cell(e), "hover")
+      }}
+      onMouseDown={(e: MouseEvent) => {
+        if (e.button === MouseButton.LEFT) onPicture(...cell(e), "click")
+      }}
+      style={{ width: geo.cols, height: geo.rows, flexShrink: 0, flexDirection: "column" }}
+    >
+      {pixels ? (
+        <PixelLayer t={t} geo={geo} labels={picture.labels} image={image} onImageError={onImageError} />
+      ) : (
+        picture.rows.map((spans, i) => <Line key={i} spans={spans} />)
+      )}
+    </box>
+  )
+}
+
+/** `│`, then the neighbour list from `top` and the bottom line on the sheet's last row. */
+function GraphList({
+  t,
+  geo,
+  rows,
+  hl,
+  top,
+  foot,
+  onRow,
+}: {
+  t: Theme
+  geo: SheetGeo
+  rows: GraphRow[]
+  hl: number
+  top: number
+  foot: string
+  onRow: (at: number, kind: PointerKind) => void
+}) {
+  const pointer = usePointer()
+  const room = geo.listW - 4
+  return (
+    <>
+      <box style={{ width: 1, flexDirection: "column", flexShrink: 0 }}>
+        {Array.from({ length: geo.rows }, (_, i) => (
+          <Line key={i} spans={[{ text: "│", fg: t.border }]} />
+        ))}
+      </box>
+      <box style={{ width: geo.listW, flexDirection: "column", paddingLeft: 2, paddingRight: 2, flexShrink: 0 }}>
+        {rows.slice(top, top + geo.listH).map((r, j) => (
+          <box
+            key={j}
+            onMouseOver={(e: MouseEvent) => {
+              if (pointer.moved(e)) onRow(top + j, "hover")
+            }}
+            onMouseDown={(e: MouseEvent) => {
+              if (e.button === MouseButton.LEFT) onRow(top + j, "click")
+            }}
+            style={{ height: 1, flexShrink: 0 }}
+          >
+            <Line spans={graphRowSpans(r, t, room, top + j === hl)} />
+          </box>
+        ))}
+        <box style={{ flexGrow: 1 }} />
+        <Line spans={[{ text: truncate(foot, room), fg: t.textMuted }]} />
+      </box>
+    </>
+  )
+}
+
+/** Below PEEK_MIN_W, in place of the list: the focused note on the row under the picture. */
+function GraphFocus({ t, geo, rows, hl }: { t: Theme; geo: SheetGeo; rows: GraphRow[]; hl: number }) {
+  const focused = rows[hl] ?? rows[0]!
+  return (
+    <box style={{ height: 1, paddingLeft: 3, flexShrink: 0 }}>
+      <Line spans={graphRowSpans(focused, t, geo.cols - 6, true)} />
+    </box>
+  )
+}
+
+/**
+ * `^g`'s Graph sheet: the picture left and the neighbour list right from PEEK_MIN_W, else the picture and the focused
+ * note under it. Hover and clicks report cells (picture) or rows (list); controlled by App.
+ */
+export function GraphSheet({
+  t,
+  W,
+  H,
+  title,
+  note,
+  foot,
+  geo,
+  rows,
+  hl,
+  top,
+  picture,
+  image,
+  onClose,
+  onScroll,
+  onPicture,
+  onRow,
+  onImageError,
+}: Pick<PopupListProps, "t" | "W" | "H" | "onClose" | "onScroll"> & {
+  title: string
+  note: string
+  foot: string
+  geo: SheetGeo
+  rows: GraphRow[]
+  hl: number
+  top: number
+  picture: Picture
+  image: NativeImage | null
+  onPicture: (col: number, row: number, kind: PointerKind) => void
+  onRow: (at: number, kind: PointerKind) => void
+  onImageError: () => void
+}) {
+  const side = geo.split ? (
+    <GraphList t={t} geo={geo} rows={rows} hl={hl} top={top} foot={foot} onRow={onRow} />
+  ) : (
+    <GraphFocus t={t} geo={geo} rows={rows} hl={hl} />
+  )
+  const body = geo.split
+    ? ({ key: "graph-split", dir: "row" } as const)
+    : ({ key: "graph-narrow", dir: "column" } as const)
+  return (
+    <Overlay t={t} W={W} H={H} width={geo.width} title={title} note={note} onClose={onClose} onScroll={onScroll}>
+      <box key={body.key} style={{ flexDirection: body.dir, height: geo.height }}>
+        <GraphPicture
+          t={t}
+          geo={geo}
+          picture={picture}
+          image={image}
+          onPicture={onPicture}
+          onImageError={onImageError}
+        />
+        {side}
       </box>
     </Overlay>
   )

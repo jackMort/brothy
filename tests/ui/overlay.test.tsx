@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/react/test-utils"
+import { egoGraph } from "../../src/graph/ego"
+import { forceLayout } from "../../src/graph/layout"
+import { buildLinks } from "../../src/graph/links"
+import { graphPicture } from "../../src/graph/picture"
+import { graphFoot, graphNote, graphRows, sheetGeo } from "../../src/graph/sheet"
 import { A } from "../../src/lib/spans"
 import type { OpenRow } from "../../src/notes/projects"
 import { type SwitchRow, switchRows } from "../../src/notes/vault"
@@ -7,6 +12,7 @@ import { contrast, contrastOn, themeByName, type themes } from "../../src/theme/
 import { filterFamilies, paneLines, sampleView, themeSplit } from "../../src/theme/themepick"
 import { helpLayout } from "../../src/ui/help"
 import {
+  GraphSheet,
   HelpSheet,
   OpenPicker,
   Overlay,
@@ -21,6 +27,7 @@ import { WORDMARK } from "../../src/ui/status"
 import { ZEN_DEFAULTS, zenRows } from "../../src/ui/zen"
 import { quietAct } from "../helpers/quiet-act"
 import { brothy, hex } from "../helpers/theme"
+import { KITCHEN, vaultOf } from "../helpers/vault"
 
 const t = brothy
 type Setup = Awaited<ReturnType<typeof testRender>>
@@ -765,5 +772,57 @@ describe("ThemeBoard and ThemePicker", () => {
     const g = setup.captureCharFrame()
     expect(g).not.toContain("│")
     expect(g).toContain("flexoki")
+  })
+})
+
+describe("GraphSheet", () => {
+  const { ix, tree } = vaultOf(KITCHEN)
+  const ego = egoGraph(buildLinks(ix, tree), "/v/Broth.md", 2)
+  const term = { pixels: false, mux: false, cellW: 8, cellH: 16 }
+  const draw = async (W: number, H: number) => {
+    const geo = sheetGeo(W, H)
+    const picture = graphPicture(ego, forceLayout(ego, 1), geo, term, "braille", t, 1, new Set())
+    setup = quietAct(
+      await testRender(
+        <GraphSheet
+          t={t}
+          W={W}
+          H={H}
+          title="Graph · Broth"
+          note={graphNote(ego, 2)}
+          foot={graphFoot(ego, 2, 6, null)}
+          geo={geo}
+          rows={graphRows(ego, "", false)}
+          hl={0}
+          top={0}
+          picture={picture}
+          image={null}
+          onClose={() => {}}
+          onScroll={() => {}}
+          onPicture={() => {}}
+          onRow={() => {}}
+          onImageError={() => {}}
+        />,
+        { width: W, height: H },
+      ),
+    )
+    await setup.renderOnce()
+    return setup.captureCharFrame()
+  }
+
+  test("from 100 columns: the braille picture with its labels, │, the list with the focus bar, the bottom line", async () => {
+    const f = await draw(120, 34)
+    expect(f).toMatch(/Graph · Broth\s+← 2 · → 2 · 1 unresolved · depth 2\s+esc/)
+    expect(f).toMatch(/│\s+▌↔ Stock/)
+    expect(f).toMatch(/│\s+ {2}→ Bones/)
+    expect(f).toContain("depth 2 · 5 of 6 notes")
+    expect(f).toMatch(/[⠁-⣿]/)
+    expect(f).toContain("◉")
+  })
+
+  test("below 100 columns: no list, the focused note on the row under the picture", async () => {
+    const f = await draw(80, 24)
+    expect(f).not.toContain("│")
+    expect(f).toContain("▌↔ Stock")
   })
 })
