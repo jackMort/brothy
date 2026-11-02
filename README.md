@@ -69,6 +69,8 @@ starts zen and `q` quits.
   properties and dataview blocks. [Obsidian notes](https://jackmort.github.io/brothy/usage/obsidian-notes/)
 - Finds things fast: `ctrl+p` over every note, heading and line with a preview, `f` to follow a
   link by its label, `H` and `L` for back and forward. [Navigating notes](https://jackmort.github.io/brothy/usage/navigating-notes/)
+- Draws the open note's links (`ctrl+g`): the notes it links to and from, out to two links, in pixels where the
+  terminal shows images and in braille elsewhere. [Graph view](https://jackmort.github.io/brothy/usage/graph-view/)
 - Reloads when the file changes on disk and numbers the sections that changed.
 - Leaves only the text in zen (`z`): scroll or pages, spotlight, typewriter or teleprompter.
   [Zen mode](https://jackmort.github.io/brothy/usage/zen-mode/)

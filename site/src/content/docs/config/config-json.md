@@ -16,6 +16,7 @@ description: "Where brothy keeps its settings and what each key does."
 | `headings` | `"classic"` (default), `"bars"`, `"ladder"` or `"rules"` (<kbd>#</kbd>; [Heading styles](/brothy/usage/reading/#heading-styles)) |
 | `motion` | boolean, default `true`; `false` draws the welcome page still, without its ink-in and steam |
 | `zen` | the [zen settings](/brothy/config/zen-settings/) |
+| `graph` | `{ "depth": 2, "render": "auto" }`: depth `1` or `2` (<kbd>+</kbd> <kbd>-</kbd>), render `"auto"`, `"pixels"` or `"braille"` (<kbd>p</kbd>; [Graph view](/brothy/usage/graph-view/)) |
 
 ```json
 {"theme": "dracula", "sidebar": {"view": "files", "hidden": false}}
