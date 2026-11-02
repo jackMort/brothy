@@ -6,7 +6,7 @@ import { dirname, join, normalize, relative } from "node:path"
 // app, and no two modules load each other. Type-only imports are erased at runtime, so the cycle check skips them.
 
 const SRC = join(import.meta.dir, "../src")
-const DOMAINS = ["markdown", "ai", "notes", "ui", "theme", "system"]
+const DOMAINS = ["markdown", "ai", "notes", "ui", "theme", "system", "graph"]
 const IMPORT =
   /^(?:import|export)\s+(type\s+)?[\w$*{},\s]*?from\s+"(\.{1,2}\/[^"]*)"|import\(\s*"(\.{1,2}\/[^"]*)"\s*\)/gm
 
@@ -47,11 +47,19 @@ test("lib/ imports nothing in src outside lib/", () => {
   expect(bad).toEqual([])
 })
 
-test("markdown/, ai/, notes/, ui/, theme/ and system/ never import app/ or App", () => {
+test("markdown/, ai/, notes/, ui/, theme/, system/ and graph/ never import app/ or App", () => {
   const bad = [...deps].flatMap(([f, es]) =>
     DOMAINS.includes(folderOf(f))
       ? es.filter((e) => folderOf(e.to) === "app" || e.to === "App.tsx").map((e) => `${f} → ${e.to}`)
       : [],
+  )
+  expect(bad).toEqual([])
+})
+
+test("graph/ imports only lib/, theme/, notes/, ui/, system/ and itself", () => {
+  const ok = new Set(["lib", "theme", "notes", "ui", "system", "graph"])
+  const bad = [...deps].flatMap(([f, es]) =>
+    folderOf(f) === "graph" ? es.filter((e) => !ok.has(folderOf(e.to))).map((e) => `${f} → ${e.to}`) : [],
   )
   expect(bad).toEqual([])
 })
