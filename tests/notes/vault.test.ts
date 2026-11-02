@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import type { FileNode } from "../../src/notes/files"
 import {
   BODY_LIMIT,
   CHUNK,
@@ -8,7 +7,6 @@ import {
   foldSame,
   headingAt,
   hitOrdinal,
-  type IndexIO,
   indexNote,
   isStop,
   lineOf,
@@ -24,40 +22,7 @@ import {
   stepRow,
   switchRows,
 } from "../../src/notes/vault"
-
-/** An in-memory tree under /v from "dir/name.md" paths (folders created on the way). */
-export function treeOf(rels: string[]): FileNode {
-  const root: FileNode = { name: "v", path: "/v", rel: "", dir: true, children: [] }
-  for (const rel of rels) {
-    const parts = rel.split("/")
-    let dir = root
-    parts.slice(0, -1).forEach((p, k) => {
-      const r = parts.slice(0, k + 1).join("/")
-      let d = dir.children.find((c) => c.dir && c.rel === r)
-      if (!d) dir.children.push((d = { name: p, path: "/v/" + r, rel: r, dir: true, children: [] }))
-      dir = d
-    })
-    dir.children.push({ name: parts.at(-1)!, path: "/v/" + rel, rel, dir: false, children: [] })
-  }
-  return root
-}
-/** IO over a map of "rel" → source; `mtimes` overrides the default mtime 1; `reads` logs every read. */
-export function memIO(files: Record<string, string>, mtimes: Record<string, number> = {}) {
-  const reads: string[] = []
-  const io: IndexIO = {
-    stat: (p) => {
-      const rel = p.slice(3)
-      return rel in files ? { mtime: mtimes[rel] ?? 1, size: files[rel]!.length } : null
-    },
-    read: async (p) => {
-      const rel = p.slice(3)
-      reads.push(rel)
-      if (files[rel] === undefined) throw new Error("gone")
-      return files[rel]!
-    },
-  }
-  return { io, reads }
-}
+import { memIO, treeOf } from "../helpers/vault"
 
 describe("indexNote", () => {
   test("aliases (list or scalar), outline headings with lines, searchable text without fences or front matter", () => {
@@ -138,6 +103,21 @@ describe("refreshIndex", () => {
     expect(ok).toBe(false)
     expect(seen).toEqual([[CHUNK, CHUNK + 5]])
     expect(ix.docs.size).toBe(CHUNK)
+  })
+  test("each note keeps its wikilink targets as written; an mtime change re-reads them", async () => {
+    const ix = emptyIndex()
+    const tree = treeOf(["a.md", "b.md"])
+    const one = { "a.md": "# A\n[[b]] and [[Missing|m]]\n", "b.md": "---\nup: x\n---\n# B\n" }
+    await refreshIndex(ix, tree, memIO(one).io)
+    expect(ix.docs.get("/v/a.md")!.links).toEqual(["b", "Missing"])
+    expect(ix.docs.get("/v/b.md")!.links).toEqual([])
+    const two = { "a.md": "# A\nnone now\n", "b.md": "# B\n[[a]]\n" }
+    await refreshIndex(ix, tree, memIO(two, { "a.md": 2, "b.md": 2 }).io)
+    expect(ix.docs.get("/v/a.md")!.links).toEqual([])
+    expect(ix.docs.get("/v/b.md")!.links).toEqual(["a"])
+  })
+  test("a note over BODY_LIMIT keeps no links", () => {
+    expect(indexNote("[[a]]", 1, BODY_LIMIT + 1).links).toEqual([])
   })
 })
 

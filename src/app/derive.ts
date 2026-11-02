@@ -38,6 +38,7 @@ import { type FileNode, rankNotes, visibleRows } from "../notes/files"
 import { fsDirIO, loadProjects, openRows, type ProjectEntry } from "../notes/projects"
 import { MAX_BYTES } from "../notes/stdin"
 import { recentSection, searchVault, switchRows, type VaultIndex } from "../notes/vault"
+import { extractLinks } from "../notes/wikilinks"
 import { STDIN } from "../notes/workspace"
 import type { View } from "../system/config"
 import { type Theme, themes } from "../theme/theme"
@@ -49,7 +50,6 @@ import { cached, findLines, findQuote, matchIndex } from "../ui/nav"
 import {
   type ChangeState,
   type ChangeView,
-  extractLinks,
   type FileMeta,
   fmtSize,
   type InfoItem,

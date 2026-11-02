@@ -3,10 +3,11 @@
 
 import { statSync } from "node:fs"
 import { dirname, sep } from "node:path"
-import { parseProperties } from "../markdown/frontmatter"
+import { parseFrontMatter, parseProperties } from "../markdown/frontmatter"
 import { parseWikilink, wikiLabel } from "../markdown/lexer"
 import { sourceScan } from "../markdown/source"
 import { type FileNode, rankNotes, scoreName, stem } from "./files"
+import { extractLinks } from "./wikilinks"
 
 /** Notes larger than this (bytes) are indexed by name and headings only. */
 export const BODY_LIMIT = 2 * 1024 * 1024
@@ -19,6 +20,8 @@ export interface NoteDoc {
   aliases: string[]
   /** the Source outline: index i is `view.headings[i]` once the note is open (outline parity) */
   headings: { text: string; line: number; depth: number }[]
+  /** the body's wikilink targets as written (`extractLinks`); the graph resolves them against the tree. [] over BODY_LIMIT */
+  links: string[]
   /** searchable source lines (`sourceScan().text`, heading lines blank, `plainLine`) joined by "\n"; "" over BODY_LIMIT */
   text: string
   /** `text` case-folded with `foldSame`, so offsets carry over */
@@ -67,7 +70,7 @@ export function indexNote(src: string, mtime: number, size: number): NoteDoc {
   const raw = parseProperties(src).find(([k]) => /^alias(es)?$/i.test(k))?.[1] ?? []
   const aliases = (Array.isArray(raw) ? raw : [raw]).map((a) => a.trim()).filter(Boolean)
   const headings = sc.headings.map(({ text, line, depth }) => ({ text, line, depth }))
-  if (size > BODY_LIMIT) return { mtime, size, aliases, headings, text: "", lower: "", starts: [] }
+  if (size > BODY_LIMIT) return { mtime, size, aliases, headings, links: [], text: "", lower: "", starts: [] }
   // Headings already answer in their own section, so their lines are not text
   const heads = new Set(sc.headings.flatMap((h) => Array.from({ length: h.end - h.line + 1 }, (_, k) => h.line + k)))
   const lines = sc.text.map((l, i) => (heads.has(i) ? "" : plainLine(l)))
@@ -78,7 +81,16 @@ export function indexNote(src: string, mtime: number, size: number): NoteDoc {
     at += l.length + 1
   }
   const text = lines.join("\n")
-  return { mtime, size, aliases, headings, text, lower: foldSame(text), starts }
+  return {
+    mtime,
+    size,
+    aliases,
+    headings,
+    links: extractLinks(parseFrontMatter(src).body),
+    text,
+    lower: foldSame(text),
+    starts,
+  }
 }
 
 export interface IndexIO {

@@ -13,7 +13,6 @@ import {
   type ChangeView,
   changeHead,
   changeItems,
-  extractLinks,
   fileRowSpans,
   findHeading,
   fmtAge,
@@ -141,11 +140,6 @@ describe("infoItems", () => {
 })
 
 describe("links", () => {
-  test("extractLinks: aliases, headings, note embeds; not images, code or self links", () => {
-    const body =
-      "See [[A]], [[B|alias]], [[C#Heading]], ![[D]], ![[pic.png]], ![[E.md]], [[a]] again, `[[code]]`\n```\n[[fenced]]\n```\n[[#local]]"
-    expect(extractLinks(body)).toEqual(["A", "B", "C", "D", "E.md"])
-  })
   test("resolveLink: exact relative path, else the note name; case-insensitive", () => {
     const root = fixture(["notes/Soup Base Stock.md", "a/index.md", "b/index.md", "Top.md"])
     const tree = scanTree(root)
