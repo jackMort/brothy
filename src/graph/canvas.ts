@@ -126,7 +126,7 @@ function baseRadius(n: EgoNode): number {
 }
 
 /** A node's radius in raster pixels (sized for 8-pixel-wide cells, scaled to `sx`). */
-const nodeRadius = (n: EgoNode, sx: number) => baseRadius(n) * (sx / 8)
+export const nodeRadius = (n: EgoNode, sx: number) => baseRadius(n) * (sx / 8)
 
 /** An edge's colour: its farther node's role; between two nodes of one depth a neutral (`border`, or `textMuted` in braille: dots are sparse). */
 function edgeColor(t: Theme, ego: Ego, e: EgoEdge, pixels: boolean): string {

@@ -15,6 +15,9 @@ export interface SidebarConfig {
   hidden: boolean
 }
 
+/** How the graph picture is drawn: OpenTUI's image where the terminal shows one (auto, pixels), else braille. */
+export type GraphRender = "auto" | "pixels" | "braille"
+
 export interface Config {
   theme?: string
   /** Legacy key: pass `undefined` in a patch to drop it from the file. */

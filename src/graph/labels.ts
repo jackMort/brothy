@@ -7,7 +7,7 @@ import type { Placed } from "./layout"
 /** Columns a label gets at most. */
 const LABEL_MAX = 18
 
-type LabelTone = "centre" | "focus" | "near" | "far"
+export type LabelTone = "centre" | "focus" | "near" | "far"
 /** A label at (row, col); `i` is its node, -1 the `+n more` note under the centre. */
 export interface Label {
   i: number
