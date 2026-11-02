@@ -11,9 +11,9 @@ export const CAP_NEAR = 18
 export const CAP_ALL = 40
 
 /** How a node is linked to the centre (depth 1) or to the depth-1 note that brought it in (depth 2). */
-type Dir = "out" | "in" | "both" | "unresolved"
+export type Dir = "out" | "in" | "both" | "unresolved"
 
-interface EgoNode {
+export interface EgoNode {
   /** absolute path; an unresolved target is `?` + its text */
   path: string
   name: string
