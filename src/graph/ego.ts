@@ -26,7 +26,7 @@ interface EgoNode {
   parent: number
 }
 /** A link between two drawn nodes, `a < b`. */
-interface EgoEdge {
+export interface EgoEdge {
   a: number
   b: number
 }
