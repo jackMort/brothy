@@ -24,7 +24,7 @@ function dispatch(actions: Actions, modes: Mode[], k: KeyEvent, skip: readonly K
 }
 
 /** The open popup's bindings, else typing into it; false with no popup open. */
-function makePopupKey({ workspace, switcher, popups }: Features, actions: Actions) {
+function makePopupKey({ workspace, switcher, popups, graph }: Features, actions: Actions) {
   const { themeSet, promptType } = popups
   /** The popups that take every key, in precedence order: each one's mode, and where a printable key no binding takes goes. */
   const popupModes: { mode: Mode; open: (s: UI) => boolean; type?: (s: UI, text: string) => void }[] = [
@@ -37,6 +37,12 @@ function makePopupKey({ workspace, switcher, popups }: Features, actions: Action
       type: (_, text) => switcher.swInput(text),
     },
     { mode: "proof", open: (s) => !!s.proof },
+    {
+      mode: "graphFilter",
+      open: (s) => !!s.graph?.typing,
+      type: (s, text) => graph.graphType((s.graph?.q ?? "") + text),
+    },
+    { mode: "graph", open: (s) => !!s.graph },
     { mode: "prompt", open: (s) => !!s.prompt, type: (s, text) => s.prompt && promptType(s.prompt.value + text) },
   ]
 

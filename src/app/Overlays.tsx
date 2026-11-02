@@ -1,5 +1,5 @@
 // The popups over the page: the `? ?` help sheet, the switcher, the Open picker, Find in Document, the Proof sheet, the
-// `t` theme picker and the zen settings. Not pure: drawn from the app context, with handlers that write the store. Each returns null
+// Graph sheet, the `t` theme picker and the zen settings. Not pure: drawn from the app context, with handlers that write the store. Each returns null
 // while its popup is closed; the components themselves live in overlay.tsx.
 import type { ReactNode } from "react"
 import { askTitleNote } from "../ai/ask"
@@ -24,6 +24,7 @@ import { innerWidth, popupWidth, ROW_PAD } from "../ui/geometry"
 import { helpLayout } from "../ui/help"
 import { findItems, keepVisible } from "../ui/nav"
 import {
+  GraphSheet,
   HelpSheet,
   OpenPicker,
   Overlay,
@@ -37,6 +38,7 @@ import {
 import { zenRows } from "../ui/zen"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
+import { type Graph, imageFor, releaseImage } from "./graph"
 import { HELP_GROUPS } from "./keymap"
 import type { Popups } from "./popups"
 import type { Proof } from "./proof"
@@ -234,6 +236,37 @@ export function proofOverlay(
       onScroll={(dir) => proofAt(p.hl + dir)}
       onHover={(at) => at !== p.hl && proofAt(at)}
       onActivate={proofGo}
+    />
+  )
+}
+
+/** `^g`'s Graph sheet from `d.graph`; its image made (or released) here, once per raster. */
+export function graphOverlay(c: AppCtx, d: Derived, g: Graph): ReactNode {
+  const { set, W, H, graphImg } = c
+  const v = d.graph
+  if (!v) {
+    releaseImage(graphImg)
+    return null
+  }
+  return (
+    <GraphSheet
+      t={d.t}
+      W={W}
+      H={H}
+      title={v.title}
+      note={v.note}
+      foot={v.foot}
+      geo={v.geo}
+      rows={v.rows}
+      hl={v.hl}
+      top={v.top}
+      picture={v.picture}
+      image={imageFor(graphImg, v.picture.rgba, g.pixelsFailed)}
+      onClose={() => set({ graph: null })}
+      onScroll={g.graphMove}
+      onPicture={g.graphPointer}
+      onRow={g.graphRow}
+      onImageError={g.pixelsFailed}
     />
   )
 }

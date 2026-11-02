@@ -13,7 +13,7 @@ import { type Config, type SidebarConfig, saveConfig, VIEWS, type View } from ".
 import { keepVisible } from "../ui/nav"
 import { fadeStep, GHOST_STEP, nextToast, TOAST_HOLD, type ToastKind } from "../ui/status"
 import type { Derived, DeriveRefs } from "./derive"
-import { OPEN_DELAY, type Spot, type UI } from "./store"
+import { type GraphImage, OPEN_DELAY, type Spot, type UI } from "./store"
 
 /** The timer slots: one pending timeout each (toast and hint fades, Files preview, teleprompter, AI redraw, …). */
 export interface Timers {
@@ -73,6 +73,8 @@ export interface Base extends DeriveRefs {
   /** `leave` has run: the last project record is written once */
   left: { current: boolean }
   welcome: { current: WelcomeState }
+  /** the Graph sheet's image (`imageFor`) */
+  graphImg: { current: GraphImage }
 }
 
 /** Fades, toasts and config saves. */

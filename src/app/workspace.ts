@@ -100,6 +100,7 @@ function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }:
       lastAsk: null,
       prompt: null,
       switcher: null,
+      graph: null,
       opener: null,
       focus: "doc",
       drawerOpen: false,

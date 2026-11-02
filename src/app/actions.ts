@@ -21,6 +21,7 @@ import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import { makeOnKey } from "./dispatch"
+import type { Graph } from "./graph"
 import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { Popups } from "./popups"
@@ -31,6 +32,7 @@ import {
   makeDocActions,
   makeFilesActions,
   makeFilterActions,
+  makeGraphActions,
   makeInfoActions,
   makeOutlineActions,
   makePopupActions,
@@ -50,6 +52,7 @@ export interface Features {
   workspace: WorkspaceControl
   popups: Popups
   proof: Proof
+  graph: Graph
   edit: ((argv: string[], piped: boolean) => EditResult | void | Promise<EditResult | void>) | undefined
 }
 
@@ -73,6 +76,7 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makePopupActions(c, f),
     ...makeSwitcherActions(c, f),
     ...makeProofActions(c, f),
+    ...makeGraphActions(f),
   }
   const { currentCtx, pokeHints } = keys
   return {
@@ -134,6 +138,7 @@ function popupCtx(s: UI): Ctx | null {
   if (s.opener) return "open"
   if (s.switcher) return "switch"
   if (s.proof) return "proof"
+  if (s.graph) return s.graph.typing ? "graphFilter" : "graph"
   return s.prompt ? "prompt" : null
 }
 
@@ -249,7 +254,7 @@ function makeToggleActions(c: AppCtx, { zen }: Features, { pokeHints, currentCtx
 /** The other global keys: pickers, find, focus, reload, esc, help, history, the AI keys and quit. */
 function makeGlobalActions(
   c: AppCtx,
-  { aiJobs, links, zen, switcher, workspace, popups }: Features,
+  { aiJobs, links, zen, switcher, workspace, popups, graph }: Features,
   { pokeHints, currentCtx, hintsVisible }: KeyContext,
 ) {
   const { ui, set, derive, renderer, flash, selectView, focusPanel, focusDoc } = c
@@ -261,6 +266,7 @@ function makeGlobalActions(
   }
   return {
     switcher: switcher.openSwitcher,
+    graphOpen: graph.graphOpen,
     open: workspace.openOpener,
     slash: () => {
       const { sideFocus } = derive()

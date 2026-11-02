@@ -9,10 +9,12 @@ import { makeCtx, type Timers, type WelcomeState } from "./app/ctx"
 import { docBox, miniBox } from "./app/Document"
 import { type Derived, makeDerive, makeMemo } from "./app/derive"
 import { useAppEffects, useRenderEffects } from "./app/effects"
+import { makeGraph } from "./app/graph"
 import { type FooterState, footerHints, type KeyId, PINNED } from "./app/keymap"
 import { makeLinks } from "./app/links"
 import {
   findOverlay,
+  graphOverlay,
   helpOverlay,
   openOverlay,
   proofOverlay,
@@ -24,7 +26,7 @@ import {
 import { panelBox } from "./app/Panel"
 import { makePopups } from "./app/popups"
 import { makeProof } from "./app/proof"
-import { type FileRow, initUI, type Job, MIN_H, MIN_W, type Spot, type UI, ZEN_DIM } from "./app/store"
+import { type FileRow, type GraphImage, initUI, type Job, MIN_H, MIN_W, type Spot, type UI, ZEN_DIM } from "./app/store"
 import { makeSwitcher } from "./app/switcher"
 import { makeWorkspace } from "./app/workspace"
 import { makeZen } from "./app/zen"
@@ -104,6 +106,7 @@ export function App({
   const workspace = makeWorkspace(ctx, switcher, aiJobs)
   const popups = makePopups(ctx)
   const proof = makeProof(ctx, links)
+  const graph = makeGraph(ctx, links, switcher)
   const { currentCtx, pokeHints, outlineGo, infoGo, onKey } = makeActions(ctx, {
     aiJobs,
     links,
@@ -112,6 +115,7 @@ export function App({
     workspace,
     popups,
     proof,
+    graph,
     edit: editImpl,
   })
 
@@ -146,6 +150,7 @@ export function App({
   const openEl = openOverlay(ctx, d, workspace)
   const findEl = findOverlay(ctx, d, popups)
   const proofEl = proofOverlay(ctx, d, proof)
+  const graphEl = graphOverlay(ctx, d, graph)
   const pickView = themePickView(ctx, d)
   // zen gloss: runs when the reading line changes section (not on every scroll tick)
   const glossAt = L.zen && openPath ? `${openPath}\0${d.currentHeading}` : null
@@ -167,6 +172,7 @@ export function App({
     helpEl,
     findEl,
     proofEl,
+    graphEl,
     switchEl,
     openEl,
     themeEl,
@@ -198,6 +204,7 @@ function useAppRefs(stdin: string | undefined, W: number, H: number) {
     hlSeen: useRef<Rendered | null>(null),
     left: useRef(false),
     welcome: useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H }),
+    graphImg: useRef<GraphImage>({ px: null, img: null }),
   }
 }
 
@@ -238,6 +245,7 @@ function footerWords(d: Derived): Partial<Record<KeyId, string>> {
   if (d.sv) words.summarize = words.summarizeHint = tldrWord(d.sv)
   const dWord = changeKey(d.cv)?.word
   if (dWord) words.explainChange = words.proofExplain = dWord
+  if (d.graph) words.graphRender = d.graph.mode === "pixels" ? "braille" : "pixels"
   return { ...words, ...stopWords(d.infoRows[d.linkRows[d.infoCur] ?? -1], d.s.tldrOpen) }
 }
 
@@ -267,6 +275,7 @@ interface ScreenParts {
   helpEl: ReactNode
   findEl: ReactNode
   proofEl: ReactNode
+  graphEl: ReactNode
   switchEl: ReactNode
   openEl: ReactNode
   themeEl: ReactNode
@@ -342,6 +351,7 @@ function mainScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: 
       {p.helpEl}
       {p.findEl}
       {p.proofEl}
+      {p.graphEl}
       {p.switchEl}
       {p.openEl}
       {p.themeEl}

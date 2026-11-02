@@ -653,12 +653,12 @@ function GraphList({
   )
 }
 
-/** Below PEEK_MIN_W, in place of the list: the focused note on the row under the picture. */
+/** Below PEEK_MIN_W, in place of the list: the focused note on the row under the picture (`hl` -1: the first row, unfocused). */
 function GraphFocus({ t, geo, rows, hl }: { t: Theme; geo: SheetGeo; rows: GraphRow[]; hl: number }) {
   const focused = rows[hl] ?? rows[0]!
   return (
     <box style={{ height: 1, paddingLeft: 3, flexShrink: 0 }}>
-      <Line spans={graphRowSpans(focused, t, geo.cols - 6, true)} />
+      <Line spans={graphRowSpans(focused, t, geo.cols - 6, hl >= 0)} />
     </box>
   )
 }

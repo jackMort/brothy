@@ -294,6 +294,27 @@ const proofDir = (k: KeyEvent): 1 | -1 => {
   return isDown(k) || (k.ctrl && k.name === "n") ? 1 : -1
 }
 
+/** The Graph sheet and its filter. */
+export function makeGraphActions({ graph: g }: Pick<Features, "graph">) {
+  return {
+    graphMove: (k) => g.graphMove(proofDir(k)),
+    graphGo: () => g.graphGo(),
+    graphCentre: g.graphCentre,
+    graphBack: g.graphBack,
+    graphDepth: (k) => g.graphDepth(k.sequence === "+" ? 2 : 1),
+    graphRender: g.graphRenderer,
+    graphFilter: g.graphFilter,
+    graphHist: (k) => g.graphHist(k.name === "h" ? -1 : 1),
+    graphClose: g.graphClose,
+    gfType: typing,
+    gfMove: (k) => g.graphMove(proofDir(k)),
+    gfGo: () => g.graphGo(),
+    gfLeave: g.graphLeave,
+    gfClear: g.graphClose,
+    gfErase: g.graphErase,
+  } satisfies Partial<Actions>
+}
+
 /** The Proof sheet: step between its blocks, go to one, `D` explain in place, close. */
 export function makeProofActions(c: AppCtx, { proof, aiJobs }: Pick<Features, "proof" | "aiJobs">) {
   const { ui, set } = c

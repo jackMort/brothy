@@ -22,6 +22,8 @@ export type Mode =
   | "switch"
   | "open"
   | "proof"
+  | "graph"
+  | "graphFilter"
 /** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change). */
 export type Ctx =
   | "doc"
@@ -37,6 +39,8 @@ export type Ctx =
   | "switch"
   | "open"
   | "proof"
+  | "graph"
+  | "graphFilter"
 /** One binding: its keys, how help and the footer show it. */
 export interface KeyDef {
   modes: readonly Mode[]
@@ -101,6 +105,13 @@ const KEYMAP = {
     hint: "find",
   },
   switcher: { modes: ["global"], keys: ["C-p"], label: "^p", desc: "go to a note, heading or text (the whole vault)" },
+  graphOpen: {
+    modes: ["global"],
+    keys: ["C-g"],
+    label: "^g",
+    desc: "graph: the notes linked to and from this one",
+    group: "Document",
+  },
   open: { modes: ["global"], keys: ["o"], label: "o", desc: "open a recent project or any path (folder or note)" },
   focus: { modes: ["global"], keys: ["tab"], label: "tab", desc: "panel ⇄ document" },
   theme: { modes: ["global"], keys: ["t"], label: "t", desc: "pick theme · ←→ dark / light" },
@@ -374,6 +385,53 @@ const KEYMAP = {
   proofGo: { modes: ["proof"], keys: ["return", "enter"], label: "⏎", hint: "go to" },
   proofExplain: { modes: ["proof"], keys: ["S-d"], label: "D", hint: "explain", when: "changes" },
   proofClose: { modes: ["proof"], keys: ["escape"], label: "esc", hint: "close" },
+  graphMove: {
+    modes: ["graph"],
+    keys: ["down", "up", "j", "k", "tab", "C-n", "C-p"],
+    label: "↑↓ j k",
+    short: "↑↓",
+    desc: "move through the linked notes",
+    hint: "neighbour",
+  },
+  graphGo: {
+    modes: ["graph"],
+    keys: ["return", "enter"],
+    label: "⏎",
+    desc: "open the note (+ n more: list them all)",
+    hint: "open",
+  },
+  graphCentre: {
+    modes: ["graph"],
+    keys: ["l", "right"],
+    label: "l →",
+    short: "l",
+    desc: "centre on the focused note",
+    hint: "centre",
+  },
+  graphBack: {
+    modes: ["graph"],
+    keys: ["h", "left"],
+    label: "h ←",
+    short: "h",
+    desc: "back to the previous centre",
+    hint: "back",
+  },
+  graphDepth: { modes: ["graph"], keys: ["+", "-"], label: "+ -", desc: "depth 2 or 1 (saved)", hint: "depth" },
+  graphRender: { modes: ["graph"], keys: ["p"], label: "p", desc: "pixels or braille (saved)", hint: "pixels" },
+  graphFilter: { modes: ["graph"], keys: ["/"], label: "/", desc: "filter the list", hint: "filter" },
+  graphHist: {
+    modes: ["graph"],
+    keys: ["S-h", "S-l"],
+    label: "H L",
+    desc: "close, then back / forward through the notes",
+  },
+  graphClose: { modes: ["graph"], keys: ["escape"], label: "esc", desc: "clear the filter, else close", hint: "close" },
+  gfType: { modes: ["graphFilter"], keys: [], label: "type", hint: "filter" },
+  gfMove: { modes: ["graphFilter"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "neighbour" },
+  gfGo: { modes: ["graphFilter"], keys: ["return", "enter"], label: "⏎", hint: "open" },
+  gfLeave: { modes: ["graphFilter"], keys: ["tab"], label: "tab", hint: "keep" },
+  gfClear: { modes: ["graphFilter"], keys: ["escape"], label: "esc", hint: "clear" },
+  gfErase: { modes: ["graphFilter"], keys: ["backspace"], label: "⌫" },
   labelType: { modes: ["label"], keys: [], label: "a–z", desc: "Links: type a label", hint: "follow" },
   labelErase: { modes: ["label"], keys: ["backspace"], label: "⌫", hint: "erase" },
   labelCancel: { modes: ["label"], keys: ["escape"], label: "esc", hint: "cancel" },
@@ -444,6 +502,8 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
   switch: ["swType", "swMove", "swSection", "swOpen", "swAskHint", "swClose"],
   open: ["opType", "opMove", "opComplete", "opOpen", "opClose"],
   proof: ["proofMove", "proofGo", "proofExplain", "proofClose"],
+  graph: ["graphMove", "graphGo", "graphCentre", "graphBack", "graphDepth", "graphRender", "graphFilter", "graphClose"],
+  graphFilter: ["gfType", "gfMove", "gfGo", "gfLeave", "gfClear"],
 }
 
 /** The switcher's footer while the query is a question, by what the ask shows (`askStage`). */
@@ -472,6 +532,8 @@ export const PINNED: readonly Ctx[] = [
   "switch",
   "open",
   "proof",
+  "graph",
+  "graphFilter",
 ]
 
 /**
@@ -500,6 +562,7 @@ const HELP_SECTIONS: [readonly Mode[], string][] = [
   [["doc"], "Document"],
   [["zen"], "Zen"],
   [["files", "outline", "info", "filter"], "Panel"],
+  [["graph"], "Graph"],
   [[], "AI"],
 ]
 /** The `? ?` sheet's groups: a binding with a description goes to its `group`, else to its first mode's section. */
@@ -528,6 +591,7 @@ export const ZEN_OFF: readonly KeyId[] = [
   "explainChange",
   "edit",
   "minimap",
+  "graphOpen",
 ]
 /** The welcome page has no panel and no note: these would only change the panel, the view or the measure out of sight. */
 export const WELCOME_OFF: readonly KeyId[] = [

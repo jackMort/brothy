@@ -25,6 +25,11 @@ import {
   quoteNeedle,
 } from "../ai/delta"
 import { freshGlosses, glossTarget } from "../ai/gloss"
+import { type Ego, egoGraph } from "../graph/ego"
+import { forceLayout, type Layout, seedOf } from "../graph/layout"
+import { buildLinks } from "../graph/links"
+import { dimOf, graphPicture } from "../graph/picture"
+import { type GraphMode, type GraphTerm, graphRows, type SheetGeo, sheetGeo } from "../graph/sheet"
 import { lineText } from "../lib/spans"
 import { clamp } from "../lib/text"
 import { type FrontMatter, type Property, parseFrontMatter, parseProperties } from "../markdown/frontmatter"
@@ -68,6 +73,7 @@ import {
   filesCursor,
   filesList,
   glossSheet,
+  graphSheet,
   infoPanel,
   landingView,
   matchState,
@@ -293,6 +299,33 @@ function askRowsMemo() {
   }
 }
 
+/** Memo builders for the Graph sheet: geometry, the link graph, the ego graph, its rows, layout and picture. */
+function graphMemo() {
+  return {
+    graphGeo: cached(sheetGeo),
+    // `_ver`: the index is changed in place; ixVer says when
+    graphLinks: cached(
+      (ix: VaultIndex, tree: FileNode, _ver: number, live: string | null, targets: readonly string[] | null) =>
+        buildLinks(ix, tree, live && targets ? { path: live, targets } : null),
+    ),
+    ego: cached(egoGraph),
+    graphRows: cached(graphRows),
+    graphLayout: cached((ego: Ego) => forceLayout(ego, seedOf(ego.nodes[0]!.path))),
+    graphPicture: cached(
+      (
+        ego: Ego,
+        lay: Layout,
+        geo: SheetGeo,
+        term: GraphTerm,
+        mode: GraphMode,
+        t: Theme,
+        focus: number | null,
+        q: string,
+      ) => graphPicture(ego, lay, geo, term, mode, t, focus, dimOf(ego, q)),
+    ),
+  }
+}
+
 /** askRows, built again only when an input changed (`at`: the seconds, notes, width and pane, compared by value). */
 function cachedAsk() {
   const rows = cached(
@@ -324,7 +357,7 @@ function cachedAsk() {
 
 /** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
 export function makeMemo(stdin: string | undefined) {
-  return { ...documentMemo(stdin), ...panelMemo(), ...viewMemo(), ...pickerMemo(), ...askRowsMemo() }
+  return { ...documentMemo(stdin), ...panelMemo(), ...viewMemo(), ...pickerMemo(), ...askRowsMemo(), ...graphMemo() }
 }
 /** The memo table: one `cached` builder per derived value. */
 export type Memo = ReturnType<typeof makeMemo>
@@ -397,6 +430,15 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
       currentHeading,
       land: landingView(s, L, doc, info.cv, memo, jobs.current),
       proof: proofSheet(s, dims.current.W, dims.current.H, info.cv, info.title, memo),
+      graph: graphSheet(
+        s,
+        dims.current.W,
+        dims.current.H,
+        t,
+        vault.current.ix,
+        s.openPath === STDIN ? memo.linkTargets(fm.body) : null,
+        memo,
+      ),
       side: changeSideAt(s, L),
       sideFocus: (L.shown && s.focus === "panel" ? s.view : null) as View | null,
       oRows,

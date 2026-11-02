@@ -7,19 +7,21 @@ import { shortModel } from "../../ai/client"
 import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
 import type { Change, ChangeMark, DeltaNote } from "../../ai/delta"
 import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
+import { noteName } from "../../graph/ego"
+import { graphFoot, graphMode, graphNote, isGraphStop } from "../../graph/sheet"
 import { clamp, plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
 import { folderCounts, SCAN_LIMIT } from "../../notes/files"
 import { switchSplit } from "../../notes/peek"
 import type { OpenRow } from "../../notes/projects"
 import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/vault"
-import { projectRoot } from "../../notes/workspace"
+import { projectRoot, STDIN } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
 import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../../ui/footnote"
 import { BODY_PAD, innerWidth, ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
 import { MINI_W } from "../../ui/minimap"
-import { relocate, remapTop } from "../../ui/nav"
+import { keepVisible, relocate, remapTop } from "../../ui/nav"
 import type { ChangeState, ChangeView, SummaryView } from "../../ui/panel"
 import { proofHeight, proofMarkW, proofTop, proofWidth } from "../../ui/proof"
 import { noteTitle } from "../../ui/status"
@@ -229,6 +231,44 @@ export function proofSheet(s: UI, W: number, H: number, cv: ChangeView | null, t
   const rows = memo.proof(cv, title, room)
   const hl = clamp(s.proof.hl, 0, changes.length - 1)
   return { rows, width, room, height, hl, top: proofTop(rows, hl, s.proof.top, height), markW: proofMarkW(changes) }
+}
+
+/**
+ * The Graph sheet on screen (`ui.graph`): the centre's ego graph at the saved depth, its list (the focus on a stop), the
+ * picture at the sheet's size in the renderer `graphMode` picks, the title's counts and the bottom line. Null while closed.
+ */
+export function graphSheet(
+  s: UI,
+  W: number,
+  H: number,
+  t: Theme,
+  ix: VaultIndex,
+  targets: readonly string[] | null,
+  memo: Memo,
+) {
+  const g = s.graph
+  if (!g) return null
+  const geo = memo.graphGeo(W, H)
+  const links = memo.graphLinks(ix, s.linkTree, s.ixVer, s.openPath === STDIN ? STDIN : null, targets)
+  const ego = memo.ego(links, g.centre, s.graphDepth)
+  const rows = memo.graphRows(ego, g.q, g.open)
+  // -1: no row to rest on (no links, no match), so no row is drawn focused
+  const hl = isGraphStop(rows[g.hl]) ? g.hl : rows.findIndex(isGraphStop)
+  const at = rows[hl]
+  const mode = graphMode(s.graphRender, g.term, s.graphFailed)
+  const focus = at?.kind === "node" ? at.i : null
+  return {
+    geo,
+    ego,
+    rows,
+    hl,
+    mode,
+    top: keepVisible(g.top, hl, Math.max(1, geo.listH), rows.length),
+    picture: memo.graphPicture(ego, memo.graphLayout(ego), geo, g.term, mode, t, focus, g.q),
+    title: `Graph · ${noteName(g.centre)}`,
+    note: graphNote(ego, s.graphDepth),
+    foot: graphFoot(ego, s.graphDepth, links.notes, s.indexing),
+  }
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   keyDef,
   modeOf,
   PINNED,
+  ZEN_OFF,
 } from "../../src/app/keymap"
 
 const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true, tldr: true }
@@ -137,5 +138,36 @@ test("the help sheet groups: AI collects its bindings, a binding without a descr
   expect(ai.entries.map((e) => e.keys)).toEqual(["a", "D", "^p ?"])
   const all = HELP_GROUPS.flatMap((g) => g.entries.map((e) => e.desc))
   expect(all).not.toContain(undefined)
-  expect(HELP_GROUPS.map((g) => g.title)).toEqual(["Global", "Document", "Zen", "Panel", "AI"])
+  expect(HELP_GROUPS.map((g) => g.title)).toEqual(["Global", "Document", "Zen", "Panel", "Graph", "AI"])
+})
+
+test("graph: ^g everywhere but zen; the sheet's footer with p named for what it switches to; the filter's own; help group Graph", () => {
+  const on = { query: false, preview: true, disk: true, ai: false, changes: false, tldr: false }
+  const words = (c: Parameters<typeof footerHints>[0], w = {}) => footerHints(c, on, w).map((h) => `${h.key} ${h.word}`)
+  expect(words("graph", { graphRender: "braille" })).toEqual([
+    "↑↓ neighbour",
+    "⏎ open",
+    "l centre",
+    "h back",
+    "+ - depth",
+    "p braille",
+    "/ filter",
+    "esc close",
+  ])
+  expect(words("graphFilter")).toEqual(["type filter", "↑↓ neighbour", "⏎ open", "tab keep", "esc clear"])
+  expect(words("doc")).not.toContain("^g graph")
+  expect(ZEN_OFF).toContain("graphOpen")
+  expect(PINNED).toEqual(expect.arrayContaining(["graph", "graphFilter"]))
+  expect(HELP_GROUPS.find((g) => g.title === "Graph")!.entries.map((e) => e.keys)).toEqual([
+    "↑↓ j k",
+    "⏎",
+    "l →",
+    "h ←",
+    "+ -",
+    "p",
+    "/",
+    "H L",
+    "esc",
+  ])
+  expect(HELP_GROUPS.find((g) => g.title === "Document")!.entries.some((e) => e.keys === "^g")).toBe(true)
 })

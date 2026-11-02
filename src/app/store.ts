@@ -1,17 +1,19 @@
 // The app's store: the one mutable UI object every handler reads at call time, its parts, the AI jobs the `jobs` ref
 // holds and the app's tunables. No React; `initUI` reads the workspace, the config and the summary cache once, at mount.
 
+import type { NativeImage } from "@opentui/core"
 import type { AskState, Candidate, Landed } from "../ai/ask"
 import { type Glosses, loadSummaries, type Summaries } from "../ai/cache"
 import type { AIConfig } from "../ai/config"
 import type { Change, DeltaNote } from "../ai/delta"
+import type { GraphTerm } from "../graph/sheet"
 import type { HeadingStyle } from "../markdown/heading-style"
 import type { Geometry } from "../markdown/render"
 import type { FileNode, TreeRow } from "../notes/files"
 import { type History, startHistory } from "../notes/history"
 import type { ProjectEntry } from "../notes/projects"
 import { stdinWorkspace, workspace } from "../notes/workspace"
-import { type Config, loadConfig, type View } from "../system/config"
+import { type Config, type GraphRender, loadConfig, type View } from "../system/config"
 import { themes } from "../theme/theme"
 import { resolveTheme, type ThemePick } from "../theme/themepick"
 import type { LinkSpot } from "../ui/nav"
@@ -85,6 +87,22 @@ export interface Job {
   /** the cleaned stream is no longer empty; stays false for a request that doesn't stream */
   live: boolean
 }
+/**
+ * The Graph sheet while open: the centre note, the centres walked from (`h` goes back), the focused list row and the
+ * first one shown, the filter and whether it is being typed, `+ n more` open, and the terminal as read at open.
+ */
+export interface GraphState {
+  centre: string
+  walk: string[]
+  hl: number
+  top: number
+  q: string
+  typing: boolean
+  open: boolean
+  term: GraphTerm
+}
+/** The sheet's image and the raster it was made from (a new raster makes a new one, the old one is disposed). */
+export type GraphImage = { px: Uint8Array | null; img: NativeImage | null }
 /** No changes or notes: shared empty lists, so the Info memo holds */
 export const NO_CHANGES: Change[] = []
 export const NO_NOTES: (DeltaNote | undefined)[] = []
@@ -222,6 +240,15 @@ export interface UI {
   landing: { path: string; n: number } | null
   /** the Proof sheet while open: the highlighted change (index into the list) and the first row shown */
   proof: { hl: number; top: number } | null
+  /** the Graph sheet while open */
+  graph: GraphState | null
+  /** config `graph`: depth (`+ -`) and renderer (`p`) */
+  graphDepth: 1 | 2
+  graphRender: GraphRender
+  /** pixels failed this run: braille until restart */
+  graphFailed: boolean
+  /** the multiplexer toast was shown this run */
+  graphMuxTold: boolean
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
@@ -246,6 +273,12 @@ function savedSettings(
   }
 }
 
+/** The graph's saved settings: depth 2 and `auto` unless config says otherwise. */
+const graphSettings = (cfg: Config): { graphDepth: 1 | 2; graphRender: GraphRender } => ({
+  graphDepth: cfg.graph?.depth ?? 2,
+  graphRender: cfg.graph?.render ?? "auto",
+})
+
 /** The store at mount: the workspace from the CLI's root and note (or the piped document), the saved config, the summary cache. */
 export function initUI(
   root: string,
@@ -260,6 +293,7 @@ export function initUI(
   const cfg = loadConfig()
   return {
     ...savedSettings(cfg, themeName, transparent, piped, motion),
+    ...graphSettings(cfg),
     themePick: null,
     ...w,
     filter: "",
@@ -309,5 +343,8 @@ export function initUI(
     changesOpen: false,
     landing: null,
     proof: null,
+    graph: null,
+    graphFailed: false,
+    graphMuxTold: false,
   }
 }

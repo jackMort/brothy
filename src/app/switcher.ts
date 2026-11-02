@@ -440,6 +440,7 @@ export function makeSwitcher(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLink
     swInput,
     swGo,
     dropIndex,
+    indexVault,
     openSwitcher,
     ...makeActivate(c, { closeSwitcher, askStart, askRerank, ...makeOpening(c, closeSwitcher) }),
     ...makePeek(c),

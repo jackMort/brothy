@@ -15,6 +15,7 @@ import { copiedCount, selectedText } from "../ui/nav"
 import { LOGO_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
+import { releaseImage } from "./graph"
 import type { Ctx } from "./keymap"
 import type { Links } from "./links"
 import type { WorkspaceControl } from "./workspace"
@@ -110,7 +111,7 @@ function useRendererListeners({ renderer, flash }: AppCtx, leave: EffectDeps["le
 }
 
 /** What stops on unmount: the index build, the timers and AI jobs, and the `alive` flag. */
-function useUnmountCleanups({ timers, jobs, vault, alive }: AppCtx) {
+function useUnmountCleanups({ timers, jobs, vault, alive, graphImg }: AppCtx) {
   // a build still running after unmount must not touch the store
   useEffect(() => () => void (vault.current = { ...vault.current }), [])
   useEffect(
@@ -121,6 +122,7 @@ function useUnmountCleanups({ timers, jobs, vault, alive }: AppCtx) {
     [],
   )
   useEffect(() => () => void (alive.current = false), [])
+  useEffect(() => () => releaseImage(graphImg), [])
 }
 
 /** What the render-time effects watch, as App draws it: the hint context, the zen reading section and the theme sample. */
