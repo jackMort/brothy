@@ -1,10 +1,11 @@
 // App: the Graph sheet on ^g: open, move, walk and back, open a note, close.
 import { expect, test } from "bun:test"
+import { existsSync } from "node:fs"
 import { setRendererCapabilities } from "@opentui/core/testing"
 import { KITCHEN } from "../helpers/vault"
 import { keys, useAppHarness, waitFrame } from "./helpers"
 
-const { tmp, mount, writeConfig, savedConfig } = useAppHarness()
+const { tmp, mount, writeConfig, savedConfig, configFile } = useAppHarness()
 
 const SIZE = { width: 120, height: 34 }
 /** The popup at 120 columns: 108 wide, 6 in. */
@@ -23,6 +24,10 @@ const listRows = (f: string) =>
     .filter((r) => r.includes("│"))
     .map((r) => r.slice(r.lastIndexOf("│") + 1).trim())
     .filter(Boolean)
+/** The picture column: the text left of the last │ on each sheet row. */
+const pictureRows = (f: string) =>
+  (sheet(f) ?? []).filter((r) => r.includes("│")).map((r) => r.slice(0, r.lastIndexOf("│")))
+const BRAILLE = /[⠁-⣿]/
 const barRow = (f: string) => listRows(f).find((r) => r.startsWith("▌"))
 
 /** KITCHEN mounted on `file` with ^g pressed, once `ready` holds (by default: the index has landed and the bottom line counts the notes). */
@@ -107,22 +112,97 @@ test("^g with no note open says so; in zen it does nothing", async () => {
   expect(sheet(await keys(s, "z", "C-g"))).toBeNull()
 })
 
-test("p with braille saved where the terminal shows no images: the toast says why, braille stays saved", async () => {
-  writeConfig({ graph: { render: "braille" } })
-  const { s } = await opened()
-  expect(await keys(s, "p")).toContain("graph · pixels unavailable here · braille")
-  expect(savedConfig().graph).toEqual({ render: "braille" })
-})
-
 test("p with braille saved where the terminal shows images: pixels, saved", async () => {
   writeConfig({ graph: { render: "braille" } })
   const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
   setRendererCapabilities(s.renderer, { kitty_graphics: true })
   await keys(s, "C-g")
   expect((await waitFrame(s, (f) => f.includes("of 6 notes"), 4000)).split("\n")[HINT_ROW]).toContain("p pixels")
-  // the first frame with the image takes seconds under testRender: the toast has faded by then, the footer and config say it
   const f = await keys(s, "p")
+  expect(f).toContain("graph · pixels")
   expect(f.split("\n")[HINT_ROW]).toContain("p braille")
   expect(f).not.toContain("unavailable")
   expect(savedConfig().graph).toEqual({ render: "pixels" })
-}, 20000)
+})
+
+test("- and + switch to depth 1 and back to 2, and save it", async () => {
+  const { s } = await opened()
+  let f = await keys(s, "-")
+  expect(sheet(f)![0]).toContain("depth 1")
+  expect(listRows(f)).toEqual(["▌↔ Stock", "← Garnish", "→ Simmering", "→ Nowhere", "depth 1 · 4 of 6 notes"])
+  expect(savedConfig().graph).toEqual({ depth: 1 })
+  f = await keys(s, "+")
+  expect(listRows(f)).toContain("→ Bones")
+  expect(savedConfig().graph).toEqual({ depth: 2 })
+})
+
+test("p where the terminal shows no images: braille stays, the toast says why, nothing is saved, whatever is saved", async () => {
+  const f = await keys((await opened()).s, "p")
+  expect(f).toContain("graph · pixels unavailable here · braille")
+  expect(pictureRows(f).some((r) => BRAILLE.test(r))).toBe(true)
+  expect(existsSync(configFile())).toBe(false)
+  writeConfig({ graph: { render: "braille" } })
+  expect(await keys((await opened()).s, "p")).toContain("graph · pixels unavailable here · braille")
+  expect(savedConfig().graph).toEqual({ render: "braille" })
+})
+
+test("where the terminal shows images: pixels with text labels; p switches to braille and saves it", async () => {
+  const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
+  setRendererCapabilities(s.renderer, { kitty_graphics: true })
+  await keys(s, "C-g")
+  let f = await waitFrame(s, (x) => x.includes("of 6 notes"), 4000)
+  expect(pictureRows(f).some((r) => BRAILLE.test(r))).toBe(false)
+  expect(pictureRows(f).join("\n")).toContain("Broth")
+  expect(f.split("\n")[HINT_ROW]).toContain("p braille")
+  f = await keys(s, "p")
+  expect(f).toContain("graph · braille")
+  expect(pictureRows(f).some((r) => BRAILLE.test(r))).toBe(true)
+  expect(savedConfig().graph).toEqual({ render: "braille" })
+})
+
+test("auto inside a multiplexer: the first open says it draws pixels and how to switch", async () => {
+  const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
+  setRendererCapabilities(s.renderer, { kitty_graphics: true, multiplexer: "zellij" })
+  expect(await keys(s, "C-g")).toContain("graph · pixels · p braille")
+})
+
+test("/ filters the list; nothing matching says so and ⏎ does nothing; esc clears the filter, then closes", async () => {
+  const { s } = await opened()
+  let f = await keys(s, "/", "type:sim")
+  expect(listRows(f)).toEqual(["▌→ Simmering", "depth 2 · 5 of 6 notes"])
+  expect(f.split("\n")[HINT_ROW]).toMatch(/type filter {3}↑↓ neighbour {3}⏎ open {3}tab keep {3}esc clear/)
+  f = await keys(s, "type:zz", "enter")
+  expect(listRows(f)).toEqual(["no match", "depth 2 · 5 of 6 notes"])
+  f = await keys(s, "esc")
+  expect(listRows(f)[0]).toBe("▌↔ Stock")
+  expect(sheet(await keys(s, "esc"))).toBeNull()
+})
+
+test("a click on a list row centres on it; a click on the focused row opens it", async () => {
+  const { s } = await opened()
+  let rows = s.captureCharFrame().split("\n")
+  let y = rows.findIndex((r) => r.includes("← Garnish"))
+  await s.mockMouse.click(rows[y]!.indexOf("Garnish"), y)
+  let f = await keys(s)
+  expect(sheet(f)![0]).toContain("Graph · Garnish")
+  rows = f.split("\n")
+  y = rows.findIndex((r) => r.includes("▌→ Broth"))
+  await s.mockMouse.click(rows[y]!.indexOf("Broth"), y)
+  f = await keys(s)
+  expect(sheet(f)).toBeNull()
+  expect(f.split("\n")[0]).toContain("Broth")
+})
+
+test("below 100 columns the picture takes the width and the row under it names the focused note", async () => {
+  const { s } = await opened("Broth.md", { width: 80, height: 24 }, (f) => f.includes("▌↔ Stock"))
+  const rows = s.captureCharFrame().split("\n")
+  const top = rows.findIndex((r) => r.includes("Graph · Broth"))
+  const body = rows.slice(top + 2, top + 2 + 18)
+  expect(body.some((r) => r.includes("│"))).toBe(false)
+  expect(body.at(-1)).toMatch(/▌↔ Stock/)
+})
+
+test("the smallest screen (60×14) still opens the sheet", async () => {
+  const { s } = await opened("Broth.md", { width: 60, height: 14 }, (f) => f.includes("▌↔ Stock"))
+  expect(s.captureCharFrame()).toContain("Graph · Broth")
+})

@@ -8,7 +8,7 @@ import { type GlossStyle, PROMPT_V, PROMPTS } from "../../ai/config"
 import type { Change, ChangeMark, DeltaNote } from "../../ai/delta"
 import { GLOSS_ROWS, type GlossTarget, type GlossView, overflows, parseGlossStyle } from "../../ai/gloss"
 import { noteName } from "../../graph/ego"
-import { graphFoot, graphMode, graphNote, isGraphStop } from "../../graph/sheet"
+import { graphFoot, graphHead, graphMode, isGraphStop } from "../../graph/sheet"
 import { clamp, plural, wrap } from "../../lib/text"
 import type { Rendered } from "../../markdown/render"
 import { folderCounts, SCAN_LIMIT } from "../../notes/files"
@@ -265,8 +265,7 @@ export function graphSheet(
     mode,
     top: keepVisible(g.top, hl, Math.max(1, geo.listH), rows.length),
     picture: memo.graphPicture(ego, memo.graphLayout(ego), geo, g.term, mode, t, focus, g.q),
-    title: `Graph · ${noteName(g.centre)}`,
-    note: graphNote(ego, s.graphDepth),
+    ...graphHead(noteName(g.centre), ego, s.graphDepth, geo.width),
     foot: graphFoot(ego, s.graphDepth, links.notes, s.indexing),
   }
 }

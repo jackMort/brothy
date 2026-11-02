@@ -248,6 +248,7 @@ export function graphOverlay(c: AppCtx, d: Derived, g: Graph): ReactNode {
     releaseImage(graphImg)
     return null
   }
+  const { mode, labels, rows } = v.picture // not the raster: see SheetPicture
   return (
     <GraphSheet
       t={d.t}
@@ -260,7 +261,7 @@ export function graphOverlay(c: AppCtx, d: Derived, g: Graph): ReactNode {
       rows={v.rows}
       hl={v.hl}
       top={v.top}
-      picture={v.picture}
+      picture={{ mode, labels, rows }}
       image={imageFor(graphImg, v.picture.rgba, g.pixelsFailed)}
       onClose={() => set({ graph: null })}
       onScroll={g.graphMove}

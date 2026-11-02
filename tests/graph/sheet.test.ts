@@ -6,6 +6,7 @@ import {
   firstStop,
   type GraphRow,
   graphFoot,
+  graphHead,
   graphMode,
   graphNote,
   graphRowSpans,
@@ -63,6 +64,18 @@ test("graphNote and graphFoot", () => {
   expect(graphFoot(ego, 2, 6, null)).toBe("depth 2 · 5 of 6 notes")
   expect(graphFoot(egoGraph(g, "/v/Lonely.md", 2), 2, 6, null)).toBe("depth 2 · 1 of 6 notes")
   expect(graphFoot(ego, 2, 6, [25, 900])).toBe("▍ indexing notes · 25 of 900")
+})
+
+test("graphHead: the title row fits beside esc: the note drops unresolved, then the counts, then itself; the title is cut last", () => {
+  expect(graphHead("Broth", ego, 2, 108)).toEqual({
+    title: "Graph · Broth",
+    note: "← 2 · → 2 · 1 unresolved · depth 2",
+  })
+  expect(graphHead("Broth", ego, 2, 58)).toEqual({ title: "Graph · Broth", note: "← 2 · → 2 · depth 2" })
+  expect(graphHead("Broth", ego, 2, 40)).toEqual({ title: "Graph · Broth", note: "depth 2" })
+  expect(graphHead("Broth", ego, 2, 28)).toEqual({ title: "Graph · Broth", note: "" })
+  const long = graphHead("A very long note name indeed", ego, 2, 30)
+  expect(long).toEqual({ title: "Graph · A very…", note: "" })
 })
 
 test("graphRowSpans: the bar and the element background across a focused row; unresolved muted and struck; never wider than the room", () => {

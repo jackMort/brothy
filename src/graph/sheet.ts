@@ -2,11 +2,11 @@
 // spans, the title's counts and the bottom line, what the terminal can draw and which renderer draws the picture. Pure.
 import { resolveImageRenderProtocol, type TerminalCapabilities } from "@opentui/core"
 import { A, type Span } from "../lib/spans"
-import { plural, spanWidth, truncate } from "../lib/text"
+import { plural, spanWidth, width as textWidth, truncate } from "../lib/text"
 import { fuzzyHits } from "../notes/files"
 import type { GraphRender } from "../system/config"
 import type { Theme } from "../theme/theme"
-import { innerWidth, PEEK_MIN_W } from "../ui/geometry"
+import { BODY_PAD, innerWidth, PEEK_MIN_W } from "../ui/geometry"
 import { proofHeight, proofWidth } from "../ui/proof"
 import { roleColor } from "./canvas"
 import type { Dir, Ego, EgoNode } from "./ego"
@@ -84,10 +84,30 @@ export function nextStop(rows: readonly GraphRow[], cur: number, dir: 1 | -1): n
 /** The first stop, else row 0. */
 export const firstStop = (rows: readonly GraphRow[]) => Math.max(0, rows.findIndex(isGraphStop))
 
-/** Right of the title: `← 9 · → 6 · 2 unresolved · depth 2`. */
-export function graphNote(ego: Ego, depth: 1 | 2): string {
+/** Right of the title, longest first: `← 9 · → 6 · 2 unresolved · depth 2`, without `unresolved`, `depth 2` alone. */
+function noteForms(ego: Ego, depth: 1 | 2): string[] {
   const { back, out, unresolved } = ego.counts
-  return [`← ${back}`, `→ ${out}`, ...(unresolved ? [`${unresolved} unresolved`] : []), `depth ${depth}`].join(" · ")
+  const counts = [`← ${back}`, `→ ${out}`]
+  const d = `depth ${depth}`
+  const all = [...counts, ...(unresolved ? [`${unresolved} unresolved`] : []), d]
+  return [all, [...counts, d], [d]].map((p) => p.join(" · "))
+}
+
+/** Right of the title: `← 9 · → 6 · 2 unresolved · depth 2`. */
+export const graphNote = (ego: Ego, depth: 1 | 2): string => noteForms(ego, depth)[0]!
+
+/** `esc` and the two cells before it, right of the title row */
+const ESC_W = 5
+
+/**
+ * The title row in a popup `width` wide (its padding and the row's, 4 a side, off): `Graph · <name>` and the longest
+ * note that fits beside it and `esc`, else none; the title is cut only when it alone does not fit.
+ */
+export function graphHead(name: string, ego: Ego, depth: 1 | 2, width: number): { title: string; note: string } {
+  const room = innerWidth(width) - BODY_PAD
+  const title = truncate(`Graph · ${name}`, room - ESC_W)
+  const left = room - textWidth(title) - 2 - ESC_W
+  return { title, note: noteForms(ego, depth).find((n) => textWidth(n) <= left) ?? "" }
 }
 
 /** The bottom line: `depth 2 · 28 of 32 notes`, or the index build's progress. */

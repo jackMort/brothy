@@ -562,6 +562,13 @@ function PixelLayer({
   )
 }
 
+/**
+ * What the sheet draws of a Picture: never its raster. React's development build diffs a component's changed props
+ * for its performance track and walks a typed array index by index: a megabyte raster in a prop froze each new
+ * picture for seconds (`bun run start` runs that build). The image arrives made, as `image`.
+ */
+type SheetPicture = Pick<Picture, "mode" | "labels" | "rows">
+
 /** The picture: braille rows, or the image with text labels; the pointer is reported by cell within it. */
 function GraphPicture({
   t,
@@ -573,7 +580,7 @@ function GraphPicture({
 }: {
   t: Theme
   geo: SheetGeo
-  picture: Picture
+  picture: SheetPicture
   image: NativeImage | null
   onPicture: (col: number, row: number, kind: PointerKind) => void
   onImageError: () => void
@@ -693,7 +700,7 @@ export function GraphSheet({
   rows: GraphRow[]
   hl: number
   top: number
-  picture: Picture
+  picture: SheetPicture
   image: NativeImage | null
   onPicture: (col: number, row: number, kind: PointerKind) => void
   onRow: (at: number, kind: PointerKind) => void
