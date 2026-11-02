@@ -141,7 +141,7 @@ type GraphMoves = ReturnType<typeof makeGraphMoves>
 
 /** Depth and renderer (saved under `graph`), and the fall back to braille when pixels fail. */
 function makeGraphSettings(c: AppCtx) {
-  const { ui, set, derive, flash, persist } = c
+  const { ui, set, flash, persist } = c
 
   const graphDepth = (depth: 1 | 2) => {
     const g = ui.current.graph
@@ -152,11 +152,11 @@ function makeGraphSettings(c: AppCtx) {
 
   /** `p`: pixels ⇄ braille; where pixels cannot show, it says so and saves nothing. */
   const graphRenderer = () => {
-    const v = derive().graph
-    if (!v) return
-    if (v.mode === "braille" && ui.current.graphRender !== "braille")
+    const { graph: g, graphRender, graphFailed } = ui.current
+    if (!g) return
+    if (graphMode("pixels", g.term, graphFailed) === "braille")
       return flash("graph · pixels unavailable here · braille")
-    const render: GraphRender = v.mode === "pixels" ? "braille" : "pixels"
+    const render: GraphRender = graphMode(graphRender, g.term, graphFailed) === "pixels" ? "braille" : "pixels"
     set({ graphRender: render })
     if (persist({ graph: { render } })) flash(`graph · ${render}`)
   }

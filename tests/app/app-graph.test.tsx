@@ -1,9 +1,10 @@
 // App: the Graph sheet on ^g: open, move, walk and back, open a note, close.
 import { expect, test } from "bun:test"
+import { setRendererCapabilities } from "@opentui/core/testing"
 import { KITCHEN } from "../helpers/vault"
 import { keys, useAppHarness, waitFrame } from "./helpers"
 
-const { tmp, mount } = useAppHarness()
+const { tmp, mount, writeConfig, savedConfig } = useAppHarness()
 
 const SIZE = { width: 120, height: 34 }
 /** The popup at 120 columns: 108 wide, 6 in. */
@@ -105,3 +106,23 @@ test("^g with no note open says so; in zen it does nothing", async () => {
   const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
   expect(sheet(await keys(s, "z", "C-g"))).toBeNull()
 })
+
+test("p with braille saved where the terminal shows no images: the toast says why, braille stays saved", async () => {
+  writeConfig({ graph: { render: "braille" } })
+  const { s } = await opened()
+  expect(await keys(s, "p")).toContain("graph · pixels unavailable here · braille")
+  expect(savedConfig().graph).toEqual({ render: "braille" })
+})
+
+test("p with braille saved where the terminal shows images: pixels, saved", async () => {
+  writeConfig({ graph: { render: "braille" } })
+  const s = await mount(tmp(KITCHEN), "Broth.md", { size: SIZE })
+  setRendererCapabilities(s.renderer, { kitty_graphics: true })
+  await keys(s, "C-g")
+  expect((await waitFrame(s, (f) => f.includes("of 6 notes"), 4000)).split("\n")[HINT_ROW]).toContain("p pixels")
+  // the first frame with the image takes seconds under testRender: the toast has faded by then, the footer and config say it
+  const f = await keys(s, "p")
+  expect(f.split("\n")[HINT_ROW]).toContain("p braille")
+  expect(f).not.toContain("unavailable")
+  expect(savedConfig().graph).toEqual({ render: "pixels" })
+}, 20000)
