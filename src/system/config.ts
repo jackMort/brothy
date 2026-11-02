@@ -17,6 +17,12 @@ export interface SidebarConfig {
 
 /** How the graph picture is drawn: OpenTUI's image where the terminal shows one (auto, pixels), else braille. */
 export type GraphRender = "auto" | "pixels" | "braille"
+const GRAPH_RENDERS: readonly GraphRender[] = ["auto", "pixels", "braille"]
+/** The graph sheet's saved settings (`+ -` and `p`). */
+interface GraphConfig {
+  depth: 1 | 2
+  render: GraphRender
+}
 
 export interface Config {
   theme?: string
@@ -36,6 +42,8 @@ export interface Config {
   headings?: HeadingStyle
   /** Zen mode settings (whether zen is on is never saved). */
   zen?: Partial<ZenConfig>
+  /** Graph sheet depth and renderer (`+ -`, `p`); default depth 2, `auto`. */
+  graph?: Partial<GraphConfig>
   /** Opt-in AI summaries; never patched by brothy (keys come only from the environment). */
   ai?: AIConfig
 }
@@ -70,6 +78,27 @@ function migrateFolds(folds: Partial<Record<View, boolean>>): Partial<SidebarCon
   return view ? { view, hidden: false } : { hidden: true }
 }
 
+/** The valid fields of a raw `graph` value. */
+function pickGraph(raw: unknown): Partial<GraphConfig> {
+  if (!isRecord(raw)) return {}
+  const out: Partial<GraphConfig> = {}
+  if (raw.depth === 1 || raw.depth === 2) out.depth = raw.depth
+  if (GRAPH_RENDERS.includes(raw.render as GraphRender)) out.render = raw.render as GraphRender
+  return out
+}
+
+/** The object-valued settings, each validated field by field; an empty one is left out. */
+function nested(raw: Raw): Pick<Config, "zen" | "graph" | "ai"> {
+  const out: Pick<Config, "zen" | "graph" | "ai"> = {}
+  const zen = pickZen(raw.zen)
+  if (Object.keys(zen).length) out.zen = zen
+  const graph = pickGraph(raw.graph)
+  if (Object.keys(graph).length) out.graph = graph
+  const ai = normalizeAI(raw.ai)
+  if (ai) out.ai = ai
+  return out
+}
+
 export function loadConfig(): Config {
   const raw = readRaw()
   const out: Config = {}
@@ -92,10 +121,7 @@ export function loadConfig(): Config {
     const sb = pickSidebar(raw.sidebar)
     if (Object.keys(sb).length) out.sidebar = sb
   } else if (folds) out.sidebar = migrateFolds(folds)
-  const zen = pickZen(raw.zen)
-  if (Object.keys(zen).length) out.zen = zen
-  const ai = normalizeAI(raw.ai)
-  if (ai) out.ai = ai
+  Object.assign(out, nested(raw))
   return out
 }
 

@@ -359,3 +359,22 @@ describe("file format", () => {
     expect(readFileSync(file(), "utf8")).toBe("[1]")
   })
 })
+
+describe("graph", () => {
+  test("loads depth 1 or 2 and render auto / pixels / braille; anything else is dropped field by field", () => {
+    writeFileSync(file(), '{"graph":{"depth":1,"render":"braille"}}')
+    expect(loadConfig().graph).toEqual({ depth: 1, render: "braille" })
+    writeFileSync(file(), '{"graph":{"depth":3,"render":"kitty"}}')
+    expect(loadConfig().graph).toBeUndefined()
+    writeFileSync(file(), '{"graph":{"depth":2,"render":"sixel"}}')
+    expect(loadConfig().graph).toEqual({ depth: 2 })
+    writeFileSync(file(), '{"graph":"pixels"}')
+    expect(loadConfig().graph).toBeUndefined()
+  })
+  test("saving one graph field keeps the other, and the rest of the file", () => {
+    saveConfig({ theme: "brothy" })
+    saveConfig({ graph: { depth: 1 } })
+    saveConfig({ graph: { render: "pixels" } })
+    expect(loadConfig()).toEqual({ theme: "brothy", graph: { depth: 1, render: "pixels" } })
+  })
+})
