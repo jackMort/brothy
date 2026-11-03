@@ -216,6 +216,25 @@ test("a click on the row j k focused opens it, the pointer moved onto it first",
   expect(after.split("\n")[0]).toContain("Garnish")
 })
 
+test("the click that opened a note from the sheet: a second one right after lands nowhere, a later one does", async () => {
+  const { s } = await opened()
+  let f = await keys(s, "j", "j")
+  const [x, y] = rowCell(f, "Garnish")
+  await s.mockMouse.moveTo(x, y)
+  await s.mockMouse.click(x, y)
+  f = await keys(s)
+  expect(sheet(f)).toBeNull()
+  const rows = f.split("\n")
+  const ly = rows.findIndex((r) => r.slice(0, 30).includes("Lonely"))
+  const lx = rows[ly]!.indexOf("Lonely")
+  await s.mockMouse.click(lx, ly) // the double-click's second half, over the Files panel
+  await Bun.sleep(600)
+  expect((await keys(s)).split("\n")[0]).toContain("Garnish")
+  await s.mockMouse.click(lx, ly)
+  await Bun.sleep(600)
+  expect((await keys(s)).split("\n")[0]).toContain("Lonely")
+})
+
 test("a double-click on a row opens that note", async () => {
   const { s } = await opened()
   const [x, y] = rowCell(s.captureCharFrame(), "Simmering")

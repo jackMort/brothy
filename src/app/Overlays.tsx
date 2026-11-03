@@ -1,6 +1,7 @@
 // The popups over the page: the `? ?` help sheet, the switcher, the Open picker, Find in Document, the Proof sheet, the
 // Graph sheet, the `t` theme picker and the zen settings. Not pure: drawn from the app context, with handlers that write the store. Each returns null
 // while its popup is closed; the components themselves live in overlay.tsx.
+import type { MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
 import { askTitleNote } from "../ai/ask"
 import { plural, truncate } from "../lib/text"
@@ -240,13 +241,23 @@ export function proofOverlay(
   )
 }
 
+/** Clear, over the whole screen: the mouse downs it swallows never reach what lies under the sheet that just closed. */
+const graphHush = (W: number, H: number) => (
+  <box
+    key="graph-hush"
+    onMouseDown={(e: MouseEvent) => e.stopPropagation()}
+    onMouseUp={(e: MouseEvent) => e.stopPropagation()}
+    style={{ position: "absolute", left: 0, top: 0, width: W, height: H, zIndex: 10 }}
+  />
+)
+
 /** `^g`'s Graph sheet from `d.graph`; its image made (or released) here, once per raster. */
 export function graphOverlay(c: AppCtx, d: Derived, g: Graph): ReactNode {
-  const { set, W, H, graphImg } = c
+  const { set, W, H, graphImg, ui } = c
   const v = d.graph
   if (!v) {
     releaseImage(graphImg)
-    return null
+    return ui.current.graphHush ? graphHush(W, H) : null
   }
   const { mode, labels, rows } = v.picture // not the raster: see SheetPicture
   return (

@@ -255,6 +255,8 @@ export interface UI {
   graphFailed: boolean
   /** the multiplexer toast was shown this run */
   graphMuxTold: boolean
+  /** a click just opened a note from the Graph sheet: mouse downs are swallowed for a double-click's span */
+  graphHush: boolean
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
@@ -352,5 +354,6 @@ export function initUI(
     graph: null,
     graphFailed: false,
     graphMuxTold: false,
+    graphHush: false,
   }
 }

@@ -210,7 +210,15 @@ function makeGraphPointer(
   c: AppCtx,
   { graphHover, centreOn, openNote, graphGo }: Pick<GraphMoves, "graphHover" | "centreOn" | "openNote" | "graphGo">,
 ) {
-  const { ui, set, derive } = c
+  const { ui, set, derive, timers } = c
+
+  /** The sheet just closed under a click: the double-click's second half must not land on what is under it. */
+  const hush = () => {
+    if (ui.current.graph) return
+    set({ graphHush: true })
+    clearTimeout(timers.current.hush)
+    timers.current.hush = setTimeout(() => set({ graphHush: false }), GRAPH_DOUBLE_MS)
+  }
 
   /** The note a click on `spot` just before centred on, when this one makes it a double-click. */
   const doubled = (spot: string) => {
@@ -232,7 +240,9 @@ function makeGraphPointer(
   /** A click on row `at` (-1: none) at `spot`, a list row or a picture cell. */
   const click = (at: number, spot: string) => {
     const twice = doubled(spot)
-    return twice ? openNote(twice) : pick(at, spot)
+    if (twice) openNote(twice)
+    else pick(at, spot)
+    hush()
   }
 
   const graphRow = (at: number, kind: PointerKind) =>

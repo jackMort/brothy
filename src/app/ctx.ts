@@ -29,6 +29,8 @@ export interface Timers {
   /** a cached gloss waits GLOSS_DWELL before it shows */
   dwell?: ReturnType<typeof setTimeout>
   steam?: ReturnType<typeof setTimeout>
+  /** the Graph sheet's mouse hush after a click opened a note */
+  hush?: ReturnType<typeof setTimeout>
 }
 
 /** The welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size. */
