@@ -246,7 +246,7 @@ function useDrawerCrossing(s: UI, W: number) {
 }
 
 /** What the footer hints wait for. */
-function footerState({ s, cv, sv }: Derived): FooterState {
+function footerState({ s, cv, sv, view }: Derived): FooterState {
   return {
     query: !!s.query,
     preview: !s.source,
@@ -254,6 +254,7 @@ function footerState({ s, cv, sv }: Derived): FooterState {
     ai: !!s.ai,
     changes: !!changeKey(cv),
     tldr: !!sv && tldrHead(sv) !== "fresh",
+    pics: !s.source && !!view.pics?.length,
   }
 }
 
@@ -263,6 +264,7 @@ function footerWords(d: Derived): Partial<Record<KeyId, string>> {
   if (d.sv) words.summarize = words.summarizeHint = tldrWord(d.sv)
   const dWord = changeKey(d.cv)?.word
   if (dWord) words.explainChange = words.proofExplain = dWord
+  words.pictures = d.picMode === "pixels" ? "text" : "pixels"
   if (d.graph) words.graphRender = d.graph.mode === "pixels" ? "braille" : "pixels"
   return { ...words, ...stopWords(d.infoRows[d.linkRows[d.infoCur] ?? -1], d.s.tldrOpen) }
 }

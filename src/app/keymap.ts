@@ -75,6 +75,8 @@ export interface FooterState {
   changes: boolean
   /** an `ai` block and no fresh TL;DR for the open note: the document footer offers `a` */
   tldr: boolean
+  /** Preview, and the note has a picture */
+  pics: boolean
 }
 
 /**
@@ -105,6 +107,15 @@ const KEYMAP = {
     hint: "find",
   },
   switcher: { modes: ["global"], keys: ["C-p"], label: "^p", desc: "go to a note, heading or text (the whole vault)" },
+  pictures: {
+    modes: ["doc"],
+    keys: ["p"],
+    label: "p",
+    desc: "pictures: pixels or text (saved)",
+    hint: "pictures",
+    spare: true,
+    when: "pics",
+  },
   graphOpen: {
     modes: ["global"],
     keys: ["C-g"],
@@ -477,6 +488,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     "histBack",
     "edit",
     "summarizeHint",
+    "pictures",
     ["focus", "panel"],
     "help",
   ],

@@ -11,8 +11,16 @@ import {
   ZEN_OFF,
 } from "../../src/app/keymap"
 
-const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true, tldr: true }
-const NONE: FooterState = { query: false, preview: false, disk: false, ai: false, changes: false, tldr: false }
+const ALL: FooterState = { query: true, preview: true, disk: true, ai: true, changes: true, tldr: true, pics: true }
+const NONE: FooterState = {
+  query: false,
+  preview: false,
+  disk: false,
+  ai: false,
+  changes: false,
+  tldr: false,
+  pics: false,
+}
 const words = (on: FooterState, c: Parameters<typeof footerHints>[0] = "doc") =>
   footerHints(c, on).map((h) => `${h.key} ${h.word}`)
 
@@ -27,6 +35,7 @@ test("document hints: short keys, a context's own word over the binding's", () =
     "H L history",
     "e edit",
     "a summarize",
+    "p pictures",
     "tab panel",
     "? keys",
   ])
@@ -73,7 +82,7 @@ test("spare hints are the optional ones", () => {
     footerHints(c, ALL)
       .filter((h) => h.spare)
       .map((h) => h.key)
-  expect(spare("doc")).toEqual(["f", "H L", "e", "a"])
+  expect(spare("doc")).toEqual(["f", "H L", "e", "a", "p"])
   expect(spare("panel:info")).toEqual(["a"]) // D shows only while it has something to do: it is never dropped first
   expect(spare("theme")).toEqual(["type"])
   expect(spare("switch")).toEqual(["?"])
@@ -142,7 +151,7 @@ test("the help sheet groups: AI collects its bindings, a binding without a descr
 })
 
 test("graph: ^g everywhere but zen; the sheet's footer with p named for what it switches to; the filter's own; help group Graph", () => {
-  const on = { query: false, preview: true, disk: true, ai: false, changes: false, tldr: false }
+  const on = { query: false, preview: true, disk: true, ai: false, changes: false, tldr: false, pics: false }
   const words = (c: Parameters<typeof footerHints>[0], w = {}) => footerHints(c, on, w).map((h) => `${h.key} ${h.word}`)
   expect(words("graph", { graphRender: "braille" })).toEqual([
     "↑↓ neighbour",
@@ -170,4 +179,12 @@ test("graph: ^g everywhere but zen; the sheet's footer with p named for what it 
     "esc",
   ])
   expect(HELP_GROUPS.find((g) => g.title === "Document")!.entries.some((e) => e.keys === "^g")).toBe(true)
+})
+
+test("p pictures waits for a picture in Preview; its word is what p switches to", () => {
+  expect(words(NONE)).not.toContain("p pictures")
+  expect(words({ ...NONE, pics: true })).toContain("p pictures")
+  expect(footerHints("doc", { ...NONE, pics: true }, { pictures: "text" }).map((h) => `${h.key} ${h.word}`)).toContain(
+    "p text",
+  )
 })

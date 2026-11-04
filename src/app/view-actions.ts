@@ -7,6 +7,7 @@ import { askSection } from "../ai/ask"
 import { clamp } from "../lib/text"
 import { ancestorsOf } from "../notes/files"
 import { nextSection, stepRow } from "../notes/vault"
+import type { PicturesPref } from "../system/config"
 import { pickMode, pickMove, pickQuery } from "../theme/themepick"
 import { helpLayout } from "../ui/help"
 import { stepMeasure, ZEN_ROWS, ZEN_WPM } from "../ui/zen"
@@ -15,6 +16,7 @@ import type { AppCtx } from "./ctx"
 import { erase } from "./input"
 import { HELP_GROUPS, isDown } from "./keymap"
 import type { Links } from "./links"
+import { pictureLayout } from "./pictures"
 import type { Popups } from "./popups"
 
 /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
@@ -27,7 +29,18 @@ export function makeDocActions(
   { jumpHeading, jumpMatch }: Moves,
 ) {
   const { ui, set, derive, setTop, scrollBy, focusPanel } = c
+  const { flash, persist, renderer, lastCell } = c
+  /** `p`: pixels ⇄ text; where pixels cannot show (or the app gave up on them), it says so and saves nothing. */
+  const togglePictures = () => {
+    const s = ui.current
+    if (pictureLayout({ ...s, pictures: "pixels" }, renderer, lastCell.current).mode === "text")
+      return flash("pictures · pixels unavailable here · text")
+    const pictures: PicturesPref = derive().picMode === "pixels" ? "text" : "pixels"
+    set({ pictures })
+    if (persist({ pictures })) flash(`pictures · ${pictures}`)
+  }
   return {
+    pictures: togglePictures,
     docLine: (k) => scrollBy(isDown(k) ? 1 : -1),
     docHalf: (k) => scrollBy((isDown(k) ? 1 : -1) * Math.max(1, Math.floor(derive().L.CH / 2))),
     docPage: (k) => scrollBy((isDown(k) ? 1 : -1) * (derive().L.CH - 2)),

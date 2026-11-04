@@ -1,6 +1,6 @@
 // App: pictures in Preview: the reserved rows, the <image> over them, the cell size, what falls back to text.
 import { expect, test } from "bun:test"
-import { writeFileSync } from "node:fs"
+import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { NativeImage, TextRenderable } from "@opentui/core"
 import { hexOf } from "../../src/graph/canvas"
@@ -9,6 +9,7 @@ import { hex } from "../helpers/theme"
 import {
   B,
   filler,
+  HINT_ROW,
   imagesOf,
   keys,
   kittyTerminal,
@@ -21,9 +22,10 @@ import {
   waitFor,
   waitFrame,
   walk,
+  withClock,
 } from "./helpers"
 
-const { tmp, mount } = useAppHarness()
+const { tmp, mount, savedConfig, configFile } = useAppHarness()
 
 /** Cells of 10 × 20 pixels on the 100 × 30 terminal, the harness's default. */
 const RES = { width: 1000, height: 600 }
@@ -42,8 +44,8 @@ const NOTE = "# Top\n\n![Plan](plan.png)\n\n# After\n\nend"
 const LONG = `# Top\n\n![Plan](plan.png)\n\n${filler(40)}\n\n![Plan](plan.png)\n\n${filler(40)}`
 
 /** The note mounted on a kitty terminal that has said its pixel size. */
-async function pictured(note = NOTE, files?: Record<string, Uint8Array>) {
-  const s = await mount(vault(note, files), "n.md")
+async function pictured(note = NOTE, files?: Record<string, Uint8Array>, size?: typeof W120) {
+  const s = await mount(vault(note, files), "n.md", size && { size })
   kittyTerminal(s)
   setResolution(s, RES)
   return s
@@ -279,4 +281,70 @@ test("a piped document keeps Files empty but a wikilink finds the picture by nam
   kittyTerminal(s)
   setResolution(s, RES)
   await shown(s)
+})
+
+const PLACEHOLDER = "▣ Plan · 200×100 · ⏎ view"
+const hintRow = (f: string) => f.split("\n")[HINT_ROW]!
+
+test("p: text and the placeholder, saved; p again: pixels back, saved; the footer names what p switches to", async () => {
+  const s = await pictured(NOTE, undefined, W120)
+  await shown(s)
+  expect(hintRow(s.captureCharFrame())).toContain("p text")
+  let f = await keys(s, "p")
+  expect(f).toContain("pictures · text")
+  expect(f).toContain(PLACEHOLDER)
+  expect(imagesOf(s)).toHaveLength(0)
+  // once the toast has gone, the footer has room for the hint again
+  await sleep(2500)
+  await keys(s, "tab", "tab")
+  expect(hintRow(await waitFrame(s, (x) => hintRow(x).includes("p pixels")))).toContain("p pixels")
+  expect(savedConfig().pictures).toBe("text")
+  f = await keys(s, "p")
+  expect(f).toContain("pictures · pixels")
+  await shown(s)
+  expect(savedConfig().pictures).toBe("pixels")
+})
+
+test("p where pixels can't show: the toast says so and nothing is saved", async () => {
+  const s = await mount(vault(NOTE), "n.md")
+  expect(await keys(s, "p")).toContain("pictures · pixels unavailable here · text")
+  expect(existsSync(configFile())).toBe(false)
+})
+
+test("p after pixels failed: the toast, nothing saved", async () => {
+  const s = await pictured()
+  await shown(s)
+  imagesOf(s)[0]!.onError?.(new Error("no"))
+  await waitFrame(s, (x) => x.includes(PLACEHOLDER))
+  // the failure's own error toast holds for a while; let it pass
+  const later = new Date(Date.now() + 10_000)
+  expect(await withClock(later, () => keys(s, "p"))).toContain("pictures · pixels unavailable here · text")
+  expect(existsSync(configFile())).toBe(false)
+})
+
+test("p while the resolution never landed: the toast, nothing saved", async () => {
+  const s = await mount(vault(NOTE), "n.md")
+  kittyTerminal(s)
+  await waitFrame(s, (f) => f.includes(PLACEHOLDER), 3000)
+  expect(await keys(s, "p")).toContain("pictures · pixels unavailable here · text")
+  expect(existsSync(configFile())).toBe(false)
+})
+
+test("the footer offers p only for a note with a picture, and not in Source", async () => {
+  const bare = await mount(vault("# Top\n\nno picture"), "n.md", { size: W120 })
+  kittyTerminal(bare)
+  setResolution(bare, RES)
+  expect(hintRow(await keys(bare, "j"))).not.toContain("p ")
+  const s = await pictured(NOTE, undefined, W120)
+  await shown(s)
+  expect(hintRow(s.captureCharFrame())).toContain("p text")
+  expect(hintRow(await keys(s, "s"))).not.toContain("p ")
+})
+
+test("p works in zen", async () => {
+  const s = await pictured()
+  await shown(s)
+  await keys(s, "z")
+  expect(await keys(s, "p")).toContain("pictures · text")
+  expect(savedConfig().pictures).toBe("text")
 })
