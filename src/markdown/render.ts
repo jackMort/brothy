@@ -4,7 +4,7 @@
 // inline spans, callouts, blocks and tables; the lexer, front matter, Source view and stats have their own modules.
 
 import type { Token, Tokens } from "marked"
-import { A, type Span, safe } from "../lib/spans"
+import { A, type Span, safe, safeLine } from "../lib/spans"
 import { truncate as clip, graphemes, pushSpan, spanWidth, width, wrap } from "../lib/text"
 import { isMarkdown } from "../notes/files"
 import { isImagePath, parseImageSize } from "../notes/images"
@@ -582,7 +582,7 @@ function pictureBlock(ctx: Ctx, img: SoleImage, f: BlockFrame): boolean {
   if (!p || !got) return false
   const { t } = ctx
   const id = ctx.pics.length
-  const alt = safe(img.alt) || safe(baseName(img.src))
+  const alt = safeLine(img.alt) || safeLine(baseName(img.src))
   const pic: Pic = { id, line: ctx.lines.length, rows: 0, cols: 0, left: 0, src: img.src, alt }
   ctx.pics.push(pic)
   const mark = { text: "▣ ", fg: t.primary }
@@ -619,8 +619,8 @@ function pictureBlock(ctx: Ctx, img: SoleImage, f: BlockFrame): boolean {
 function paragraphBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
   // a "text" block is a tight list item's body: no blank row after it
   const p = tokenOf(tok, "paragraph", "text")
-  const img = tok.type === "paragraph" ? soleImage(p.tokens ?? []) : null
-  if (img && pictureBlock(ctx, img, f)) return spacer(ctx, f.rest)
+  const img = soleImage(p.tokens ?? [])
+  if (img && pictureBlock(ctx, img, f)) return tok.type === "paragraph" ? spacer(ctx, f.rest) : undefined
   emitRows(ctx, wrap(inline(p.tokens, ctx.t, undefined, ctx.sink), f.max, f.pre(), f.rest))
   if (tok.type === "paragraph") spacer(ctx, f.rest)
 }

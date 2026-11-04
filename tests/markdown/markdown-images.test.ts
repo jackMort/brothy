@@ -91,3 +91,32 @@ test("inline images and no picture opts render as today", () => {
   expect(render("![x](a.png)", 80, t).pics).toEqual([])
   expect(render("![x](a.png)", 80, t).plain[0]).toBe("▣ x")
 })
+
+test("a picture alone in a tight list item is a picture; items after it keep their lines", () => {
+  const r = render("- ![cap](a.png)\n- two\n\n# After", 80, t, pix)
+  const p = r.pics![0]!
+  expect(p).toMatchObject({ line: 0, rows: 10, cols: 40, src: "a.png", alt: "cap" })
+  expect(p.left).toBeGreaterThan(2) // past the bullet's indent
+  for (let i = 0; i < 10; i++) expect(r.lines[i]!.pic).toBe(0)
+  expect(r.plain[10]!.trim()).toBe("cap")
+  expect(r.plain[11]).toContain("two")
+  const h = r.headings[0]!
+  expect(r.lines[h.line]!.heading).toBe(0)
+  expect(r.plain[h.line]).toContain("after")
+  const t2 = render("- ![cap](a.png)\n- two", 80, t, txt)
+  expect(t2.pics![0]).toMatchObject({ rows: 0, line: 0 })
+  expect(t2.plain[0]).toContain("▣ cap · 400×200 · ⏎ view")
+  expect(t2.plain[1]).toContain("two")
+})
+
+test("a list item with text around the image stays inline", () => {
+  expect(render("- see ![cap](a.png)\n- two", 80, t, pix).pics).toEqual([])
+})
+
+test("a multi-line alt is one row: no newline in the caption, placeholder or Pic.alt", () => {
+  for (const o of [pix, txt]) {
+    const r = render("![two\nlines](a.png)", 80, t, o)
+    expect(r.pics![0]!.alt).not.toMatch(/[\n\t]/)
+    expect(r.plain.some((l) => l.includes("\n"))).toBe(false)
+  }
+})
