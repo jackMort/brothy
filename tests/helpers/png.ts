@@ -45,3 +45,19 @@ export const solidPng = (w: number, h: number, [r, g, b, a]: readonly [number, n
     h,
     Array.from({ length: w * h * 4 }, (_, i) => [r, g, b, a][i % 4]!),
   )
+
+/** A `w × h` transparent PNG made without arrays of numbers, for sizes where `solidPng` is slow. */
+export const blankPng = (w: number, h: number) => {
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(w, 0)
+  ihdr.writeUInt32BE(h, 4)
+  ihdr.set([8, 6, 0, 0, 0], 8)
+  return Uint8Array.from(
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk("IHDR", ihdr),
+      chunk("IDAT", deflateSync(Buffer.alloc(h * (1 + w * 4)))),
+      chunk("IEND", new Uint8Array()),
+    ]),
+  )
+}

@@ -76,6 +76,8 @@ test("PictureCache: decodes once per key, evicts the oldest past the cap and dis
   expect(cache.get("a")).toBeUndefined()
   await until(() => done === 1)
   expect(cache.get("a")).toBe(made[0]!)
+  // the next render does not draw it
+  cache.frame()
   cache.want("b", "/b.png", 100, 100, null, () => done++)
   cache.want("c", "/c.png", 100, 100, null, () => done++)
   await until(() => done === 3)
@@ -155,6 +157,35 @@ test("PictureCache: a picture touched on every render survives eviction past the
   expect(cache.get("seen")).toBe(seen)
   expect(seen.gone).toBe(false)
   expect(cache.get("old")).toBeUndefined()
+})
+
+test("PictureCache: nothing touched in the current frame is evicted, whatever it totals; the cap comes back after", async () => {
+  const cache = new PictureCache(
+    100 * 100 * 4 * 2,
+    (_b, _f, w, h) => fake(w, h),
+    () => PNG,
+  )
+  let done = 0
+  const keys = ["a", "b", "c", "d"]
+  // one frame draws all four (twice the cap), each as it lands: a landing in the same frame evicts none of them
+  cache.frame()
+  for (const k of keys) cache.want(k, `/${k}.png`, 100, 100, null, () => (cache.get(k), done++))
+  await until(() => done === 4)
+  const imgs = keys.map((k) => cache.get(k) as NativeImage & { gone: boolean })
+  cache.want("e", "/e.png", 100, 100, null, () => done++)
+  await until(() => done === 5)
+  expect(imgs.every((i) => i && !i.gone)).toBe(true)
+  // the next frame draws only e and a: the rest go on the next landing, down to the cap
+  cache.frame()
+  cache.get("e")
+  cache.get("a")
+  cache.want("f", "/f.png", 100, 100, null, () => done++)
+  await until(() => done === 6)
+  expect(cache.get("b")).toBeUndefined()
+  expect(cache.get("c")).toBeUndefined()
+  expect(cache.get("d")).toBeUndefined()
+  expect(imgs.map((i) => i.gone)).toEqual([false, true, true, true])
+  expect(cache.get("f")).toBeDefined()
 })
 
 test("PictureCache: a done that throws leaves the queue running", async () => {

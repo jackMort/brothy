@@ -1,10 +1,10 @@
 // App: pictures in Preview: the reserved rows, the <image> over them, the cell size, what falls back to text.
-import { expect, test } from "bun:test"
+import { expect, spyOn, test } from "bun:test"
 import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { NativeImage, TextRenderable } from "@opentui/core"
 import { hexOf } from "../../src/graph/canvas"
-import { solidPng } from "../helpers/png"
+import { blankPng, solidPng } from "../helpers/png"
 import { hex } from "../helpers/theme"
 import {
   B,
@@ -53,6 +53,28 @@ async function pictured(note = NOTE, files?: Record<string, Uint8Array>, size?: 
   return s
 }
 const shown = (s: Setup, n = 1) => waitFor(s, () => imagesOf(s).length === n)
+
+test("pictures on screen totalling over the cache cap are decoded once each, not evicted and decoded again", async () => {
+  const note = Array.from({ length: 5 }, (_, i) => `![P${i}](p${i}.png)`).join("\n\n")
+  const big = blankPng(2000, 1000)
+  const files = Object.fromEntries([0, 1, 2, 3, 4].map((i) => [`p${i}.png`, big]))
+  const decode = spyOn(NativeImage, "decode")
+  try {
+    const s = await mount(vault(note, files), "n.md", { size: { width: 100, height: 90 } })
+    kittyTerminal(s)
+    // 40 × 80 pixels a cell: each picture is 50 × 13 cells and decodes to 2000 × 1040, 8.3 MB; five are 41 MB
+    setResolution(s, { width: 4000, height: 7200 })
+    await waitFor(s, () => imagesOf(s).length === 5, 20_000)
+    await sleep(400)
+    const settled = decode.mock.calls.length
+    await sleep(600)
+    expect(decode.mock.calls.length).toBe(settled)
+    expect(settled).toBe(5)
+    expect(imagesOf(s)).toHaveLength(5)
+  } finally {
+    decode.mockRestore()
+  }
+}, 30_000)
 
 test("no image support: the placeholder row, and the heading after it", async () => {
   const s = await mount(vault(NOTE), "n.md")

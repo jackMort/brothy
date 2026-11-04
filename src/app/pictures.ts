@@ -1,6 +1,6 @@
 // Pictures in notes, the impure side: which mode shows, the cell size, where each picture lives and which part of it
 // is on screen, and the decoded images (one NativeImage per file, box and background, least recently used dropped past
-// 32 MB and disposed). Decodes off the render, one at a time, a macrotask apart so a frame can paint between two.
+// 32 MB and disposed, but never one the current render drew). Decodes off the render, one at a time, a macrotask apart so a frame can paint between two.
 
 import { readFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
@@ -201,6 +201,8 @@ const solid = (w: number, h: number, [r, g, b]: Bg) => {
 interface Entry {
   img: NativeImage | null
   bytes: number
+  /** The frame (`frame()` count) that last `get` it. */
+  seen: number
 }
 
 export class PictureCache {
@@ -209,6 +211,8 @@ export class PictureCache {
   private pending = new Set<string>()
   private busy = false
   private total = 0
+  /** Counts renders; what a `get` touches in the current one is on screen and is never evicted. */
+  private tick = 0
   /** Bumped by `clear()`: a job that started before it must not put anything into the emptied cache. */
   private gen = 0
   constructor(
@@ -217,10 +221,16 @@ export class PictureCache {
     private read: (path: string) => Uint8Array = (p) => readFileSync(p),
   ) {}
 
-  /** The image for `key`: undefined while not decoded, null once it failed. Touches it (most recently used). */
+  /** A new render begins: call once per render, before anything draws. The cache may run over its cap by what a render touches. */
+  frame() {
+    this.tick++
+  }
+
+  /** The image for `key`: undefined while not decoded, null once it failed. Touches it (most recently used, and on screen for this render). */
   get(key: string): NativeImage | null | undefined {
     const e = this.entries.get(key)
     if (!e) return undefined
+    e.seen = this.tick
     this.entries.delete(key)
     this.entries.set(key, e)
     return e.img
@@ -279,10 +289,11 @@ export class PictureCache {
   }
 
   private put(key: string, img: NativeImage | null, bytes: number) {
-    this.entries.set(key, { img, bytes })
+    this.entries.set(key, { img, bytes, seen: -1 })
     this.total += bytes
     for (const [k, e] of this.entries) {
       if (this.total <= this.cap || k === key) break
+      if (e.seen === this.tick) continue
       e.img?.dispose()
       this.total -= e.bytes
       this.entries.delete(k)

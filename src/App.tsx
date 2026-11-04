@@ -132,6 +132,8 @@ export function App({
   // ---------------------------------------------------- render
   const d = derive()
   const { L } = d
+  // the one place a render of the picture cache begins: the page's pictures and the sheet's both count as this render
+  ctx.pics.frame()
 
   // the panel and the document write the list tops and the welcome row back to the store as they draw: always built,
   // even when zen or a too-small terminal leaves them off screen
