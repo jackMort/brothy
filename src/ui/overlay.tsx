@@ -27,6 +27,7 @@ import {
 import { chip, groupColor, keycaps } from "./chrome"
 import { BODY_PAD, innerWidth, PANE_PAD, POPUP_INSET, popupWidth, ROW_PAD, ZEN_POPUP_W } from "./geometry"
 import type { HelpLayout, HelpLine } from "./help"
+import type { PictureFit } from "./picture"
 import { blockAt, type ProofRow, proofSpans } from "./proof"
 import {
   artSpans,
@@ -728,6 +729,68 @@ export function GraphSheet({
           onImageError={onImageError}
         />
         {side}
+      </box>
+    </Overlay>
+  )
+}
+
+/** What the picture sheet's body draws: the made image, half-block rows, or one centred row (a picture with nothing to show). */
+export type PictureBody =
+  | { kind: "pixels"; image: NativeImage; fit: PictureFit }
+  | { kind: "blocks"; rows: Span[][]; fit: PictureFit }
+  | { kind: "note"; spans: Span[] }
+  | null
+
+/**
+ * The picture sheet: the whole body of the popup is the picture's area (`cols × rows`), the picture fitted and centred
+ * in it. The body keeps its size while the picture decodes (`null`: empty), so the popup does not jump.
+ */
+export function PictureSheet({
+  t,
+  W,
+  H,
+  width,
+  title,
+  cols,
+  rows,
+  body,
+  onClose,
+  onImageError,
+}: Pick<PopupListProps, "t" | "W" | "H" | "onClose"> & {
+  width: number
+  title: string
+  cols: number
+  rows: number
+  body: PictureBody
+  onImageError: () => void
+}) {
+  const at = body && body.kind !== "note" ? body.fit : null
+  return (
+    <Overlay t={t} W={W} H={H} width={width} title={title} onClose={onClose}>
+      <box key="picture-body" style={{ width: cols, height: rows, flexShrink: 0, flexDirection: "column" }}>
+        {body?.kind === "pixels" && at ? (
+          <image
+            key="pic-px"
+            source={body.image}
+            fit="fill"
+            onError={onImageError}
+            style={{ position: "absolute", left: at.left, top: at.top, width: at.cols, height: at.rows }}
+          />
+        ) : null}
+        {body?.kind === "blocks" && at ? (
+          <box key="pic-hb" style={{ marginTop: at.top, marginLeft: at.left, flexDirection: "column" }}>
+            {body.rows.map((spans, i) => (
+              <Line key={i} spans={spans} />
+            ))}
+          </box>
+        ) : null}
+        {body?.kind === "note" ? (
+          <box key="pic-note" style={{ marginTop: Math.floor((rows - 1) / 2), height: 1, flexShrink: 0 }}>
+            <Line
+              spans={[{ text: " ".repeat(Math.max(0, Math.floor((cols - spanWidth(body.spans)) / 2))) }, ...body.spans]}
+            />
+          </box>
+        ) : null}
       </box>
     </Overlay>
   )

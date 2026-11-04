@@ -4,6 +4,7 @@
 import type { MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
 import { askTitleNote } from "../ai/ask"
+import { rgb } from "../graph/canvas"
 import { plural, truncate } from "../lib/text"
 import type { Rendered } from "../markdown/render"
 import { folderCounts } from "../notes/files"
@@ -31,6 +32,8 @@ import {
   Overlay,
   PickerInput,
   PickerList,
+  type PictureBody,
+  PictureSheet,
   ProofSheet,
   Switcher,
   ThemePicker,
@@ -41,6 +44,7 @@ import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { type Graph, imageFor, releaseImage } from "./graph"
 import { HELP_GROUPS } from "./keymap"
+import { failedSpans, pixelsFailed } from "./PictureLayer"
 import type { Popups } from "./popups"
 import type { Proof } from "./proof"
 import { WHEEL_ROWS } from "./store"
@@ -237,6 +241,54 @@ export function proofOverlay(
       onScroll={(dir) => proofAt(p.hl + dir)}
       onHover={(at) => at !== p.hl && proofAt(at)}
       onActivate={proofGo}
+    />
+  )
+}
+
+/**
+ * The picture sheet from `d.picSheet`: the picture decoded at its fitted size (asked of the cache; the body stays empty
+ * until it lands), as the made image or as half-block rows, or the one row saying why there is nothing to show.
+ */
+export function pictureOverlay(c: AppCtx, d: Derived): ReactNode {
+  const { set, W, H, pics, memo, alive, ui } = c
+  const v = d.picSheet
+  if (!v) return null
+  const { t } = d
+  const { pic, draw } = v
+  const note = (reason: string) => ({ kind: "note", spans: failedSpans(t, pic.alt, reason, v.cols) }) as const
+  const body = (): PictureBody => {
+    if (pic.problem) return note(pic.problem)
+    if (!draw) return note("unreadable")
+    const img = pics.get(draw.key)
+    if (img === undefined) {
+      const bg = rgb(t.backgroundPanel)
+      pics.want(
+        draw.key,
+        draw.file,
+        draw.px.w,
+        draw.px.h,
+        bg,
+        () => alive.current && set({ picVer: ui.current.picVer + 1 }),
+      )
+      return null
+    }
+    if (img === null) return note("unreadable")
+    return draw.pixels
+      ? { kind: "pixels", image: img, fit: draw.fit }
+      : { kind: "blocks", rows: memo.halfRows(img, t.backgroundPanel), fit: draw.fit }
+  }
+  return (
+    <PictureSheet
+      t={t}
+      W={W}
+      H={H}
+      width={v.width}
+      title={v.title}
+      cols={v.cols}
+      rows={v.rows}
+      body={body()}
+      onClose={() => set({ picture: null })}
+      onImageError={() => pixelsFailed(c)}
     />
   )
 }

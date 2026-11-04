@@ -1,15 +1,23 @@
 // The note's pictures over their reserved rows: one <image> per picture on screen, cut to the rows it has there. Not
 // pure: asks the cache for what isn't decoded yet and reports through the store, always after the render.
 import { rgb } from "../graph/canvas"
-import { truncate } from "../lib/text"
+import type { Span } from "../lib/spans"
+import { truncate, width } from "../lib/text"
 import { type Pic, plainOf, type Rendered } from "../markdown/render"
+import type { Theme } from "../theme/theme"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { type Cell, picKey, picWindow } from "./pictures"
 import { Row } from "./Row"
 
-/** What a failed picture's row needs besides the alt: `▣ `, ` · ` and `unreadable`. */
-const FAILED_W = 15
+/** The row of a picture that won't show, within `room` columns: `▣ `, the alt (cut first), ` · ` and the reason in `warning`. */
+export function failedSpans(t: Theme, alt: string, reason: string, room: number): Span[] {
+  return [
+    { text: "▣ ", fg: t.primary },
+    { text: `${truncate(alt, Math.max(1, room - 5 - width(reason)))} · `, fg: t.textMuted },
+    { text: reason, fg: t.warning },
+  ]
+}
 
 /** Line `n` is a reserved row with nothing on it: an empty box, since a `<text>` over an `<image>` paints black. */
 export function reservedBlank(view: Rendered, n: number) {
@@ -33,7 +41,7 @@ function askPicture(c: AppCtx, d: Derived, key: string, file: string, p: Pic, ce
 }
 
 /** The image could not be shown in this terminal: text for the rest of the run. */
-function pixelsFailed({ ui, set, flash }: AppCtx) {
+export function pixelsFailed({ ui, set, flash }: AppCtx) {
   if (ui.current.picFailed) return
   set({ picFailed: true })
   flash("pictures · pixels failed · text instead", "error")
@@ -73,13 +81,7 @@ export function pictureLayer(c: AppCtx, d: Derived, rows: number, win?: Window) 
       />
     ) : (
       <box key={`pic-${p.id}-failed`} style={{ ...place, width: L.CW - p.left, height: 1 }}>
-        <Row
-          spans={[
-            { text: "▣ ", fg: t.primary },
-            { text: `${truncate(p.alt, Math.max(1, L.CW - p.left - FAILED_W))} · `, fg: t.textMuted },
-            { text: "unreadable", fg: t.warning },
-          ]}
-        />
+        <Row spans={failedSpans(t, p.alt, "unreadable", L.CW - p.left)} />
       </box>
     )
   })

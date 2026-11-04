@@ -35,6 +35,7 @@ test("document hints: short keys, a context's own word over the binding's", () =
     "H L history",
     "e edit",
     "a summarize",
+    "⏎ view",
     "p pictures",
     "tab panel",
     "? keys",

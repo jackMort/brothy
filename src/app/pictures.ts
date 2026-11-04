@@ -3,9 +3,10 @@
 // 32 MB and disposed). Decodes off the render, one at a time, a macrotask apart so a frame can paint between two.
 
 import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { dirname, join, relative } from "node:path"
 import { type CliRenderer, NativeImage } from "@opentui/core"
 import { type GraphTerm, graphTerm } from "../graph/sheet"
+import { safeLine } from "../lib/spans"
 import type { Pic, PictureOpts, Rendered } from "../markdown/render"
 import { type FileNode, findVault } from "../notes/files"
 import {
@@ -122,6 +123,21 @@ export type PictureFiles = ReturnType<typeof pictureFiles>
 /** One decoded image per file contents, box, cell size, background: `path#sig#cols×rows#cell#theme#t|o`. */
 export const picKey = (path: string, p: Pic, cell: Cell, theme: string, transparent: boolean) =>
   `${path}#${imageSig(path)}#${p.cols}x${p.rows}#${cell.w}x${cell.h}#${theme}#${transparent ? "t" : "o"}`
+
+/** The sheet's decoded image: `path#sig#cols×rows#cell#theme#px|hb` (pixels at the cell size, or two half-block rows per cell row). */
+export const sheetKey = (
+  path: string,
+  fit: { cols: number; rows: number },
+  cell: Cell,
+  theme: string,
+  pixels: boolean,
+) => `${path}#${imageSig(path)}#sheet${fit.cols}x${fit.rows}#${cell.w}x${cell.h}#${theme}#${pixels ? "px" : "hb"}`
+
+/** Where a picture's file is shown from: relative to the note's folder (a piped document: to the workspace), one line. */
+export function pictureShown(file: string, openPath: string | null, root: string): string {
+  const note = openPath && openPath !== STDIN ? openPath : join(root, STDIN)
+  return safeLine(relative(dirname(note), file))
+}
 
 /**
  * The part of `p` in the `rows` rows from `top`, null when none is: where it sits from the first row, how many rows it

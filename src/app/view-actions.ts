@@ -307,6 +307,11 @@ const proofDir = (k: KeyEvent): 1 | -1 => {
   return isDown(k) || (k.ctrl && k.name === "n") ? 1 : -1
 }
 
+/** `⏎` on the document (zen's too: its keys fall through to it) and the picture sheet's close. */
+export function makePictureActions({ pictureSheet: p }: Pick<Features, "pictureSheet">) {
+  return { docEnter: p.viewPicture, pictureClose: p.closePicture } satisfies Partial<Actions>
+}
+
 /** The Graph sheet and its filter. */
 export function makeGraphActions({ graph: g }: Pick<Features, "graph">) {
   return {

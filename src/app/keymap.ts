@@ -22,6 +22,7 @@ export type Mode =
   | "switch"
   | "open"
   | "proof"
+  | "picture"
   | "graph"
   | "graphFilter"
 /** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change). */
@@ -39,6 +40,7 @@ export type Ctx =
   | "switch"
   | "open"
   | "proof"
+  | "picture"
   | "graph"
   | "graphFilter"
 /** One binding: its keys, how help and the footer show it. */
@@ -207,6 +209,14 @@ const KEYMAP = {
     desc: "next / previous match",
     hint: "match",
     when: "query",
+  },
+  docEnter: {
+    modes: ["doc"],
+    keys: ["return", "enter"],
+    label: "⏎",
+    desc: "view the picture on screen",
+    hint: "view",
+    when: "pics",
   },
   // hint-only: while landed on a change, `[ ]` (docHeading) walk the changes and `3` (views) opens Info
   landWalk: { modes: ["doc"], keys: [], label: "[ ]", hint: "changes" },
@@ -396,6 +406,7 @@ const KEYMAP = {
   proofGo: { modes: ["proof"], keys: ["return", "enter"], label: "⏎", hint: "go to" },
   proofExplain: { modes: ["proof"], keys: ["S-d"], label: "D", hint: "explain", when: "changes" },
   proofClose: { modes: ["proof"], keys: ["escape"], label: "esc", hint: "close" },
+  pictureClose: { modes: ["picture"], keys: ["escape", "q"], label: "esc", hint: "close" },
   graphMove: {
     modes: ["graph"],
     keys: ["down", "up", "j", "k", "tab", "C-n", "C-p"],
@@ -488,6 +499,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     "histBack",
     "edit",
     "summarizeHint",
+    "docEnter",
     "pictures",
     ["focus", "panel"],
     "help",
@@ -514,6 +526,7 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
   switch: ["swType", "swMove", "swSection", "swOpen", "swAskHint", "swClose"],
   open: ["opType", "opMove", "opComplete", "opOpen", "opClose"],
   proof: ["proofMove", "proofGo", "proofExplain", "proofClose"],
+  picture: ["pictureClose"],
   graph: ["graphMove", "graphGo", "graphCentre", "graphBack", "graphDepth", "graphRender", "graphFilter", "graphClose"],
   graphFilter: ["gfType", "gfMove", "gfGo", "gfLeave", "gfClear"],
 }
@@ -544,6 +557,7 @@ export const PINNED: readonly Ctx[] = [
   "switch",
   "open",
   "proof",
+  "picture",
   "graph",
   "graphFilter",
 ]

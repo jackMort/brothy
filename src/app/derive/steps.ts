@@ -18,16 +18,17 @@ import { firstHit, isStop, type SwitchRow, type VaultIndex } from "../../notes/v
 import { projectRoot, STDIN } from "../../notes/workspace"
 import type { Theme } from "../../theme/theme"
 import { SIDENOTE_ROWS, SIDENOTE_W, sidenoteAt, staleKind, waitSecs } from "../../ui/footnote"
-import { BODY_PAD, innerWidth, ROW_PAD } from "../../ui/geometry"
+import { BODY_PAD, innerWidth, popupWidth, ROW_PAD } from "../../ui/geometry"
 import type { layout } from "../../ui/layout"
 import { MINI_W } from "../../ui/minimap"
 import { keepVisible, relocate, remapTop } from "../../ui/nav"
 import type { ChangeState, ChangeView, SummaryView } from "../../ui/panel"
+import { pictureFit, pictureTitle } from "../../ui/picture"
 import { proofHeight, proofMarkW, proofTop, proofWidth } from "../../ui/proof"
 import { noteTitle } from "../../ui/status"
 import { pageSlice, sectionAt, typewriterTop } from "../../ui/zen"
 import type { DeriveRefs, Memo, ScrollEntry } from "../derive"
-import type { pictureLayout } from "../pictures"
+import { type Cell, type PictureFiles, type pictureLayout, pictureShown, sheetKey } from "../pictures"
 import { type FileRow, type Job, jobKey, NO_CANDS, NO_CHANGES, NO_NOTES, type UI } from "../store"
 
 /** The screen layout `derive()` works at. */
@@ -234,6 +235,39 @@ export function proofSheet(s: UI, W: number, H: number, cv: ChangeView | null, t
   const rows = memo.proof(cv, title, room)
   const hl = clamp(s.proof.hl, 0, changes.length - 1)
   return { rows, width, room, height, hl, top: proofTop(rows, hl, s.proof.top, height), markW: proofMarkW(changes) }
+}
+
+/** Columns the sheet's title row leaves for `esc` and its gap, beside the 4 and 4 it pads. */
+const PICTURE_TITLE_PAD = BODY_PAD + 4
+
+/**
+ * The picture sheet on screen (`ui.picture`): the whole body is the picture's area, the image fitted into it and the
+ * decode it needs (`key`, `px` pixels: at the cell size, or `fit.cols × 2·fit.rows` for half blocks). `fit` is null for a
+ * picture with nothing to draw (a problem, no file); null while closed or when the id means no picture on this note.
+ */
+export function pictureSheet(
+  s: UI,
+  W: number,
+  H: number,
+  view: Rendered,
+  files: PictureFiles,
+  mode: "pixels" | "text",
+  cell: Cell,
+  theme: string,
+) {
+  const pic = s.picture && view.pics?.[s.picture.id]
+  if (!pic) return null
+  const width = proofWidth(W)
+  const cols = innerWidth(popupWidth(W, width))
+  const rows = proofHeight(H)
+  const file = files.file(pic.src)
+  const title = pictureTitle(pic, file ? pictureShown(file, s.openPath, s.root) : "", cols - PICTURE_TITLE_PAD)
+  const base = { pic, width, cols, rows, title }
+  if (pic.problem || !pic.size || !file) return { ...base, draw: null }
+  const pixels = mode === "pixels" && s.cell !== null
+  const fit = pictureFit(pic.size, cols, rows, cell)
+  const px = pixels ? { w: fit.cols * cell.w, h: fit.rows * cell.h } : { w: fit.cols, h: fit.rows * 2 }
+  return { ...base, draw: { file, fit, pixels, px, key: sheetKey(file, fit, cell, theme, pixels) } }
 }
 
 /**

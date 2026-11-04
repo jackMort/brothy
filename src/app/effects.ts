@@ -63,6 +63,10 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, flash }: AppCtx, dr
   // a failed read is a toast too (the document shows the message as well); the change list
   // compares against the text the note had when it opened: leaving it or a failed read drops it
   const { reload } = ui.current
+  // a picture's id means nothing on another note, or after a reload that may have changed the pictures
+  useEffect(() => {
+    if (ui.current.picture) set({ picture: null })
+  }, [openPath, reload])
   useEffect(() => {
     const f = derive().file
     if (f?.error && openPath) flash(`cannot open “${basename(openPath)}”: ${f.error}`, "error")

@@ -86,6 +86,7 @@ function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }:
     const s = ui.current
     set({
       ...w,
+      picture: null,
       filter: "",
       filterTyping: false,
       cursor: 0,

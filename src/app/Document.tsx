@@ -37,6 +37,7 @@ import type { Derived } from "./derive"
 import { keyDef, WELCOME_KEYS } from "./keymap"
 import { labelGeo } from "./links"
 import { pictureLayer, reservedBlank } from "./PictureLayer"
+import type { PictureSheet } from "./picture-sheet"
 import { Row } from "./Row"
 import { SCRIM_DIM, WHEEL_ROWS } from "./store"
 import type { WorkspaceControl } from "./workspace"
@@ -46,7 +47,7 @@ import type { Zen } from "./zen"
 export function docBox(
   c: AppCtx,
   d: Derived,
-  ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll">,
+  ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll"> & Pick<PictureSheet, "clickRow">,
 ): ReactNode {
   const { focusDoc, scrollBy } = c
   const { s, L, file } = d
@@ -66,7 +67,11 @@ export function docBox(
         paddingLeft: L.zen ? L.padL - 2 : L.padL,
         overflow: "hidden", // the body clips, not `lines`: marks and notes sit left and right of its text column
       }}
-      onMouseDown={() => focusDoc()}
+      onMouseDown={(e: MouseEvent) => {
+        focusDoc()
+        // the row under the pointer, from the box's top: a picture's rows, caption or placeholder open its sheet
+        if (e.button === MouseButton.LEFT && s.openPath) ws.clickRow(e.y - (e.currentTarget?.screenY ?? 0))
+      }}
       onMouseScroll={(e: MouseEvent) =>
         (L.zen ? ws.zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)
       }

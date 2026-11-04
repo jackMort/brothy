@@ -77,7 +77,8 @@ test("? ? at 120 columns: five chip groups in two columns, Global and Panel left
   expect(after[top - 1]).toContain("1 2 3")
   expect(after.join("\n")).toContain("Keybindings")
   expect(after.some((r) => / {2}AI {2}/.test(r))).toBe(true)
-  expect(after.join("\n")).toContain("ask your notes: ^p then ?question")
+  // the AI group's last line is one scroll further down since the document gained ⏎
+  expect(await keys(s, "j")).toContain("ask your notes: ^p then ?question")
   let end = (await keys(s, "G")).split("\n")
   for (let i = 0; i < 6 && !end.some((r) => r.includes(" Panel ")); i++) end = (await keys(s, "b")).split("\n")
   const panel = end.findIndex((r) => r.includes(" Panel "))

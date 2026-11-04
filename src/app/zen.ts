@@ -116,6 +116,7 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
     }
     set({
       zen: on,
+      picture: null,
       ghostAt: null,
       filterTyping: false,
       ...(on ? { drawerOpen: false, focus: "doc" as Focus, source: false } : { gloss: null }),

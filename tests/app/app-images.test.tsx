@@ -14,6 +14,7 @@ import {
   keys,
   kittyTerminal,
   OLLAMA,
+  panelShown,
   type Setup,
   setResolution,
   sleep,
@@ -72,7 +73,7 @@ test("kitty: an <image> over the reserved rows once the resolution lands", async
   const caption = rows.findIndex((r) => r.includes("Plan"))
   expect(caption).toBe(img!.y + 5)
   expect(f).toContain("After")
-  expect(f).not.toContain("⏎ view")
+  expect(f).not.toContain("· ⏎ view")
 })
 
 test("the decoded picture has the size of its cells, background underneath", async () => {
@@ -98,7 +99,7 @@ test("no resolution → no image, then image", async () => {
   const s = await mount(vault(NOTE), "n.md")
   kittyTerminal(s)
   // laid out as pixels with the default 8 × 16 cell: 25 columns, 6 rows
-  await waitFrame(s, (f) => f.includes("Plan") && !f.includes("⏎ view"))
+  await waitFrame(s, (f) => f.includes("Plan") && !f.includes("· ⏎ view"))
   await sleep(150)
   await s.renderOnce()
   expect(imagesOf(s)).toHaveLength(0)
@@ -122,7 +123,7 @@ test("a resize drops the cell until the new resolution lands, and the picture fo
   setResolution(s, null)
   s.renderer.emit("resize", 100, 30)
   await waitFor(s, () => imagesOf(s).length === 0)
-  expect(s.captureCharFrame()).not.toContain("⏎ view")
+  expect(s.captureCharFrame()).not.toContain("· ⏎ view")
   setResolution(s, { width: 500, height: 300 })
   await shown(s)
   // 5 × 10 pixels a cell: the picture is 40 columns wide now, 10 rows
@@ -290,7 +291,7 @@ test("zen Typewriter: the picture over its rows, at the text's column, moving wi
   img = imagesOf(s)[0]!
   expect(captionRow(s)).toBe(img.y + 5)
   expect(img.crop).toEqual({ left: 0, top: 0, width: 200, height: 100 })
-  expect(s.captureCharFrame()).not.toContain("⏎ view")
+  expect(s.captureCharFrame()).not.toContain("· ⏎ view")
 })
 
 test("zen Typewriter: the reading marker stays on through a picture's rows, in the gutter", async () => {
@@ -512,4 +513,170 @@ test("p works in zen", async () => {
   await keys(s, "z")
   expect(await keys(s, "p")).toContain("pictures · text")
   expect(savedConfig().pictures).toBe("text")
+})
+
+// ------------------------------------------------------------- the picture sheet
+
+/** The sheet's own `<image>`: on a 100 × 30 terminal its body is 86 columns by 24 rows, the page's picture 20 wide. */
+const sheetImage = (s: Setup) => imagesOf(s).find((i) => i.width > 20)
+const SHEET = "Plan · 200×100 · plan.png"
+const TWO_PICS = `# Top\n\n![Alpha](plan.png)\n\n${filler(8)}\n\n![Beta](plan.png)\n\n${filler(40)}`
+
+test("⏎ opens the sheet on the picture in view: the title, the image fitted, esc closes", async () => {
+  const s = await pictured()
+  await shown(s)
+  const f = await keys(s, "enter")
+  expect(f).toContain(SHEET)
+  await waitFor(s, () => !!sheetImage(s))
+  const img = sheetImage(s)!
+  // 200 × 100 pixels into 86 × 24 cells of 10 × 20 pixels: 86 × 22, centred
+  expect([img.width, img.height]).toEqual([86, 22])
+  expect((img.source as NativeImage).width).toBe(860)
+  expect(f.split("\n")[28]).toContain("esc close")
+  await keys(s, "esc")
+  await waitFrame(s, (x) => !x.includes(SHEET))
+  expect(sheetImage(s)).toBeUndefined()
+})
+
+test("the sheet's picture sits on the panel colour, and a key other than esc does nothing", async () => {
+  const s = await pictured("![Clear](clear.png)", { "clear.png": solidPng(200, 100, [0, 0, 0, 0]) })
+  await shown(s)
+  await keys(s, "enter")
+  await waitFor(s, () => !!sheetImage(s))
+  const px = (sheetImage(s)!.source as NativeImage).raw().data
+  expect(hexOf([px[0]!, px[1]!, px[2]!])).toBe(B.backgroundPanel)
+  await keys(s, "p", "j", "s")
+  expect(sheetImage(s)).toBeDefined()
+  expect(existsSync(configFile())).toBe(false) // p saved nothing
+  await keys(s, "q")
+  await waitFor(s, () => !sheetImage(s))
+})
+
+test("⏎ on a note without a picture does nothing", async () => {
+  const s = await mount(vault("# Top\n\nno picture"), "n.md")
+  const before = s.captureCharFrame()
+  expect(await keys(s, "enter")).toBe(before)
+})
+
+test("⏎ takes the first picture in view, not the first in the note", async () => {
+  const s = await pictured(TWO_PICS)
+  await shown(s)
+  expect(await keys(s, "enter")).toContain("Alpha · 200×100")
+  await keys(s, "esc")
+  await waitFor(s, () => !sheetImage(s))
+  await keys(s, ...Array(14).fill("j"))
+  await waitFor(s, () => !s.captureCharFrame().includes("Alpha") && s.captureCharFrame().includes("Beta"))
+  await keys(s, "enter")
+  await waitFrame(s, (x) => x.includes("Beta · 200×100"))
+})
+
+test("zen Typewriter and Pages: ⏎ opens the picture on screen, and esc closes the sheet, not zen", async () => {
+  for (const flow of ["scroll", "pages"]) {
+    const s = await zenMounted(`# Top\n\nintro\n\n![Zed](plan.png)\n\n# Two\n\nsecond`, { flow })
+    await shown(s)
+    await keys(s, "enter")
+    await waitFrame(s, (x) => x.includes("Zed · 200×100"))
+    await keys(s, "esc")
+    await waitFrame(s, (x) => !x.includes("Zed · 200×100"))
+    expect(panelShown(s.captureCharFrame())).toBe(false) // still zen
+    await keys(s, "esc")
+    await waitFrame(s, panelShown)
+  }
+})
+
+test("zen Pages: ⏎ takes a picture of the page on screen only", async () => {
+  const s = await zenMounted(`# One\n\nfirst page\n\n# Two\n\n![Zed](plan.png)\n\nlast`, { flow: "pages" })
+  await keys(s, "enter")
+  await sleep(50)
+  expect(s.captureCharFrame()).not.toContain("Zed · 200×100")
+  await keys(s, "]")
+  await waitFor(s, () => s.captureCharFrame().includes("page 2 of 2"))
+  await keys(s, "enter")
+  await waitFrame(s, (x) => x.includes("Zed · 200×100"))
+})
+
+test("a click on the placeholder row opens the sheet, drawn in half blocks; a click on the backdrop closes it", async () => {
+  const s = await mount(vault(NOTE), "n.md")
+  const f = await waitFrame(s, (x) => x.includes("▣ Plan · 200×100 · ⏎ view"))
+  const y = f.split("\n").findIndex((r) => r.includes("▣ Plan"))
+  await s.mockMouse.click(30, y)
+  const open = await waitFrame(s, (x) => x.includes(SHEET) && x.includes("▀"))
+  const row = open.split("\n").find((r) => r.includes("▀"))!
+  // 200 × 100 into 86 × 24 cells of 8 × 16 pixels: 86 × 27, so 86 × 24 wide-limited rows of ▀ (two pixel rows each)
+  expect(row.match(/▀/g)!.length).toBeGreaterThan(40)
+  await s.mockMouse.click(2, 5)
+  await waitFrame(s, (x) => !x.includes(SHEET))
+})
+
+test("a click on the picture's rows or its caption opens the sheet, in Preview and in zen", async () => {
+  for (const zen of [false, true]) {
+    const s = await pictured()
+    if (zen) await keys(s, "z")
+    await shown(s)
+    const img = imagesOf(s)[0]!
+    await s.mockMouse.click(img.x + 3, img.y + 1)
+    await waitFor(s, () => !!sheetImage(s))
+    await keys(s, "esc")
+    await waitFor(s, () => !sheetImage(s))
+    const caption = s
+      .captureCharFrame()
+      .split("\n")
+      .findIndex((r) => r.trim() === "Plan")
+    await s.mockMouse.click(img.x + 5, caption)
+    await waitFor(s, () => !!sheetImage(s))
+  }
+})
+
+test("a click on a row without a picture opens nothing", async () => {
+  const s = await pictured()
+  await shown(s)
+  await s.mockMouse.click(30, BODY_TOP)
+  await sleep(100)
+  expect(s.captureCharFrame()).not.toContain(SHEET)
+})
+
+test("a picture with a problem: the sheet says so on one row, in the page's colours", async () => {
+  const s = await mount(vault("# Top\n\n![Lost](lost.png)\n\nend"), "n.md")
+  await waitFrame(s, (x) => x.includes("▣ Lost"))
+  await keys(s, "enter")
+  const f = await waitFrame(s, (x) => x.split("\n")[1]!.includes("Lost"))
+  // the sheet covers the page's row: one `▣` row, in the middle of the body
+  const rows = f.split("\n").flatMap((r, i) => (r.includes("▣ Lost") ? [i] : []))
+  expect(rows).toEqual([14])
+  const reason = spansOf(s).filter((sp) => sp.text.includes("not found"))
+  expect(reason.length).toBeGreaterThan(0)
+  expect(reason.every((sp) => hex(sp.fg) === B.warning)).toBe(true)
+})
+
+test("a picture that won't decode: the sheet says unreadable", async () => {
+  const s = await pictured("![Bad](bad.png)", { "bad.png": PLAN.subarray(0, 40) })
+  await waitFrame(s, (x) => x.includes("▣ Bad · unreadable"))
+  await keys(s, "enter")
+  const f = await waitFrame(s, (x) => x.split("\n")[1]!.includes("Bad · 200×100 · bad.png"))
+  expect(f.split("\n")[14]).toContain("▣ Bad · unreadable")
+})
+
+test("the footer: ⏎ view for a note with a picture, esc close while the sheet is open", async () => {
+  const bare = await mount(vault("# Top\n\nno picture"), "n.md", { size: W120 })
+  expect(hintRow(await keys(bare, "j"))).not.toContain("⏎")
+  const s = await pictured(NOTE, undefined, W120)
+  await shown(s)
+  const h = hintRow(s.captureCharFrame())
+  expect(h).toContain("⏎ view")
+  expect(h.indexOf("⏎ view")).toBeLessThan(h.indexOf("p text"))
+  expect(hintRow(await keys(s, "enter"))).toContain("esc close")
+})
+
+test("the note changing on disk closes the sheet", async () => {
+  const d = vault(NOTE)
+  const s = await mount(d, "n.md")
+  kittyTerminal(s)
+  setResolution(s, RES)
+  await shown(s)
+  await keys(s, "enter")
+  await waitFor(s, () => !!sheetImage(s))
+  writeFileSync(join(d, "n.md"), "# Top\n\nno picture now")
+  await waitFrame(s, (x) => x.includes("no picture now"), 4000)
+  expect(s.captureCharFrame()).not.toContain(SHEET)
+  expect(sheetImage(s)).toBeUndefined()
 })

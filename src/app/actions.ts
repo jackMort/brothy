@@ -24,6 +24,7 @@ import { makeOnKey } from "./dispatch"
 import type { Graph } from "./graph"
 import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
+import type { PictureSheet } from "./picture-sheet"
 import type { Popups } from "./popups"
 import type { Proof } from "./proof"
 import type { Focus, UI } from "./store"
@@ -35,6 +36,7 @@ import {
   makeGraphActions,
   makeInfoActions,
   makeOutlineActions,
+  makePictureActions,
   makePopupActions,
   makeProofActions,
   makeSwitcherActions,
@@ -52,6 +54,7 @@ export interface Features {
   workspace: WorkspaceControl
   popups: Popups
   proof: Proof
+  pictureSheet: PictureSheet
   graph: Graph
   edit: ((argv: string[], piped: boolean) => EditResult | void | Promise<EditResult | void>) | undefined
 }
@@ -76,6 +79,7 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makePopupActions(c, f),
     ...makeSwitcherActions(c, f),
     ...makeProofActions(c, f),
+    ...makePictureActions(f),
     ...makeGraphActions(f),
   }
   const { currentCtx, pokeHints } = keys
@@ -133,13 +137,17 @@ type KeyContext = ReturnType<typeof makeKeyContext>
 
 /** The open popup's context (they take every key, in this order), else null. */
 function popupCtx(s: UI): Ctx | null {
-  if (s.themePick) return "theme"
-  if (s.zenOrig !== null) return "zenSettings"
-  if (s.opener) return "open"
-  if (s.switcher) return "switch"
-  if (s.proof) return "proof"
-  if (s.graph) return s.graph.typing ? "graphFilter" : "graph"
-  return s.prompt ? "prompt" : null
+  const open: [unknown, Ctx][] = [
+    [s.themePick, "theme"],
+    [s.zenOrig !== null, "zenSettings"],
+    [s.opener, "open"],
+    [s.switcher, "switch"],
+    [s.proof, "proof"],
+    [s.picture, "picture"],
+    [s.graph, s.graph?.typing ? "graphFilter" : "graph"],
+    [s.prompt, "prompt"],
+  ]
+  return open.find(([on]) => on)?.[1] ?? null
 }
 
 /** Moves within the note and Info: to a find match, a heading, an Outline heading, a Changed row; Info's stops. */

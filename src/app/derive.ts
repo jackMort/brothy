@@ -2,6 +2,7 @@
 // Not pure: `derive()` writes back the Files cursor, the scroll entry it remaps and the match line it re-finds.
 // Its steps, one per area, live in derive/steps.ts.
 import { existsSync } from "node:fs"
+import type { NativeImage } from "@opentui/core"
 import {
   type AskState,
   type AskTarget,
@@ -65,6 +66,7 @@ import {
   type SummaryState,
   type SummaryView,
 } from "../ui/panel"
+import { halfBlocks } from "../ui/picture"
 import { proofRows } from "../ui/proof"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import { sectionRanges, wordSuffix } from "../ui/zen"
@@ -79,6 +81,7 @@ import {
   matchState,
   noteView,
   openerList,
+  pictureSheet,
   proofSheet,
   readingWindow,
   scrollState,
@@ -107,6 +110,15 @@ function documentMemo(stdin: string | undefined) {
     }),
     fm: cached(parseFrontMatter),
     picFiles: cached(pictureFiles),
+    // the sheet's half-block rows for a decoded image: the rows, not the raster, go on to the component
+    halfRows: cached((img: NativeImage, bg: string) => {
+      const { data, width: w, height: h, stride } = img.raw("rgba8")
+      const px =
+        stride === w * 4
+          ? data
+          : Uint8Array.from({ length: w * h * 4 }, (_, i) => data[Math.floor(i / (w * 4)) * stride + (i % (w * 4))]!)
+      return halfBlocks(px, w, h, bg)
+    }),
     // one object per layout of the pictures, so `doc` holds
     picture: cached(
       (mode: PictureOpts["mode"], w: number, h: number, files: PictureFiles): PictureOpts => ({
@@ -471,6 +483,16 @@ export function makeDerive({
       currentHeading,
       land: landingView(s, L, doc, info.cv, memo, jobs.current),
       proof: proofSheet(s, dims.current.W, dims.current.H, info.cv, info.title, memo),
+      picSheet: pictureSheet(
+        s,
+        dims.current.W,
+        dims.current.H,
+        view,
+        picFiles,
+        picMode,
+        s.cell ?? lastCell.current,
+        t.name,
+      ),
       graph: graphSheet(
         s,
         dims.current.W,

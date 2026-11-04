@@ -37,6 +37,7 @@ function makePopupKey({ workspace, switcher, popups, graph }: Features, actions:
       type: (_, text) => switcher.swInput(text),
     },
     { mode: "proof", open: (s) => !!s.proof },
+    { mode: "picture", open: (s) => !!s.picture },
     {
       mode: "graphFilter",
       open: (s) => !!s.graph?.typing,

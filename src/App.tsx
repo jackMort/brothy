@@ -17,6 +17,7 @@ import {
   graphOverlay,
   helpOverlay,
   openOverlay,
+  pictureOverlay,
   proofOverlay,
   switchOverlay,
   themeOverlay,
@@ -24,6 +25,7 @@ import {
   zenOverlay,
 } from "./app/Overlays"
 import { panelBox } from "./app/Panel"
+import { makePictureSheet } from "./app/picture-sheet"
 import { DEFAULT_CELL, PictureCache } from "./app/pictures"
 import { makePopups } from "./app/popups"
 import { makeProof } from "./app/proof"
@@ -107,6 +109,7 @@ export function App({
   const workspace = makeWorkspace(ctx, switcher, aiJobs)
   const popups = makePopups(ctx)
   const proof = makeProof(ctx, links)
+  const pictureSheet = makePictureSheet(ctx)
   const graph = makeGraph(ctx, links, switcher)
   const { currentCtx, pokeHints, outlineGo, infoGo, onKey } = makeActions(ctx, {
     aiJobs,
@@ -116,6 +119,7 @@ export function App({
     workspace,
     popups,
     proof,
+    pictureSheet,
     graph,
     edit: editImpl,
   })
@@ -132,7 +136,7 @@ export function App({
   // the panel and the document write the list tops and the welcome row back to the store as they draw: always built,
   // even when zen or a too-small terminal leaves them off screen
   const panelEl = panelBox(ctx, d, { outlineGo, infoGo })
-  const docEl = docBox(ctx, d, { ...workspace, ...zen })
+  const docEl = docBox(ctx, d, { ...workspace, ...zen, ...pictureSheet })
   const miniEl = miniBox(ctx, d)
   const progressEl = progressLine(ctx, d)
 
@@ -151,6 +155,7 @@ export function App({
   const openEl = openOverlay(ctx, d, workspace)
   const findEl = findOverlay(ctx, d, popups)
   const proofEl = proofOverlay(ctx, d, proof)
+  const pictureEl = pictureOverlay(ctx, d)
   const graphEl = graphOverlay(ctx, d, graph)
   const pickView = themePickView(ctx, d)
   // zen gloss: runs when the reading line changes section (not on every scroll tick)
@@ -173,6 +178,7 @@ export function App({
     helpEl,
     findEl,
     proofEl,
+    pictureEl,
     graphEl,
     switchEl,
     openEl,
@@ -295,6 +301,7 @@ interface ScreenParts {
   helpEl: ReactNode
   findEl: ReactNode
   proofEl: ReactNode
+  pictureEl: ReactNode
   graphEl: ReactNode
   switchEl: ReactNode
   openEl: ReactNode
@@ -340,6 +347,7 @@ function zenScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: S
       {p.helpEl}
       {p.findEl}
       {p.proofEl}
+      {p.pictureEl}
       {p.switchEl}
       {p.openEl}
       {p.themeEl}
@@ -371,6 +379,7 @@ function mainScreen(d: Derived, W: number, H: number, note: Pointer["note"], p: 
       {p.helpEl}
       {p.findEl}
       {p.proofEl}
+      {p.pictureEl}
       {p.graphEl}
       {p.switchEl}
       {p.openEl}
