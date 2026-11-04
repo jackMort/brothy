@@ -4,7 +4,7 @@ import { closeSync, type Dirent, existsSync, openSync, readdirSync, readSync, re
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { type FileNode, SCAN_DEPTH, SCAN_LIMIT, skipped } from "./files"
 
-type ImageFormat = "png" | "jpeg" | "gif" | "webp" | "svg"
+export type ImageFormat = "png" | "jpeg" | "gif" | "webp" | "svg"
 interface ImageSize {
   w: number
   h: number
@@ -12,7 +12,7 @@ interface ImageSize {
 }
 
 // How much of a file the sniffer reads.
-const SNIFF_BYTES = 64 * 1024
+export const SNIFF_BYTES = 64 * 1024
 // Caps: a bigger file or more pixels than this is not drawn.
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 const MAX_IMAGE_PIXELS = 40_000_000

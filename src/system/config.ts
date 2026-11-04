@@ -18,6 +18,9 @@ export interface SidebarConfig {
 /** How the graph picture is drawn: OpenTUI's image where the terminal shows one (auto, pixels), else braille. */
 export type GraphRender = "auto" | "pixels" | "braille"
 const GRAPH_RENDERS: readonly GraphRender[] = ["auto", "pixels", "braille"]
+/** How pictures in notes show: OpenTUI's image where the terminal shows one (auto, pixels), else a placeholder row. */
+export type PicturesPref = "auto" | "pixels" | "text"
+const PICTURES: readonly PicturesPref[] = ["auto", "pixels", "text"]
 /** The graph sheet's saved settings (`+ -` and `p`). */
 interface GraphConfig {
   depth: 1 | 2
@@ -44,6 +47,8 @@ export interface Config {
   zen?: Partial<ZenConfig>
   /** Graph sheet depth and renderer (`+ -`, `p`); default depth 2, `auto`. */
   graph?: Partial<GraphConfig>
+  /** How pictures in notes show (`p` in the document); default `auto`. */
+  pictures?: PicturesPref
   /** Opt-in AI summaries; never patched by brothy (keys come only from the environment). */
   ai?: AIConfig
 }
@@ -110,6 +115,7 @@ export function loadConfig(): Config {
   if (typeof raw.minimap === "boolean") out.minimap = raw.minimap
   if (typeof raw.headings === "string" && (HEADING_STYLES as readonly string[]).includes(raw.headings))
     out.headings = raw.headings as HeadingStyle
+  if (PICTURES.includes(raw.pictures as PicturesPref)) out.pictures = raw.pictures as PicturesPref
   let folds: Partial<Record<View, boolean>> | undefined
   const f = raw.folds
   if (isRecord(f)) {

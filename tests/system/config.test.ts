@@ -360,6 +360,15 @@ describe("file format", () => {
   })
 })
 
+describe("pictures", () => {
+  test("a valid mode loads, anything else is dropped", () => {
+    writeFileSync(file(), '{"pictures":"text"}')
+    expect(loadConfig().pictures).toBe("text")
+    writeFileSync(file(), '{"pictures":"nope"}')
+    expect(loadConfig().pictures).toBeUndefined()
+  })
+})
+
 describe("graph", () => {
   test("loads depth 1 or 2 and render auto / pixels / braille; anything else is dropped field by field", () => {
     writeFileSync(file(), '{"graph":{"depth":1,"render":"braille"}}')
