@@ -5,8 +5,9 @@
 
 import type { Token, Tokens } from "marked"
 import { A, type Span, safe } from "../lib/spans"
-import { graphemes, pushSpan, spanWidth, width, wrap } from "../lib/text"
+import { truncate as clip, graphemes, pushSpan, spanWidth, width, wrap } from "../lib/text"
 import { isMarkdown } from "../notes/files"
+import { isImagePath, parseImageSize } from "../notes/images"
 import type { Theme } from "../theme/theme"
 import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
@@ -18,6 +19,35 @@ export interface Line {
   fill?: string
   /** Index into `headings` when this line starts a heading. */
   heading?: number
+  /** The `Rendered.pics` id on a picture's reserved, caption and placeholder rows. */
+  pic?: number
+}
+
+/** A picture in the text: its reserved rows (`rows` > 0, pixels mode) or its one placeholder row (`rows` 0). */
+interface Pic {
+  /** index in `Rendered.pics` */
+  id: number
+  /** first reserved row, or the placeholder row */
+  line: number
+  rows: number
+  /** width in cells (0 for a placeholder) */
+  cols: number
+  /** columns from the text's left edge */
+  left: number
+  /** the target as written (wikilink target or md href) */
+  src: string
+  /** alt text, else the file's basename */
+  alt: string
+  size?: { w: number; h: number }
+  /** why it is a placeholder */
+  problem?: string
+}
+
+interface PictureOpts {
+  mode: "pixels" | "text"
+  cell: { w: number; h: number }
+  /** size or problem for a target as written; null = not an image file, render inline as today */
+  info: (src: string) => { w: number; h: number } | { problem: string } | null
 }
 
 export interface Heading {
@@ -38,6 +68,8 @@ export interface Rendered {
   links?: LinkTarget[]
   /** Source only: the first row of each source line (jumping to a source line) */
   srcRow?: number[]
+  /** Preview only, with `RenderOpts.picture`: the pictures laid out as block images */
+  pics?: Pic[]
 }
 
 /** A rendering's line geometry, which scroll offsets are measured against (`remapTop`): heading lines and total line count. */
@@ -65,6 +97,8 @@ export interface RenderOpts {
   headings?: HeadingStyle
   /** whether a wikilink target resolves to a note; unresolved links are drawn muted */
   exists?: (target: string) => boolean
+  /** lay out a paragraph that is one image as reserved rows or a placeholder row */
+  picture?: PictureOpts
 }
 
 // biome-ignore lint/complexity/useMathMinMax: a NaN width must leave the running maximum alone, which Math.max would not
@@ -346,6 +380,8 @@ interface Ctx {
   pending: HighlightRequest[]
   sink: LinkSink
   headingStyle: HeadingStyle
+  pics: Pic[]
+  picture?: PictureOpts
 }
 
 /** The `bars` and `ladder` heading marks, h1 to h6. */
@@ -368,7 +404,7 @@ function spacer(ctx: Ctx, rest: Span[]) {
 function blank(ctx: Ctx, prefix: Span[]) {
   const last = ctx.lines[ctx.lines.length - 1]
   if (!last) return
-  if (last.fill === undefined && plainOf(last.spans).trim() === plainOf(prefix).trim()) return
+  if (last.fill === undefined && last.pic === undefined && plainOf(last.spans).trim() === plainOf(prefix).trim()) return
   ctx.lines.push({ spans: prefix.map((s) => ({ ...s })) })
 }
 
@@ -481,9 +517,110 @@ function headingBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
   spacer(ctx, f.rest)
 }
 
+export const PIC_MAX_ROWS = 30
+
+/** A picture's box in cells: never upscaled, at most the measure wide and `PIC_MAX_ROWS` high, its aspect kept. */
+export function picBox(
+  size: { w: number; h: number },
+  want: { w?: number; h?: number } | null,
+  measure: number,
+  cell: { w: number; h: number },
+): { cols: number; rows: number } {
+  const wPx = want?.w ?? size.w
+  const hPx = want?.h ?? (want?.w ? (want.w * size.h) / size.w : size.h)
+  let cols = Math.max(1, Math.min(measure, Math.ceil(wPx / cell.w)))
+  let rows = Math.max(1, Math.round((cols * cell.w * hPx) / wPx / cell.h))
+  if (rows > PIC_MAX_ROWS) {
+    rows = PIC_MAX_ROWS
+    cols = Math.max(1, Math.round((rows * cell.h * wPx) / hPx / cell.w))
+  }
+  return { cols, rows }
+}
+
+interface SoleImage {
+  src: string
+  /** the alt as written, "" when empty */
+  alt: string
+  want: { w?: number; h?: number } | null
+}
+
+/** `![alt|300](href)`: the alt without its `|size`, and the size. */
+function mdImage(tok: Token): SoleImage {
+  const im = tokenOf(tok, "image")
+  const bar = im.text.lastIndexOf("|")
+  const want = bar >= 0 ? parseImageSize(im.text.slice(bar + 1)) : null
+  return { src: im.href, alt: (want ? im.text.slice(0, bar) : im.text).trim(), want }
+}
+
+/** `![[pic.png|300]]` (an embed of an image file): the alias is a size or the alt. */
+function wikiImage(tok: Token): SoleImage | null {
+  if (!isWikilink(tok) || !tok.embed || !isImagePath(tok.target)) return null
+  const want = parseImageSize(tok.alias)
+  return { src: tok.target, alt: want ? "" : (tok.alias ?? "").trim(), want }
+}
+
+const isBlankText = (x: Token) => x.type === "text" && !String((x as Tokens.Text).text).trim()
+
+/** The one image a paragraph holds alone (whitespace aside): its target, alt and `|size`; else null. */
+function soleImage(tokens: Token[]): SoleImage | null {
+  const real = tokens.filter((x) => !isBlankText(x))
+  const tok = real.length === 1 ? real[0]! : null
+  if (!tok) return null
+  return tok.type === "image" ? mdImage(tok) : wikiImage(tok)
+}
+
+const baseName = (src: string) =>
+  src
+    .split(/[\\/]/)
+    .at(-1)!
+    .replace(/\.[^.]*$/, "")
+
+/** A paragraph that is one image: reserved rows and a caption (pixels), else one placeholder row. */
+function pictureBlock(ctx: Ctx, img: SoleImage, f: BlockFrame): boolean {
+  const p = ctx.picture
+  const got = p?.info(img.src)
+  if (!p || !got) return false
+  const { t } = ctx
+  const id = ctx.pics.length
+  const alt = safe(img.alt) || safe(baseName(img.src))
+  const pic: Pic = { id, line: ctx.lines.length, rows: 0, cols: 0, left: 0, src: img.src, alt }
+  ctx.pics.push(pic)
+  const mark = { text: "▣ ", fg: t.primary }
+  const place = (tail: Span[]) => {
+    for (const row of wrap([mark, ...tail], f.max, f.pre(), f.rest)) ctx.lines.push({ spans: row, pic: id })
+  }
+  if ("problem" in got) {
+    pic.problem = got.problem
+    place([
+      { text: `${alt} · `, fg: t.textMuted },
+      { text: got.problem, fg: t.warning },
+    ])
+    return true
+  }
+  pic.size = got
+  if (p.mode === "text") {
+    place([{ text: `${alt} · ${got.w}×${got.h} · ⏎ view`, fg: t.textMuted }])
+    return true
+  }
+  const indent = spanWidth(f.rest)
+  const room = f.max - indent
+  const box = picBox(got, img.want, room, p.cell)
+  Object.assign(pic, box, { left: indent + Math.floor((room - box.cols) / 2) })
+  for (let i = 0; i < box.rows; i++)
+    ctx.lines.push({ spans: i === 0 ? f.pre() : f.rest.map((s) => ({ ...s })), pic: id })
+  if (img.alt) {
+    const cap = clip(alt, room)
+    const lead = { text: pad(Math.floor((room - width(cap)) / 2)) }
+    ctx.lines.push({ spans: [...f.rest, lead, { text: cap, fg: t.textMuted }], pic: id })
+  }
+  return true
+}
+
 function paragraphBlock(ctx: Ctx, tok: Token, f: BlockFrame) {
   // a "text" block is a tight list item's body: no blank row after it
   const p = tokenOf(tok, "paragraph", "text")
+  const img = tok.type === "paragraph" ? soleImage(p.tokens ?? []) : null
+  if (img && pictureBlock(ctx, img, f)) return spacer(ctx, f.rest)
   emitRows(ctx, wrap(inline(p.tokens, ctx.t, undefined, ctx.sink), f.max, f.pre(), f.rest))
   if (tok.type === "paragraph") spacer(ctx, f.rest)
 }
@@ -682,7 +819,8 @@ function trimTrailingBlank(ctx: Ctx, from: number, rest: Span[]) {
   const r = plainOf(rest).trim()
   while (ctx.lines.length > from + 1) {
     const last = ctx.lines[ctx.lines.length - 1]!
-    if (last.fill === undefined && plainOf(last.spans).trim() === r && last.heading === undefined) ctx.lines.pop()
+    const free = last.fill === undefined && last.heading === undefined && last.pic === undefined
+    if (free && plainOf(last.spans).trim() === r) ctx.lines.pop()
     else break
   }
 }
@@ -837,25 +975,30 @@ export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}
     pending: [],
     sink: { links: [], exists: opts.exists },
     headingStyle: opts.headings ?? "classic",
+    pics: [],
+    picture: opts.picture,
   }
   blocks(ctx, tokens, Math.max(MIN_MEASURE, max), [], [])
   while (
     ctx.lines.length &&
     plainOf(ctx.lines[ctx.lines.length - 1]!.spans).trim() === "" &&
-    ctx.lines[ctx.lines.length - 1]!.fill === undefined
+    ctx.lines[ctx.lines.length - 1]!.fill === undefined &&
+    ctx.lines[ctx.lines.length - 1]!.pic === undefined
   )
     ctx.lines.pop()
   while (
     ctx.lines.length &&
     plainOf(ctx.lines[0]!.spans).trim() === "" &&
     ctx.lines[0]!.heading === undefined &&
-    ctx.lines[0]!.fill === undefined
+    ctx.lines[0]!.fill === undefined &&
+    ctx.lines[0]!.pic === undefined
   ) {
     ctx.lines.shift()
     for (const h of ctx.headings) {
       h.line--
       if (h.last !== undefined) h.last--
     }
+    for (const p of ctx.pics) p.line--
   }
   return {
     lines: ctx.lines,
@@ -867,5 +1010,6 @@ export function render(src: string, max: number, t: Theme, opts: RenderOpts = {}
     ),
     pending: ctx.pending,
     links: ctx.sink.links,
+    pics: ctx.pics,
   }
 }
