@@ -13,9 +13,12 @@ interface ImageSize {
 
 // How much of a file the sniffer reads.
 export const SNIFF_BYTES = 64 * 1024
-// Caps: a bigger file or more pixels than this is not drawn.
+// Caps: a bigger file or more pixels than this is not drawn. A raster is held to what OpenTUI's decoder takes
+// (measured: 25 million pixels, 16384 a side); an SVG never goes through it and keeps a wider cap.
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
-const MAX_IMAGE_PIXELS = 40_000_000
+const MAX_RASTER_PIXELS = 25_000_000
+const MAX_RASTER_SIDE = 16384
+const MAX_SVG_PIXELS = 40_000_000
 
 /** Why a picture cannot show. */
 type ImageProblem = "not found" | "remote image" | "outside the folder" | "too large" | "unsupported" | "unreadable"
@@ -293,12 +296,17 @@ function readHead(path: string, size: number): Uint8Array {
   return buf
 }
 
+const tooLarge = (s: ImageSize) =>
+  s.format === "svg"
+    ? s.w * s.h > MAX_SVG_PIXELS
+    : s.w * s.h > MAX_RASTER_PIXELS || s.w > MAX_RASTER_SIDE || s.h > MAX_RASTER_SIDE
+
 function measure(path: string, size: number): Info {
   if (size > MAX_IMAGE_BYTES) return { problem: "too large" }
   try {
     const s = sniffSize(readHead(path, size))
     if (!s) return { problem: "unsupported" }
-    return s.w * s.h > MAX_IMAGE_PIXELS ? { problem: "too large" } : s
+    return tooLarge(s) ? { problem: "too large" } : s
   } catch {
     return { problem: "unreadable" }
   }

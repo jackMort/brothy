@@ -32,7 +32,7 @@ The row says why, in the warning colour:
 | `not found` | no such file next to the note, under the root or by name |
 | `remote image` | a URL; brothy never fetches |
 | `outside the folder` | the file exists but beyond the root |
-| `too large` | over 20 MB or 40 million pixels |
+| `too large` | over 20 MB, a picture over 25 million pixels or 16384 pixels on a side, or an SVG over 40 million pixels |
 | `unsupported` | not a picture brothy reads, or a broken header |
 | `unreadable` | the file could not be read or decoded |
 

@@ -247,6 +247,42 @@ test("imageInfo: size, too large by pixels, unsupported, unreadable; cached unti
   expect(imageInfo(join(root, "d.png"))).toEqual({ problem: "not found" })
 })
 
+test("imageInfo: a raster the decoder refuses is too large (25 MP, 16384 a side); an SVG keeps 40 MP", () => {
+  const root = tmpDir()
+  const png = (w: number, h: number) =>
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]),
+      Buffer.from("IHDR"),
+      Buffer.from([
+        w >>> 24,
+        (w >>> 16) & 255,
+        (w >>> 8) & 255,
+        w & 255,
+        h >>> 24,
+        (h >>> 16) & 255,
+        (h >>> 8) & 255,
+        h & 255,
+      ]),
+    ])
+  const jpeg = (w: number, h: number) =>
+    Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 11, 8, h >> 8, h & 255, w >> 8, w & 255, 1, 1, 0x11, 0])
+  const info = (name: string, bytes: Buffer) => {
+    writeFileSync(join(root, name), bytes)
+    return imageInfo(join(root, name))
+  }
+  // measured against NativeImage.decode: 5000x5000 decodes, 6000x4167 does not; 16384 a side decodes, 16385 does not
+  expect(info("a.png", png(5000, 5000))).toEqual({ w: 5000, h: 5000, format: "png" })
+  expect(info("b.png", png(6000, 4167))).toEqual({ problem: "too large" })
+  expect(info("c.jpg", jpeg(7008, 4672))).toEqual({ problem: "too large" })
+  expect(info("d.jpg", jpeg(6000, 4000))).toEqual({ w: 6000, h: 4000, format: "jpeg" })
+  expect(info("e.png", png(16384, 1))).toEqual({ w: 16384, h: 1, format: "png" })
+  expect(info("f.png", png(16385, 1))).toEqual({ problem: "too large" })
+  expect(info("g.png", png(20000, 100))).toEqual({ problem: "too large" })
+  const svg = (w: number, h: number) => Buffer.from(`<svg width="${w}" height="${h}"/>`)
+  expect(info("h.svg", svg(20000, 1500))).toEqual({ w: 20000, h: 1500, format: "svg" })
+  expect(info("i.svg", svg(8000, 5001))).toEqual({ problem: "too large" })
+})
+
 test("imageInfo: a file that cannot be read is unreadable", () => {
   if (process.getuid?.() === 0) return
   const p = join(tmpDir(), "locked.png")
