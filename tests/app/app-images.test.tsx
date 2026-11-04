@@ -293,6 +293,28 @@ test("zen Typewriter: the picture over its rows, at the text's column, moving wi
   expect(s.captureCharFrame()).not.toContain("⏎ view")
 })
 
+test("zen Typewriter: the reading marker stays on through a picture's rows, in the gutter", async () => {
+  const s = await zenMounted(zenNote(1))
+  await shown(s)
+  const markerRow = () =>
+    s
+      .captureCharFrame()
+      .split("\n")
+      .findIndex((r) => r.includes("▸"))
+  const row = markerRow()
+  let over = 0
+  for (let i = 0; i < 40 && imagesOf(s)[0]; i++) {
+    expect(markerRow()).toBe(row)
+    const img = imagesOf(s)[0]!
+    if (row >= img.y && row < img.y + 5) {
+      over++
+      expect(s.captureCharFrame().split("\n")[row]![ZEN_TEXT_X - 2]).toBe("▸")
+    }
+    await keys(s, "j")
+  }
+  expect(over).toBe(5)
+})
+
 test("zen Typewriter: cropped at the body's bottom, and at its top", async () => {
   const s = await zenMounted(zenNote(3))
   await shown(s)

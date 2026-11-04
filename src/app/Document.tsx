@@ -145,9 +145,13 @@ function zenLines(c: AppCtx, d: Derived) {
           const r = i - sheetAt
           if (r >= 0) return <Row key={"gloss" + r} spans={[{ text: "  " }, ...bottom[r]!]} />
           const n = d.win.first + i
-          if (n >= d.win.lo && n < d.win.hi && reservedBlank(d.view, n))
-            return <box key={`reserved-${n}`} style={{ height: 1, flexShrink: 0 }} />
           const head = { text: d.tw && n === d.top ? "▸" : " ", fg: gutter }
+          if (n >= d.win.lo && n < d.win.hi && reservedBlank(d.view, n))
+            return (
+              <box key={`reserved-${n}`} style={{ width: 2, height: 1, flexShrink: 0 }}>
+                {head.text === "▸" ? <Row spans={[head]} /> : null}
+              </box>
+            )
           return <Row key={n} spans={markedLine(head, zenLine(d, n), marks.get(n), CW)} />
         })}
         {pictureLayer(c, d, sheetAt, { ...d.win, dx: 2 })}
