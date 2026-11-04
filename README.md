@@ -71,6 +71,8 @@ starts zen and `q` quits.
   link by its label, `H` and `L` for back and forward. [Navigating notes](https://jackmort.github.io/brothy/usage/navigating-notes/)
 - Draws the open note's links (`ctrl+g`): the notes it links to and from, out to two links, in pixels where the
   terminal shows images and in braille elsewhere. [Graph view](https://jackmort.github.io/brothy/usage/graph-view/)
+- Shows pictures (`![alt](img.png)`, `![[img.png]]`) in the note where the terminal draws images and as a row
+  elsewhere; `⏎` views one larger. [Pictures](https://jackmort.github.io/brothy/usage/pictures/)
 - Reloads when the file changes on disk and numbers the sections that changed.
 - Leaves only the text in zen (`z`): scroll or pages, spotlight, typewriter or teleprompter.
   [Zen mode](https://jackmort.github.io/brothy/usage/zen-mode/)

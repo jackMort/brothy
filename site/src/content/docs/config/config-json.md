@@ -15,6 +15,7 @@ description: "Where brothy keeps its settings and what each key does."
 | `minimap` | boolean, default `true` (<kbd>m</kbd>) |
 | `headings` | `"classic"` (default), `"bars"`, `"ladder"` or `"rules"` (<kbd>#</kbd>; [Heading styles](/brothy/usage/reading/#heading-styles)) |
 | `motion` | boolean, default `true`; `false` draws the welcome page still, without its ink-in and steam |
+| `pictures` | `"auto"` (default), `"pixels"` or `"text"` (<kbd>p</kbd>; [Pictures](/brothy/usage/pictures/)) |
 | `zen` | the [zen settings](/brothy/config/zen-settings/) |
 | `graph` | `{ "depth": 2, "render": "auto" }`: depth `1` or `2` (<kbd>+</kbd> <kbd>-</kbd>), render `"auto"`, `"pixels"` or `"braille"` (<kbd>p</kbd>; [Graph view](/brothy/usage/graph-view/)) |
 

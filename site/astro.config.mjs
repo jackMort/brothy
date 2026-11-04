@@ -98,6 +98,7 @@ export default defineConfig({
             "usage/reading",
             "usage/navigating-notes",
             "usage/graph-view",
+            "usage/pictures",
             "usage/obsidian-notes",
             "usage/zen-mode",
             "usage/pipes-and-editor",
