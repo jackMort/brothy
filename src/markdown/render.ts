@@ -7,7 +7,7 @@ import type { Token, Tokens } from "marked"
 import { A, type Span, safe, safeLine } from "../lib/spans"
 import { truncate as clip, graphemes, pushSpan, spanWidth, width, wrap } from "../lib/text"
 import { isMarkdown } from "../notes/files"
-import { isImagePath, parseImageSize } from "../notes/images"
+import { isImagePath, isRemoteImage, parseImageSize, QUERY_OR_ANCHOR } from "../notes/images"
 import type { Theme } from "../theme/theme"
 import type { HeadingStyle } from "./heading-style"
 import { codeSpans, type HighlightRequest } from "./highlight"
@@ -526,8 +526,11 @@ export function picBox(
   measure: number,
   cell: { w: number; h: number },
 ): { cols: number; rows: number } {
-  const wPx = want?.w ?? size.w
-  const hPx = want?.h ?? (want?.w ? (want.w * size.h) / size.w : size.h)
+  // a size of zero is none (parseImageSize drops it; this keeps NaN rows out whatever calls)
+  const w = want?.w || undefined
+  const h = want?.h || undefined
+  const wPx = w ?? size.w
+  const hPx = h ?? (w ? (w * size.h) / size.w : size.h)
   let cols = Math.max(1, Math.min(measure, Math.ceil(wPx / cell.w)))
   let rows = Math.max(1, Math.round((cols * cell.w * hPx) / wPx / cell.h))
   if (rows > PIC_MAX_ROWS) {
@@ -569,11 +572,23 @@ function soleImage(tokens: Token[]): SoleImage | null {
   return tok.type === "image" ? mdImage(tok) : wikiImage(tok)
 }
 
-const baseName = (src: string) =>
-  src
-    .split(/[\\/]/)
-    .at(-1)!
-    .replace(/\.[^.]*$/, "")
+/** The file name of a target without its extension: the alt of a picture that has none. A data URI or an address with no file is `image`. */
+function baseName(src: string): string {
+  let path = src
+  if (isRemoteImage(src)) {
+    try {
+      path = /^data:/i.test(src.trim()) ? "" : decodeURIComponent(new URL(src.trim()).pathname)
+    } catch {
+      path = ""
+    }
+  } else if (!isImagePath(src)) path = src.replace(QUERY_OR_ANCHOR, "")
+  return (
+    path
+      .split(/[\\/]/)
+      .at(-1)!
+      .replace(/\.[^.]*$/, "") || "image"
+  )
+}
 
 /** A paragraph that is one image: reserved rows and a caption (pixels), else one placeholder row. */
 function pictureBlock(ctx: Ctx, img: SoleImage, f: BlockFrame): boolean {

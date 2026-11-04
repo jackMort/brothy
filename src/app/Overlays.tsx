@@ -258,6 +258,7 @@ export function pictureOverlay(c: AppCtx, d: Derived): ReactNode {
   const note = (reason: string) => ({ kind: "note", spans: failedSpans(t, pic.alt, reason, v.cols) }) as const
   const body = (): PictureBody => {
     if (pic.problem) return note(pic.problem)
+    if (v.waiting) return null
     if (!draw) return note("unreadable")
     const img = pics.get(draw.key)
     if (img === undefined) {

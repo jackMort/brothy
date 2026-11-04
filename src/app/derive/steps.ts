@@ -243,7 +243,7 @@ const PICTURE_TITLE_PAD = BODY_PAD + 4
 /**
  * The picture sheet on screen (`ui.picture`): the whole body is the picture's area, the image fitted into it and the
  * decode it needs (`key`, `px` pixels: at the cell size, or `fit.cols × 2·fit.rows` for half blocks). `fit` is null for a
- * picture with nothing to draw (a problem, no file); null while closed or when the id means no picture on this note.
+ * picture with nothing to draw (a problem, no file) and `waiting` while pixels need a cell size that isn't known yet; null while closed or when the id means no picture on this note.
  */
 export function pictureSheet(
   s: UI,
@@ -262,9 +262,11 @@ export function pictureSheet(
   const rows = proofHeight(H)
   const file = files.file(pic.src)
   const title = pictureTitle(pic, file ? pictureShown(file, s.openPath, s.root) : "", cols - PICTURE_TITLE_PAD)
-  const base = { pic, width, cols, rows, title }
+  const base = { pic, width, cols, rows, title, waiting: false }
   if (pic.problem || !pic.size || !file) return { ...base, draw: null }
-  const pixels = mode === "pixels" && s.cell !== null
+  // pixels but no cell size yet (a resize in flight): nothing to decode for, the body waits empty
+  if (mode === "pixels" && s.cell === null) return { ...base, draw: null, waiting: true }
+  const pixels = mode === "pixels"
   const fit = pictureFit(pic.size, cols, rows, cell)
   const px = pixels ? { w: fit.cols * cell.w, h: fit.rows * cell.h } : { w: fit.cols, h: fit.rows * 2 }
   return { ...base, draw: { file, fit, pixels, px, key: sheetKey(file, fit, cell, theme, pixels) } }

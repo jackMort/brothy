@@ -149,6 +149,41 @@ test("isImagePath and parseImageSize", () => {
   expect(parseImageSize(undefined)).toBeNull()
 })
 
+test("parseImageSize: a zero is no size, in any of the three forms", () => {
+  for (const z of ["0", "0x200", "0x0", "200x0", "00"]) expect(parseImageSize(z)).toBeNull()
+})
+
+test("sniffSize: stroke-width is not width, nor stroke-height height; a commented-out <svg> is not the tag", () => {
+  expect(sniffSize(u8(`<svg stroke-width="2" height="24" width="48">`))).toEqual({ w: 48, h: 24, format: "svg" })
+  expect(sniffSize(u8(`<svg data-height="3" height="24" viewBox="0 0 48 24">`))).toEqual({
+    w: 48,
+    h: 24,
+    format: "svg",
+  })
+  expect(sniffSize(u8(`<!-- <svg width="10" height="10"> --><svg width="48" height="24">`))).toEqual({
+    w: 48,
+    h: 24,
+    format: "svg",
+  })
+  expect(sniffSize(u8(`<!-- <svg width="10" height="10">`))).toBeNull()
+})
+
+test("resolveImage: a ?query or #anchor after the file name is dropped; a file named with them wins as written", () => {
+  const root = tmpDir()
+  mkdirSync(join(root, "sub"))
+  for (const f of ["img.png", "sub/deep.png", "a#b.png", "c?d.png"]) writeFileSync(join(root, f), "x")
+  writeFileSync(join(root, "n.md"), "# n")
+  const tree = scanTree(root)
+  const note = join(root, "n.md")
+  const at = (t: string) => resolveImage(t, note, { vault: null, root }, tree)
+  expect(at("img.png?raw=true")).toBe(join(root, "img.png"))
+  expect(at("img.png#anchor")).toBe(join(root, "img.png"))
+  expect(at("deep.png?raw=true")).toBe(join(root, "sub/deep.png"))
+  expect(at("a#b.png")).toBe(join(root, "a#b.png"))
+  expect(at("c?d.png")).toBe(join(root, "c?d.png"))
+  expect(at("gone.png?raw=true")).toEqual({ problem: "not found" })
+})
+
 test("resolveImage: next to the note, then the vault root, then by name, shortest path first", () => {
   const root = tmpDir()
   mkdirSync(join(root, ".obsidian"))

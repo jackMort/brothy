@@ -109,10 +109,12 @@ function webp(b: Uint8Array): ImageSize | null {
 const px = (v: string | undefined) => (v && /^\s*[\d.]+\s*(px)?\s*$/.test(v) ? Number.parseFloat(v) : Number.NaN)
 
 function svg(b: Uint8Array): ImageSize | null {
-  const head = new TextDecoder().decode(b.subarray(0, SNIFF_BYTES))
+  // comments first: an <svg> inside one is not the tag
+  const head = new TextDecoder().decode(b.subarray(0, SNIFF_BYTES)).replace(/<!--[\s\S]*?(?:-->|$)/g, "")
   const tag = /<svg\b[^>]*>/i.exec(head)?.[0]
   if (!tag) return null
-  const attr = (n: string) => new RegExp(`\\b${n}\\s*=\\s*["']([^"']*)["']`, "i").exec(tag)?.[1]
+  // not `stroke-width`, `data:width`: the name starts after a space or a quote
+  const attr = (n: string) => new RegExp(`(?<![\\w:-])${n}\\s*=\\s*["']([^"']*)["']`, "i").exec(tag)?.[1]
   const w = px(attr("width"))
   const h = px(attr("height"))
   if (w > 0 && h > 0) return sized(Math.round(w), Math.round(h), "svg")
@@ -137,12 +139,14 @@ export const isImagePath = (p: string) => IMAGE_EXT.has(extname(p).toLowerCase()
 /** A target that is never fetched. */
 export const isRemoteImage = (t: string) => /^(https?:|data:)/i.test(t.trim())
 
-/** `300` or `300x200` (Obsidian's `|size`); anything else is an alias, null. */
+/** `300` or `300x200` (Obsidian's `|size`); anything else, a zero too, is an alias, null. */
 export function parseImageSize(s: string | undefined): { w?: number; h?: number } | null {
   const m = s ? /^\s*(\d{1,5})(?:\s*x\s*(\d{1,5}))?\s*$/.exec(s) : null
   if (!m) return null
   const w = Number(m[1])
-  return m[2] ? { w, h: Number(m[2]) } : { w }
+  const h = m[2] ? Number(m[2]) : undefined
+  if (w === 0 || h === 0) return null
+  return h ? { w, h } : { w }
 }
 
 export interface ImageIO {
@@ -264,6 +268,24 @@ export function resolveImage(
   const t = target.trim()
   if (isRemoteImage(t)) return { problem: "remote image" }
   const decoded = decodeTarget(t)
+  // as written first (a file may be named `a#b.png`), then without a `?query` or `#anchor`
+  const first = resolveDecoded(decoded, notePath, roots, tree, io)
+  const bare = decoded.replace(QUERY_OR_ANCHOR, "")
+  if (typeof first === "string" || bare === decoded || !bare) return first
+  const second = resolveDecoded(bare, notePath, roots, tree, io)
+  return typeof second === "string" || first.problem === "not found" ? second : first
+}
+
+/** From the first `?` or `#` on: what a URL adds to a file name. */
+export const QUERY_OR_ANCHOR = /[?#].*$/s
+
+function resolveDecoded(
+  decoded: string,
+  notePath: string,
+  roots: { vault: string | null; root: string },
+  tree: FileNode,
+  io: ImageIO,
+): string | { problem: ImageProblem } {
   const root = roots.vault ?? roots.root
   let rootReal: string
   try {

@@ -8,6 +8,9 @@ const sizes: Record<string, { w: number; h: number } | { problem: string }> = {
   "big.png": { w: 4000, h: 2000 },
   "tall.png": { w: 100, h: 4000 },
   "gone.png": { problem: "not found" },
+  "data:image/png;base64,iVBOR/w0KGgo=": { problem: "remote image" },
+  "https://x.io/pics/cat.png?w=1": { problem: "remote image" },
+  "https://x.io/": { problem: "remote image" },
 }
 const info = (s: string) => sizes[s] ?? null
 const pix = { picture: { mode: "pixels" as const, cell, info } }
@@ -21,6 +24,29 @@ test("picBox: never upscaled, measure caps width, rows from the cell aspect, cap
   const tall = picBox({ w: 100, h: 4000 }, null, 80, cell)
   expect(tall.rows).toBe(PIC_MAX_ROWS)
   expect(tall.cols).toBe(2) // shrunk to keep the aspect: 30 rows · 20 px = 600 px high → 15 px wide → 2 cells
+})
+
+test("picBox: a zero size never gives NaN rows", () => {
+  for (const want of [{ w: 0 }, { w: 0, h: 200 }, { w: 0, h: 0 }, { h: 0 }]) {
+    const box = picBox({ w: 400, h: 200 }, want, 80, cell)
+    expect(Number.isFinite(box.cols) && Number.isFinite(box.rows)).toBe(true)
+    expect(box.rows).toBeGreaterThan(0)
+  }
+})
+
+test("a zero in |size is no size: the picture keeps its own, rows finite", () => {
+  for (const src of ["![[a.png|0x0]]", "![[a.png|0]]", "![[a.png|0x200]]", "![x|0x0](a.png)"]) {
+    const p = render(src, 80, t, pix).pics![0]!
+    expect([p.cols, p.rows]).toEqual([40, 10])
+  }
+})
+
+test("an empty alt on a data or remote target is `image`, not base64 or a query; a usable file name stays", () => {
+  const alt = (src: string) => render(`![](${src})`, 80, t, txt).pics![0]!.alt
+  expect(alt("data:image/png;base64,iVBOR/w0KGgo=")).toBe("image")
+  expect(alt("https://x.io/")).toBe("image")
+  expect(alt("https://x.io/pics/cat.png?w=1")).toBe("cat")
+  expect(alt("a.png")).toBe("a")
 })
 
 test("a block image reserves rows plus a caption; headings after it keep exact lines", () => {

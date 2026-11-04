@@ -560,6 +560,23 @@ test("⏎ opens the sheet on the picture in view: the title, the image fitted, e
   expect(sheetImage(s)).toBeUndefined()
 })
 
+test("the sheet in a pixels terminal waits for the resolution after a resize: no half blocks, no image", async () => {
+  const s = await pictured()
+  await shown(s)
+  await keys(s, "enter")
+  await waitFor(s, () => !!sheetImage(s))
+  setResolution(s, null)
+  s.renderer.emit("resize", 100, 30)
+  await waitFor(s, () => !sheetImage(s))
+  await sleep(100)
+  await s.renderOnce()
+  expect(s.captureCharFrame()).not.toContain("▀")
+  expect(sheetImage(s)).toBeUndefined()
+  setResolution(s, { width: 500, height: 300 })
+  await waitFor(s, () => !!sheetImage(s))
+  expect(s.captureCharFrame()).not.toContain("▀")
+})
+
 test("the sheet's picture sits on the panel colour, and a key other than esc does nothing", async () => {
   const s = await pictured("![Clear](clear.png)", { "clear.png": solidPng(200, 100, [0, 0, 0, 0]) })
   await shown(s)

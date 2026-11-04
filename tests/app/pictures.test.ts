@@ -267,6 +267,24 @@ test("real decoder: an SVG whose aspect differs from the box still ends up the b
   expect([cache.get("v")!.width, cache.get("v")!.height]).toEqual([10, 10])
 })
 
+test("real decoder: an SVG's external <image href> (file:, a path, http:) draws nothing", async () => {
+  const d = makeTmp("brothy-svg-")
+  writeFileSync(join(d, "red.png"), PNG)
+  for (const href of [`file://${join(d, "red.png")}`, join(d, "red.png"), "red.png", "http://127.0.0.1:9/red.png"]) {
+    const svg = new TextEncoder().encode(
+      `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 4 4"><image href="${href}" xlink:href="${href}" width="4" height="4"/></svg>`,
+    )
+    const cache = new PictureCache(1e9, undefined, () => svg)
+    cache.want("v", "/v.svg", 4, 4, null, () => {})
+    await until(() => cache.get("v") !== undefined)
+    const img = cache.get("v")!
+    expect(img).not.toBeNull()
+    expect(img.raw().data.every((b) => b === 0)).toBe(true)
+    img.dispose()
+  }
+  rmSync(d, { recursive: true })
+})
+
 test("real decoder: bg flattens a transparent pixel onto the colour; null leaves it clear", async () => {
   const flat = new PictureCache(1e9, undefined, () => CLEAR_PNG)
   flat.want("f", "/f.png", 2, 2, [10, 20, 30], () => {})
@@ -381,6 +399,25 @@ test("watchCell: a resize clears the cell and keeps the last one for the layout"
   clearTimeout((r.timers.current as { cell?: ReturnType<typeof setTimeout> }).cell)
   expect(r.ui.current.cell).toBeNull()
   expect(r.lastCell.current).toEqual(CELL)
+})
+
+test("watchCell: a 0;0 resolution is unknown: no cell, and the wait goes on", () => {
+  const r = cellRig({ width: 0, height: 0 })
+  expect(r.watch.read()).toBe(false)
+  r.watch.poll()
+  clearTimeout((r.timers.current as { cell?: ReturnType<typeof setTimeout> }).cell)
+  expect(r.sets).toEqual([])
+  expect(r.lastCell.current).toEqual({ w: 8, h: 16 })
+})
+
+test("pictureFiles: ?query and #anchor on a picture's target still find the file", () => {
+  const d = makeTmp("brothy-pics-")
+  writeFileSync(join(d, "a.png"), PNG)
+  const files = pictureFiles(join(d, "n.md"), d, scanTree(d))
+  expect(files.info("a.png?raw=true")).toEqual({ w: 1, h: 1 })
+  expect(files.info("a.png#top")).toEqual({ w: 1, h: 1 })
+  expect(files.file("a.png?raw=true")).toBe(join(d, "a.png"))
+  rmSync(d, { recursive: true })
 })
 
 test("pictureFiles: a piped document stands in the folder; a target that is no picture is null; remote is a problem", () => {

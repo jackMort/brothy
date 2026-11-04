@@ -15,6 +15,7 @@ import {
   imageSig,
   isImagePath,
   isRemoteImage,
+  QUERY_OR_ANCHOR,
   resolveImage,
   SNIFF_BYTES,
   sniffSize,
@@ -45,11 +46,14 @@ export const cellOf = (term: GraphTerm) => ({
   h: Math.max(1, Math.round(term.cellH)),
 })
 
+/** A resolution the terminal gave; a zero one (`0;0`) is as good as none, as OpenTUI itself treats it. */
+const known = (res: PictureTerminal["resolution"]) => (res && res.width > 0 && res.height > 0 ? res : null)
+
 /** The terminal as a layout sees it: the resolution stands in from `last` while unknown (sixel needs one, kitty doesn't). */
 const termOf = (r: PictureTerminal, last: Cell) =>
   graphTerm(
     r.capabilities,
-    r.resolution ?? { width: last.w * r.terminalWidth, height: last.h * r.terminalHeight },
+    known(r.resolution) ?? { width: last.w * r.terminalWidth, height: last.h * r.terminalHeight },
     r.terminalWidth,
     r.terminalHeight,
   )
@@ -78,7 +82,7 @@ interface CellDeps {
  */
 export function watchCell({ ui, set, renderer, timers, lastCell }: CellDeps) {
   const read = () => {
-    const res = renderer.resolution
+    const res = known(renderer.resolution)
     if (!res) return false
     const cell = cellOf(graphTerm(renderer.capabilities, res, renderer.terminalWidth, renderer.terminalHeight))
     lastCell.current = cell
@@ -93,7 +97,7 @@ export function watchCell({ ui, set, renderer, timers, lastCell }: CellDeps) {
     timers.current.cell = setTimeout(() => poll(left - 1), CELL_POLL_MS)
   }
   const resized = () => {
-    if (!renderer.resolution && ui.current.cell) set({ cell: null })
+    if (!known(renderer.resolution) && ui.current.cell) set({ cell: null })
     poll()
   }
   return { read, poll, resized }
@@ -108,7 +112,7 @@ export function pictureFiles(openPath: string | null, root: string, tree: FileNo
   const roots = { vault: findVault(dirname(note)), root }
   const files = new Map<string, string>()
   const info: PictureOpts["info"] = (src) => {
-    if (!isImagePath(src.split(/[?#]/)[0]!) && !isRemoteImage(src)) return null
+    if (!isImagePath(src) && !isImagePath(src.replace(QUERY_OR_ANCHOR, "")) && !isRemoteImage(src)) return null
     const file = resolveImage(src, note, roots, tree)
     if (typeof file !== "string") return file
     files.set(src, file)

@@ -112,12 +112,8 @@ function documentMemo(stdin: string | undefined) {
     picFiles: cached(pictureFiles),
     // the sheet's half-block rows for a decoded image: the rows, not the raster, go on to the component
     halfRows: cached((img: NativeImage, bg: string) => {
-      const { data, width: w, height: h, stride } = img.raw("rgba8")
-      const px =
-        stride === w * 4
-          ? data
-          : Uint8Array.from({ length: w * h * 4 }, (_, i) => data[Math.floor(i / (w * 4)) * stride + (i % (w * 4))]!)
-      return halfBlocks(px, w, h, bg)
+      const { data, width: w, height: h } = img.raw("rgba8")
+      return halfBlocks(data, w, h, bg)
     }),
     // one object per layout of the pictures, so `doc` holds
     picture: cached(

@@ -9,7 +9,7 @@ PNG, JPEG, GIF, WebP and SVG are read. A picture is never drawn larger than it i
 
 ## Where pictures are found
 
-A target is looked for next to the note, then from the vault root (the folder you started in when there is no `.obsidian/`), then by file name anywhere under that root, the shortest path first, as Obsidian does for `![[plan.png]]`. A picture outside the root is never read, not even through a symlink. A URL is never fetched: `http:`, `https:` and `data:` images are a row that says `remote image`.
+A target is looked for next to the note, then from the vault root (the folder you started in when there is no `.obsidian/`), then by file name in the folder tree brothy scanned (the one Files shows: its depth and entry limit apply, dot folders and `node_modules` are skipped), the shortest path first, as Obsidian does for `![[plan.png]]`. A `?query` or `#anchor` after the file name, as in `img.png?raw=true`, is ignored when no file is named that way. A picture outside the root is never read, not even through a symlink. A URL is never fetched: `http:`, `https:` and `data:` images are a row that says `remote image`.
 
 ## Seeing a picture larger
 
