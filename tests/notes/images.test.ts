@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test"
-import { sniffSize } from "../../src/notes/images"
+import { chmodSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { scanTree } from "../../src/notes/files"
+import { imageInfo, isImagePath, parseImageSize, resolveImage, sniffSize } from "../../src/notes/images"
+import { useTmp } from "../helpers/tmp"
+
+const tmpDir = useTmp("brothy-img-")
 
 const u8 = (...parts: (number[] | string)[]) =>
   new Uint8Array(parts.flatMap((p) => (typeof p === "string" ? [...Buffer.from(p, "latin1")] : p)))
@@ -132,4 +138,119 @@ test("sniffSize: every prefix of every format is null or a size, never a throw",
     u8(`<svg width="5" height="5">`),
   ]
   for (const s of samples) for (let n = 0; n <= s.length; n++) sniffSize(s.subarray(0, n))
+})
+
+test("isImagePath and parseImageSize", () => {
+  expect(isImagePath("a/b.PNG")).toBe(true)
+  expect(isImagePath("note.md")).toBe(false)
+  expect(parseImageSize("300")).toEqual({ w: 300 })
+  expect(parseImageSize("300x200")).toEqual({ w: 300, h: 200 })
+  expect(parseImageSize("alias")).toBeNull()
+  expect(parseImageSize(undefined)).toBeNull()
+})
+
+test("resolveImage: next to the note, then the vault root, then by name, shortest path first", () => {
+  const root = tmpDir()
+  mkdirSync(join(root, ".obsidian"))
+  mkdirSync(join(root, "notes/deep/er"), { recursive: true })
+  mkdirSync(join(root, "assets"))
+  for (const f of ["notes/near.png", "assets/top.png", "notes/deep/er/Pic.png", "notes/deep/pic.png"])
+    writeFileSync(join(root, f), "x")
+  writeFileSync(join(root, "notes/n.md"), "# n")
+  const tree = scanTree(root)
+  const note = join(root, "notes/n.md")
+  const roots = { vault: root, root }
+  expect(resolveImage("near.png", note, roots, tree)).toBe(join(root, "notes/near.png"))
+  expect(resolveImage("assets/top.png", note, roots, tree)).toBe(join(root, "assets/top.png"))
+  expect(resolveImage("PIC.png", note, roots, tree)).toBe(join(root, "notes/deep/pic.png"))
+  expect(resolveImage("gone.png", note, roots, tree)).toEqual({ problem: "not found" })
+  expect(resolveImage("https://x.io/a.png", note, roots, tree)).toEqual({ problem: "remote image" })
+  expect(resolveImage("data:image/png;base64,AAAA", note, roots, tree)).toEqual({ problem: "remote image" })
+})
+
+test("resolveImage: never outside the root, through .. or a symlink", () => {
+  const outer = tmpDir()
+  const root = join(outer, "vault")
+  mkdirSync(root)
+  writeFileSync(join(outer, "secret.png"), "x")
+  writeFileSync(join(root, "n.md"), "# n")
+  symlinkSync(join(outer, "secret.png"), join(root, "link.png"))
+  symlinkSync(outer, join(root, "dir"))
+  const tree = scanTree(root)
+  const note = join(root, "n.md")
+  const outside = { problem: "outside the folder" as const }
+  expect(resolveImage("../secret.png", note, { vault: null, root }, tree)).toEqual(outside)
+  expect(resolveImage("link.png", note, { vault: null, root }, tree)).toEqual(outside)
+  expect(resolveImage("dir/secret.png", note, { vault: null, root }, tree)).toEqual(outside)
+  expect(resolveImage(join(outer, "secret.png"), note, { vault: null, root }, tree)).toEqual(outside)
+})
+
+test("resolveImage: a lookup by name skips dot folders and node_modules, and never returns a link out of the root", () => {
+  const outer = tmpDir()
+  const root = join(outer, "vault")
+  for (const d of [".hidden", "node_modules/x", "a"]) mkdirSync(join(root, d), { recursive: true })
+  mkdirSync(join(outer, "away"))
+  for (const f of [".hidden/h.png", "node_modules/x/m.png"]) writeFileSync(join(root, f), "x")
+  writeFileSync(join(outer, "away/e.png"), "x")
+  symlinkSync(join(outer, "away/e.png"), join(root, "a/e.png"))
+  symlinkSync(join(outer, "away"), join(root, "a/away"))
+  writeFileSync(join(root, "n.md"), "# n")
+  const tree = scanTree(root)
+  for (const name of ["h.png", "m.png", "e.png"])
+    expect(resolveImage(name, join(root, "n.md"), { vault: null, root }, tree)).toEqual({ problem: "not found" })
+})
+
+test("resolveImage: a lookup by name follows a link that stays inside the root", () => {
+  const root = tmpDir()
+  mkdirSync(join(root, "a"))
+  writeFileSync(join(root, "real.png"), "x")
+  symlinkSync(join(root, "real.png"), join(root, "a/alias.png"))
+  writeFileSync(join(root, "n.md"), "# n")
+  const tree = scanTree(root)
+  expect(resolveImage("alias.png", join(root, "n.md"), { vault: null, root }, tree)).toBe(join(root, "a/alias.png"))
+})
+
+test("imageInfo: size, too large by pixels, unsupported, unreadable; cached until mtime changes", () => {
+  const root = tmpDir()
+  const p = join(root, "a.png")
+  const png = (w: number, h: number) =>
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]),
+      Buffer.from("IHDR"),
+      Buffer.from([
+        w >>> 24,
+        (w >>> 16) & 255,
+        (w >>> 8) & 255,
+        w & 255,
+        h >>> 24,
+        (h >>> 16) & 255,
+        (h >>> 8) & 255,
+        h & 255,
+      ]),
+    ])
+  writeFileSync(p, png(1200, 800))
+  expect(imageInfo(p)).toEqual({ w: 1200, h: 800, format: "png" })
+  writeFileSync(p, png(10000, 5000))
+  expect(imageInfo(p)).toEqual({ problem: "too large" })
+  // same size and mtime: the cached answer stands
+  const at = new Date(Date.now() - 60_000)
+  writeFileSync(p, png(100, 50))
+  utimesSync(p, at, at)
+  expect(imageInfo(p)).toEqual({ w: 100, h: 50, format: "png" })
+  writeFileSync(p, png(200, 50))
+  utimesSync(p, at, at)
+  expect(imageInfo(p)).toEqual({ w: 100, h: 50, format: "png" })
+  writeFileSync(join(root, "b.png"), "not an image")
+  expect(imageInfo(join(root, "b.png"))).toEqual({ problem: "unsupported" })
+  expect(imageInfo(join(root, "missing.png"))).toEqual({ problem: "not found" })
+  mkdirSync(join(root, "d.png"))
+  expect(imageInfo(join(root, "d.png"))).toEqual({ problem: "not found" })
+})
+
+test("imageInfo: a file that cannot be read is unreadable", () => {
+  if (process.getuid?.() === 0) return
+  const p = join(tmpDir(), "locked.png")
+  writeFileSync(p, "x")
+  chmodSync(p, 0o000)
+  expect(imageInfo(p)).toEqual({ problem: "unreadable" })
 })

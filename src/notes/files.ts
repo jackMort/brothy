@@ -20,9 +20,11 @@ const MD_EXT = /\.(md|markdown|mdx|mdown|mkd)$/i
 const SKIP = new Set(["node_modules"])
 /** Directory entries examined per scan before giving up (keeps `brothy ~` responsive). */
 export const SCAN_LIMIT = 20_000
+/** Folder levels `scanTree` descends by default. */
+export const SCAN_DEPTH = 8
 
 /** Dot-entries are hidden, except `.github` (it holds docs worth reading). */
-const skipped = (name: string) => SKIP.has(name) || (name.startsWith(".") && name !== ".github")
+export const skipped = (name: string) => SKIP.has(name) || (name.startsWith(".") && name !== ".github")
 
 export const isMarkdown = (path: string) => MD_EXT.test(path)
 
@@ -171,7 +173,7 @@ function walkDir(s: Scan, dir: string, depth: number): FileNode | null {
  * per realpath, so loops and aliases never duplicate a subtree. At most `maxEntries` directory entries are
  * examined; past that the scan stops and the root is flagged `truncated`.
  */
-export function scanTree(root: string, maxDepth = 8, maxEntries = SCAN_LIMIT): FileNode {
+export function scanTree(root: string, maxDepth = SCAN_DEPTH, maxEntries = SCAN_LIMIT): FileNode {
   const rootReal = realOf(root)
   const s: Scan = { root, rootReal, visited: new Set<string>(), seen: 0, truncated: false, maxDepth, maxEntries }
   if (rootReal) s.visited.add(rootReal)

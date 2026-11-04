@@ -1,4 +1,8 @@
-// Pictures in notes: the header sniffer (size without decoding). Pure. Never fetches.
+// Pictures in notes: the header sniffer (size without decoding), where a target lives, and the cached size read. Never fetches.
+
+import { closeSync, type Dirent, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs"
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { type FileNode, SCAN_DEPTH, SCAN_LIMIT, skipped } from "./files"
 
 type ImageFormat = "png" | "jpeg" | "gif" | "webp" | "svg"
 interface ImageSize {
@@ -9,6 +13,12 @@ interface ImageSize {
 
 // How much of a file the sniffer reads.
 const SNIFF_BYTES = 64 * 1024
+// Caps: a bigger file or more pixels than this is not drawn.
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024
+const MAX_IMAGE_PIXELS = 40_000_000
+
+/** Why a picture cannot show. */
+type ImageProblem = "not found" | "remote image" | "outside the folder" | "too large" | "unsupported" | "unreadable"
 
 // Reads past the end give 0, so a truncated header is a zero size, never NaN.
 const at = (b: Uint8Array, i: number) => b[i] ?? 0
@@ -117,4 +127,195 @@ export function sniffSize(b: Uint8Array): ImageSize | null {
   if (b[0] === 0xff && b[1] === 0xd8) return jpeg(b)
   if (ascii(b, 0, "RIFF") && ascii(b, 8, "WEBP")) return webp(b)
   return svg(b)
+}
+
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"])
+export const isImagePath = (p: string) => IMAGE_EXT.has(extname(p).toLowerCase())
+
+/** `300` or `300x200` (Obsidian's `|size`); anything else is an alias, null. */
+export function parseImageSize(s: string | undefined): { w?: number; h?: number } | null {
+  const m = s ? /^\s*(\d{1,5})(?:\s*x\s*(\d{1,5}))?\s*$/.exec(s) : null
+  if (!m) return null
+  const w = Number(m[1])
+  return m[2] ? { w, h: Number(m[2]) } : { w }
+}
+
+export interface ImageIO {
+  exists(p: string): boolean
+  real(p: string): string
+}
+const fsIO: ImageIO = { exists: existsSync, real: realpathSync }
+
+const inside = (root: string, p: string) => {
+  const r = relative(root, p)
+  return r === "" || (r !== ".." && !r.startsWith(`..${sep}`) && !isAbsolute(r))
+}
+
+/** Image files found by one walk: what is left to examine and the folders already walked. */
+interface Walk {
+  map: Map<string, string[]>
+  left: number
+  visited: Set<string>
+}
+
+const realOrNull = (p: string) => {
+  try {
+    return realpathSync(p)
+  } catch {
+    return null
+  }
+}
+
+function readEntries(dir: string): Dirent[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+}
+
+/** Whether a symlink resolves to a file inside `rootReal`; images never leave the root. */
+function linkedFileInside(rootReal: string, full: string): boolean {
+  const rp = realOrNull(full)
+  try {
+    return !!rp && inside(rootReal, rp) && statSync(rp).isFile()
+  } catch {
+    return false
+  }
+}
+
+function addImage(w: Walk, name: string, full: string) {
+  const k = name.toLowerCase()
+  w.map.set(k, [...(w.map.get(k) ?? []), full])
+}
+
+/** Records one directory entry: folders are walked (links to folders are not), pictures kept. */
+function visitEntry(w: Walk, rootReal: string, e: Dirent, full: string, depth: number) {
+  if (e.isDirectory()) return walkImages(w, rootReal, full, depth + 1)
+  if (!isImagePath(e.name)) return
+  if (e.isFile() || (e.isSymbolicLink() && linkedFileInside(rootReal, full))) addImage(w, e.name, full)
+}
+
+/** Walks as `scanTree` does (same depth, entry budget and skipped names), but symlinked folders are never entered. */
+function walkImages(w: Walk, rootReal: string, dir: string, depth: number) {
+  const rp = depth < SCAN_DEPTH ? realOrNull(dir) : null
+  if (!rp || w.visited.has(rp)) return
+  w.visited.add(rp)
+  for (const e of readEntries(dir)) {
+    if (skipped(e.name)) continue
+    if (--w.left < 0) return
+    visitEntry(w, rootReal, e, join(dir, e.name), depth)
+  }
+}
+
+let treeMemo: { tree: FileNode; map: Map<string, string[]> } | null = null
+
+/** Image files under the tree's root by lowercase basename, shortest path first (one walk per tree). */
+const imageTree = (tree: FileNode): Map<string, string[]> => {
+  if (treeMemo?.tree === tree) return treeMemo.map
+  const w: Walk = { map: new Map(), left: SCAN_LIMIT, visited: new Set() }
+  const rootReal = realOrNull(tree.path)
+  if (rootReal) walkImages(w, rootReal, tree.path, 0)
+  for (const ps of w.map.values()) ps.sort((a, b) => a.length - b.length || (a < b ? -1 : 1))
+  treeMemo = { tree, map: w.map }
+  return w.map
+}
+
+/** `p` when it exists and its realpath is inside `rootReal`; "outside" when it exists beyond it; null otherwise. */
+function checked(io: ImageIO, rootReal: string, p: string): string | "outside" | null {
+  if (!io.exists(p)) return null
+  try {
+    return inside(rootReal, io.real(p)) ? p : "outside"
+  } catch {
+    return null
+  }
+}
+
+const decodeTarget = (t: string) => {
+  try {
+    return decodeURIComponent(t)
+  } catch {
+    return t
+  }
+}
+
+/** A picture found by its file name anywhere in the tree, shortest path first, and still inside the root. */
+function byName(io: ImageIO, rootReal: string, tree: FileNode, target: string): string | null {
+  const hits = imageTree(tree).get(target.split(/[\\/]/).at(-1)?.toLowerCase() ?? "") ?? []
+  return hits.find((p) => checked(io, rootReal, p) === p) ?? null
+}
+
+/**
+ * Where a picture's target lives: next to the note, from the vault root (else the folder), else by name anywhere in
+ * the tree; never outside the root (by realpath), never a URL.
+ */
+export function resolveImage(
+  target: string,
+  notePath: string,
+  roots: { vault: string | null; root: string },
+  tree: FileNode,
+  io: ImageIO = fsIO,
+): string | { problem: ImageProblem } {
+  const t = target.trim()
+  if (/^(https?:|data:)/i.test(t)) return { problem: "remote image" }
+  const decoded = decodeTarget(t)
+  const root = roots.vault ?? roots.root
+  let rootReal: string
+  try {
+    rootReal = io.real(root)
+  } catch {
+    return { problem: "not found" }
+  }
+  let outside = false
+  for (const p of [resolve(dirname(notePath), decoded), resolve(root, decoded)]) {
+    const c = checked(io, rootReal, p)
+    if (c === "outside") outside = true
+    else if (c) return c
+  }
+  if (outside) return { problem: "outside the folder" }
+  return byName(io, rootReal, tree, decoded) ?? { problem: "not found" }
+}
+
+type Info = ImageSize | { problem: ImageProblem }
+const infoCache = new Map<string, { sig: string; info: Info }>()
+const INFO_CAP = 500
+
+function readHead(path: string, size: number): Uint8Array {
+  const buf = new Uint8Array(Math.min(size, SNIFF_BYTES))
+  const fd = openSync(path, "r")
+  try {
+    readSync(fd, buf, 0, buf.length, 0)
+  } finally {
+    closeSync(fd)
+  }
+  return buf
+}
+
+function measure(path: string, size: number): Info {
+  if (size > MAX_IMAGE_BYTES) return { problem: "too large" }
+  try {
+    const s = sniffSize(readHead(path, size))
+    if (!s) return { problem: "unsupported" }
+    return s.w * s.h > MAX_IMAGE_PIXELS ? { problem: "too large" } : s
+  } catch {
+    return { problem: "unreadable" }
+  }
+}
+
+/** A picture file's size (header only), or why it cannot show; cached by path, mtime and size. */
+export function imageInfo(path: string): Info {
+  let st: ReturnType<typeof statSync>
+  try {
+    st = statSync(path)
+  } catch {
+    return { problem: "not found" }
+  }
+  if (!st.isFile()) return { problem: "not found" }
+  const sig = `${st.mtimeMs}:${st.size}`
+  const hit = infoCache.get(path)
+  if (hit?.sig === sig) return hit.info
+  const info = measure(path, st.size)
+  if (infoCache.size >= INFO_CAP) infoCache.delete(infoCache.keys().next().value as string)
+  infoCache.set(path, { sig, info })
+  return info
 }
