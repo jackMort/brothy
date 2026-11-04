@@ -1,15 +1,38 @@
-// Pictures in notes, the impure side: which mode shows, the cell size, and the decoded images (one NativeImage per
-// file, box and background, least recently used dropped past 32 MB and disposed). Decodes off the render, one at a
-// time, a macrotask apart so a frame can paint between two.
+// Pictures in notes, the impure side: which mode shows, the cell size, where each picture lives and which part of it
+// is on screen, and the decoded images (one NativeImage per file, box and background, least recently used dropped past
+// 32 MB and disposed). Decodes off the render, one at a time, a macrotask apart so a frame can paint between two.
 
 import { readFileSync } from "node:fs"
-import { NativeImage } from "@opentui/core"
-import type { GraphTerm } from "../graph/sheet"
-import { type ImageFormat, SNIFF_BYTES, sniffSize } from "../notes/images"
+import { dirname, join } from "node:path"
+import { type CliRenderer, NativeImage } from "@opentui/core"
+import { type GraphTerm, graphTerm } from "../graph/sheet"
+import type { Pic, PictureOpts, Rendered } from "../markdown/render"
+import { type FileNode, findVault } from "../notes/files"
+import {
+  type ImageFormat,
+  imageInfo,
+  imageSig,
+  isImagePath,
+  isRemoteImage,
+  resolveImage,
+  SNIFF_BYTES,
+  sniffSize,
+} from "../notes/images"
+import { STDIN } from "../notes/workspace"
 import type { PicturesPref } from "../system/config"
 import { ensureSvg, svgRaster } from "./svg"
 
 const PICTURE_CACHE_BYTES = 32 * 1024 * 1024
+
+/** A cell in whole pixels. */
+export type Cell = { w: number; h: number }
+/** Laid out with this until the terminal says otherwise. */
+export const DEFAULT_CELL: Cell = { w: 8, h: 16 }
+/** What the picture code reads from the renderer. */
+export type PictureTerminal = Pick<CliRenderer, "capabilities" | "resolution" | "terminalWidth" | "terminalHeight">
+/** After a resize or an unknown start: looks for the resolution this often, this many times (then pixels are off). */
+const CELL_POLL_MS = 100
+const CELL_TRIES = 10
 
 /** Text when asked for, once pixels failed this run, or where the terminal shows no images; else pixels. */
 export const pictureMode = (pref: PicturesPref, term: Pick<GraphTerm, "pixels">, failed: boolean): "pixels" | "text" =>
@@ -21,7 +44,108 @@ export const cellOf = (term: GraphTerm) => ({
   h: Math.max(1, Math.round(term.cellH)),
 })
 
-type Bg = [number, number, number]
+/** The terminal as a layout sees it: the resolution stands in from `last` while unknown (sixel needs one, kitty doesn't). */
+const termOf = (r: PictureTerminal, last: Cell) =>
+  graphTerm(
+    r.capabilities,
+    r.resolution ?? { width: last.w * r.terminalWidth, height: last.h * r.terminalHeight },
+    r.terminalWidth,
+    r.terminalHeight,
+  )
+
+/** How the document is laid out now: text once the wait for a resolution ended (`noCell`), else by capability; the last cell known. */
+export function pictureLayout(
+  s: { pictures: PicturesPref; picFailed: boolean; noCell: boolean; cell: Cell | null },
+  r: PictureTerminal,
+  last: Cell,
+) {
+  return { mode: pictureMode(s.pictures, termOf(r, last), s.picFailed || s.noCell), cell: s.cell ?? last }
+}
+
+/** What `watchCell` works on: the app context's part of it. */
+interface CellDeps {
+  ui: { current: { cell: Cell | null; noCell: boolean } }
+  set: (patch: { cell?: Cell | null; noCell?: boolean }) => void
+  renderer: PictureTerminal
+  timers: { current: { cell?: ReturnType<typeof setTimeout> } }
+  lastCell: { current: Cell }
+}
+
+/**
+ * Keeps `cell` on what the renderer knows. OpenTUI drops the resolution on a resize and has no event for it landing:
+ * `read` takes it when it's there, `poll` looks for a second, `resized` also clears the cell until it lands.
+ */
+export function watchCell({ ui, set, renderer, timers, lastCell }: CellDeps) {
+  const read = () => {
+    const res = renderer.resolution
+    if (!res) return false
+    const cell = cellOf(graphTerm(renderer.capabilities, res, renderer.terminalWidth, renderer.terminalHeight))
+    lastCell.current = cell
+    const s = ui.current
+    if (s.noCell || s.cell?.w !== cell.w || s.cell.h !== cell.h) set({ cell, noCell: false })
+    return true
+  }
+  const poll = (left = CELL_TRIES) => {
+    clearTimeout(timers.current.cell)
+    if (read() || !termOf(renderer, lastCell.current).pixels) return
+    if (left === 0) return set({ noCell: true })
+    timers.current.cell = setTimeout(() => poll(left - 1), CELL_POLL_MS)
+  }
+  const resized = () => {
+    if (!renderer.resolution && ui.current.cell) set({ cell: null })
+    poll()
+  }
+  return { read, poll, resized }
+}
+
+/**
+ * Where a note's pictures live: the layout's size lookup (`info`, null for a target that isn't a picture) and the file
+ * each target resolved to. A piped document has no folder of its own: it stands in the workspace folder.
+ */
+export function pictureFiles(openPath: string | null, root: string, tree: FileNode) {
+  const note = openPath && openPath !== STDIN ? openPath : join(root, STDIN)
+  const roots = { vault: findVault(dirname(note)), root }
+  const files = new Map<string, string>()
+  const info: PictureOpts["info"] = (src) => {
+    if (!isImagePath(src.split(/[?#]/)[0]!) && !isRemoteImage(src)) return null
+    const file = resolveImage(src, note, roots, tree)
+    if (typeof file !== "string") return file
+    files.set(src, file)
+    const size = imageInfo(file)
+    return "problem" in size ? size : { w: size.w, h: size.h }
+  }
+  return { info, file: (src: string) => files.get(src) ?? null }
+}
+/** What `pictureFiles` returns. */
+export type PictureFiles = ReturnType<typeof pictureFiles>
+
+/** One decoded image per file contents, box, cell size, background: `path#sig#cols×rows#cell#theme#t|o`. */
+export const picKey = (path: string, p: Pic, cell: Cell, theme: string, transparent: boolean) =>
+  `${path}#${imageSig(path)}#${p.cols}x${p.rows}#${cell.w}x${cell.h}#${theme}#${transparent ? "t" : "o"}`
+
+/**
+ * The part of `p` in the `rows` rows from `top`, null when none is: where it sits from the first row, how many rows it
+ * takes and the source pixels those rows show.
+ */
+export function picWindow(p: Pic, top: number, rows: number, cell: Cell) {
+  const from = Math.max(0, top - p.line)
+  const to = Math.min(p.rows, top + rows - p.line)
+  if (from >= to) return null
+  return {
+    y: p.line + from - top,
+    rows: to - from,
+    crop: { left: 0, top: from * cell.h, width: p.cols * cell.w, height: (to - from) * cell.h },
+  }
+}
+
+/** Which rows are a picture's reserved rows (not its caption or a placeholder row). */
+export function reservedRows(view: Rendered): boolean[] {
+  const rows = Array<boolean>(view.lines.length).fill(false)
+  for (const p of view.pics ?? []) rows.fill(true, p.line, p.line + p.rows)
+  return rows
+}
+
+type Bg = readonly [number, number, number]
 export type Decoder = (bytes: Uint8Array, format: ImageFormat, w: number, h: number) => NativeImage
 
 /** Decode, fit to exactly `w × h` pixels, flattened onto `bg` when one is given. Every intermediate is disposed. */
@@ -88,7 +212,7 @@ export class PictureCache {
 
   failed = (key: string) => this.entries.get(key)?.img === null
 
-  /** Ask for `key` decoded at `w × h`; `done` runs once it lands (or fails). Asking again while queued does nothing. */
+  /** Ask for `key` decoded at `w × h`; `done` runs once it lands (or fails), and may not throw. Asking again while queued does nothing. */
   want(key: string, path: string, w: number, h: number, bg: Bg | null, done: () => void) {
     if (this.entries.has(key) || this.pending.has(key)) return
     this.pending.add(key)
@@ -101,7 +225,11 @@ export class PictureCache {
       }
       this.pending.delete(key)
       this.put(key, img, img ? w * h * 4 : 0)
-      done()
+      try {
+        done()
+      } catch {
+        // the picture landed; the queue goes on
+      }
     })
     this.pump()
   }

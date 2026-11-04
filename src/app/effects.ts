@@ -1,7 +1,8 @@
 // The app's effects, in the order they run: live reload, the change baseline, the project record, the config theme
-// toast, a piped document's link scan, exit and copy-on-select listeners, the unmount cleanups, the welcome animation and
-// code-block highlighting; then, in `useRenderEffects`, the ones that watch what this render drew (the hint context, the
-// zen reading section, the theme sample). Hooks: App calls each once per render, at the same place, so the hook order holds.
+// toast, a piped document's link scan, exit and copy-on-select listeners, the terminal's cell size, the unmount cleanups,
+// the welcome animation and code-block highlighting; then, in `useRenderEffects`, the ones that watch what this render
+// drew (the hint context, the zen reading section, the theme sample). Hooks: App calls each once per render, at the same
+// place, so the hook order holds.
 import { basename } from "node:path"
 import { useEffect, useRef } from "react"
 import { reloadToast } from "../ai/delta"
@@ -18,6 +19,7 @@ import type { AppCtx } from "./ctx"
 import { releaseImage } from "./graph"
 import type { Ctx } from "./keymap"
 import type { Links } from "./links"
+import { watchCell } from "./pictures"
 import type { WorkspaceControl } from "./workspace"
 
 /** What the effects call from the feature factories. */
@@ -30,6 +32,7 @@ export function useAppEffects(c: AppCtx, { dropDelta, ensureLinks, recordProject
   useNoteWatch(c, dropDelta)
   useStartup(c, ensureLinks, recordProject)
   useRendererListeners(c, leave)
+  useCellSize(c)
   useUnmountCleanups(c)
   // the welcome page's ink-in and steam
   useEffect(animateWelcome)
@@ -110,8 +113,32 @@ function useRendererListeners({ renderer, flash }: AppCtx, leave: EffectDeps["le
   }, [])
 }
 
-/** What stops on unmount: the index build, the timers and AI jobs, and the `alive` flag. */
-function useUnmountCleanups({ timers, jobs, vault, alive, graphImg }: AppCtx) {
+/** The terminal's cell size in the store: read at mount, again on a resize and once the capabilities are known. */
+function useCellSize(c: AppCtx) {
+  const { ui, renderer, bump } = c
+  const cell = watchCell(c)
+  useEffect(() => {
+    // they decide the layout, and OpenTUI only repaints when they land
+    const again = () => {
+      bump((x) => x + 1)
+      cell.poll()
+    }
+    cell.poll()
+    renderer.on("resize", cell.resized)
+    renderer.on("capabilities", again)
+    return () => {
+      renderer.off("resize", cell.resized)
+      renderer.off("capabilities", again)
+    }
+  }, [])
+  // an answer later than the wait shows with the next render
+  useEffect(() => {
+    if (!ui.current.cell && renderer.resolution) cell.read()
+  })
+}
+
+/** What stops on unmount: the index build, the timers and AI jobs, the decoded pictures and the `alive` flag. */
+function useUnmountCleanups({ timers, jobs, vault, alive, graphImg, pics }: AppCtx) {
   // a build still running after unmount must not touch the store
   useEffect(() => () => void (vault.current = { ...vault.current }), [])
   useEffect(
@@ -123,6 +150,7 @@ function useUnmountCleanups({ timers, jobs, vault, alive, graphImg }: AppCtx) {
   )
   useEffect(() => () => void (alive.current = false), [])
   useEffect(() => () => releaseImage(graphImg), [])
+  useEffect(() => () => pics.clear(), [])
 }
 
 /** What the render-time effects watch, as App draws it: the hint context, the zen reading section and the theme sample. */

@@ -42,6 +42,8 @@ const RULE = /^[\s─━]*$/
 export interface MiniInk {
   /** braille dot bits per cell, row-major (`rows × cols`) */
   bits: Uint8Array
+  /** per cell row: it holds a picture's reserved rows */
+  pics: Uint8Array
   rows: number
   /** lines per dot row */
   scale: number
@@ -52,19 +54,24 @@ export function miniInk(
   fills: readonly boolean[],
   textW: number,
   maxRows: number,
+  /** a picture's reserved rows: a solid block in `textMuted` */
+  reserved: readonly boolean[] = [],
   cols = MINI_COLS,
 ): MiniInk {
   const n = plain.length
   const scale = Math.max(1, Math.ceil(n / (4 * Math.max(1, maxRows))))
   const rows = Math.ceil(n / (4 * scale))
   const bits = new Uint8Array(rows * cols)
+  const pics = new Uint8Array(rows)
   const per = Math.max(1, textW) / (cols * 2)
   for (let i = 0; i < n; i++) {
-    const solid = fills[i] === true
+    const pic = reserved[i] === true
+    const solid = pic || fills[i] === true
     if (!solid && RULE.test(plain[i]!)) continue
     const dotRow = Math.floor(i / scale)
     const cy = dotRow >> 2
     const dy = dotRow & 3
+    if (pic) pics[cy] = 1
     const on = solid ? null : inkedColumns(plain[i]!, per, cols * 2)
     for (let dc = 0; dc < cols * 2; dc++) {
       if (on && !on[dc]) continue
@@ -72,10 +79,10 @@ export function miniInk(
       bits[k] = bits[k]! | BIT[dy]![dc & 1]!
     }
   }
-  return { bits, rows, scale }
+  return { bits, pics, rows, scale }
 }
 
-export type MiniKind = "head" | "view" | "rest" | "lane"
+export type MiniKind = "head" | "pic" | "view" | "rest" | "lane"
 export interface MiniCell {
   ch: string
   kind: MiniKind
@@ -84,7 +91,7 @@ export interface MiniCell {
 }
 
 /**
- * One row of cells per ink row: a heading in it beats the viewport, the viewport beats the rest;
+ * One row of cells per ink row: a heading in it beats a picture, a picture beats the viewport, the viewport the rest;
  * the band marks the rows on screen. With `lane`, one more cell per row carries the find hits.
  */
 export function miniCells(
@@ -104,8 +111,9 @@ export function miniCells(
     const a = cy * span
     const b = Math.min(o.total, a + span)
     const band = a < o.top + o.h && b > o.top
-    const inBody: MiniKind = band ? "view" : "rest"
-    const kind: MiniKind = heads.has(cy) ? "head" : inBody
+    let kind: MiniKind = band ? "view" : "rest"
+    if (ink.pics[cy]) kind = "pic"
+    if (heads.has(cy)) kind = "head"
     const row = Array.from(
       { length: cols },
       (_, cx): MiniCell => ({ ch: braille(ink.bits[cy * cols + cx]!), kind, band }),
@@ -120,9 +128,10 @@ export function miniCells(
 export const miniJump = (row: number, ink: MiniInk, h: number, maxTop: number) =>
   clamp(row * 4 * ink.scale - Math.floor(h / 2), 0, maxTop)
 
-/** Theme roles only: headings as H1s, text on screen muted on the band, the rest as faint as a rule, hits as find marks them. */
+/** Theme roles only: headings as H1s, pictures and text on screen muted, the rest as faint as a rule, hits as find marks them. */
 export const miniColors = (t: Theme): Record<MiniKind, string> => ({
   head: t.primary,
+  pic: t.textMuted,
   view: t.textMuted,
   rest: t.borderSubtle,
   lane: t.secondary,

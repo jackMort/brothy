@@ -131,6 +131,8 @@ export function sniffSize(b: Uint8Array): ImageSize | null {
 
 const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"])
 export const isImagePath = (p: string) => IMAGE_EXT.has(extname(p).toLowerCase())
+/** A target that is never fetched. */
+export const isRemoteImage = (t: string) => /^(https?:|data:)/i.test(t.trim())
 
 /** `300` or `300x200` (Obsidian's `|size`); anything else is an alias, null. */
 export function parseImageSize(s: string | undefined): { w?: number; h?: number } | null {
@@ -257,7 +259,7 @@ export function resolveImage(
   io: ImageIO = fsIO,
 ): string | { problem: ImageProblem } {
   const t = target.trim()
-  if (/^(https?:|data:)/i.test(t)) return { problem: "remote image" }
+  if (isRemoteImage(t)) return { problem: "remote image" }
   const decoded = decodeTarget(t)
   const root = roots.vault ?? roots.root
   let rootReal: string
@@ -319,3 +321,6 @@ export function imageInfo(path: string): Info {
   infoCache.set(path, { sig, info })
   return info
 }
+
+/** What identifies a file's contents, as `imageInfo` last read it ("" before it has). */
+export const imageSig = (path: string) => infoCache.get(path)?.sig ?? ""

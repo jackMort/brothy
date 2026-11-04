@@ -24,6 +24,7 @@ import {
   zenOverlay,
 } from "./app/Overlays"
 import { panelBox } from "./app/Panel"
+import { DEFAULT_CELL, PictureCache } from "./app/pictures"
 import { makePopups } from "./app/popups"
 import { makeProof } from "./app/proof"
 import { type FileRow, type GraphImage, initUI, type Job, MIN_H, MIN_W, type Spot, type UI, ZEN_DIM } from "./app/store"
@@ -94,7 +95,7 @@ export function App({
   useDrawerCrossing(ui.current, W)
 
   const refs = useAppRefs(stdin, W, H)
-  const derive = makeDerive({ ui, dims, ...refs })
+  const derive = makeDerive({ ui, dims, renderer, ...refs })
 
   // the app context and the feature factories over it, rebuilt every render: handlers close over this render's size and
   // props, and read the store at call time
@@ -197,14 +198,31 @@ function useAppRefs(stdin: string | undefined, W: number, H: number) {
     zenBack: useRef<Spot | null>(null),
     sidebarSeen: useRef<{ rows: FileRow[] | null; cursorPath: string | null }>({ rows: null, cursorPath: null }),
     timers: useRef<Timers>({}),
-    jobs: useRef(new Map<string, Job>()),
-    askMemo: useRef(new Map<string, { queries: string[]; model: string }>()),
-    rerankMemo: useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>()),
+    ...useAIRefs(),
     alive: useRef(true),
     hlSeen: useRef<Rendered | null>(null),
     left: useRef(false),
     welcome: useRef<WelcomeState>({ hl: 1, gen: 0, tick: STILL_TICK, ink: INK_STEPS - 1, run: "idle", at: 0, W, H }),
     graphImg: useRef<GraphImage>({ px: null, img: null }),
+    ...usePictureRefs(),
+  }
+}
+
+/** The refs AI requests keep (documented on `Base` and `DeriveRefs`). A hook. */
+function useAIRefs() {
+  return {
+    jobs: useRef(new Map<string, Job>()),
+    askMemo: useRef(new Map<string, { queries: string[]; model: string }>()),
+    rerankMemo: useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>()),
+  }
+}
+
+/** The refs the note's pictures keep (documented on `Base` and `DeriveRefs`). A hook. */
+function usePictureRefs() {
+  return {
+    pics: useRef(new PictureCache()).current,
+    picTold: useRef(new Set<string>()),
+    lastCell: useRef(DEFAULT_CELL),
   }
 }
 

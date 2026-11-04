@@ -4,6 +4,8 @@
 import { afterAll, afterEach, beforeAll, setSystemTime } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { ImageRenderable, type Renderable } from "@opentui/core"
+import { setRendererCapabilities } from "@opentui/core/testing"
 import { testRender } from "@opentui/react/test-utils"
 import { App, type AppProps } from "../../src/App"
 import { textHash } from "../../src/ai/cache"
@@ -165,6 +167,21 @@ export async function openHelp(s: Setup) {
 export const panelShown = (f: string) => /Files\s+²Outline/.test(f)
 
 export const W120 = { width: 120, height: 30 }
+
+// ------------------------------------------------------------- pictures
+
+/** The renderable tree under `r`, itself first. */
+export const walk = (r: Renderable): Renderable[] => [r, ...r.getChildren().flatMap((c) => walk(c as Renderable))]
+/** Every `<image>` on screen. */
+export const imagesOf = (s: Setup) => walk(s.renderer.root).filter((r) => r instanceof ImageRenderable)
+/** What the terminal says its window measures: OpenTUI keeps it in a private field, with no event when it lands. */
+export const setResolution = (s: Setup, res: Size | null) => {
+  ;(s.renderer as unknown as { _resolution: Size | null })._resolution = res
+}
+/** A terminal that draws kitty images, as it reports itself after mount. */
+export function kittyTerminal(s: Setup) {
+  s.renderer.emit("capabilities", setRendererCapabilities(s.renderer, { kitty_graphics: true }))
+}
 
 // ------------------------------------------------------------- fixtures
 

@@ -35,7 +35,7 @@ import { clamp } from "../lib/text"
 import { type FrontMatter, type Property, parseFrontMatter, parseProperties } from "../markdown/frontmatter"
 import type { HeadingStyle } from "../markdown/heading-style"
 import { normalize } from "../markdown/lexer"
-import { type Geometry, type Rendered, render } from "../markdown/render"
+import { type Geometry, type PictureOpts, type Rendered, render } from "../markdown/render"
 import { renderSource } from "../markdown/source"
 import { type Stats, stats, wordStats } from "../markdown/stats"
 import { type DocFile, readDoc } from "../notes/doc"
@@ -85,6 +85,14 @@ import {
   switcherList,
   truncationNote,
 } from "./derive/steps"
+import {
+  type Cell,
+  type PictureFiles,
+  type PictureTerminal,
+  pictureFiles,
+  pictureLayout,
+  reservedRows,
+} from "./pictures"
 import type { Explained, FileRow, Job, UI } from "./store"
 
 /** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
@@ -98,8 +106,18 @@ function documentMemo(stdin: string | undefined) {
       return { src: stdin, info: null, error: null }
     }),
     fm: cached(parseFrontMatter),
-    doc: cached((src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle) =>
-      render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings }),
+    picFiles: cached(pictureFiles),
+    // one object per layout of the pictures, so `doc` holds
+    picture: cached(
+      (mode: PictureOpts["mode"], w: number, h: number, files: PictureFiles): PictureOpts => ({
+        mode,
+        cell: { w, h },
+        info: files.info,
+      }),
+    ),
+    doc: cached(
+      (src: string, w: number, t: Theme, _hl: number, tree: FileNode, headings: HeadingStyle, picture: PictureOpts) =>
+        render(src, w, t, { exists: (x) => resolveLink(x, tree) !== null, headings, picture }),
     ),
     source: cached((src: string, w: number, t: Theme, tree: FileNode) =>
       renderSource(src, w, t, { exists: (x) => resolveLink(x, tree) !== null }),
@@ -217,6 +235,7 @@ function viewMemo() {
         view.lines.map((l) => l.fill !== undefined),
         w - gutter,
         rows,
+        reservedRows(view),
       ),
     ),
     words: cached((view: Rendered) => wordSuffix(view.plain)),
@@ -378,6 +397,10 @@ export interface DeriveRefs {
   ui: { current: UI }
   dims: { current: { W: number; H: number } }
   memo: Memo
+  /** what the terminal draws and how big its cells are */
+  renderer: PictureTerminal
+  /** the last cell the terminal said, kept while `cell` is null */
+  lastCell: { current: Cell }
   /** the switcher's index of `linkTree`; replaced (never mutated) when dropped, so a stale build sees it and stops */
   vault: { current: { ix: VaultIndex; running: boolean } }
   /** AI requests in flight by `jobKey`: the raw streamed text and how to cancel it */
@@ -389,14 +412,25 @@ export interface DeriveRefs {
 }
 
 /** `derive()` over these refs. */
-export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, matchSeen }: DeriveRefs) {
+export function makeDerive({
+  ui,
+  dims,
+  memo,
+  renderer,
+  lastCell,
+  vault,
+  jobs,
+  sidebarSeen,
+  scrolls,
+  matchSeen,
+}: DeriveRefs) {
   /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. The steps run in this order. */
   return () => {
     const s = ui.current
     const L = layout(dims.current.W, dims.current.H, s)
     const t = themes[s.themeIdx]!
-    const opened = noteView(s, L, t, memo)
-    const { file, fm, doc, view, st } = opened
+    const opened = noteView(s, L, t, pictureLayout(s, renderer, lastCell.current), memo)
+    const { file, fm, doc, view, st, picMode, picFiles } = opened
     const files = filesList(s, memo)
     const note = truncationNote(s, L)
     const info = infoPanel(s, L, opened, memo, jobs.current)
@@ -416,6 +450,8 @@ export function makeDerive({ ui, dims, memo, vault, jobs, sidebarSeen, scrolls, 
       doc,
       view,
       st,
+      picMode,
+      picFiles,
       ...files,
       ...info,
       ...switcher,

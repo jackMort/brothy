@@ -95,10 +95,22 @@ test("miniJump centres the clicked cell's first line, clamped", () => {
   expect(miniJump(99, ink, 30, 370)).toBe(370)
 })
 
+test("miniInk: a picture's reserved rows are solid, and their cells a kind of their own past a heading", () => {
+  const n = 12
+  const reserved = Array.from({ length: n }, (_, i) => i >= 4 && i < 8)
+  const ink = miniInk(Array(n).fill(""), Array(n).fill(false), 8, 10, reserved)
+  expect([...ink.bits.slice(2, 4)]).toEqual([0xff, 0xff])
+  expect([...ink.bits.slice(0, 2)]).toEqual([0, 0])
+  const kinds = (heads: number[], top: number) =>
+    miniCells(ink, { top, h: 4, heads, hits: [], total: n, lane: false }).map((r) => r[0]!.kind)
+  expect(kinds([], 8)).toEqual(["rest", "pic", "view"])
+  expect(kinds([4], 8)).toEqual(["rest", "head", "view"])
+})
+
 test("minimap colours are theme roles; on-screen dots and the lane read on the band in every theme", () => {
   for (const t of themes) {
     const c = miniColors(t)
-    expect(c).toEqual({ head: t.primary, view: t.textMuted, rest: t.borderSubtle, lane: t.secondary })
+    expect(c).toEqual({ head: t.primary, pic: t.textMuted, view: t.textMuted, rest: t.borderSubtle, lane: t.secondary })
     expect(contrast(c.view, t.backgroundElement), t.name).toBeGreaterThanOrEqual(3)
     expect(contrast(c.lane, t.backgroundElement), t.name).toBeGreaterThanOrEqual(3)
   }

@@ -27,6 +27,7 @@ import { proofHeight, proofMarkW, proofTop, proofWidth } from "../../ui/proof"
 import { noteTitle } from "../../ui/status"
 import { pageSlice, sectionAt, typewriterTop } from "../../ui/zen"
 import type { DeriveRefs, Memo, ScrollEntry } from "../derive"
+import type { pictureLayout } from "../pictures"
 import { type FileRow, type Job, jobKey, NO_CANDS, NO_CHANGES, NO_NOTES, type UI } from "../store"
 
 /** The screen layout `derive()` works at. */
@@ -34,15 +35,17 @@ type Layout = ReturnType<typeof layout>
 
 // ------------------------------------------------------------- document
 
-/** The open note: its file, front matter, Preview, the view on screen (Preview or Source) and its stats. */
-export function noteView(s: UI, L: Layout, t: Theme, memo: Memo) {
+/** The open note: its file, front matter, Preview, the view on screen (Preview or Source), its stats and its pictures. */
+export function noteView(s: UI, L: Layout, t: Theme, pic: ReturnType<typeof pictureLayout>, memo: Memo) {
   const file = s.openPath ? memo.read(s.openPath, s.reload) : null
   const src = file?.src ?? ""
   const fm = memo.fm(src)
-  const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headingStyle)
+  const picFiles = memo.picFiles(s.openPath, s.root, s.linkTree)
+  const picture = memo.picture(pic.mode, pic.cell.w, pic.cell.h, picFiles)
+  const doc = memo.doc(fm.body, L.CW, t, s.hl, s.linkTree, s.headingStyle, picture)
   const view = s.source ? memo.source(src, L.CW, t, s.linkTree) : doc
   const st = memo.stats(fm.body)
-  return { file, src, fm, doc, view, st }
+  return { file, src, fm, doc, view, st, picMode: pic.mode, picFiles }
 }
 /** What `noteView` returns. */
 type NoteView = ReturnType<typeof noteView>

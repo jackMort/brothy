@@ -24,7 +24,7 @@ export interface Line {
 }
 
 /** A picture in the text: its reserved rows (`rows` > 0, pixels mode) or its one placeholder row (`rows` 0). */
-interface Pic {
+export interface Pic {
   /** index in `Rendered.pics` */
   id: number
   /** first reserved row, or the placeholder row */
@@ -43,7 +43,7 @@ interface Pic {
   problem?: string
 }
 
-interface PictureOpts {
+export interface PictureOpts {
   mode: "pixels" | "text"
   cell: { w: number; h: number }
   /** size or problem for a target as written; null = not an image file, render inline as today */

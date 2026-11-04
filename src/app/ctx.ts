@@ -13,6 +13,7 @@ import { type Config, type SidebarConfig, saveConfig, VIEWS, type View } from ".
 import { keepVisible } from "../ui/nav"
 import { fadeStep, GHOST_STEP, nextToast, TOAST_HOLD, type ToastKind } from "../ui/status"
 import type { Derived, DeriveRefs } from "./derive"
+import type { PictureCache } from "./pictures"
 import { type GraphImage, OPEN_DELAY, type Spot, type UI } from "./store"
 
 /** The timer slots: one pending timeout each (toast and hint fades, Files preview, teleprompter, AI redraw, …). */
@@ -31,6 +32,8 @@ export interface Timers {
   steam?: ReturnType<typeof setTimeout>
   /** the Graph sheet's mouse hush after a click opened a note */
   hush?: ReturnType<typeof setTimeout>
+  /** looking for the terminal's resolution, which arrives with no event */
+  cell?: ReturnType<typeof setTimeout>
 }
 
 /** The welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size. */
@@ -77,6 +80,10 @@ export interface Base extends DeriveRefs {
   welcome: { current: WelcomeState }
   /** the Graph sheet's image (`imageFor`) */
   graphImg: { current: GraphImage }
+  /** the decoded pictures */
+  pics: PictureCache
+  /** the notes that have toasted an unreadable picture */
+  picTold: { current: Set<string> }
 }
 
 /** Fades, toasts and config saves. */

@@ -1,7 +1,24 @@
 import { expect, test } from "bun:test"
-import { deflateSync } from "node:zlib"
+import { rmSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import type { NativeImage } from "@opentui/core"
-import { cellOf, PictureCache, pictureMode } from "../../src/app/pictures"
+import { createTerminalCapabilities } from "@opentui/core/testing"
+import {
+  type Cell,
+  cellOf,
+  PictureCache,
+  picKey,
+  pictureFiles,
+  pictureLayout,
+  pictureMode,
+  picWindow,
+  reservedRows,
+  watchCell,
+} from "../../src/app/pictures"
+import { scanTree } from "../../src/notes/files"
+import { STDIN } from "../../src/notes/workspace"
+import { makePng } from "../helpers/png"
+import { makeTmp } from "../helpers/tmp"
 
 test("pictureMode: text when asked, after a failure, or where no images show", () => {
   expect(pictureMode("auto", { pixels: true }, false)).toBe("pixels")
@@ -16,42 +33,6 @@ test("cellOf rounds herdr's fractional cells", () => {
   expect(cellOf({ pixels: true, mux: false, cellW: 0.2, cellH: 0 })).toEqual({ w: 1, h: 1 })
 })
 
-// A PNG made from own pixels (8-bit RGBA).
-const crcTable = Array.from({ length: 256 }, (_, n) => {
-  let c = n
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
-  return c >>> 0
-})
-const crc = (b: Uint8Array) => {
-  let c = 0xffffffff
-  for (const x of b) c = crcTable[(c ^ x) & 255]! ^ (c >>> 8)
-  return (c ^ 0xffffffff) >>> 0
-}
-const chunk = (type: string, data: Uint8Array) => {
-  const body = new Uint8Array([...Buffer.from(type, "latin1"), ...data])
-  const out = new Uint8Array(12 + data.length)
-  const dv = new DataView(out.buffer)
-  dv.setUint32(0, data.length)
-  out.set(body, 4)
-  dv.setUint32(8 + data.length, crc(body))
-  return out
-}
-const makePng = (w: number, h: number, rgba: number[]) => {
-  const ihdr = new Uint8Array(13)
-  const dv = new DataView(ihdr.buffer)
-  dv.setUint32(0, w)
-  dv.setUint32(4, h)
-  ihdr.set([8, 6, 0, 0, 0], 8)
-  const rows: number[] = []
-  for (let y = 0; y < h; y++) rows.push(0, ...rgba.slice(y * w * 4, (y + 1) * w * 4))
-  const parts = [
-    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", ihdr),
-    chunk("IDAT", new Uint8Array(deflateSync(Uint8Array.from(rows)))),
-    chunk("IEND", new Uint8Array()),
-  ]
-  return Uint8Array.from(parts.flatMap((p) => [...p]))
-}
 const PNG = makePng(1, 1, [200, 100, 50, 255])
 const CLEAR_PNG = makePng(1, 1, [0, 0, 0, 0])
 const SVG = new TextEncoder().encode(
@@ -158,6 +139,39 @@ test("PictureCache: an unknown format, or a read that throws, is a failure", asy
   expect(gone.failed("n")).toBe(true)
 })
 
+test("PictureCache: a picture touched on every render survives eviction past the cap", async () => {
+  const cache = new PictureCache(
+    100 * 100 * 4 * 2,
+    (_b, _f, w, h) => fake(w, h),
+    () => PNG,
+  )
+  let done = 0
+  cache.want("seen", "/a.png", 100, 100, null, () => done++)
+  cache.want("old", "/b.png", 100, 100, null, () => done++)
+  await until(() => done === 2)
+  const seen = cache.get("seen") as NativeImage & { gone: boolean }
+  cache.want("new", "/c.png", 100, 100, null, () => done++)
+  await until(() => done === 3)
+  expect(cache.get("seen")).toBe(seen)
+  expect(seen.gone).toBe(false)
+  expect(cache.get("old")).toBeUndefined()
+})
+
+test("PictureCache: a done that throws leaves the queue running", async () => {
+  const cache = new PictureCache(
+    1e9,
+    (_b, _f, w, h) => fake(w, h),
+    () => PNG,
+  )
+  let done = 0
+  cache.want("a", "/a.png", 1, 1, null, () => {
+    throw new Error("no")
+  })
+  cache.want("b", "/b.png", 1, 1, null, () => done++)
+  await until(() => done === 1)
+  expect(cache.get("a")).toBeDefined()
+})
+
 test("PictureCache: a clear while a job is running disposes its image and skips done", async () => {
   const made: (NativeImage & { gone: boolean })[] = []
   let done = 0
@@ -230,4 +244,109 @@ test("real decoder: bg flattens a transparent pixel onto the colour; null leaves
   await until(() => flat.get("f") !== undefined && clear.get("c") !== undefined)
   expect(px(flat.get("f")!)).toEqual([10, 20, 30, 255])
   expect(px(clear.get("c")!)[3]).toBe(0)
+})
+
+const CELL: Cell = { w: 10, h: 20 }
+const PIC = { id: 0, line: 10, rows: 5, cols: 20, left: 3, src: "a.png", alt: "a" }
+
+test("picWindow: the rows on screen and the source pixels they show", () => {
+  expect(picWindow(PIC, 0, 26, CELL)).toEqual({ y: 10, rows: 5, crop: { left: 0, top: 0, width: 200, height: 100 } })
+  expect(picWindow(PIC, 12, 26, CELL)).toEqual({ y: 0, rows: 3, crop: { left: 0, top: 40, width: 200, height: 60 } })
+  expect(picWindow(PIC, 0, 12, CELL)).toEqual({ y: 10, rows: 2, crop: { left: 0, top: 0, width: 200, height: 40 } })
+  // taller than the window: the middle
+  expect(picWindow(PIC, 11, 2, CELL)).toEqual({ y: 0, rows: 2, crop: { left: 0, top: 20, width: 200, height: 40 } })
+})
+
+test("picWindow: nothing above, below, or for a placeholder", () => {
+  expect(picWindow(PIC, 15, 26, CELL)).toBeNull()
+  expect(picWindow(PIC, 0, 10, CELL)).toBeNull()
+  expect(picWindow({ ...PIC, rows: 0 }, 0, 26, CELL)).toBeNull()
+})
+
+test("picKey: another cell size, box, theme or background is another image", () => {
+  const key = picKey("/a.png", PIC, CELL, "brothy", false)
+  expect(key).toBe("/a.png##20x5#10x20#brothy#o")
+  expect(picKey("/a.png", PIC, { w: 9, h: 20 }, "brothy", false)).not.toBe(key)
+  expect(picKey("/a.png", { ...PIC, cols: 21 }, CELL, "brothy", false)).not.toBe(key)
+  expect(picKey("/a.png", PIC, CELL, "tokyonight", false)).not.toBe(key)
+  expect(picKey("/a.png", PIC, CELL, "brothy", true)).not.toBe(key)
+})
+
+test("reservedRows: never the caption or a placeholder", () => {
+  const view = {
+    lines: Array.from({ length: 5 }, () => ({ spans: [] })),
+    headings: [],
+    plain: [],
+    pics: [
+      { ...PIC, id: 0, line: 1, rows: 2 },
+      { ...PIC, id: 1, line: 4, rows: 0 },
+    ],
+  }
+  expect(reservedRows(view)).toEqual([false, true, true, false, false])
+})
+
+const KITTY = { terminalWidth: 100, terminalHeight: 30, resolution: null } as const
+const kitty = createTerminalCapabilities({ kitty_graphics: true })
+const sixel = createTerminalCapabilities({ sixel: true })
+const state = { pictures: "auto", picFailed: false, noCell: false, cell: null } as const
+
+test("pictureLayout: with no resolution yet the last cell stands in, for kitty and for sixel", () => {
+  const last = { w: 9, h: 18 }
+  expect(pictureLayout(state, { ...KITTY, capabilities: kitty }, last)).toEqual({ mode: "pixels", cell: last })
+  expect(pictureLayout(state, { ...KITTY, capabilities: sixel }, last)).toEqual({ mode: "pixels", cell: last })
+  expect(pictureLayout({ ...state, cell: CELL }, { ...KITTY, capabilities: kitty }, last).cell).toEqual(CELL)
+})
+
+test("pictureLayout: text once the wait ended, after a failure, as asked, or with no images", () => {
+  const r = { ...KITTY, capabilities: kitty }
+  expect(pictureLayout({ ...state, noCell: true }, r, CELL).mode).toBe("text")
+  expect(pictureLayout({ ...state, picFailed: true }, r, CELL).mode).toBe("text")
+  expect(pictureLayout({ ...state, pictures: "text" }, r, CELL).mode).toBe("text")
+  expect(pictureLayout(state, { ...r, capabilities: createTerminalCapabilities() }, CELL).mode).toBe("text")
+})
+
+/** A store and renderer for `watchCell`, without an app. */
+const cellRig = (resolution: { width: number; height: number } | null) => {
+  const ui = { current: { cell: null as Cell | null, noCell: false } }
+  const renderer = { ...KITTY, capabilities: kitty, resolution }
+  const sets: object[] = []
+  const set = (patch: object) => {
+    sets.push(patch)
+    Object.assign(ui.current, patch)
+  }
+  const rig = { ui, set, renderer, timers: { current: {} }, lastCell: { current: { w: 8, h: 16 } } }
+  return { ...rig, sets, watch: watchCell(rig) }
+}
+
+test("watchCell: rounds the resolution through cellOf and sets it once, whatever the polls", () => {
+  const r = cellRig({ width: 910, height: 600 })
+  r.watch.poll()
+  r.watch.poll()
+  r.watch.resized()
+  expect(r.sets).toEqual([{ cell: { w: 9, h: 20 }, noCell: false }])
+  expect(r.lastCell.current).toEqual({ w: 9, h: 20 })
+})
+
+test("watchCell: a resize clears the cell and keeps the last one for the layout", () => {
+  const r = cellRig({ width: 1000, height: 600 })
+  r.watch.poll()
+  r.renderer.resolution = null as never
+  r.watch.resized()
+  clearTimeout((r.timers.current as { cell?: ReturnType<typeof setTimeout> }).cell)
+  expect(r.ui.current.cell).toBeNull()
+  expect(r.lastCell.current).toEqual(CELL)
+})
+
+test("pictureFiles: a piped document stands in the folder; a target that is no picture is null; remote is a problem", () => {
+  const d = makeTmp("brothy-pics-")
+  writeFileSync(join(d, "a.png"), PNG)
+  const tree = scanTree(d)
+  const piped = pictureFiles(STDIN, d, tree)
+  expect(piped.info("a.png")).toEqual({ w: 1, h: 1 })
+  expect(piped.file("a.png")).toBe(join(d, "a.png"))
+  expect(piped.info("other.md")).toBeNull()
+  expect(piped.info("https://x.example/a")).toEqual({ problem: "remote image" })
+  expect(piped.info("gone.png")).toEqual({ problem: "not found" })
+  expect(piped.file("gone.png")).toBeNull()
+  rmSync(d, { recursive: true })
 })

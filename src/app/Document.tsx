@@ -36,6 +36,7 @@ import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
 import { keyDef, WELCOME_KEYS } from "./keymap"
 import { labelGeo } from "./links"
+import { pictureLayer, reservedBlank } from "./PictureLayer"
 import { Row } from "./Row"
 import { SCRIM_DIM, WHEEL_ROWS } from "./store"
 import type { WorkspaceControl } from "./workspace"
@@ -52,13 +53,19 @@ export function docBox(
   const pageContent = () => {
     if (!s.openPath) return welcomePage(c, d, ws)
     if (file?.error) return openError(d, file.error)
-    return L.zen ? zenLines(d) : noteLines(d)
+    return L.zen ? zenLines(d) : noteLines(c, d)
   }
   const content = pageContent()
   return (
     <box
       key="doc"
-      style={{ flexDirection: "column", flexGrow: 1, height: L.bodyH, paddingLeft: L.zen ? L.padL - 2 : L.padL }}
+      style={{
+        flexDirection: "column",
+        flexGrow: 1,
+        height: L.bodyH,
+        paddingLeft: L.zen ? L.padL - 2 : L.padL,
+        overflow: "hidden", // the body clips, not `lines`: marks and notes sit left and right of its text column
+      }}
       onMouseDown={() => focusDoc()}
       onMouseScroll={(e: MouseEvent) =>
         (L.zen ? ws.zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)
@@ -322,8 +329,8 @@ function changeMargin(d: Derived): Span[][] | null {
   return rows
 }
 
-/** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim. */
-function noteLines(d: Derived) {
+/** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim; the pictures over their rows. */
+function noteLines(c: AppCtx, d: Derived) {
   const { L, t, view, top } = d
   const { CW, CH } = L
   const scrim = L.mode === "drawer" && L.shown
@@ -341,6 +348,7 @@ function noteLines(d: Derived) {
           lineRow(d, top + i, marks.get(top + i), dim)
         ),
       )}
+      {pictureLayer(c, d, footAt)}
       {margin ? (
         <box
           key="change-side"
@@ -372,7 +380,11 @@ function lineRow(d: Derived, n: number, m: RowMark | undefined, dim: (spans: Spa
   let spans = lineSpans(d, n)
   const at = m && (m.gutter ? { gutter: m.mark } : placeMark(spans, d.L.CW, m.mark))
   if (at && "inline" in at) spans = at.inline
-  const row = <Row key={n} spans={dim(spans)} />
+  const row = reservedBlank(d.view, n) ? (
+    <box key={`reserved-${n}`} style={{ height: 1, flexShrink: 0 }} />
+  ) : (
+    <Row key={n} spans={dim(spans)} />
+  )
   return at && "gutter" in at ? (
     <box key={n} style={{ height: 1, flexDirection: "row" }}>
       <box style={{ position: "absolute", left: -2, width: 1, height: 1 }}>

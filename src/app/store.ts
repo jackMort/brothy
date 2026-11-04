@@ -13,13 +13,14 @@ import type { FileNode, TreeRow } from "../notes/files"
 import { type History, startHistory } from "../notes/history"
 import type { ProjectEntry } from "../notes/projects"
 import { stdinWorkspace, workspace } from "../notes/workspace"
-import { type Config, type GraphRender, loadConfig, type View } from "../system/config"
+import { type Config, type GraphRender, loadConfig, type PicturesPref, type View } from "../system/config"
 import { themes } from "../theme/theme"
 import { resolveTheme, type ThemePick } from "../theme/themepick"
 import type { LinkSpot } from "../ui/nav"
 import type { Toast } from "../ui/status"
 import { normalizeZen, type ZenConfig } from "../ui/zen"
 import type { Ctx } from "./keymap"
+import type { Cell } from "./pictures"
 
 /** Sidebar j/k opens the file under the cursor once it rests this long. */
 export const OPEN_DELAY = 100
@@ -257,6 +258,18 @@ export interface UI {
   graphMuxTold: boolean
   /** a click just opened a note from the Graph sheet: mouse downs are swallowed for a double-click's span */
   graphHush: boolean
+  /** config `pictures`: how pictures in notes show */
+  pictures: PicturesPref
+  /** the terminal's cell in whole pixels; null until it says, and after a resize until it says again: no picture is drawn */
+  cell: Cell | null
+  /** it never said (`watchCell` gave up): text, as `auto` shows pixels only where the resolution is known */
+  noCell: boolean
+  /** bumped when a decoded picture lands, to draw it */
+  picVer: number
+  /** pixels failed in the terminal this run: text until restart */
+  picFailed: boolean
+  /** the picture sheet while open */
+  picture: { id: number } | null
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
@@ -287,6 +300,18 @@ const graphSettings = (cfg: Config): { graphDepth: 1 | 2; graphRender: GraphRend
   graphRender: cfg.graph?.render ?? "auto",
 })
 
+/** The pictures' fields at mount: `auto` unless config says otherwise, nothing known about the terminal yet. */
+const pictureSettings = (
+  cfg: Config,
+): Pick<UI, "pictures" | "cell" | "noCell" | "picVer" | "picFailed" | "picture"> => ({
+  pictures: cfg.pictures ?? "auto",
+  cell: null,
+  noCell: false,
+  picVer: 0,
+  picFailed: false,
+  picture: null,
+})
+
 /** The store at mount: the workspace from the CLI's root and note (or the piped document), the saved config, the summary cache. */
 export function initUI(
   root: string,
@@ -302,6 +327,7 @@ export function initUI(
   return {
     ...savedSettings(cfg, themeName, transparent, piped, motion),
     ...graphSettings(cfg),
+    ...pictureSettings(cfg),
     themePick: null,
     ...w,
     filter: "",
