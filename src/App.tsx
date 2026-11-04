@@ -45,7 +45,7 @@ import { changeKey, type InfoItem, tldrHead, tldrWord } from "./ui/panel"
 import { fadeStep, GHOST_STEPS, tooSmall } from "./ui/status"
 import { STILL_TICK } from "./ui/welcome"
 
-export const VERSION = "0.2.0"
+export const VERSION = "0.3.0"
 
 export interface AppProps {
   root: string

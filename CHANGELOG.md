@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-04
+
 ### Added
 - Pictures: `![alt](img.png)` and `![[img.png]]` alone in a paragraph are drawn in the note where the terminal shows images (kitty graphics or sixel; PNG, JPEG, GIF, WebP and SVG), sized to the text and by `|300` or `|300x200`, with a muted caption under them; elsewhere, or when it cannot show, the picture is one row (`▣ alt · 1200×800 · ⏎ view`, or `▣ alt · not found`, `remote image`, `outside the folder`, `too large`, `unsupported`, `unreadable`). Targets are found next to the note, from the vault root, then by name; nothing outside the root is read and URLs are never fetched. `⏎`, a click or an `f` label opens the picture in a sheet fitted to the popup (half blocks where pixels cannot show), `esc` or `q` closes it; `p` switches pixels and text and saves `pictures` in `config.json`. Pictures also show in zen and as blocks in the minimap. A picture edited on disk shows after `r` or when the note changes.
 - Graph view: `ctrl+g` opens **Graph**, the open note in the middle with the notes it links to (`→`), the notes that link to it (`←`), both (`↔`) and, out to two links, theirs, drawn beside a list of them (below 100 columns the picture takes the width and the row under it names the focused note). `↑` `↓` move, `⏎` opens a note, `l` centres on a neighbour and `h` comes back, `+` `-` set depth 1 or 2, `/` filters, `p` switches pixels and braille; depth and renderer are saved as `graph` in `config.json`. In terminals with the kitty graphics protocol or sixel the picture is real pixels drawn through OpenTUI's image; elsewhere, inside tmux, or when an image fails, it is braille like the minimap. Names are always terminal text. Links to missing notes show muted and struck through; past 18 neighbours `+ n more` lists the rest. The first open inside a multiplexer that claims image support says `graph · pixels · p braille`.
@@ -78,7 +80,8 @@ First public release. Renamed to brothy: the command, binary and repo are `broth
 - Zen mode (`z`, settings `Z`): centered text, scroll or pages flow, spotlight, typewriter, teleprompter.
 - Prebuilt binaries for Linux and macOS (x64, arm64).
 
-[Unreleased]: https://github.com/jackMort/brothy/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jackMort/brothy/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jackMort/brothy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jackMort/brothy/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/jackMort/brothy/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jackMort/brothy/releases/tag/v0.1.0
