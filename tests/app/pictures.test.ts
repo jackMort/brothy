@@ -152,6 +152,7 @@ test("PictureCache: a picture touched on every render survives eviction past the
   cache.want("old", "/b.png", 100, 100, null, () => done++)
   await until(() => done === 2)
   const seen = cache.get("seen") as NativeImage & { gone: boolean }
+  cache.frame()
   cache.want("new", "/c.png", 100, 100, null, () => done++)
   await until(() => done === 3)
   expect(cache.get("seen")).toBe(seen)
