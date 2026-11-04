@@ -11,6 +11,7 @@ import { STDIN } from "../notes/workspace"
 import { findQuote, linkLabels, narrowLabels, visibleLinks } from "../ui/nav"
 import { findHeading, type InfoItem, linkDest, resolveLink } from "../ui/panel"
 import type { AppCtx } from "./ctx"
+import type { PictureSheet } from "./picture-sheet"
 import type { UI } from "./store"
 
 /** What the label spots depend on: a highlight re-render keeps it, a reload, the mode, the width or the scroll changes it. */
@@ -62,6 +63,7 @@ function makeFollow(c: AppCtx) {
 function makeLabels(
   c: AppCtx,
   { ensureLinks, followLink }: Pick<ReturnType<typeof makeFollow>, "ensureLinks" | "followLink">,
+  openPicture: PictureSheet["openPicture"],
 ) {
   const { ui, set, derive, flash } = c
 
@@ -77,7 +79,7 @@ function makeLabels(
     ensureLinks()
     const d = derive()
     if (d.s.source) return flash("links: preview only (s)")
-    const spots = visibleLinks(d.view.lines, d.top, d.L.CH)
+    const spots = visibleLinks(d.view.lines, d.top, d.L.CH, d.view.pics)
     if (!spots.length) return flash("no links on screen")
     const labels = linkLabels(spots.length)
     set({
@@ -97,8 +99,10 @@ function makeLabels(
     const left = narrowLabels(lb.labels, typed)
     if (!left.length) return set({ labels: null })
     if (left.length === 1 && lb.labels[left[0]!] === typed) {
-      const link = derive().view.links?.[lb.spots[left[0]!]!.link]
+      const spot = lb.spots[left[0]!]!
       set({ labels: null })
+      if (spot.pic !== undefined) return openPicture(spot.pic)
+      const link = spot.link === undefined ? undefined : derive().view.links?.[spot.link]
       if (link) followLink(link)
       return
     }
@@ -170,12 +174,12 @@ function makeLanding(c: AppCtx) {
 }
 
 /** Links, labels, history and landing on a change, over the app context. */
-export function makeLinks(c: AppCtx) {
+export function makeLinks(c: AppCtx, { openPicture }: Pick<PictureSheet, "openPicture">) {
   const { ensureLinks, openLink, followLink } = makeFollow(c)
   return {
     ensureLinks,
     openLink,
-    ...makeLabels(c, { ensureLinks, followLink }),
+    ...makeLabels(c, { ensureLinks, followLink }, openPicture),
     ...makeHistory(c),
     ...makeLanding(c),
   }

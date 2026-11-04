@@ -102,14 +102,14 @@ export function App({
   // the app context and the feature factories over it, rebuilt every render: handlers close over this render's size and
   // props, and read the store at call time
   const ctx = makeCtx({ ui, set, bump, derive, dims, ...refs, W, H, renderer, fetchImpl, themeName, linkScanDelay })
-  const links = makeLinks(ctx)
+  const pictureSheet = makePictureSheet(ctx)
+  const links = makeLinks(ctx, pictureSheet)
   const aiJobs = makeAIJobs(ctx, links)
   const zen = makeZen(ctx, aiJobs)
   const switcher = makeSwitcher(ctx, links)
   const workspace = makeWorkspace(ctx, switcher, aiJobs)
   const popups = makePopups(ctx)
   const proof = makeProof(ctx, links)
-  const pictureSheet = makePictureSheet(ctx)
   const graph = makeGraph(ctx, links, switcher)
   const { currentCtx, pokeHints, outlineGo, infoGo, onKey } = makeActions(ctx, {
     aiJobs,

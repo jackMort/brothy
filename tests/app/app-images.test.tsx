@@ -680,3 +680,45 @@ test("the note changing on disk closes the sheet", async () => {
   expect(s.captureCharFrame()).not.toContain(SHEET)
   expect(sheetImage(s)).toBeUndefined()
 })
+
+test("f: a picture is a label target; its label opens the sheet and the pixels stay", async () => {
+  const s = await pictured()
+  await shown(s)
+  const f = await keys(s, "f")
+  const img = imagesOf(s)[0]!
+  expect(imagesOf(s)).toHaveLength(1)
+  expect(f.split("\n")[img.y]!.slice(img.x, img.x + 1)).toBe("a")
+  await keys(s, "a")
+  await waitFor(s, () => !!sheetImage(s))
+  expect(s.captureCharFrame()).toContain(SHEET)
+})
+
+test("f: a note whose only target is a picture starts labels, in the placeholder too", async () => {
+  const s = await mount(vault(NOTE), "n.md")
+  const f = await waitFrame(s, (x) => x.includes("▣ Plan"))
+  expect(f).toContain("▣ Plan")
+  const lab = await keys(s, "f")
+  expect(lab).not.toContain("no links")
+  expect(lab).toContain("a Plan")
+  await keys(s, "a")
+  await waitFrame(s, (x) => x.includes(SHEET))
+})
+
+test("f: a failed picture is a target, and a label letter that doesn't match cancels", async () => {
+  const s = await pictured("![Bad](bad.png)", { "bad.png": new Uint8Array([1, 2, 3]) })
+  await waitFrame(s, (x) => x.includes("Bad"))
+  const lab = await keys(s, "f")
+  expect(lab).not.toContain("no links")
+  await keys(s, "a")
+  await waitFrame(s, (x) => x.includes("Bad"))
+  expect(s.captureCharFrame()).not.toContain("no links")
+})
+
+test("f: in zen, labels stay off", async () => {
+  const s = await pictured()
+  await keys(s, "z")
+  await shown(s)
+  const f = await keys(s, "f")
+  expect(f).not.toContain("no links")
+  expect(imagesOf(s)).toHaveLength(1)
+})

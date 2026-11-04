@@ -8,7 +8,8 @@ import type { ReactNode } from "react"
 import { landTail, landText } from "../ai/delta"
 import { drawnText, glossTail, type MarginNote, marginLayout, sheetRows } from "../ai/gloss"
 import { A, type Span } from "../lib/spans"
-import { superscript, truncate } from "../lib/text"
+import { superscript, truncate, width } from "../lib/text"
+import type { Rendered } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
 import {
   CARET,
@@ -26,7 +27,7 @@ import {
   waitText,
 } from "../ui/footnote"
 import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
-import { markMatches, overlayAt } from "../ui/nav"
+import { type LinkSpot, markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
 import type { ChangeView } from "../ui/panel"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
@@ -361,6 +362,7 @@ function noteLines(c: AppCtx, d: Derived) {
         ),
       )}
       {pictureLayer(c, d, footAt)}
+      {pictureLabels(d, footAt)}
       {margin ? (
         <box
           key="change-side"
@@ -375,13 +377,37 @@ function noteLines(c: AppCtx, d: Derived) {
   )
 }
 
+/** The spot is a picture's label on its reserved rows (a blank row has no text to draw it in, an image sits under it). */
+function onReserved(view: Rendered, sp: LinkSpot) {
+  const p = sp.pic === undefined ? undefined : view.pics?.[sp.pic]
+  return !!p && sp.row < p.line + p.rows
+}
+
+/** The `f` labels of the pictures on their reserved rows: a box of the label's width over the image, in the labels' style. */
+function pictureLabels({ s, L, t, view, top }: Derived, bottom: number) {
+  const lb = s.labels && s.labels.geo === labelGeo(s, L.CW, view.lines.length, top) ? s.labels : null
+  return lb?.spots.map((sp, k) => {
+    const label = lb.labels[k]!
+    const y = sp.row - top
+    if (!onReserved(view, sp) || y < 0 || y >= bottom || !label.startsWith(lb.typed)) return null
+    return (
+      <box
+        key={`pic-label-${k}`}
+        style={{ position: "absolute", left: sp.col, top: y, width: width(label), height: 1 }}
+      >
+        <Row spans={[{ text: label, fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD }]} />
+      </box>
+    )
+  })
+}
+
 /** Line `n` of the note: find matches marked, the `f` labels over its links. */
 function lineSpans({ s, L, t, view, top }: Derived, n: number): Span[] {
   let spans = markMatches(view.lines[n]?.spans ?? [], s.query, t)
   const lb = s.labels && s.labels.geo === labelGeo(s, L.CW, view.lines.length, top) ? s.labels : null
   lb?.spots.forEach((sp, k) => {
     const label = lb.labels[k]!
-    if (sp.row === n && label.startsWith(lb.typed))
+    if (sp.row === n && !onReserved(view, sp) && label.startsWith(lb.typed))
       spans = overlayAt(spans, sp.col, label, { fg: contrastOn(t.warning), bg: t.warning, attr: A.BOLD })
   })
   return spans

@@ -218,6 +218,38 @@ describe("link labels", () => {
     expect(visibleLinks(lines, 1, 3)).toEqual([{ link: 0, row: 1, col: 0 }])
     expect(visibleLinks(lines, 2, 3)).toEqual([])
   })
+  describe("pictures", () => {
+    const pic = (id: number, line: number, rows: number, left = 0) => ({
+      id,
+      line,
+      rows,
+      cols: 10,
+      left,
+      src: "a.png",
+      alt: "a",
+    })
+    const at = (id: number) => ({ spans: [{ text: "x" }], pic: id })
+    test("reserved rows: one spot at the picture's left on its first row, in reading order with links", () => {
+      const lines = [row(["see "], ["b", 0]), at(0), at(0), at(0), row(["z "], ["c", 1])]
+      expect(visibleLinks(lines, 0, 5, [pic(0, 1, 2, 7)])).toEqual([
+        { link: 0, row: 0, col: 4 },
+        { pic: 0, row: 1, col: 7 },
+        { link: 1, row: 4, col: 2 },
+      ])
+    })
+    test("a placeholder: the column where its text starts, after a quote's bar", () => {
+      const lines = [{ spans: [{ text: "│ " }, { text: "▣ " }, { text: "Plan" }], pic: 0 }]
+      expect(visibleLinks(lines, 0, 5, [pic(0, 0, 0)])).toEqual([{ pic: 0, row: 0, col: 2 }])
+    })
+    test("scrolled partly off: the first row in view; only the caption in view: one spot there", () => {
+      const lines = [at(0), at(0), at(0), at(0)]
+      expect(visibleLinks(lines, 1, 5, [pic(0, 0, 3, 4)])).toEqual([{ pic: 0, row: 1, col: 4 }])
+      expect(visibleLinks(lines, 3, 5, [pic(0, 0, 3, 4)])).toEqual([{ pic: 0, row: 3, col: 4 }])
+    })
+    test("no pics given: lines with pic are ignored", () => {
+      expect(visibleLinks([at(0)], 0, 5)).toEqual([])
+    })
+  })
   test("linkLabels: single keys up to the alphabet, then two-key labels; prefix-free", () => {
     expect(linkLabels(3)).toEqual(["a", "s", "d"])
     expect(linkLabels(12)).toHaveLength(12)

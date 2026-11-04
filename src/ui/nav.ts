@@ -2,7 +2,7 @@
 
 import { lineText, type Span } from "../lib/spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "../lib/text"
-import type { Geometry } from "../markdown/render"
+import type { Geometry, Pic } from "../markdown/render"
 import type { Theme } from "../theme/theme"
 import { fitHits, hitSpans, type PickerItem } from "./rows"
 
@@ -238,29 +238,57 @@ export function matchKey(spec: string, k: KeyLike): boolean {
 // ------------------------------------------------------------- link labels
 
 export interface LinkSpot {
-  /** index into `Rendered.links` */
-  link: number
+  /** index into `Rendered.links` (a link spot) */
+  link?: number
+  /** index into `Rendered.pics` (a picture spot) */
+  pic?: number
   /** absolute line index */
   row: number
-  /** column of the link's first visible cell */
+  /** column of the target's first visible cell */
   col: number
 }
 
 /** Home-row-first keys for link labels. */
 const LABEL_KEYS = "asdjklghreui"
 
-/** Links on rows `first`..`first+h`, each once (a wrapped link at its first visible row), in reading order. */
-export function visibleLinks(lines: { spans: Span[] }[], first: number, h: number): LinkSpot[] {
+/** Where a picture's label goes on its row: the reserved rows' left edge, a placeholder's `▣` (after any quote bar). */
+function picCol(pic: Pic, spans: Span[]): number {
+  if (pic.rows > 0) return pic.left
+  let col = 0
+  for (const s of spans) {
+    if (s.text.startsWith("▣")) return col
+    col += width(s.text)
+  }
+  return 0
+}
+
+/**
+ * Links and pictures on rows `first`..`first+h`, each once (a wrapped link at its first visible row, a picture at the
+ * first of its rows in view, the caption included), in reading order.
+ */
+export function visibleLinks(
+  lines: { spans: Span[]; pic?: number }[],
+  first: number,
+  h: number,
+  pics: Pic[] = [],
+): LinkSpot[] {
   const seen = new Set<number>()
+  const seenPic = new Set<number>()
   const out: LinkSpot[] = []
   for (let row = Math.max(0, first); row < Math.min(lines.length, first + h); row++) {
+    const { spans, pic: id } = lines[row]!
+    const pic = id === undefined ? undefined : pics[id]
     let col = 0
-    for (const s of lines[row]!.spans) {
+    for (const s of spans) {
       if (s.link !== undefined && !seen.has(s.link)) {
         seen.add(s.link)
         out.push({ link: s.link, row, col })
       }
       col += width(s.text)
+    }
+    if (pic && !seenPic.has(pic.id)) {
+      seenPic.add(pic.id)
+      out.push({ pic: pic.id, row, col: picCol(pic, spans) })
     }
   }
   return out
