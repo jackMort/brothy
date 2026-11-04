@@ -53,7 +53,7 @@ export function docBox(
   const pageContent = () => {
     if (!s.openPath) return welcomePage(c, d, ws)
     if (file?.error) return openError(d, file.error)
-    return L.zen ? zenLines(d) : noteLines(c, d)
+    return L.zen ? zenLines(c, d) : noteLines(c, d)
   }
   const content = pageContent()
   return (
@@ -128,7 +128,7 @@ function openError({ s, L, t }: Derived, error: string) {
  * Zen's lines: a 2-column gutter carrying the typewriter marker, Spotlight dimming, and the gloss: a sheet over the bottom
  * rows, or from 140 columns notes in the right margin; either way a mark after each glossed heading.
  */
-function zenLines(d: Derived) {
+function zenLines(c: AppCtx, d: Derived) {
   const { t, sheet } = d
   const { CW, CH } = d.L
   // a 2-column gutter left of the text carries the typewriter marker
@@ -145,9 +145,12 @@ function zenLines(d: Derived) {
           const r = i - sheetAt
           if (r >= 0) return <Row key={"gloss" + r} spans={[{ text: "  " }, ...bottom[r]!]} />
           const n = d.win.first + i
+          if (n >= d.win.lo && n < d.win.hi && reservedBlank(d.view, n))
+            return <box key={`reserved-${n}`} style={{ height: 1, flexShrink: 0 }} />
           const head = { text: d.tw && n === d.top ? "▸" : " ", fg: gutter }
           return <Row key={n} spans={markedLine(head, zenLine(d, n), marks.get(n), CW)} />
         })}
+        {pictureLayer(c, d, sheetAt, { ...d.win, dx: 2 })}
       </box>
       {side ? (
         <box

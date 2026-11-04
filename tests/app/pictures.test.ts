@@ -257,6 +257,21 @@ test("picWindow: the rows on screen and the source pixels they show", () => {
   expect(picWindow(PIC, 11, 2, CELL)).toEqual({ y: 0, rows: 2, crop: { left: 0, top: 20, width: 200, height: 40 } })
 })
 
+test("picWindow: only the lines inside lo..hi, for a page", () => {
+  // PIC sits on lines 10..14: a page that starts at 12 shows its last three rows, one that ends at 12 its first two
+  expect(picWindow(PIC, 0, 26, CELL, 12)).toEqual({
+    y: 12,
+    rows: 3,
+    crop: { left: 0, top: 40, width: 200, height: 60 },
+  })
+  expect(picWindow(PIC, 0, 26, CELL, 0, 12)).toEqual({
+    y: 10,
+    rows: 2,
+    crop: { left: 0, top: 0, width: 200, height: 40 },
+  })
+  expect(picWindow(PIC, 0, 26, CELL, 15)).toBeNull()
+})
+
 test("picWindow: nothing above, below, or for a placeholder", () => {
   expect(picWindow(PIC, 15, 26, CELL)).toBeNull()
   expect(picWindow(PIC, 0, 10, CELL)).toBeNull()

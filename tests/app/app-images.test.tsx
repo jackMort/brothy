@@ -13,6 +13,7 @@ import {
   imagesOf,
   keys,
   kittyTerminal,
+  OLLAMA,
   type Setup,
   setResolution,
   sleep,
@@ -25,7 +26,7 @@ import {
   withClock,
 } from "./helpers"
 
-const { tmp, mount, savedConfig, configFile } = useAppHarness()
+const { tmp, mount, savedConfig, configFile, aiConfig, seedGloss, zenConfig } = useAppHarness()
 
 /** Cells of 10 × 20 pixels on the 100 × 30 terminal, the harness's default. */
 const RES = { width: 1000, height: 600 }
@@ -258,14 +259,156 @@ test("minimap: a picture's reserved rows are a muted block, past the band too", 
   await waitFor(s, () => offBand().length > 0)
 })
 
-test("zen keeps the rows and draws no picture yet", async () => {
+/** Zen's body: 26 rows from the top line and its gap; the text sits 14 columns in (the page's 12 and the 2-column gutter). */
+const ZEN_TEXT_X = 14
+
+/** A note whose picture is the only one: `lead` filler paragraphs before it, `after` after. */
+const zenNote = (lead: number, after = 30) => `# Top\n\n${filler(lead)}\n\n![Plan](plan.png)\n\nend\n\n${filler(after)}`
+const zenMounted = async (note: string, zen?: Record<string, unknown>) => {
+  if (zen) zenConfig(zen)
+  const s = await pictured(note)
+  await keys(s, "z")
+  return s
+}
+/** The row of the caption (`Plan`) in the frame. */
+const captionRow = (s: Setup) =>
+  s
+    .captureCharFrame()
+    .split("\n")
+    .findIndex((r) => r.trim() === "Plan")
+
+test("zen Typewriter: the picture over its rows, at the text's column, moving with the reading line", async () => {
+  const s = await zenMounted(zenNote(1))
+  await shown(s)
+  let img = imagesOf(s)[0]!
+  // centred in the 72-column measure: (72 - 20) / 2 columns past the text's left
+  expect(img.x).toBe(ZEN_TEXT_X + 26)
+  expect(captionRow(s)).toBe(img.y + 5)
+  const y = img.y
+  await keys(s, "j", "j")
+  await waitFor(s, () => imagesOf(s)[0]?.y === y - 2)
+  img = imagesOf(s)[0]!
+  expect(captionRow(s)).toBe(img.y + 5)
+  expect(img.crop).toEqual({ left: 0, top: 0, width: 200, height: 100 })
+  expect(s.captureCharFrame()).not.toContain("⏎ view")
+})
+
+test("zen Typewriter: cropped at the body's bottom, and at its top", async () => {
+  const s = await zenMounted(zenNote(3))
+  await shown(s)
+  let img = imagesOf(s)[0]!
+  expect(img.y + img.height).toBe(BODY_END)
+  expect(img.height).toBeLessThan(5)
+  expect(img.crop).toEqual({ left: 0, top: 0, width: 200, height: img.height * 20 })
+  // up through the top edge: the reading line is mid-body, so the first rows leave first
+  await keys(s, ...Array(30).fill("j"))
+  await waitFor(s, () => imagesOf(s).length === 0 || imagesOf(s)[0]!.y === BODY_TOP)
+  const s2 = await zenMounted(zenNote(1))
+  await shown(s2)
+  for (let i = 0; i < 40 && !(imagesOf(s2)[0]?.y === BODY_TOP && imagesOf(s2)[0]!.height < 5); i++) await keys(s2, "j")
+  img = imagesOf(s2)[0]!
+  expect([img.y, img.height < 5]).toEqual([BODY_TOP, true])
+  expect(img.crop!.top).toBe((5 - img.height) * 20)
+  expect(img.crop!.height).toBe(img.height * 20)
+})
+
+test("zen Pages: a picture shows on its page, not on another, and a page's end crops it", async () => {
+  const note = `# One\n\nintro\n\n![Plan](plan.png)\n\n# Two\n\nsecond page\n\n# Three\n\n${filler(40)}`
+  const s = await zenMounted(note, { flow: "pages" })
+  await shown(s)
+  const img = imagesOf(s)[0]!
+  expect(captionRow(s)).toBe(img.y + 5)
+  await keys(s, "]")
+  await waitFor(s, () => s.captureCharFrame().includes("page 2 of 3"))
+  expect(imagesOf(s)).toHaveLength(0)
+  await keys(s, "[")
+  await shown(s)
+  // a picture the next heading cuts off is not cut by the page: it is reserved inside its own section
+  expect(imagesOf(s)[0]!.height).toBe(5)
+})
+
+test("zen Pages: the page's lines above and below the picture's section are not drawn into", async () => {
+  // a section taller than the screen: the picture sits past the page's first rows and is cropped at the bottom
+  const note = `# One\n\n${filler(8)}\n\n![Plan](plan.png)\n\n${filler(8)}\n\n# Two\n\nx`
+  const s = await zenMounted(note, { flow: "pages" })
+  await waitFor(s, () => s.captureCharFrame().includes("page 1 of 2"))
+  const f = s.captureCharFrame().split("\n")
+  for (const img of imagesOf(s)) {
+    expect(img.y).toBeGreaterThanOrEqual(BODY_TOP)
+    expect(img.y + img.height).toBeLessThanOrEqual(BODY_END)
+    expect(f[img.y + img.height] ?? "").not.toContain("Two")
+  }
+})
+
+test("zen: an open gloss sheet keeps the picture above it", async () => {
+  aiConfig(OLLAMA)
+  const d = vault(zenNote(1))
+  seedGloss(join(d, "n.md"), 0, "About the top section, said at some length so the sheet takes its rows.")
+  const s = await mount(d, "n.md")
+  kittyTerminal(s)
+  setResolution(s, RES)
+  await keys(s, "z")
+  await waitFor(s, () => s.captureCharFrame().includes("¹ About the top"))
+  await shown(s)
+  const rule = s
+    .captureCharFrame()
+    .split("\n")
+    .findIndex((l) => /^\s*─{16}(?!─)/.test(l))
+  expect(rule).toBeGreaterThan(BODY_TOP)
+  const img = imagesOf(s)[0]!
+  expect(img.y + img.height).toBeLessThanOrEqual(rule)
+  expect(img.height).toBeLessThan(5)
+})
+
+test("leaving zen: the picture is back at its place in Preview", async () => {
   const s = await pictured()
   await shown(s)
-  const f = await keys(s, "z")
-  expect(imagesOf(s)).toHaveLength(0)
-  expect(f).toContain("Plan")
-  expect(f).not.toContain("⏎ view")
+  const before = imagesOf(s)[0]!
+  const at = [before.x, before.y, before.width, before.height]
+  await keys(s, "z")
+  await shown(s)
+  await keys(s, "z")
+  await shown(s)
+  const after = imagesOf(s)[0]!
+  expect([after.x, after.y, after.width, after.height]).toEqual(at)
 })
+
+test("zen: a failed picture shows its unreadable row, and a text mode its placeholder", async () => {
+  const s = await zenMounted(zenNote(1))
+  await shown(s)
+  imagesOf(s)[0]!.onError?.(new Error("no"))
+  const f = await waitFrame(s, (x) => x.includes("▣ Plan · 200×100 · ⏎ view"))
+  expect(f).toContain("pictures · pixels failed")
+  expect(imagesOf(s)).toHaveLength(0)
+})
+
+/** The first body row of the frame that holds `text` (the top line's breadcrumb is not one). */
+const rowOf = (s: Setup, text: string) =>
+  s
+    .captureCharFrame()
+    .split("\n")
+    .findIndex((r, i) => i >= BODY_TOP && r.includes(text))
+
+for (const zen of [false, true]) {
+  test(`p keeps the reader's place ${zen ? "in zen" : "in Preview"}: the same heading, and back`, async () => {
+    const note = `# Top\n\n![Plan](plan.png)\n\n${filler(3)}\n\n## Mid\n\n${filler(2)}\n\n![Plan](plan.png)\n\n${filler(10)}`
+    const s = await pictured(note)
+    await shown(s, 2)
+    if (zen) await keys(s, "z")
+    // past the first picture, with ## Mid on screen
+    await keys(s, ...Array(14).fill("j"))
+    await waitFor(s, () => rowOf(s, "Mid") > 0)
+    const mid = rowOf(s, "Mid")
+    // `remapTop` keeps the same fraction of the section: the first picture's rows leaving the section moves the heading a few rows
+    const drift = 4
+    await keys(s, "p")
+    await waitFor(s, () => imagesOf(s).length === 0 && rowOf(s, "▣ Plan") > 0)
+    expect(Math.abs(rowOf(s, "Mid") - mid)).toBeLessThanOrEqual(drift)
+    await keys(s, "p")
+    await waitFor(s, () => imagesOf(s).length > 0)
+    expect(Math.abs(rowOf(s, "Mid") - mid)).toBeLessThanOrEqual(1)
+  })
+}
 
 test("a piped document resolves pictures from the folder", async () => {
   const s = await mount(vault(NOTE), undefined, { stdin: NOTE })

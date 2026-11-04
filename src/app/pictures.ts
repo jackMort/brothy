@@ -125,11 +125,11 @@ export const picKey = (path: string, p: Pic, cell: Cell, theme: string, transpar
 
 /**
  * The part of `p` in the `rows` rows from `top`, null when none is: where it sits from the first row, how many rows it
- * takes and the source pixels those rows show.
+ * takes and the source pixels those rows show. Zen shows only lines `lo..hi` of the note (a page, the note's ends).
  */
-export function picWindow(p: Pic, top: number, rows: number, cell: Cell) {
-  const from = Math.max(0, top - p.line)
-  const to = Math.min(p.rows, top + rows - p.line)
+export function picWindow(p: Pic, top: number, rows: number, cell: Cell, lo = 0, hi = Number.POSITIVE_INFINITY) {
+  const from = Math.max(0, top - p.line, lo - p.line)
+  const to = Math.min(p.rows, top + rows - p.line, hi - p.line)
   if (from >= to) return null
   return {
     y: p.line + from - top,

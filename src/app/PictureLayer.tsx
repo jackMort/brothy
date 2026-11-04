@@ -39,16 +39,20 @@ function pixelsFailed({ ui, set, flash }: AppCtx) {
   flash("pictures · pixels failed · text instead", "error")
 }
 
+/** Which lines the rows on screen show: row `i` is line `first + i` when it lies in `lo..hi`; `dx` columns of gutter left of the text. */
+export type Window = { first: number; lo: number; hi: number; dx: number }
+
 /**
  * What the pictures in the `rows` rows on screen draw: each `<image>` (a `get` per picture keeps it from being evicted
  * while on screen); nothing while it is decoding, so its blank rows show; a failed one's `▣` row.
  */
-export function pictureLayer(c: AppCtx, d: Derived, rows: number) {
-  const { s, t, view, top, L } = d
+export function pictureLayer(c: AppCtx, d: Derived, rows: number, win?: Window) {
+  const { s, t, view, L } = d
+  const { first, lo, hi, dx } = win ?? { first: d.top, lo: 0, hi: Number.POSITIVE_INFINITY, dx: 0 }
   const { cell } = s
   if (d.picMode !== "pixels" || !cell) return null
   return (view.pics ?? []).flatMap((p) => {
-    const at = picWindow(p, top, rows, cell)
+    const at = picWindow(p, first, rows, cell, lo, hi)
     const file = at && d.picFiles.file(p.src)
     if (!at || !file) return []
     const key = picKey(file, p, cell, t.name, s.transparent)
@@ -57,7 +61,7 @@ export function pictureLayer(c: AppCtx, d: Derived, rows: number) {
       askPicture(c, d, key, file, p, cell)
       return []
     }
-    const place = { position: "absolute", left: p.left, top: at.y } as const
+    const place = { position: "absolute", left: p.left + dx, top: at.y } as const
     return img ? (
       <image
         key={`pic-${p.id}-${key}`}
