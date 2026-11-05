@@ -20,6 +20,8 @@ vaults as they are and comes with 42 themes. AI is optional and runs only when y
 [Keys](https://jackmort.github.io/brothy/keys/) ·
 [Changelog](CHANGELOG.md)
 
+[![A 17-second tour of brothy: following a link, ctrl+p, a sweep through themes and zen mode](docs/demo.gif)](https://jackmort.github.io/brothy/#tour)
+
 ## Install
 
 macOS or Linux, in a terminal with true color and Unicode. Download `brothy-<os>-<arch>`
@@ -34,6 +36,9 @@ mv brothy-linux-x64 ~/.local/bin/brothy        # any folder on your PATH
 
 On macOS you may need to clear the quarantine flag first:
 `xattr -d com.apple.quarantine brothy-darwin-arm64`.
+
+On Arch Linux, [`brothy-bin`](https://aur.archlinux.org/packages/brothy-bin) in the AUR installs
+the same binary (kept by a community packager): `yay -S brothy-bin`.
 
 <details>
 <summary>Build from source</summary>

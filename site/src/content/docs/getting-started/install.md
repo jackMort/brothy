@@ -26,6 +26,14 @@ chmod +x brothy && mv brothy ~/.local/bin/brothy
 You may need to clear the quarantine flag first: `xattr -d com.apple.quarantine brothy-darwin-arm64`.
 :::
 
+## Arch Linux
+
+[`brothy-bin`](https://aur.archlinux.org/packages/brothy-bin) in the AUR packages the release binary. A community maintainer keeps it, so a new release can take a few days to land:
+
+```sh
+yay -S brothy-bin              # or any AUR helper
+```
+
 ## From source
 
 Needs [Bun](https://bun.sh) 1.4 or newer:
