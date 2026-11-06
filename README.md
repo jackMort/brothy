@@ -5,6 +5,7 @@ A calm terminal Markdown reader for a folder of notes.
 [![CI](https://github.com/jackMort/brothy/actions/workflows/ci.yml/badge.svg)](https://github.com/jackMort/brothy/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jackMort/brothy)](https://github.com/jackMort/brothy/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/jackmort)
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png">
@@ -144,6 +145,12 @@ bun test
 [CLAUDE.md](CLAUDE.md) explains how the code is laid out. See [CONTRIBUTING.md](CONTRIBUTING.md),
 the [Code of Conduct](CODE_OF_CONDUCT.md) and [CHANGELOG.md](CHANGELOG.md); report security
 problems privately as described in [SECURITY.md](SECURITY.md).
+
+## Support
+
+brothy is free. If it earns a place in your terminal, you can buy me a coffee.
+
+<a href="https://buymeacoffee.com/jackmort"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
 
 ## Credits
 
