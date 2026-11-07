@@ -8,7 +8,8 @@ description: "Where brothy keeps its settings and what each key does."
 | Key | Value |
 | --- | --- |
 | `ai` | see [AI](/brothy/ai/setup/) |
-| `theme` | a theme name, or a family's: `"one"` opens `one-dark`. A name brothy does not know is reported at start and `brothy` stands in |
+| `theme` | a theme name, or a family's: `"one"` opens `one-dark`. A name brothy does not know is reported at start and `brothy` stands in. With no `theme` the default is `brothy` following the terminal |
+| `themeMode` | `"auto"`: the theme's family follows the terminal's light or dark. Absent: `theme` is fixed. Set by the [theme picker](/brothy/themes/theme-picker/) |
 | `sidebar` | `{ "view": "files", "hidden": false }`: the panel view and whether it is hidden |
 | `wide` | boolean, full-width text (<kbd>w</kbd>) |
 | `transparent` | boolean (<kbd>T</kbd>); `--transparent` wins for one run |

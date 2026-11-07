@@ -10,15 +10,21 @@ import Shot from "../../../components/Shot.astro"
 <kbd>t</kbd> opens a picker laid out as a board: one row per family with its dark and light specimens side by side (`Aa` and three accents, each on that theme's own background; a dark-only family's light is struck through).
 
 - Type to filter.
-- <kbd>↑</kbd> <kbd>↓</kbd> picks the family and <kbd>←</kbd> <kbd>→</kbd> (or <kbd>tab</kbd>) the mode. The cursor frames the theme being previewed and the theme in use keeps a thin frame.
+- <kbd>↑</kbd> <kbd>↓</kbd> picks the family and <kbd>←</kbd> <kbd>→</kbd> (or <kbd>tab</kbd>) the mode: `dark`, `light` or `auto`, wrapping. The cursor frames the theme being previewed and the theme in use keeps a thin frame.
 - From 100 columns a pane shows a sample note (marks, links, code, a callout, tasks, a table) in the highlighted theme.
 - The app keeps its theme while you look. <kbd>⏎</kbd> applies it and saves it to [`config.json`](/brothy/config/config-json/); <kbd>esc</kbd> closes with nothing changed. A click on a specimen applies that theme.
 
-The choice is always explicit: brothy does not follow the terminal's colors.
+## Follow the terminal
+
+`auto` follows the terminal's own light or dark: brothy asks the terminal at start and swaps to the family's other side when it changes. Both of the family's specimens are framed, and the pane's head says what it follows (`brothy · auto · terminal is dark`, or `no answer, dark` when the terminal does not report). A dark-only or light-only family has nothing to follow, so its `auto` is struck through.
+
+<kbd>⏎</kbd> on `auto` saves the family and `"themeMode": "auto"`; <kbd>⏎</kbd> on `dark` or `light` saves that theme and drops `themeMode`, so the theme is fixed again. With no `theme` saved at all brothy is `brothy` in `auto`. A saved `theme` without `themeMode` stays fixed. Following the terminal is never written to the config: only the picker saves.
+
+A terminal that does not answer is taken as dark, and a later report still switches. Without a terminal report brothy waits at most 100 ms before the first frame.
 
 ## On the command line
 
-`brothy -t dracula` picks a theme for one run. A family name opens its dark theme (`-t one` is `one-dark`), or its only one. `--theme` wins over the `theme` in the config for that run.
+`brothy -t dracula` picks a theme for one run. A family name opens its dark theme (`-t one` is `one-dark`), or its only one. `--theme` wins over the `theme` in the config for that run, and turns `auto` off for it.
 
 ## Transparent background
 

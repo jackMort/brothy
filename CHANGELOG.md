@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Follow the terminal's light or dark: the theme picker's switch gains `auto` (`dark  light  auto`, `←` `→` and `tab` wrapping). With `auto` chosen both of a family's slots are framed and the pane says what it follows (`brothy · auto · terminal is dark`, or `no answer, dark`). `⏎` on `auto` saves `theme` (the family) and `themeMode: "auto"`; on `dark` or `light` it saves the theme and drops `themeMode`. With no `theme` saved brothy is `brothy` in auto; a saved `theme` without `themeMode` stays fixed, and `--theme` turns auto off for the run. The terminal is asked before the first frame (up to 100 ms), so a light terminal gets no dark flash; no answer is dark, and a later report still switches. A single-mode family (synthwave84, vesper) has nothing to follow.
+
 ## [0.3.0] - 2026-11-04
 
 ### Added
