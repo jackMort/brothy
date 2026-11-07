@@ -31,6 +31,19 @@ describe("loadConfig", () => {
     writeFileSync(file(), '{"theme":"nord"}')
     expect(loadConfig()).toEqual({ theme: "nord" })
   })
+  test("reads themeMode auto and drops any other value", () => {
+    writeFileSync(file(), '{"theme":"nord","themeMode":"auto"}')
+    expect(loadConfig()).toEqual({ theme: "nord", themeMode: "auto" })
+    for (const bad of ['"dark"', "true", "1", "null"]) {
+      writeFileSync(file(), `{"theme":"nord","themeMode":${bad}}`)
+      expect(loadConfig()).toEqual({ theme: "nord" })
+    }
+  })
+  test("saving themeMode undefined removes it from the file", () => {
+    writeFileSync(file(), '{"theme":"nord","themeMode":"auto","wide":true}')
+    expect(saveConfig({ theme: "one-dark", themeMode: undefined })).toBe(true)
+    expect(JSON.parse(readFileSync(file(), "utf8"))).toEqual({ theme: "one-dark", wide: true })
+  })
   for (const bad of ["null", "[]", "42", '"str"', "{oops"]) {
     test(`tolerates ${bad}`, () => {
       writeFileSync(file(), bad)

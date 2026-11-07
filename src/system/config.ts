@@ -29,6 +29,8 @@ interface GraphConfig {
 
 export interface Config {
   theme?: string
+  /** `auto`: the theme's family follows the terminal's light/dark; absent: `theme` is fixed. Pass `undefined` in a patch to drop it. */
+  themeMode?: "auto" | undefined
   /** Legacy key: pass `undefined` in a patch to drop it from the file. */
   folds?: undefined
   /** Panel view and inline visibility. */
@@ -109,6 +111,7 @@ export function loadConfig(): Config {
   const out: Config = {}
   if (!raw) return out
   if (typeof raw.theme === "string") out.theme = raw.theme
+  if (raw.themeMode === "auto") out.themeMode = "auto"
   if (typeof raw.wide === "boolean") out.wide = raw.wide
   if (typeof raw.transparent === "boolean") out.transparent = raw.transparent
   if (typeof raw.motion === "boolean") out.motion = raw.motion
