@@ -460,7 +460,7 @@ const KEYMAP = {
 
   themeType: { modes: ["theme"], keys: [], label: "type", hint: "filter", spare: true },
   themeMove: { modes: ["theme"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
-  themeMode: { modes: ["theme"], keys: ["tab", "left", "right"], label: "←→", hint: "dark/light" },
+  themeMode: { modes: ["theme"], keys: ["tab", "left", "right"], label: "←→", hint: "dark/light/auto" },
   themeApply: { modes: ["theme"], keys: ["return", "enter"], label: "⏎", hint: "apply" },
   themeClose: { modes: ["theme"], keys: ["escape"], label: "esc", hint: "close" },
   themeErase: { modes: ["theme"], keys: ["backspace"], label: "⌫" },

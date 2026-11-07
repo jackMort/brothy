@@ -29,6 +29,8 @@ export interface MountOpts {
   fetch?: AppProps["fetch"]
   /** `themeName` */
   theme?: string
+  /** `auto`: follow the terminal's light/dark (what the CLI computes from config and `--theme`) */
+  auto?: boolean
   motion?: boolean
   stdin?: string
   linkScanDelay?: number

@@ -5,7 +5,7 @@
 // applies the theme; nothing here saves config or re-themes the app.
 
 import { A, type Span } from "../lib/spans"
-import { clamp, spanWidth, width } from "../lib/text"
+import { clamp, spanWidth, truncate, width } from "../lib/text"
 import type { HeadingStyle } from "../markdown/heading-style"
 import { type Rendered, render } from "../markdown/render"
 import { fuzzyHits } from "../notes/files"
@@ -13,6 +13,8 @@ import { innerWidth, PEEK_MIN_W, paneWidth, popupWidth, SPLIT_ROWS_MARGIN, split
 import { contrast, type Theme, themes } from "./theme"
 
 export type ThemeMode = Theme["mode"]
+/** The picker's switch: a mode, or `auto` (the family's side for the terminal's mode). */
+export type PickMode = ThemeMode | "auto"
 
 /** A family has at least one of `dark` and `light`; with only one it is single-mode (synthwave84, vesper). */
 export interface Family {
@@ -55,6 +57,33 @@ export const resolveTheme = (name: string | undefined, fams: readonly Family[] =
 export const familyOf = (t: Theme, fams: readonly Family[] = FAMILIES): Family | undefined =>
   fams.find((f) => f.dark?.name === t.name || f.light?.name === t.name)
 
+/** The family's theme for a terminal reporting `term` (null: no answer, dark). */
+export const autoTheme = (family: string, term: ThemeMode | null, fams: readonly Family[] = FAMILIES): Theme => {
+  const f = fams.find((x) => x.name === family) ?? fams[0]!
+  return familyTheme(f, term ?? "dark")
+}
+
+/**
+ * The theme to start in and whether it follows the terminal. `--theme` (`arg`) wins and is fixed; else auto
+ * when config says `themeMode: "auto"` or has no theme at all (family brothy). A saved theme alone stays fixed.
+ * A single-mode family or an unknown name has nothing to follow. In auto `name` is the family.
+ */
+export function startTheme(
+  arg: string | undefined,
+  cfg: { theme?: string; themeMode?: "auto" },
+): { name: string | undefined; auto: boolean } {
+  if (arg !== undefined) return { name: arg, auto: false }
+  if (cfg.theme === undefined) return { name: "brothy", auto: true }
+  if (cfg.themeMode !== "auto") return { name: cfg.theme, auto: false }
+  const t = resolveTheme(cfg.theme)
+  const f = t && familyOf(t)
+  return f && !onlyMode(f) ? { name: f.name, auto: true } : { name: cfg.theme, auto: false }
+}
+
+/** The pane's head under auto: `brothy · auto · terminal is dark`. */
+export const autoHead = (family: string, term: ThemeMode | null) =>
+  `${family} · auto · ${term ? `terminal is ${term}` : "no answer, dark"}`
+
 export interface FamilyHit {
   family: Family
   /** code-point indexes of the query in the name */
@@ -79,15 +108,21 @@ export interface ThemePick {
   q: string
   family: string
   /** the mode asked for; a single-mode family shows its own mode instead and leaves this alone (`pickShown`) */
-  mode: ThemeMode
+  mode: PickMode
   /** the theme in use when the picker opened (`current` on its row) */
   orig: string
   /** the list's first row, held while the pointer moves the highlight; null: centred on it (keys, wheel, typing) */
   top: number | null
 }
 
-export function pickStart(t: Theme): ThemePick {
-  return { q: "", family: familyOf(t)?.name ?? FAMILIES[0]!.name, mode: t.mode, orig: t.name, top: null }
+export function pickStart(t: Theme, auto = false): ThemePick {
+  return {
+    q: "",
+    family: familyOf(t)?.name ?? FAMILIES[0]!.name,
+    mode: auto ? "auto" : t.mode,
+    orig: t.name,
+    top: null,
+  }
 }
 
 /** The highlighted row in `rows`, -1 when the family is filtered out (no rows). */
@@ -95,12 +130,18 @@ export const pickIndex = (p: ThemePick, rows: readonly FamilyHit[]) => rows.find
 
 const pickFamily = (p: ThemePick, fams: readonly Family[]) => fams.find((x) => x.name === p.family) ?? fams[0]!
 
-/** The candidate: the highlighted family in the picker's mode, or in its only mode. */
-export const pickTheme = (p: ThemePick, fams: readonly Family[] = FAMILIES): Theme =>
-  familyTheme(pickFamily(p, fams), p.mode)
+/** The mode in force: the asked one, but a single-mode family has no auto and shows its own mode. */
+export const pickEffective = (p: ThemePick, fams: readonly Family[] = FAMILIES): PickMode =>
+  onlyMode(pickFamily(p, fams)) ?? p.mode
 
-/** The mode the switch shows as active: the candidate's. */
-export const pickShown = (p: ThemePick, fams: readonly Family[] = FAMILIES): ThemeMode => pickTheme(p, fams).mode
+/** The candidate: the highlighted family in the picker's mode (auto: the terminal's, `term`), or in its only mode. */
+export const pickTheme = (p: ThemePick, fams: readonly Family[] = FAMILIES, term: ThemeMode | null = null): Theme => {
+  const m = pickEffective(p, fams)
+  return familyTheme(pickFamily(p, fams), m === "auto" ? (term ?? "dark") : m)
+}
+
+/** The mode the switch shows as active: auto, else the candidate's. */
+export const pickShown = (p: ThemePick, fams: readonly Family[] = FAMILIES): PickMode => pickEffective(p, fams)
 
 /** One row down or up among the filtered families, wrapping. */
 export function pickMove(p: ThemePick, dir: 1 | -1, fams: readonly Family[] = FAMILIES): ThemePick {
@@ -117,9 +158,17 @@ export function pickQuery(p: ThemePick, q: string, fams: readonly Family[] = FAM
   return { ...p, q, family: keep ? p.family : rows[0]!.family.name, top: null }
 }
 
-/** Set the mode, or flip it when none is given (`tab`); on a single-mode family nothing changes. */
-export const pickMode = (p: ThemePick, mode?: ThemeMode, fams: readonly Family[] = FAMILIES): ThemePick =>
-  onlyMode(pickFamily(p, fams)) ? p : { ...p, mode: mode ?? (p.mode === "dark" ? "light" : "dark") }
+/** Set the mode, or step it when none is given (`tab`: dark → light → auto → dark); on a single-mode family nothing changes. */
+export const pickMode = (p: ThemePick, mode?: PickMode, fams: readonly Family[] = FAMILIES): ThemePick =>
+  onlyMode(pickFamily(p, fams)) ? p : { ...p, mode: mode ?? stepMode(p.mode, 1) }
+
+/** The mode `dir` steps away on the switch, wrapping. */
+const stepMode = (m: PickMode, dir: 1 | -1): PickMode =>
+  PICK_MODES[(PICK_MODES.indexOf(m) + dir + PICK_MODES.length) % PICK_MODES.length]!
+
+/** ← →: one step along the switch (wrapping); on a single-mode family nothing changes. */
+export const pickStep = (p: ThemePick, dir: 1 | -1, fams: readonly Family[] = FAMILIES): ThemePick =>
+  pickMode(p, stepMode(p.mode, dir), fams)
 
 /** Name column: the longest family name plus a 2-cell gap before the board's cells. */
 export const NAME_W = Math.max(...FAMILIES.map((f) => width(f.name))) + 2
@@ -153,6 +202,8 @@ export function themeSplit(
   }
 }
 
+/** The switch's modes, left to right. */
+export const PICK_MODES = ["dark", "light", "auto"] as const satisfies readonly PickMode[]
 /** The board's modes, left to right (the switch's order too). */
 export const BOARD_MODES = ["dark", "light"] as const satisfies readonly ThemeMode[]
 /** A specimen, ` Aa ●●● `. */
@@ -200,11 +251,12 @@ export type SlotFrame = "cursor" | "current" | undefined
  * Each mode's frame on a row: the cursor on the highlighted row's shown theme (the asked mode, or a
  * single-mode family's only one), else `current` on the theme in use.
  */
-export function boardFrames(f: Family, mode: ThemeMode, orig: string, sel: boolean): Record<ThemeMode, SlotFrame> {
-  const shown = familyTheme(f, mode)
+export function boardFrames(f: Family, mode: PickMode, orig: string, sel: boolean): Record<ThemeMode, SlotFrame> {
+  const both = mode === "auto" && !onlyMode(f)
+  const shown = familyTheme(f, mode === "auto" ? "dark" : mode)
   const frame = (x: Theme | undefined): SlotFrame => {
     if (!x) return undefined
-    if (sel && x === shown) return "cursor"
+    if (sel && (both || x === shown)) return "cursor"
     return x.name === orig ? "current" : undefined
   }
   return { dark: frame(f.dark), light: frame(f.light) }
@@ -239,14 +291,14 @@ export function boardSlot(t: Theme, x: Theme | undefined, mode: ThemeMode, frame
 }
 
 /** The header row: `dark` and `light` centred over their slots, bold, the shown mode in primary and the other muted. */
-export function boardHeader(t: Theme, shown: ThemeMode, L: BoardLayout): Span[] {
+export function boardHeader(t: Theme, shown: PickMode, L: BoardLayout): Span[] {
   const out: Span[] = [{ text: " ".repeat(L.nameW) }]
   BOARD_MODES.forEach((m, i) => {
     if (i) out.push({ text: " ".repeat(L.gap) })
     const l = (SLOT_W - width(m)) >> 1
     out.push(
       { text: " ".repeat(l) },
-      { text: m, fg: m === shown ? t.primary : t.textMuted, attr: A.BOLD },
+      { text: m, fg: m === shown || shown === "auto" ? t.primary : t.textMuted, attr: A.BOLD },
       { text: " ".repeat(SLOT_W - l - width(m)) },
     )
   })
@@ -312,16 +364,16 @@ export function roleWords(t: Theme, w: number): Span[] {
  * role words, a blank, then `view` (the sample at `w`) with its code rows filled
  * to the width; at most `h` rows.
  */
-export function paneLines(t: Theme, view: Rendered, w: number, h: number): Span[][] {
+export function paneLines(t: Theme, view: Rendered, w: number, h: number, name = t.name): Span[][] {
   const right = `text ${contrast(t.text, t.background).toFixed(1)}:1`
   const head: Span[] =
-    width(t.name) + 1 + width(right) <= w
+    width(name) + 1 + width(right) <= w
       ? [
-          { text: t.name, fg: t.textMuted },
-          { text: " ".repeat(w - width(t.name) - width(right)) },
+          { text: name, fg: t.textMuted },
+          { text: " ".repeat(w - width(name) - width(right)) },
           { text: right, fg: t.textMuted },
         ]
-      : [{ text: t.name, fg: t.textMuted }]
+      : [{ text: truncate(name, w), fg: t.textMuted }]
   const out: Span[][] = [head, roleWords(t, w), []]
   for (const l of view.lines) {
     if (!l.fill) {

@@ -11,7 +11,8 @@ import { ensureHighlights } from "../markdown/highlight"
 import { pendingHighlights, type Rendered } from "../markdown/render"
 import { watchPath } from "../notes/watch"
 import { STDIN } from "../notes/workspace"
-import { resolveTheme } from "../theme/themepick"
+import { themes } from "../theme/theme"
+import { autoTheme, familyOf, resolveTheme, type ThemeMode } from "../theme/themepick"
 import { copiedCount, selectedText } from "../ui/nav"
 import { LOGO_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
@@ -98,7 +99,19 @@ function useStartup(
 }
 
 /** The renderer's `destroy` and `selection` events. */
-function useRendererListeners({ renderer, flash }: AppCtx, leave: EffectDeps["leave"]) {
+function useRendererListeners({ renderer, flash, ui, set }: AppCtx, leave: EffectDeps["leave"]) {
+  // the terminal's light/dark: under auto the theme takes the family's other side; nothing is saved
+  useEffect(() => {
+    const follow = (mode: ThemeMode) => {
+      const s = ui.current
+      set({ termMode: mode })
+      if (!s.auto) return
+      const next = autoTheme(familyOf(themes[s.themeIdx]!)?.name ?? "brothy", mode)
+      set({ themeIdx: themes.indexOf(next) })
+    }
+    renderer.on("theme_mode", follow)
+    return () => void renderer.off("theme_mode", follow)
+  }, [])
   // SIGTERM / SIGHUP (the terminal closing) end the renderer without `quit`
   useEffect(() => {
     renderer.on("destroy", leave)

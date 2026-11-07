@@ -31,7 +31,7 @@ test("fitHits: the end is cut first; a late match gets a window; wide characters
 
 test("modeSwitch: the active side is a primary chip on backgroundElement, the other muted", () => {
   const segs = modeSwitch(t, "light")
-  expect(segs.map((seg) => seg.map((s) => s.text).join(""))).toEqual([" dark ", " light "]) // SWITCH_MODES order, one per chip
+  expect(segs.map((seg) => seg.map((s) => s.text).join(""))).toEqual([" dark ", " light ", " auto "]) // SWITCH_MODES order, one per chip
   expect(segs[1]!.find((s) => s.text === "light")).toMatchObject({ fg: t.primary, bg: t.backgroundElement, attr: 1 })
   expect(segs[0]!.map((s) => s.fg)).toEqual([t.textMuted])
   expect(segs[0]![0]!.attr).toBeUndefined()
@@ -39,6 +39,8 @@ test("modeSwitch: the active side is a primary chip on backgroundElement, the ot
   const only = modeSwitch(t, "dark", "dark")
   expect(only[0]!.find((s) => s.text === "dark")).toMatchObject({ fg: t.primary })
   expect(only[1]).toEqual([{ text: " light ", fg: t.textMuted, attr: A.STRIKE }])
+  expect(only[2]).toEqual([{ text: " auto ", fg: t.textMuted, attr: A.STRIKE }]) // auto can't be chosen either
+  expect(modeSwitch(t, "auto")[2]!.find((s) => s.text === "auto")).toMatchObject({ fg: t.primary })
 })
 
 test("hitSpans: hits are bold in the hit colour, runs of the same look share a span, `bold` makes the rest bold too", () => {

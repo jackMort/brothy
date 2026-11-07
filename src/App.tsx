@@ -51,6 +51,8 @@ export interface AppProps {
   root: string
   initialFile?: string
   themeName?: string
+  /** follow the terminal's light/dark: `themeName` is then a family (the CLI decides, `startTheme`) */
+  auto?: boolean
   /** `--transparent`: wins over the config for this run (a live toggle still saves). */
   transparent?: boolean
   /** injected by tests; the CLI uses the global fetch */
@@ -71,6 +73,7 @@ export function App({
   root: startRoot,
   initialFile,
   themeName,
+  auto,
   transparent,
   fetch: fetchImpl = globalThis.fetch,
   edit: editImpl,
@@ -86,7 +89,16 @@ export function App({
 
   // a ref-like box built once, on the first render: handlers read `ui.current` at call time
   const [ui] = useState(() => ({
-    current: initUI(startRoot, initialFile, themeName, transparent, stdin !== undefined, motion),
+    current: initUI(
+      startRoot,
+      initialFile,
+      themeName,
+      transparent,
+      stdin !== undefined,
+      motion,
+      auto,
+      renderer.themeMode,
+    ),
   }))
   const [, bump] = useState(0)
   const set = (patch: Partial<UI>) => {

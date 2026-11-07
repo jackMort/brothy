@@ -1,10 +1,12 @@
-import { afterAll, expect, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import { A, type Span } from "../../src/lib/spans"
 import { width as sw } from "../../src/lib/text"
 import { cachedHighlight, ensureHighlights, shutdownHighlighter } from "../../src/markdown/highlight"
 import { pendingHighlights } from "../../src/markdown/render"
 import { contrast, type Theme, themeByName, themes } from "../../src/theme/theme"
 import {
+  autoHead,
+  autoTheme,
   BOARD_MODES,
   boardFrames,
   boardHeader,
@@ -19,6 +21,7 @@ import {
   NAME_W,
   onlyMode,
   paneLines,
+  pickEffective,
   pickIndex,
   pickMode,
   pickMove,
@@ -33,6 +36,7 @@ import {
   SLOT_W,
   sampleView,
   specimen,
+  startTheme,
   THEME_LIST_W,
   themeFamilies,
   themeSplit,
@@ -298,4 +302,80 @@ test("resolveTheme: a theme name, else a family name in its dark theme (light wh
   expect(resolveTheme("paper", lightOnly)!.name).toBe("one-light")
   expect(resolveTheme("nope")).toBeUndefined()
   expect(resolveTheme(undefined)).toBeUndefined()
+})
+
+// ------------------------------------------------------------------ auto (follow the terminal)
+
+describe("startTheme", () => {
+  test("no saved theme: family brothy in auto", () =>
+    expect(startTheme(undefined, {})).toEqual({ name: "brothy", auto: true }))
+  test("a saved theme without themeMode stays fixed, exactly as it was", () =>
+    expect(startTheme(undefined, { theme: "nord-light" })).toEqual({ name: "nord-light", auto: false }))
+  test("themeMode auto follows the saved theme's family", () => {
+    expect(startTheme(undefined, { theme: "nord-light", themeMode: "auto" })).toEqual({ name: "nord", auto: true })
+    expect(startTheme(undefined, { themeMode: "auto" })).toEqual({ name: "brothy", auto: true })
+  })
+  test("--theme wins and turns auto off", () => {
+    expect(startTheme("gruvbox", {})).toEqual({ name: "gruvbox", auto: false })
+    expect(startTheme("gruvbox", { theme: "nord", themeMode: "auto" })).toEqual({ name: "gruvbox", auto: false })
+  })
+  test("a single-mode family or an unknown name cannot be auto", () => {
+    expect(startTheme(undefined, { theme: "vesper", themeMode: "auto" })).toEqual({ name: "vesper", auto: false })
+    expect(startTheme(undefined, { theme: "nope", themeMode: "auto" })).toEqual({ name: "nope", auto: false })
+  })
+})
+
+describe("autoTheme", () => {
+  test("the family's side for the terminal's mode; no answer is dark", () => {
+    expect(autoTheme("nord", "light").name).toBe("nord-light")
+    expect(autoTheme("nord", "dark").name).toBe("nord")
+    expect(autoTheme("nord", null).name).toBe("nord")
+    expect(autoTheme("vesper", "light").name).toBe("vesper")
+  })
+})
+
+describe("picker auto", () => {
+  const fam = (n: string) => FAMILIES.find((f) => f.name === n)!
+  test("pickStart opens on auto while auto is on", () => {
+    expect(pickStart(themeByName("brothy-light"), true).mode).toBe("auto")
+    expect(pickStart(themeByName("brothy-light")).mode).toBe("light")
+  })
+  test("pickMode cycles dark → light → auto → dark and sets auto directly", () => {
+    let p = pickStart(themeByName("brothy"))
+    p = pickMode(p)
+    expect(p.mode).toBe("light")
+    p = pickMode(p)
+    expect(p.mode).toBe("auto")
+    p = pickMode(p)
+    expect(p.mode).toBe("dark")
+    expect(pickMode(p, "auto").mode).toBe("auto")
+  })
+  test("a single-mode family can't take auto: nothing changes, and it shows its own mode", () => {
+    const p = pickStart(themeByName("vesper"))
+    expect(pickMode(p, "auto")).toBe(p)
+    const a = { ...pickStart(themeByName("brothy"), true), family: "vesper" }
+    expect(pickEffective(a)).toBe("dark")
+    expect(pickShown(a)).toBe("dark")
+  })
+  test("the candidate under auto is the family's side for the terminal", () => {
+    const p = pickStart(themeByName("nord"), true)
+    expect(pickTheme(p, FAMILIES, "light").name).toBe("nord-light")
+    expect(pickTheme(p, FAMILIES, null).name).toBe("nord")
+    expect(pickShown(p)).toBe("auto")
+  })
+  test("boardFrames: auto frames both slots of a pair; a single-mode family its one", () => {
+    expect(boardFrames(fam("nord"), "auto", "brothy", true)).toEqual({ dark: "cursor", light: "cursor" })
+    expect(boardFrames(fam("nord"), "auto", "brothy", false)).toEqual({ dark: undefined, light: undefined })
+    expect(boardFrames(fam("vesper"), "auto", "brothy", true)).toEqual({ dark: "cursor", light: undefined })
+  })
+  test("autoHead says what the terminal reported", () => {
+    expect(autoHead("brothy", "dark")).toBe("brothy · auto · terminal is dark")
+    expect(autoHead("brothy", "light")).toBe("brothy · auto · terminal is light")
+    expect(autoHead("brothy", null)).toBe("brothy · auto · no answer, dark")
+  })
+  test("paneLines shows a given head instead of the theme name", () => {
+    const t = themeByName("brothy")
+    const lines = paneLines(t, sampleView(t, 63), 63, 24, "brothy · auto · terminal is dark")
+    expect(lines[0]!.map((s) => s.text).join("")).toContain("brothy · auto · terminal is dark")
+  })
 })

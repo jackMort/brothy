@@ -5,7 +5,7 @@ import { themeByName } from "../../src/theme/theme"
 import { hex } from "../helpers/theme"
 import { keys, onBg, openHelp, type Setup, spansOf, useAppHarness, W120, waitFor } from "./helpers"
 
-const { tmp, mount, configFile } = useAppHarness()
+const { tmp, mount, configFile, writeConfig } = useAppHarness()
 
 /** The background of the specimen the board's cursor frames (`▐ Aa ●●● ▌`): the candidate's. */
 const cursorBg = (s: Setup) => {
@@ -112,9 +112,9 @@ test("theme picker: a header, one row per family with both specimens, typing fil
   s.mockInput.pressTab({ shift: true }) // S-tab flips back
   await keys(s)
   expect(cursorBg(s)).toBe(themeByName("brothy").background)
-  await keys(s, "left") // ← is dark already
-  expect(cursorBg(s)).toBe(themeByName("brothy").background)
-  await keys(s, "right")
+  await keys(s, "left") // ← wraps from dark to auto: both of brothy's slots framed
+  expect((await keys(s)).match(/▐ Aa ●●● ▌/g)).toHaveLength(2)
+  await keys(s, "right", "right") // dark → light
   expect(cursorBg(s)).toBe(themeByName("brothy-light").background)
   await keys(s, "down")
   expect(cursorBg(s)).toBe(themeByName("catppuccin-light").background) // ↑↓ keep the column
@@ -305,4 +305,60 @@ test("borderSubtle is only used for decorative glyphs, never for readable text",
   seen.push(...drawn(s))
   expect(seen.length).toBeGreaterThan(0) // fold arrows at least
   expect(seen.filter((t) => !decorative.test(t))).toEqual([])
+})
+
+// ------------------------------------------------------------------ auto: follow the terminal
+
+const infoTheme = async (s: Setup) => /brothy v\d+\.\d+\.\d+ · ([\w-]+)/.exec(await openHelp(s))![1]!
+
+test("auto: a theme_mode event swaps to the family's other side and never writes config", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { size: W120, auto: true, theme: "nord" })
+  expect(existsSync(configFile())).toBe(false)
+  s.renderer.emit("theme_mode", "light")
+  await keys(s)
+  expect(await infoTheme(s)).toBe("nord-light")
+  s.renderer.emit("theme_mode", "dark")
+  await keys(s)
+  expect(await infoTheme(s)).toBe("nord")
+  expect(existsSync(configFile())).toBe(false)
+})
+
+test("a saved fixed theme (no themeMode) ignores theme_mode", async () => {
+  writeConfig({ theme: "nord" })
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { size: W120, theme: "nord" })
+  s.renderer.emit("theme_mode", "light")
+  await keys(s)
+  expect(await infoTheme(s)).toBe("nord")
+})
+
+test("--theme (auto off for the run) ignores theme_mode", async () => {
+  writeConfig({ theme: "nord", themeMode: "auto" })
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { size: W120, theme: "gruvbox", auto: false })
+  s.renderer.emit("theme_mode", "light")
+  await keys(s)
+  expect(await infoTheme(s)).toBe("gruvbox")
+})
+
+test("the picker: ⏎ on auto saves theme and themeMode; ⏎ on a mode clears themeMode", async () => {
+  writeConfig({ theme: "nord" })
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { size: W120 })
+  await keys(s, "t", "right", "right") // dark → light → auto
+  const f = await keys(s)
+  expect(f).toContain("auto")
+  expect(f).toContain("brothy · auto · no answer, dark")
+  expect(await keys(s, "enter")).toContain("theme · brothy · auto")
+  expect(JSON.parse(readFileSync(configFile(), "utf8"))).toEqual({ theme: "brothy", themeMode: "auto" })
+  await keys(s, "t") // opens on auto
+  expect(await keys(s)).toContain("brothy · auto · no answer, dark")
+  await keys(s, "left", "left", "enter") // auto → light → dark
+  expect(JSON.parse(readFileSync(configFile(), "utf8"))).toEqual({ theme: "brothy" })
+})
+
+test("the picker keeps its choice when theme_mode arrives, and previews the new mode", async () => {
+  const s = await mount(tmp({ "a.md": "# a" }), "a.md", { size: W120, auto: true, theme: "brothy" })
+  await keys(s, "t")
+  s.renderer.emit("theme_mode", "light")
+  const f = await keys(s)
+  expect(f).toContain("brothy · auto · terminal is light")
+  expect(await keys(s, "enter")).toContain("theme · brothy · auto")
 })

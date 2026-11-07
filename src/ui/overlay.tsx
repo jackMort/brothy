@@ -20,6 +20,7 @@ import {
   boardSlot,
   FAMILIES,
   type FamilyHit,
+  type PickMode,
   SLOT_W,
   type ThemeMode,
   type themeSplit,
@@ -855,7 +856,7 @@ function BoardHead({
 }: {
   t: Theme
   L: ReturnType<typeof boardLayout>
-  shown: ThemeMode
+  shown: PickMode
   empty: boolean
 }) {
   return empty ? (
@@ -950,9 +951,9 @@ export function ThemeBoard({
   height: number
   innerW: number
   /** the mode asked for */
-  mode: ThemeMode
-  /** the candidate's mode: the header's primary word */
-  shown: ThemeMode
+  mode: PickMode
+  /** the mode shown as active: the header's primary word (both under auto) */
+  shown: PickMode
   /** the theme in use */
   orig: string
   onHover?: (i: number) => void
@@ -1019,9 +1020,9 @@ export function ThemePicker({
   /** the board's first row on screen (`pickTop`) */
   top: number
   /** the mode asked for: where each row's cursor would sit (`boardFrames`) */
-  mode: ThemeMode
-  /** the candidate's mode, active on the switch (`pickShown`) */
-  shown?: ThemeMode
+  mode: PickMode
+  /** the mode active on the switch (`pickShown`) */
+  shown?: PickMode
   /** the highlighted family's only mode: the switch does nothing */
   only?: ThemeMode
   /** the theme in use (its thin frame) */
@@ -1031,7 +1032,7 @@ export function ThemePicker({
   pane?: { theme: Theme; lines: Span[][] }
   /** a click on row `i`'s slot for `mode`: that theme, applied */
   onPick?: (i: number, mode: ThemeMode) => void
-  onMode?: (mode: ThemeMode) => void
+  onMode?: (mode: PickMode) => void
 }) {
   const note = q.trim() ? `${rows.length} of ${FAMILIES.length}` : `${FAMILIES.length} families`
   // the header takes a row; below PEEK_MIN_W the popup shrinks to the rows there are

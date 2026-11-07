@@ -8,7 +8,7 @@ import { clamp } from "../lib/text"
 import { ancestorsOf } from "../notes/files"
 import { nextSection, stepRow } from "../notes/vault"
 import type { PicturesPref } from "../system/config"
-import { pickMode, pickMove, pickQuery } from "../theme/themepick"
+import { pickMove, pickQuery, pickStep } from "../theme/themepick"
 import { helpLayout } from "../ui/help"
 import { stepMeasure, ZEN_ROWS, ZEN_WPM } from "../ui/zen"
 import type { Actions, Features, Moves } from "./actions"
@@ -284,10 +284,9 @@ export function makePopupActions(c: AppCtx, { zen, popups }: Features) {
 
     themeType: typing,
     themeMove: (k) => themeSet((p) => pickMove(p, k.name === "down" || (k.ctrl && k.name === "n") ? 1 : -1)),
-    // ← → move across the board (dark / light), tab and S-tab flip; a single-mode family stays put (pickMode)
+    // ← → step across dark / light / auto, wrapping; tab steps on and S-tab back; a single-mode family stays put (pickMode)
     themeMode: (k) => {
-      if (k.name === "left") return themeSet((p) => pickMode(p, "dark"))
-      themeSet((p) => pickMode(p, k.name === "right" ? "light" : undefined))
+      themeSet((p) => pickStep(p, k.name === "left" || (k.name === "tab" && k.shift) ? -1 : 1))
     },
     themeApply: applyTheme,
     themeClose: closeTheme,

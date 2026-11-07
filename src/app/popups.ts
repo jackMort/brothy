@@ -3,7 +3,15 @@
 
 import { clamp } from "../lib/text"
 import { themes } from "../theme/theme"
-import { filterFamilies, pickIndex, pickStart, pickTheme, type ThemePick } from "../theme/themepick"
+import {
+  FAMILIES,
+  filterFamilies,
+  pickEffective,
+  pickIndex,
+  pickStart,
+  pickTheme,
+  type ThemePick,
+} from "../theme/themepick"
 import { helpLayout } from "../ui/help"
 import { keepVisible } from "../ui/nav"
 import type { AppCtx } from "./ctx"
@@ -78,7 +86,7 @@ function makeThemePicker(c: AppCtx) {
   const { ui, set, flash, persist } = c
 
   // `t` picker: the app stays in its theme while you move (only the pane shows the candidate); ⏎ applies and saves, esc changes nothing
-  const openTheme = () => set({ themePick: pickStart(themes[ui.current.themeIdx]!) })
+  const openTheme = () => set({ themePick: pickStart(themes[ui.current.themeIdx]!, ui.current.auto) })
   const closeTheme = () => set({ themePick: null })
   /** The open picker's next state from `f` (nothing while it is closed). */
   const themeSet = (f: (p: ThemePick) => ThemePick) => {
@@ -89,9 +97,12 @@ function makeThemePicker(c: AppCtx) {
   const applyTheme = () => {
     const p = ui.current.themePick
     if (!p || pickIndex(p, filterFamilies(p.q)) < 0) return
-    const name = pickTheme(p).name
-    set({ themeIdx: themes.findIndex((x) => x.name === name), themePick: null })
-    if (persist({ theme: name })) flash(`theme · ${name}`, "ok")
+    const auto = pickEffective(p) === "auto"
+    const theme = pickTheme(p, FAMILIES, ui.current.termMode)
+    set({ themeIdx: themes.indexOf(theme), auto, themePick: null })
+    // auto saves the family and the mode word; a named theme drops `themeMode` from the file (undefined is not written)
+    const saved = auto ? { theme: p.family, themeMode: "auto" as const } : { theme: theme.name, themeMode: undefined }
+    if (persist(saved)) flash(auto ? `theme · ${p.family} · auto` : `theme · ${theme.name}`, "ok")
   }
 
   return { openTheme, closeTheme, themeSet, applyTheme }

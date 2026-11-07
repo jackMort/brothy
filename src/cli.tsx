@@ -10,7 +10,7 @@ import { isMarkdown } from "./notes/files"
 import { readCapped } from "./notes/stdin"
 import { parseArgs } from "./system/args"
 import { loadConfig } from "./system/config"
-import { FAMILIES, onlyMode } from "./theme/themepick"
+import { FAMILIES, onlyMode, startTheme } from "./theme/themepick"
 import { WORDMARK } from "./ui/status"
 
 const die: (msg: string) => never = (msg) => {
@@ -101,6 +101,11 @@ if (piped) {
     die("needs an interactive terminal (stdin and stdout must be a TTY)")
 }
 
+const start = startTheme(args.theme, loadConfig())
+
+/** How long the first frame waits for the terminal to report light or dark (no answer: dark, a later report still switches). */
+const THEME_MODE_WAIT_MS = 100
+
 try {
   const renderer = await createCliRenderer({
     exitOnCtrlC: true,
@@ -108,12 +113,15 @@ try {
     targetFps: 30,
     ...(keys && { stdin: keys }),
   })
+  // follow the terminal: ask for its mode before the first frame, so a light terminal gets no dark flash
+  if (start.auto) await renderer.waitForThemeMode(THEME_MODE_WAIT_MS)
   createRoot(renderer).render(
     <App
       root={root}
       initialFile={isFile ? abs : undefined}
       stdin={stdinText}
-      themeName={args.theme ?? loadConfig().theme}
+      themeName={start.name}
+      auto={start.auto}
       transparent={args.transparent || undefined}
     />,
   )

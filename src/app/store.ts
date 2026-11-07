@@ -15,7 +15,7 @@ import type { ProjectEntry } from "../notes/projects"
 import { stdinWorkspace, workspace } from "../notes/workspace"
 import { type Config, type GraphRender, loadConfig, type PicturesPref, type View } from "../system/config"
 import { themes } from "../theme/theme"
-import { resolveTheme, type ThemePick } from "../theme/themepick"
+import { autoTheme, resolveTheme, type ThemeMode, type ThemePick } from "../theme/themepick"
 import type { LinkSpot } from "../ui/nav"
 import type { Toast } from "../ui/status"
 import { normalizeZen, type ZenConfig } from "../ui/zen"
@@ -120,6 +120,10 @@ export const NO_NOTES: (DeltaNote | undefined)[] = []
  */
 export interface UI {
   themeIdx: number
+  /** the theme follows the terminal's light/dark (runtime only: a switch never writes config) */
+  auto: boolean
+  /** the mode the terminal last reported (null: no answer yet, dark) */
+  termMode: ThemeMode | null
   /** the `t` picker while open; the app keeps `themeIdx` until ⏎ */
   themePick: ThemePick | null
   /** the workspace folder (Files lists it; `o` replaces it) */
@@ -279,9 +283,14 @@ function savedSettings(
   transparent: boolean | undefined,
   piped: boolean,
   motion: boolean | undefined,
+  auto: boolean,
+  termMode: ThemeMode | null,
 ) {
+  const start = auto ? autoTheme(themeName ?? "brothy", termMode) : resolveTheme(themeName)
   return {
-    themeIdx: Math.max(0, themes.indexOf(resolveTheme(themeName) ?? themes[0]!)),
+    themeIdx: Math.max(0, themes.indexOf(start ?? themes[0]!)),
+    auto,
+    termMode,
     hidden: cfg.sidebar?.hidden ?? false,
     wide: cfg.wide ?? false,
     minimap: cfg.minimap ?? true,
@@ -320,12 +329,14 @@ export function initUI(
   transparent: boolean | undefined,
   piped: boolean,
   motion: boolean | undefined,
+  auto = false,
+  termMode: ThemeMode | null = null,
 ): UI {
   const w = piped ? stdinWorkspace(root) : workspace(root, initialFile, true)
   const openPath = w.openPath
   const cfg = loadConfig()
   return {
-    ...savedSettings(cfg, themeName, transparent, piped, motion),
+    ...savedSettings(cfg, themeName, transparent, piped, motion, auto, termMode),
     ...graphSettings(cfg),
     ...pictureSettings(cfg),
     themePick: null,

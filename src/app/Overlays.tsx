@@ -11,6 +11,8 @@ import { folderCounts } from "../notes/files"
 import { stepRow } from "../notes/vault"
 import type { Theme } from "../theme/theme"
 import {
+  autoHead,
+  FAMILIES,
   type FamilyHit,
   onlyMode,
   pickIndex,
@@ -362,7 +364,7 @@ export function themePickView(c: AppCtx, d: Derived): ThemePickView | null {
   const hl = pickIndex(pick, rows)
   // the board's rows under the header; hover holds the window where it is, keys and the wheel centre it again
   const top = pickTop(pick, hl, Math.max(1, geo.rows - 1), rows.length)
-  const cand = pickTheme(pick)
+  const cand = pickTheme(pick, FAMILIES, s.termMode)
   const sample = geo.split && hl >= 0 ? memo.themeSample(cand, geo.peekW, s.hl, s.headingStyle) : null
   return { pick, rows, geo, hl, top, cand, sample }
 }
@@ -382,6 +384,8 @@ export function themeOverlay(
     const r = rows[i]
     if (r && r.family.name !== ui.current.themePick?.family) themeSet((p) => ({ ...p, family: r.family.name, top }))
   }
+  // under auto the pane says what it follows
+  const head = pickShown(pick) === "auto" ? autoHead(pick.family, ui.current.termMode) : undefined
   return (
     <ThemePicker
       t={d.t}
@@ -396,7 +400,7 @@ export function themeOverlay(
       only={hl >= 0 ? onlyMode(rows[hl]!.family) : undefined}
       orig={pick.orig}
       geo={geo}
-      pane={sample ? { theme: cand, lines: memo.themePane(cand, sample, geo.peekW, geo.rows) } : undefined}
+      pane={sample ? { theme: cand, lines: memo.themePane(cand, sample, geo.peekW, geo.rows, head) } : undefined}
       onClose={closeTheme}
       onScroll={(dir) => themeSet((p) => pickMove(p, dir))}
       onHover={pickAt}

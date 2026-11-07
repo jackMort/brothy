@@ -7,7 +7,7 @@ import { stem } from "../notes/files"
 import { type OpenRow, tildify } from "../notes/projects"
 import type { AnswerRow, AskActionRow, AskMarkRow, AskNoteRow, SwitchRow } from "../notes/vault"
 import type { Theme } from "../theme/theme"
-import { BOARD_MODES, type ThemeMode } from "../theme/themepick"
+import { PICK_MODES, type PickMode, type ThemeMode } from "../theme/themepick"
 import { chip, inkAt, steamColors } from "./chrome"
 import { CARET, footInk, footnoteRule, markText, RULE } from "./footnote"
 import type { ArtCell } from "./welcome"
@@ -213,14 +213,14 @@ export function openItem(r: OpenRow, t: Theme, w = Infinity, home?: string): Pic
   }
 }
 
-/** The modes in the switch's order: the board's (`BOARD_MODES`). */
-export const SWITCH_MODES = BOARD_MODES
+/** The modes in the switch's order: `PICK_MODES`: dark, light, auto. */
+export const SWITCH_MODES = PICK_MODES
 
 /**
  * The mode switch in the input row, one segment per SWITCH_MODES entry: the active side as a primary
  * chip, the other muted; with `only` (a single-mode family) the missing side is also struck through.
  */
-export const modeSwitch = (t: Theme, mode: ThemeMode, only?: ThemeMode): Span[][] =>
+export const modeSwitch = (t: Theme, mode: PickMode, only?: ThemeMode): Span[][] =>
   SWITCH_MODES.map((m) =>
     m === mode
       ? chip(t, m, t.primary)
