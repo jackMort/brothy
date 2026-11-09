@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Exchange, Thread } from "../../src/ai/thread"
 import { MIN_H, MIN_W } from "../../src/app/store"
 import { width } from "../../src/lib/text"
+import { mix } from "../../src/theme/theme"
 import { INK_MS } from "../../src/ui/chrome"
 import { type LayoutState, layout } from "../../src/ui/layout"
 import {
@@ -12,15 +13,20 @@ import {
   charInk,
   chatStage,
   chipRow,
+  citeRange,
   frameRows,
   inkStep,
   inputSpans,
   type PillView,
+  pickRows,
   pillBorder,
   pillGeo,
+  pillMoving,
   pillRow,
   sizeFoot,
   steamTick,
+  tintBg,
+  tintSpans,
 } from "../../src/ui/pill"
 import { STEAM_MS, STILL_TICK } from "../../src/ui/welcome"
 import { ZEN_DEFAULTS } from "../../src/ui/zen"
@@ -265,5 +271,93 @@ describe("the card", () => {
     expect(cardWindow(rows, 4, 99).top).toBe(6)
     expect(text(cardFoot(t, 4)!)).toBe(" ↓ 4 more ")
     expect(cardFoot(t, 0)).toBeUndefined()
+  })
+})
+
+describe("list, tint, range, motion", () => {
+  const text = (r: { text: string }[]) => r.map((s) => s.text).join("")
+  test("pickRows: at most 5, `▌` and bold on backgroundElement for the highlight, `linked from here` muted", () => {
+    const items = Array.from({ length: 7 }, (_, i) => ({ path: `/${i}`, name: `note ${i}`, linked: i === 0 }))
+    const rows = pickRows(t, items, 0)
+    expect(rows).toHaveLength(5)
+    expect(text(rows[0]!)).toBe("▌ note 0  linked from here")
+    expect(rows[0]!.every((s) => s.bg === t.backgroundElement)).toBe(true)
+    expect(text(rows[1]!)).toBe("  note 1")
+  })
+  test("pickRows: a long name is cut so mark, name and the whole hint fit the framed row", () => {
+    const rows = pickRows(t, [{ path: "/a", name: "a very long note name indeed", linked: true }], 0)
+    expect(text(rows[0]!).endsWith("  linked from here")).toBe(true)
+    expect(width(text(rows[0]!))).toBe(36 - 4)
+    expect(text(rows[0]!)).toContain("…")
+  })
+  test("tintSpans: the range gets the background, the text and the rest kept", () => {
+    const out = tintSpans(
+      [
+        { text: "abc", fg: "#1" },
+        { text: "def", fg: "#2" },
+      ],
+      2,
+      4,
+      "#bg",
+    )
+    expect(out).toEqual([
+      { text: "ab", fg: "#1" },
+      { text: "c", fg: "#1", bg: "#bg" },
+      { text: "d", fg: "#2", bg: "#bg" },
+      { text: "ef", fg: "#2" },
+    ])
+  })
+  test("tintSpans: columns are UTF-16 offsets, so a wide character before the quote does not shift it", () => {
+    const out = tintSpans([{ text: "漢😀ab" }], 3, 5, "#bg")
+    expect(
+      out
+        .filter((s) => s.bg)
+        .map((s) => s.text)
+        .join(""),
+    ).toBe("ab")
+    expect(text(out)).toBe("漢😀ab")
+  })
+  test("tintBg: backgroundElement mixed toward the background, full at step 3", () => {
+    expect(tintBg(t, 3)).toBe(mix(t.backgroundElement, t.background, 0))
+    expect(tintBg(t, 0)).toBe(mix(t.backgroundElement, t.background, 1))
+  })
+  test("citeRange: Preview from the heading to the next; the lead-in from 0; Source from the cite's row", () => {
+    const view = {
+      headings: [
+        { depth: 1, text: "a", line: 4 },
+        { depth: 2, text: "b", line: 9 },
+      ],
+      lines: Array(20),
+      srcRow: [0, 1, 2, 3, 5, 6, 7],
+    }
+    expect(citeRange(view as never, false, 0, 99)).toEqual({ from: 4, to: 9 })
+    expect(citeRange(view as never, false, -1, 99)).toEqual({ from: 0, to: 4 })
+    expect(citeRange(view as never, false, 1, 99)).toEqual({ from: 9, to: 20 })
+    expect(citeRange(view as never, true, 0, 5)).toEqual({ from: 6, to: 9 })
+  })
+  test("pillMoving: the border inking, a thinking steam, a recent arrival or glow, the tint; else null", () => {
+    expect(pillMoving(viewOf({ openedAt: 0 }), INK_MS)).toBe("ink")
+    expect(pillMoving(viewOf({ openedAt: 0 }), 10 * INK_MS)).toBeNull()
+    const thinking = viewOf({ openedAt: -1e9, running: { ...running, live: false } })
+    expect(pillMoving(thinking, 1e6)).toBe("steam")
+  })
+  test("pillMoving: folded, the tint fades from land.at, not the exchange's doneAt", () => {
+    const turns = [{ ...DONE, doneAt: 100 * INK_MS }]
+    const base = { focus: false, thread: { path: "/n.md", chips: [], turns } }
+    const land = (at: number) => ({ exchange: 0, n: 1, path: "/n.md", at })
+    const now = 101 * INK_MS
+    expect(pillMoving(viewOf({ ...base, land: land(100 * INK_MS) }), now)).toBe("ink")
+    expect(pillMoving(viewOf({ ...base, land: land(0) }), now)).toBeNull()
+  })
+  test("pillMoving: a recent arrival or a just-finished answer inks", () => {
+    const live = { ...running, live: true, arrivals: [{ len: 3, at: 10 * INK_MS }] }
+    expect(pillMoving(viewOf({ openedAt: -1e9, running: live }), 11 * INK_MS)).toBe("ink")
+    const done = viewOf({
+      openedAt: -1e9,
+      card: true,
+      thread: { path: "/n.md", chips: [], turns: [{ ...DONE, doneAt: 10 * INK_MS }] },
+    })
+    expect(pillMoving(done, 11 * INK_MS)).toBe("ink")
+    expect(pillMoving(done, 50 * INK_MS)).toBeNull()
   })
 })

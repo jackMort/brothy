@@ -4,7 +4,8 @@ import { fmtTokens } from "../ai/client"
 import type { Chip, Exchange, Part, Thread } from "../ai/thread"
 import { A, type Span, safeLine } from "../lib/spans"
 import { mergeSpans, spanWidth, superscript, truncate, truncateLeft, width, wrap } from "../lib/text"
-import type { Theme } from "../theme/theme"
+import type { Rendered } from "../markdown/render"
+import { mix, type Theme } from "../theme/theme"
 import { chip, INK_MS, inkAt, steamColors } from "./chrome"
 import { CARET, footInk, footnoteRule, type Tail, waitText } from "./footnote"
 import type { QuoteSpan } from "./nav"
@@ -20,6 +21,11 @@ const CARD_STEAM_W = 14
 const CARD_STEAM_H = 3
 /** An error shows at most this many rows. */
 const ERROR_ROWS = 3
+/** The `[[` list: its width (a frame's inner width is PICK_W − 4) and most rows. */
+const PICK_W = 36
+const PICK_ROWS = 5
+const PICK_MARK = 2
+const PICK_HINT = "  linked from here"
 
 /** What the footer follows. */
 type ChatStage = "input" | "pick" | "waiting" | "answer" | "error"
@@ -373,3 +379,63 @@ export function cardWindow(
 /** ` ↓ n more ` for the card's bottom border while it is scrolled up. */
 export const cardFoot = (t: Theme, below: number): Span[] | undefined =>
   below ? [{ text: ` ↓ ${below} more `, fg: footInk(t).status }] : undefined
+
+/** The `[[` list's rows: at most PICK_ROWS names, the highlight `▌` and bold on backgroundElement, `linked from here` muted. */
+export function pickRows(t: Theme, items: readonly PickItem[], hl: number): Span[][] {
+  const c = footInk(t)
+  const nameW = PICK_W - 4 - PICK_MARK - width(PICK_HINT)
+  return items.slice(0, PICK_ROWS).map((it, i) => {
+    const sel = i === hl
+    const row: Span[] = [
+      sel ? { text: "▌ ", fg: t.primary } : pad(PICK_MARK),
+      { text: truncate(safeLine(it.name), nameW), fg: sel ? t.text : c.other, attr: sel ? A.BOLD : 0 },
+      ...(it.linked ? [{ text: PICK_HINT, fg: c.status }] : []),
+    ]
+    return sel ? row.map((s) => ({ ...s, bg: t.backgroundElement })) : row
+  })
+}
+
+/** `spans` with columns `from..to` on `bg`; columns are UTF-16 offsets into the row's text, as `quoteSpan` gives them. */
+export function tintSpans(spans: Span[], from: number, to: number, bg: string): Span[] {
+  const out: Span[] = []
+  let x = 0
+  for (const s of spans) {
+    const len = s.text.length
+    const a = Math.max(0, Math.min(len, from - x))
+    const b = Math.max(a, Math.min(len, to - x))
+    if (a > 0) out.push({ ...s, text: s.text.slice(0, a) })
+    if (b > a) out.push({ ...s, text: s.text.slice(a, b), bg })
+    if (b < len) out.push({ ...s, text: s.text.slice(b) })
+    x += len
+  }
+  return out
+}
+
+/** The quote's tint at ink step `step`: backgroundElement fading in from the background. */
+export const tintBg = (t: Theme, step: number) => mix(t.backgroundElement, t.background, 1 - step / 3)
+
+/** The rows a cite's quote is looked for in: its section (Preview: heading to heading, the lead-in from 0); Source from the cite's row. */
+export function citeRange(
+  view: Pick<Rendered, "headings" | "lines" | "srcRow">,
+  source: boolean,
+  index: number,
+  line: number,
+): { from: number; to: number } {
+  const to = view.headings[index + 1]?.line ?? view.lines.length
+  if (source) return { from: view.srcRow?.[line] ?? 0, to }
+  return { from: index < 0 ? 0 : (view.headings[index]?.line ?? 0), to }
+}
+
+const INKING = 3 * INK_MS
+const recent = (at: number | null | undefined, now: number) => at != null && now - at < INKING
+const openGlow = (v: PillView, now: number) => v.focus && recent(v.openedAt, now)
+/** Folded, the tint fades from the landing; unfolded, the last answer from when it finished. */
+const answerGlow = (v: PillView, now: number) =>
+  v.land ? recent(v.land.at, now) : recent(v.thread.turns.at(-1)?.doneAt, now)
+const arrivalGlow = (v: PillView, now: number) => recent(v.running?.arrivals.at(-1)?.at, now)
+
+/** What still moves on the pill: the steam (STEAM_MS frames), something inking (INK_MS frames), or nothing. */
+export function pillMoving(v: PillView, now: number): "steam" | "ink" | null {
+  if (v.running && !v.running.live) return "steam"
+  return openGlow(v, now) || arrivalGlow(v, now) || answerGlow(v, now) ? "ink" : null
+}
