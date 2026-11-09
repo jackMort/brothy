@@ -59,8 +59,9 @@ describe("marks", () => {
     expect(marks.map(markText)).toEqual(["*", "Δ", "¹", "³", "¹⁰"])
   })
 
-  test("markFor: change, then ask, then gloss; the first of equals; none → null", () => {
+  test("markFor: chat, then change, then ask, then gloss; the first of equals; none → null", () => {
     const m = (source: MarkSource, id = 0) => ({ source, id })
+    expect(markFor([m("gloss"), m("ask"), m("change"), m("chat")])).toEqual(m("chat"))
     expect(markFor([m("gloss"), m("ask"), m("change")])).toEqual(m("change"))
     expect(markFor([m("gloss"), m("ask")])).toEqual(m("ask"))
     expect(markFor([m("gloss", 1), m("gloss", 2)])).toEqual(m("gloss", 1))

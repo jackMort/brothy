@@ -33,10 +33,10 @@ const same: Ink = (c) => c
 export type Mark = "*" | "Δ" | number
 export const markText = (m: Mark) => (typeof m === "number" ? superscript(m) : m)
 
-export type MarkSource = "change" | "ask" | "gloss"
-const MARK_RANK: Record<MarkSource, number> = { change: 0, ask: 1, gloss: 2 }
+export type MarkSource = "chat" | "change" | "ask" | "gloss"
+const MARK_RANK: Record<MarkSource, number> = { chat: 0, change: 1, ask: 2, gloss: 3 }
 
-/** The one mark a heading gets: change, then ask, then gloss. */
+/** The one mark a heading gets: chat, then change, then ask, then gloss. */
 export const markFor = <T extends { source: MarkSource }>(cands: readonly T[]): T | null =>
   cands.reduce<T | null>((best, c) => (best && MARK_RANK[best.source] <= MARK_RANK[c.source] ? best : c), null)
 
