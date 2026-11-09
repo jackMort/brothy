@@ -40,7 +40,7 @@ import type { Derived } from "./derive"
 import { keyDef, WELCOME_KEYS } from "./keymap"
 import { labelGeo } from "./links"
 import { pictureLayer, reservedBlank } from "./PictureLayer"
-import { type PillActions, pictureAlts, pillLayer } from "./PillLayer"
+import { type PillActions, pictureAlts, pictureCut, pillLayer } from "./PillLayer"
 import type { PictureSheet } from "./picture-sheet"
 import { pressOutside } from "./pill"
 import { Row } from "./Row"
@@ -382,9 +382,8 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
   const dim = pageDim(d, scrim)
   const foot = landFoot(d)
   const footAt = CH - foot.length
-  // pictures stop at the pill's top by the user's decision (the image may reach into the clear row), at the card's top
-  // while it is up; the text stops at pillCut
-  const picCut = d.pill ? Math.min(footAt, d.pill.card ? pillCut(d) : d.pill.geo.top) : footAt
+  // the pictures' cut is shared with the pill's band; the text stops at pillCut
+  const picCut = pictureCut(d.pill, footAt, pillCut(d))
   const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
@@ -407,7 +406,7 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
           ))}
         </box>
       ) : null}
-      {pillLayer(d, pill)}
+      {pillLayer(d, pill, footAt)}
     </box>
   )
 }

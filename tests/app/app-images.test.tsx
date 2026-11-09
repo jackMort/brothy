@@ -3,6 +3,7 @@ import { expect, spyOn, test } from "bun:test"
 import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { NativeImage, TextRenderable } from "@opentui/core"
+import { pictureCut } from "../../src/app/PillLayer"
 import { hexOf } from "../../src/graph/canvas"
 import { mix } from "../../src/theme/theme"
 import { blankPng, solidPng } from "../helpers/png"
@@ -833,7 +834,7 @@ async function bandFill(note: string) {
   // the clear row is the one above the pill's top border (a row starting `╭` after the gutter)
   const top = frame.findIndex((r) => r.includes("╭"))
   const clear = s.captureSpans().lines[top - 1]!.spans
-  return { img: img!, clear: top - 1, cells: clear.filter((x) => x.text.trim() === "" || x.text.length > 0) }
+  return { img: img!, clear: top - 1, cells: clear }
 }
 
 test("chat under T: a picture reaching the band's clear row gets the page fill on it", async () => {
@@ -846,4 +847,12 @@ test("chat under T: with no picture on the clear row it stays transparent", asyn
   const { img, clear, cells } = await bandFill(`# Top\n\n![Plan](plan.png)\n\n${filler(30)}`)
   expect(img.y + img.height).toBeLessThan(clear)
   expect(cells.every((x) => hex(x.bg) === null)).toBe(true)
+})
+
+test("pictureCut: the footnote, the pill's top or the card's top, whichever is first; the footnote alone while hidden", () => {
+  const pill = { card: false, geo: { top: 20 } } as Parameters<typeof pictureCut>[0]
+  expect(pictureCut(null, 25, 18)).toBe(25)
+  expect(pictureCut(pill, 25, 18)).toBe(20)
+  expect(pictureCut(pill, 15, 18)).toBe(15)
+  expect(pictureCut({ ...pill!, card: true }, 25, 18)).toBe(18)
 })

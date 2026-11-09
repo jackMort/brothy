@@ -64,17 +64,26 @@ const own =
   }
 
 /** The pill, its card and the `[[` list over the note's rows; nothing while hidden. */
-export function pillLayer(d: Derived, a: PillActions): ReactNode[] {
+export function pillLayer(d: Derived, a: PillActions, footAt: number): ReactNode[] {
   const v = d.pill
   if (!v) return []
-  return [bandBlock(d, v), pillBlock(d, v, a), cardBlock(d, v, a), pickBlock(d, v, a)].filter((n) => n !== null)
+  return [bandBlock(d, v, footAt), pillBlock(d, v, a), cardBlock(d, v, a), pickBlock(d, v, a)].filter((n) => n !== null)
 }
+
+/**
+ * The rows the pictures may draw in (the one cut, for the document and the band): they stop at the landing's footnote
+ * (`footAt`), at the pill's top by the user's decision (an image may reach into the clear row) and at the card's top
+ * while it is up. `pill` is null while hidden.
+ */
+export const pictureCut = (pill: Pick<PillView, "card" | "geo"> | null, footAt: number, card: number) =>
+  pill ? Math.min(footAt, pill.card ? card : pill.geo.top) : footAt
 
 /**
  * The band: the pill's rows and the row above it, the gutter's 3 columns included, on the page's own fill (clear with
  * `T`). The note draws no text there (`noteLines` stops above it); the band keeps whatever else lies under it out.
  */
-function bandBlock({ L, t, s, view, top, picMode, picFiles }: Derived, v: PillView): ReactNode {
+function bandBlock({ L, t, s, view, top, picMode, picFiles }: Derived, v: PillView, footAt: number): ReactNode {
+  const cut = pictureCut(v, footAt, cardTop(v))
   const w = L.CW + GUTTER
   const clear = surface(t, s.transparent).main
   // under `T` a row an image lies on takes the page fill, since a `<text>` with no real bg over an <image> paints black;
@@ -84,7 +93,7 @@ function bandBlock({ L, t, s, view, top, picMode, picFiles }: Derived, v: PillVi
     !v.card &&
     picMode === "pixels" &&
     !!s.cell &&
-    pixelsOnRow(view, y, top, v.geo.top, s.cell, picFiles.file)
+    pixelsOnRow(view, y, top, cut, s.cell, picFiles.file)
   const rows = Array.from({ length: BAND_ROWS }, (_, i) => [
     { text: " ".repeat(w), bg: onImage(v.geo.top - 1 + i) ? t.background : clear },
   ])
