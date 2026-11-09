@@ -24,6 +24,7 @@ import {
   pillGeo,
   pillMoving,
   pillRow,
+  pillWidth,
   quoteTint,
   sizeFoot,
   steamTick,
@@ -66,11 +67,17 @@ describe("geometry and stage", () => {
     ] as const) {
       const L = layout(W, H, LS)
       const g = pillGeo(L)
-      expect(g.w).toBe(Math.min(72, L.CW))
+      expect(g.w).toBe(pillWidth(L.CW))
       expect(g.x).toBe(Math.floor((L.CW - g.w) / 2))
       expect(g.top).toBe(L.CH - 3)
       expect(g.cardMax).toBe(L.CH - 5)
     }
+  })
+  test("pillWidth: 72 at the 80 measure, up to 100 as the column widens, 40 at the floor, the column below it", () => {
+    expect([80, 120, 100, 44, 30, 108, 200].map(pillWidth)).toEqual([72, 100, 92, 40, 30, 100, 100])
+    expect(pillGeo({ CW: 80, CH: 30 })).toMatchObject({ w: 72, x: 4 })
+    expect(pillGeo({ CW: 120, CH: 30 })).toMatchObject({ w: 100, x: 10 })
+    expect(pillGeo({ CW: 30, CH: 30 })).toMatchObject({ w: 30, x: 0 })
   })
   test("chatStage: pick, waiting, error, answer, else input", () => {
     const pick = { q: "", hl: 0, items: [] }
@@ -324,25 +331,29 @@ describe("list, tint, range, motion", () => {
   const text = (r: { text: string }[]) => r.map((s) => s.text).join("")
   test("pickRows: at most 5, `▌` and bold on backgroundElement for the highlight, `linked from here` muted", () => {
     const items = Array.from({ length: 7 }, (_, i) => ({ path: `/${i}`, name: `note ${i}`, linked: i === 0 }))
-    const rows = pickRows(t, items, 0)
+    const rows = pickRows(t, items, 0, 36)
     expect(rows).toHaveLength(5)
     expect(text(rows[0]!)).toBe("▌ note 0  linked from here")
     expect(rows[0]!.every((s) => s.bg === t.backgroundElement)).toBe(true)
     expect(text(rows[1]!)).toBe("  note 1")
   })
   test("pickRows: a long name is cut so mark, name and the whole hint fit the framed row", () => {
-    const rows = pickRows(t, [{ path: "/a", name: "a very long note name indeed", linked: true }], 0)
+    const rows = pickRows(t, [{ path: "/a", name: "a very long note name indeed", linked: true }], 0, 36)
     expect(text(rows[0]!).endsWith("  linked from here")).toBe(true)
     expect(width(text(rows[0]!))).toBe(36 - 4)
     expect(text(rows[0]!)).toContain("…")
   })
+  test("pickRows: the width is a parameter: rows fit a narrower list", () => {
+    const rows = pickRows(t, [{ path: "/a", name: "a very long note name indeed", linked: true }], 0, 30)
+    expect(width(text(rows[0]!))).toBe(30 - 4)
+  })
   test("pickRows: an unlinked name takes the hint's room too: mark and name fill the framed row", () => {
     const long = "a very long note name indeed, longer than the row"
-    const rows = pickRows(t, [{ path: "/a", name: long, linked: false }], 0)
+    const rows = pickRows(t, [{ path: "/a", name: long, linked: false }], 0, 36)
     expect(width(text(rows[0]!))).toBe(36 - 4)
     expect(text(rows[0]!)).toBe(`▌ ${long.slice(0, 29)}…`)
     // a short one is not padded out
-    expect(text(pickRows(t, [{ path: "/b", name: "short", linked: false }], 0)[0]!)).toBe("▌ short")
+    expect(text(pickRows(t, [{ path: "/b", name: "short", linked: false }], 0, 36)[0]!)).toBe("▌ short")
   })
   test("tintSpans: the range gets the background, the text and the rest kept", () => {
     const out = tintSpans(

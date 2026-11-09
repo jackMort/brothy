@@ -916,3 +916,62 @@ test("a chip is named by the note's front-matter title, as the top line is; no t
   expect(system).toContain('<note id="2" title="Gentle heat">')
   expect(system).toContain('<note id="3" title="stock">')
 })
+
+// ------------------------------------------------------------- the pill follows the text column
+
+/** The widest framed run on any row holding `╭`..`╮` (a frame's top border), and the rows that have one. */
+const frames = (f: string) =>
+  f.split("\n").flatMap((r) => (r.includes("╭") ? [r.lastIndexOf("╮") - r.indexOf("╭") + 1] : []))
+
+const LONG_ANSWER = `${"alpha beta gamma delta ".repeat(8)}end.`
+
+async function widthAt(size: { width: number; height: number }, wide: boolean) {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", { size })
+  if (wide) await keys(s, "w")
+  await keys(s, "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, LONG_ANSWER)
+  ai.end(0)
+  const f = await waitFrame(s, (x) => x.includes("end."))
+  const answerRows = f.split("\n").filter((r) => r.includes("alpha") || r.includes("end."))
+  const rowW = Math.max(...answerRows.map((r) => r.lastIndexOf("│") - r.indexOf("│") + 1))
+  return { f, s, frameW: Math.max(...frames(f)), rowW }
+}
+
+test("at the 80 measure the pill and card are 72 wide; wide (w) at 170 columns makes them 100 and the answer wraps later", async () => {
+  const narrow = await widthAt({ width: 170, height: 30 }, false)
+  expect(narrow.frameW).toBe(72)
+  const wide = await widthAt({ width: 170, height: 30 }, true)
+  expect(wide.frameW).toBe(100)
+  expect(wide.rowW).toBeGreaterThan(narrow.rowW)
+  expect(wide.rowW).toBeLessThanOrEqual(100)
+})
+
+test("in the narrowest drawer layout the pill fits the column and a chip leaves the input its 20 columns", async () => {
+  aiConfig(OLLAMA)
+  const { s } = await mountAI(tmp(LINKED), "Slow broth.md", { size: { width: 60, height: 20 } })
+  let f = await keys(s, "c", "type:[[sim", "enter")
+  const pill = f.split("\n").findIndex((r) => r.includes("⠳⢆"))
+  const top = f.split("\n")[pill - 1]!
+  const w = top.lastIndexOf("╮") - top.indexOf("╭") + 1
+  expect(w).toBeLessThanOrEqual(60)
+  expect(w).toBeGreaterThanOrEqual(40)
+  f = await keys(s, "type:abcdefghijklmnopqrst")
+  expect(pillOf(f)).toContain("abcdefghijklmnopqrst")
+})
+
+test("the [[ list stays inside the pill's span at a narrow width", async () => {
+  aiConfig(OLLAMA)
+  const { s } = await mountAI(tmp(LINKED), "Slow broth.md", { size: { width: 60, height: 20 } })
+  const f = await keys(s, "c", "type:a long question about the [[")
+  const rows = f.split("\n")
+  const pill = rows.findIndex((r) => r.includes("⠳⢆"))
+  const frame = rows[pill - 1]!
+  const lo = frame.indexOf("╭")
+  const hi = frame.lastIndexOf("╮")
+  const list = rows.findIndex((r) => r.includes("simmering  linked"))
+  expect(list).toBeGreaterThan(-1)
+  expect(rows[list]!.indexOf("│")).toBeGreaterThanOrEqual(lo)
+  expect(rows[list]!.lastIndexOf("│")).toBeLessThanOrEqual(hi)
+})

@@ -14,7 +14,9 @@ import { STEAM_MS, STILL_TICK, steamRows } from "./welcome"
 
 /** How far the page and the minimap mix toward the background while the card is up. */
 export const CHAT_DIM = 0.5
-const PILL_W = 72
+/** The pill and card are the text column less 4 a side, at most PILL_MAX_W; below PILL_MIN_W the margin goes first. */
+const PILL_MAX_W = 100
+const PILL_MIN_W = 40
 const PILL_H = 3
 /** The body rows the pill takes from the bottom while it shows: itself and the clear row above it. */
 export const PILL_ROOM = PILL_H + 1
@@ -26,7 +28,7 @@ const CARD_STEAM_W = 14
 const CARD_STEAM_H = 3
 /** An error shows at most this many rows. */
 const ERROR_ROWS = 3
-/** The `[[` list: its width (a frame's inner width is PICK_W − 4) and most rows. */
+/** The `[[` list: its width (a frame's inner width is the width − 4), at most the pill's, and most rows. */
 export const PICK_W = 36
 export const PICK_ROWS = 5
 const PICK_MARK = 2
@@ -97,8 +99,11 @@ export interface PillView {
   cardOut: CardOut | null
 }
 
+/** The pill's width in a text column of `CW`: 72 at the 80 measure, 100 at most, 40 before it gives up its margins. */
+export const pillWidth = (CW: number): number => Math.min(CW, PILL_MAX_W, Math.max(CW - 8, PILL_MIN_W))
+
 export function pillGeo(L: { CW: number; CH: number }): PillGeo {
-  const w = Math.min(PILL_W, L.CW)
+  const w = pillWidth(L.CW)
   return { x: Math.floor((L.CW - w) / 2), w, top: L.CH - PILL_H, cardMax: L.CH - PILL_H - 2 }
 }
 
@@ -436,10 +441,10 @@ export const cardFoot = (t: Theme, below: number): Span[] | undefined =>
   below ? [{ text: ` ↓ ${below} more `, fg: footInk(t).status }] : undefined
 
 /** The `[[` list's rows: at most PICK_ROWS names, the highlight `▌` and bold on backgroundElement, `linked from here` muted. */
-export function pickRows(t: Theme, items: readonly PickItem[], hl: number): Span[][] {
+export function pickRows(t: Theme, items: readonly PickItem[], hl: number, w: number): Span[][] {
   const c = footInk(t)
   // the frame's inner width less the mark; a linked row leaves room for its hint
-  const room = PICK_W - 4 - PICK_MARK
+  const room = w - 4 - PICK_MARK
   return items.slice(0, PICK_ROWS).map((it, i) => {
     const sel = i === hl
     const nameW = it.linked ? room - width(PICK_HINT) : room

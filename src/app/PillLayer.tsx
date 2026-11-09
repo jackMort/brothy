@@ -127,12 +127,13 @@ function cardBlock({ t }: Derived, v: PillView, a: PillActions): ReactNode {
  * The `[[` list above the caret, its bottom border on the clear row over the pill; a press on it stays there. Its names
  * start under the `[[` (the mockup's place), so the list holds still while the query is typed.
  */
-function pickBlock({ t, L }: Derived, v: PillView, a: PillActions): ReactNode {
+function pickBlock({ t }: Derived, v: PillView, a: PillActions): ReactNode {
   if (!v.pick?.items.length) return null
-  const rows = frameRows(pickRows(t, v.pick.items, v.pick.hl), PICK_W, t.border, t.backgroundPanel)
+  const w = Math.min(PICK_W, v.geo.w)
+  const rows = frameRows(pickRows(t, v.pick.items, v.pick.hl, w), w, t.border, t.backgroundPanel)
   const at = caretCol(t, { ...v, input: v.input.slice(0, v.input.lastIndexOf("[[")) })
-  const left = Math.max(0, Math.min(at - 2, L.CW - PICK_W))
-  return block("chat-pick", left, v.geo.top - rows.length, PICK_W, rows, { onMouseDown: own(a) })
+  const left = Math.max(v.geo.x, Math.min(at - 2, v.geo.x + v.geo.w - w))
+  return block("chat-pick", left, v.geo.top - rows.length, w, rows, { onMouseDown: own(a) })
 }
 
 /** With the card up no image draws: each picture drawn as pixels on screen gets `▣ <alt>` muted, dimmed with the page, at its first visible reserved row above `rows`. */
