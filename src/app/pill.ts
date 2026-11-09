@@ -34,6 +34,9 @@ const pickQ = (input: string) => PICK_TAIL.exec(input)?.[1] ?? null
 /** The input without its `[[` query (esc on the list, a chip added). */
 const dropPick = (input: string) => input.replace(PICK_TAIL, "")
 
+/** The toast when a thread already holds CHAT_MAX_CHIPS notes. */
+const CHIPS_FULL = `${CHAT_MAX_CHIPS} notes at most`
+
 /** The chip of the open note: its stem, or the piped document's title. */
 const chipOf = (path: string, title: string): Chip => ({ path, title: path === STDIN ? title : stem(basename(path)) })
 
@@ -113,12 +116,22 @@ function makePillInput(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
   const { ui, flash } = c
   const { patch, setThread } = pillState(c)
 
-  /** The input changed: the `[[` list follows its tail; the first `[[` scans the links. */
+  /** Whether a `[[` list may open: not on a thread at CHAT_MAX_CHIPS (a toast); opening scans the links first. */
+  const mayOpen = () => {
+    const p = ui.current.pill
+    if ((p ? (ui.current.threads[p.path]?.chips.length ?? 0) : 0) >= CHAT_MAX_CHIPS) {
+      flash(CHIPS_FULL)
+      return false
+    }
+    ensureLinks()
+    return true
+  }
+
+  /** The input changed: the `[[` list follows its tail. */
   const setInput = (input: string) => {
     const q = pickQ(input)
     const was = ui.current.pill?.pick
-    if (q !== null && !was) ensureLinks()
-    patch({ input, pick: q === null ? null : { q, hl: was?.q === q ? was.hl : 0 } })
+    patch({ input, pick: q !== null && (was || mayOpen()) ? { q, hl: was?.q === q ? was.hl : 0 } : null })
   }
   const pillType = (text: string) => setInput((ui.current.pill?.input ?? "") + text)
 
@@ -167,7 +180,7 @@ function makePick(c: AppCtx, setInput: (input: string) => void) {
     const l = list()
     const it = l?.items[l.hl]
     if (!l || !it) return
-    if (l.t.chips.length >= CHAT_MAX_CHIPS) return flash(`${CHAT_MAX_CHIPS} notes at most`)
+    if (l.t.chips.length >= CHAT_MAX_CHIPS) return flash(CHIPS_FULL) // `[[` never opens then: a backstop
     setThread({ ...l.t, chips: [...l.t.chips, { path: it.path, title: it.name }] })
     setInput(dropPick(l.input))
   }

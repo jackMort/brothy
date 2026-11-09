@@ -85,7 +85,10 @@ export function chatMemo(stdin: string | undefined) {
       const found = extractLinks(parseFrontMatter(src).body).flatMap((k) => resolveLink(k, tree, from) ?? [])
       return [...new Set(found)].join(SEP)
     }),
-    pickItems: cached(pickList),
+    /** `ver` is the index's `ixVer`: aliases indexed while the list sits on one query show up */
+    pickItems: cached((tree: FileNode, q: string, ix: VaultIndex, _ver: number, linked: string, chips: string) =>
+      pickList(tree, q, ix, linked, chips),
+    ),
     /** where cite `cite` is in `view` of its note `src`: its section's first row and its quote (`citeSpot`) */
     citeSpot: cached((view: Rendered, source: boolean, src: string, cite: Cite) =>
       citeSpot(view, source, citeSection(src, cite.line).index, cite.line, quoteNeedle(cite.quote, source)),
@@ -183,7 +186,7 @@ export function pillView(
 function pickFor(s: UI, memo: Memo, ix: VaultIndex, thread: Thread, q: string) {
   const own = memo.chatRead(chipKey(thread), s.reload)[thread.chips.findIndex((c) => c.path === thread.path)]
   const linked = memo.pickLinked(own?.src ?? "", s.linkTree, thread.path)
-  return memo.pickItems(s.linkTree, q, ix, linked, chipKey(thread))
+  return memo.pickItems(s.linkTree, q, ix, s.ixVer, linked, chipKey(thread))
 }
 
 /**

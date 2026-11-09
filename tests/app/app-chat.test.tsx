@@ -576,7 +576,7 @@ test("[[sim ⏎ adds a chip; the next body holds two <note> tags; ⌫ on an empt
   expect(f).toContain("simmering  linked from here")
   f = await keys(s, "enter")
   expect(pillOf(f)).toContain(" Slow broth   simmering ")
-  expect(f).not.toContain("[[sim")
+  expect(pillOf(f)).not.toContain("[[sim")
   expect(hints(f)).toContain("esc hide") // back to the input's footer
   await keys(s, "type:why?", "enter")
   await waitFor(s, () => ai.calls.length === 1)
@@ -614,16 +614,18 @@ test("[[ alone lists the notes the thread's note links to; ↓ moves the highlig
   expect(pillOf(f)).toContain("⠳⢆ and ▍")
 })
 
-test("six notes at most: the seventh [[…⏎ toasts and adds nothing", async () => {
+test("six notes at most: at six, [[ toasts and opens no list; nothing more is added", async () => {
   aiConfig(OLLAMA)
   const names = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
   const files = Object.fromEntries(names.map((n) => [`${n}.md`, `# ${n}\n\n${n} text.\n`]))
   const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE, ...files }), "Slow broth.md")
   await keys(s, "c")
   for (const n of names.slice(0, 5)) await keys(s, `type:[[${n.slice(0, 4)}`, "enter")
-  const f = await keys(s, "type:[[foxt", "enter")
+  const f = await keys(s, "type:[[")
   expect(f).toContain("6 notes at most")
-  await keys(s, "esc", "type:q", "enter")
+  expect(f).not.toContain("▌") // no list
+  expect(hints(f)).toContain("esc hide") // the input's footer, not the list's
+  await keys(s, "C-u", "type:q", "enter")
   await waitFor(s, () => ai.calls.length === 1)
   const system = ai.calls[0]!.body.messages[0]!.content
   expect(system).toContain('<note id="6" title="echo">')
