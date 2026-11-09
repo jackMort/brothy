@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
+import { noteText } from "../../src/ai/client"
 import { PROMPTS } from "../../src/ai/config"
 import {
   bodyParts,
@@ -17,6 +18,7 @@ import {
   splitReply,
   verifyCites,
 } from "../../src/ai/thread"
+import * as nav from "../../src/ui/nav"
 
 const A: Chip = { path: "/v/a.md", title: "a" }
 const B: Chip = { path: "/v/b.md", title: "b" }
@@ -179,6 +181,49 @@ describe("verifyCites", () => {
       notes,
     )
     expect(r).toEqual({ parts: ["x"], cites: [] })
+  })
+})
+
+describe("verifying in one pass", () => {
+  const big = (n: number) => Array.from({ length: n }, (_, i) => `Line ${i} of the stock.`).join("\n")
+  test("each cited note is flattened once, whatever its sources; a note no source cites never is", () => {
+    const spy = spyOn(nav, "flatten")
+    try {
+      const notes = [
+        { chip: A, src: big(50) },
+        { chip: B, src: big(50) },
+        { chip: { path: "/v/c.md", title: "c" }, src: big(50) },
+      ]
+      const r = verifyCites(
+        ["x ", 1, 2, 3, 4],
+        [
+          { n: 1, note: 1, quote: "Line 3 of" },
+          { n: 2, note: 1, quote: "Line 40 of" },
+          { n: 3, note: 2, quote: "Line 7 of the stock" },
+          { n: 4, note: 1, quote: "not there" },
+        ],
+        notes,
+      )
+      expect(r.cites.map((c) => c.line)).toEqual([3, 40, 7])
+      expect(spy).toHaveBeenCalledTimes(2)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test("a clipped note verifies only within the lines its sent text reached: the model saw nothing past them", () => {
+    const src = `---\ntitle: x\n---\n\n%%hidden%%\n${big(40)}`
+    const ctx = chatContext([noteText(src)], [A], [], "q", cp(CHAT_PROMPT) + 1 + 60)
+    expect(ctx.notes[0]!.clipped).toBe(true)
+    const sent = { src, ...ctx.notes[0]! }
+    const lineOf = (quote: string) => verifyCites(["x ", 1], [{ n: 1, note: 1, quote }], [sent]).cites[0]?.line
+    expect(lineOf("Line 0 of the stock")).toBe(5)
+    expect(lineOf("Line 2 of the")).toBe(7) // the clip's last line, cut inside: counted whole
+    expect(lineOf("Line 3 of the stock")).toBeUndefined()
+    const whole = verifyCites(["x ", 1], [{ n: 1, note: 1, quote: "Line 3 of" }], [{ chip: A, src }])
+    expect(whole.cites[0]?.line).toBe(8)
+    const none = { ...sent, text: "", clipped: true }
+    expect(verifyCites(["x ", 1], [{ n: 1, note: 1, quote: "Line 0" }], [none]).cites).toEqual([])
   })
 })
 

@@ -656,6 +656,19 @@ test("a note over 24k characters: `clipped` on its chip, the system text cut", a
   expect(ai.calls[0]!.body.messages[0]!.content).toContain("[truncated]")
 })
 
+test("a clipped note: a quote from past the clip, which the model never saw, keeps no mark", async () => {
+  aiConfig({ ...OLLAMA, maxChars: 100_000 })
+  const long = `${NOTE}${"Skim the pot.\n".repeat(2000)}\nThe tail line.\n`
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": long }), "Slow broth.md")
+  await keys(s, "c", "type:q", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Pressed [1]. Tail [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "The tail line"')
+  ai.end(0)
+  const f = await waitFrame(s, (x) => x.includes("go to"))
+  expect(f).toContain("Pressed¹. Tail.")
+  expect(f).not.toContain("“The tail line”")
+})
+
 test("a cite in another note: ⏎ opens it; H returns with the pill still folded", async () => {
   aiConfig(OLLAMA)
   const { s, ai } = await mountAI(tmp(LINKED), "Slow broth.md")

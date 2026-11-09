@@ -13,6 +13,7 @@ import {
   chatRequest,
   type Exchange,
   parseSources,
+  type QuotedNote,
   splitReply,
   type Thread,
   verifyCites,
@@ -237,14 +238,14 @@ export function answerToast(ok: boolean, here: boolean, cardUp: boolean): "ready
 }
 
 /** A finished reply as the exchange shows it: its marks verified against the notes as sent. */
-export function doneExchange(ex: Exchange, text: string, notes: readonly SentNote[], now: number): Exchange {
+export function doneExchange(ex: Exchange, text: string, notes: readonly QuotedNote[], now: number): Exchange {
   const { body, sources } = splitReply(text)
   const v = verifyCites(bodyParts(body), parseSources(sources), notes)
   return { ...ex, raw: text, parts: v.parts, cites: v.cites, doneAt: now }
 }
 
 /** Where a request's end lands: its thread, the exchange, the notes as sent and the target. */
-type Sent = { path: string; ex: Exchange; notes: SentNote[]; target: AITarget }
+type Sent = { path: string; ex: Exchange; notes: QuotedNote[]; target: AITarget }
 
 /** A request's end: the exchange replaced in its thread (kept whatever is on screen), and the toast when §3 wants one. */
 function makePillDone(c: AppCtx, { failText }: Pick<Jobs, "failText">, animate: () => void) {
@@ -353,7 +354,8 @@ function makePillSend(c: AppCtx, jobs: Jobs, animate: () => void, citeGo: (at?: 
         chatInk.current.get(path)?.push({ len: cleanReply(raw).length, at: Date.now() })
         animate()
       },
-      done: (r) => finish({ path, ex, notes, target }, r),
+      // what each note sent: past a clip, the model saw nothing to quote
+      done: (r) => finish({ path, ex, notes: notes.map((n, i) => ({ ...n, ...ctx.notes[i] })), target }, r),
     })
     animate()
   }

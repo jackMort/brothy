@@ -7,7 +7,7 @@ import { normalize, scanComments } from "../markdown/lexer"
 import { decode } from "../markdown/render"
 import { type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
-import { quoteSpan } from "../ui/nav"
+import { type Flat, flatten, spanIn } from "../ui/nav"
 import { sameText } from "../ui/status"
 import { type ChatReq, cleanReply, clip, type Msg, tokens } from "./client"
 import { keepSentences } from "./gloss"
@@ -196,12 +196,22 @@ const LINK = /(?<!!)\[([^\]\n]*)\]\([^)\n]*\)/g
 export const seenLine = (line: string): string =>
   decode(plainLine(line.replace(QUOTE_BAR, "")).replace(LINK, "$1").replace(/~~/g, ""))
 
-/** One string per source line, as quotes are checked against it: front matter and comments blank, `seenLine`, code kept. */
-export function quoteLines(src: string): string[] {
+/**
+ * One string per source line, as quotes are checked against it: front matter and comments blank, `seenLine`, code
+ * kept. With `shown`, only up to the line where the `shown`th line of `noteText` (no front matter, comment-only lines
+ * or leading blank lines) ends: what a clipped send reached.
+ */
+export function quoteLines(src: string, shown = Number.POSITIVE_INFINITY): string[] {
   const lines = normalize(src).split("\n")
   const { offset } = parseFrontMatter(src)
   const { kept, hidden } = scanComments(lines, offset)
-  return lines.map((_, i) => (i < offset || hidden[i] ? "" : seenLine(kept[i] ?? "")))
+  const out: string[] = []
+  for (let i = 0, n = 0; i < lines.length && n < shown; i++) {
+    const line = i < offset || hidden[i] ? null : (kept[i] ?? "")
+    out.push(line === null ? "" : seenLine(line))
+    if (line !== null && (n > 0 || line.trim())) n++
+  }
+  return out
 }
 
 /** Append `text` to `out`; right after a dropped mark, a blank before punctuation goes. */
@@ -211,15 +221,31 @@ function pushText(out: Part[], text: string, dropped: boolean) {
   out[out.length - 1] = dropped && /^[.,;:!?)]/.test(text) ? prev.trimEnd() + text : prev + text
 }
 
-/** Each source's mark whose quote occurs in its note's `quoteLines`; the first source for a mark wins. */
-function verified(sources: readonly Source[], notes: readonly { chip: Chip; src: string }[]): Map<number, Cite> {
-  const lines = notes.map((n) => quoteLines(n.src))
+/** A note an answer's quotes are checked against: its source, and, from a send, the text sent and whether it was clipped. */
+export interface QuotedNote {
+  chip: Chip
+  src: string
+  text?: string
+  clipped?: boolean
+}
+
+/** The note's `quoteLines` as one `Flat`, over the lines its sent text reached: each `\n` of a clipped one is a line sent. */
+function noteFlat(note: QuotedNote): Flat {
+  const shown = note.clipped ? (note.text ?? "").split("\n").length - 1 : Number.POSITIVE_INFINITY
+  const lines = quoteLines(note.src, shown)
+  return flatten(lines, 0, lines.length)
+}
+
+/** Each source's mark whose quote occurs in its note's `quoteLines`; the first source for a mark wins. Each cited note is read once. */
+function verified(sources: readonly Source[], notes: readonly QuotedNote[]): Map<number, Cite> {
+  const flats = new Map<number, Flat>()
   const out = new Map<number, Cite>()
   for (const s of sources) {
     const note = notes[s.note - 1]
-    const own = lines[s.note - 1]
-    if (out.has(s.n) || !note || !own) continue
-    const at = quoteSpan(own, 0, own.length, seenLine(s.quote))
+    if (out.has(s.n) || !note) continue
+    const flat = flats.get(s.note) ?? noteFlat(note)
+    flats.set(s.note, flat)
+    const at = spanIn(flat, seenLine(s.quote))
     if (at) out.set(s.n, { n: 0, path: note.chip.path, quote: s.quote, line: at.row })
   }
   return out
@@ -229,7 +255,7 @@ function verified(sources: readonly Source[], notes: readonly { chip: Chip; src:
 export function verifyCites(
   parts: Part[],
   sources: readonly Source[],
-  notes: readonly { chip: Chip; src: string }[],
+  notes: readonly QuotedNote[],
 ): { parts: Part[]; cites: Cite[] } {
   const found = verified(sources, notes)
   const num = new Map<number, number>()

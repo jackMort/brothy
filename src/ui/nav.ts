@@ -390,7 +390,7 @@ export interface QuoteSpan {
 }
 
 /** The rows as one folded, space-joined text, with the row and column each of its characters came from. */
-interface Flat {
+export interface Flat {
   text: string
   at: [number, number][]
 }
@@ -413,7 +413,8 @@ function flatRow(flat: Flat, row: string, i: number) {
   }
 }
 
-function flatten(plain: readonly string[], from: number, to: number): Flat {
+/** Rows `from..to` of `plain` as one `Flat`: what `quoteSpan` reads; `spanIn` looks in one built once. */
+export function flatten(plain: readonly string[], from: number, to: number): Flat {
   const flat: Flat = { text: "", at: [] }
   for (let i = Math.max(0, from); i < Math.min(to, plain.length); i++) flatRow(flat, foldSame(plain[i]!), i)
   return flat
@@ -425,9 +426,13 @@ function flatten(plain: readonly string[], from: number, to: number): Flat {
  * offsets into each row's text.
  */
 export function quoteSpan(plain: readonly string[], from: number, to: number, needle: string): QuoteSpan | null {
+  return foldSame(needle).trim() ? spanIn(flatten(plain, from, to), needle) : null
+}
+
+/** `quoteSpan` within rows already flattened, so several needles share one pass over them. */
+export function spanIn({ text, at }: Flat, needle: string): QuoteSpan | null {
   const want = foldSame(needle).replace(/\s+/g, " ").trim()
   if (!want) return null
-  const { text, at } = flatten(plain, from, to)
   const k = text.indexOf(want)
   if (k < 0) return null
   const [row, col] = at[k]!
