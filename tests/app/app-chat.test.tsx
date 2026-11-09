@@ -896,7 +896,8 @@ test("a quote edited away lands on its section with a toast", async () => {
 })
 
 test("a cite in a chip's note deleted since: ⏎ toasts note gone and the card stays as it was", async () => {
-  const d = tmp({ "Slow broth.md": NOTE, "Stock.md": "# Stock\n\nRoast the bones first.\n" })
+  // a heading other than the title: a row recomputed against the gone file would fall back to the title alone
+  const d = tmp({ "Slow broth.md": NOTE, "Stock.md": "# Roasting\n\nRoast the bones first.\n" })
   aiConfig(OLLAMA)
   const { s, ai } = await mountAI(d, "Slow broth.md")
   await keys(s, "c", "type:[[sto", "enter", "type:why?", "enter")
@@ -909,7 +910,7 @@ test("a cite in a chip's note deleted since: ⏎ toasts note gone and the card s
   expect(f).toContain("note gone")
   expect(f).toContain("Slow broth") // still on the thread's note
   expect(hints(f)).toContain("go to") // the card stays up with the keys
-  expect(f).toContain("¹ Stock · “Roast the bones first”")
+  expect(f).toContain("¹ Stock › Roasting · “Roast the bones first”")
 })
 
 test("[ ] step the folded cites; at the ends: last mark / first mark; esc hides", async () => {
