@@ -35,7 +35,7 @@ interface Cite {
   line: number
 }
 /** Answer text, or a cite number. */
-type Part = string | number
+export type Part = string | number
 /** One question and its answer. */
 export interface Exchange {
   q: string
@@ -50,6 +50,12 @@ export interface Exchange {
   error: string | null
   /** when the marks start to glow */
   doneAt: number | null
+}
+/** A chat thread: the note it belongs to, the notes it carries, its exchanges. */
+export interface Thread {
+  path: string
+  chips: Chip[]
+  turns: Exchange[]
 }
 interface SentNote {
   chip: Chip
