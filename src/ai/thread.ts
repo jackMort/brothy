@@ -149,19 +149,39 @@ export function chatRequest(ctx: Pick<SentContext, "notes" | "turns">, question:
   }
 }
 
-/** The line that starts the sources: `Sources:`, `**Sources**`, any case. */
-const SOURCES = /^\s*\**sources:?\**\s*$/i
-/** A last line that may still become SOURCES while it streams. */
+/** What a source line starts with: a bullet or `1.`, then its `[n]`. */
+const SOURCE_START = /^(?:[-*•]|\d+[.)])?\s*\[\d{1,2}\]/
+/** The line that starts the sources: `Sources:`, `Source`, `**Sources**`, `## Sources`, any case; the rest of the line is captured. */
+const SOURCES = /^\s*(?:#{1,6}\s*)?\**sources?\b\**\s*(:?)\**\s*(.*)$/i
+/** What follows a `Sources` header on its line (the first source line, maybe empty), or null when the line is body. */
+const sourcesHeader = (line: string): string | null => {
+  const m = SOURCES.exec(line)
+  if (!m) return null
+  const rest = (m[2] ?? "").trim()
+  if (!rest) return ""
+  return m[1] && SOURCE_START.test(rest) ? rest : null
+}
+/** A last line that may still become a header while it streams. */
 const isSourcesStart = (line: string) => {
-  const s = line.trim().toLowerCase().replace(/^\*+/, "")
-  return s.length > 0 && "sources:".startsWith(s)
+  const s = line
+    .trim()
+    .toLowerCase()
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^\*+/, "")
+  return s.length > 0 && ("sources:".startsWith(s) || "source:".startsWith(s))
 }
 
 /** The reply split at its last SOURCES line; before one exists, all body (`streaming`: a last line still becoming one is held back). */
 export function splitReply(text: string, streaming = false): { body: string; sources: string } {
   const lines = text.split("\n")
-  const at = lines.findLastIndex((l) => SOURCES.test(l))
-  if (at >= 0) return { body: lines.slice(0, at).join("\n").trimEnd(), sources: lines.slice(at + 1).join("\n") }
+  const at = lines.findLastIndex((l) => sourcesHeader(l) !== null)
+  if (at >= 0) {
+    const first = sourcesHeader(lines[at] ?? "") ?? ""
+    return {
+      body: lines.slice(0, at).join("\n").trimEnd(),
+      sources: [...(first ? [first] : []), ...lines.slice(at + 1)].join("\n"),
+    }
+  }
   if (streaming && lines.length > 1 && isSourcesStart(lines.at(-1) ?? "")) lines.pop()
   return { body: lines.join("\n").trimEnd(), sources: "" }
 }
@@ -201,7 +221,8 @@ export interface Source {
   note: number
   quote: string
 }
-const SOURCE_LINE = /^\s*\[(\d{1,2})\]\s*(?:note\s*)?(\d+)\s*[:\-–]?\s*["“](.*)["”]\s*$/i
+const SOURCE_LINE =
+  /^\s*(?:[-*•]|\d+[.)])?\s*\[(\d{1,2})\]\s*(?:note\s*)?(\d+)\s*[:\-–—,]?\s*["“](.*)["”][\s.,;]*(?:\(.*\))?[\s.,;]*$/i
 
 /** The source lines that parse; the rest are dropped. */
 export function parseSources(sources: string): Source[] {

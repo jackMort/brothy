@@ -137,6 +137,60 @@ describe("the reply", () => {
     expect(splitReply("A [1].\nSoup is", true).body).toBe("A [1].\nSoup is")
     expect(splitReply("A [1].\nSour", false).body).toBe("A [1].\nSour")
   })
+  test("splitReply: a singular, #-led or same-line header splits; the rest of its line is the first source", () => {
+    const body = { body: "A [1].", sources: '[1] note 1: "a"' }
+    expect(splitReply('A [1].\nSource:\n[1] note 1: "a"')).toEqual(body)
+    expect(splitReply('A [1].\n## Sources\n[1] note 1: "a"')).toEqual(body)
+    expect(splitReply('A [1].\n## Sources:\n[1] note 1: "a"')).toEqual(body)
+    expect(splitReply('A [1].\n**Sources:**\n[1] note 1: "a"')).toEqual(body)
+    expect(splitReply('A [1].\nSources: [1] note 1: "a"')).toEqual(body)
+    expect(splitReply('A [1].\nSources: - [1] note 1: "a"\n[2] note 1: "b"')).toEqual({
+      body: "A [1].",
+      sources: '- [1] note 1: "a"\n[2] note 1: "b"',
+    })
+  })
+  test("splitReply: an ordinary sentence starting with the word stays body", () => {
+    for (const l of ["Sources of salt include kelp.", "Source: my grandmother's recipe", "Sources: none were found"]) {
+      expect(splitReply(`A.\n${l}`)).toEqual({ body: `A.\n${l}`, sources: "" })
+    }
+  })
+  test("splitReply while streaming holds back `Source` and `## Sour`, but not ordinary words", () => {
+    expect(splitReply("A.\nSource", true).body).toBe("A.")
+    expect(splitReply("A.\n## Sour", true).body).toBe("A.")
+    expect(splitReply("A.\n## Sources", true).body).toBe("A.")
+    expect(splitReply("A.\n## Soup", true).body).toBe("A.\n## Soup")
+    expect(splitReply("A.\n##", true).body).toBe("A.\n##")
+  })
+  test("parseSources: bullets, numbers, trailing punctuation, any dash, a parenthetical or a comma all parse", () => {
+    const want = [{ n: 1, note: 1, quote: "do not press" }]
+    for (const l of [
+      '- [1] note 1: "do not press"',
+      '* [1] note 1: "do not press"',
+      '• [1] note 1: "do not press"',
+      '1. [1] note 1: "do not press"',
+      '1) [1] note 1: "do not press"',
+      '[1] note 1: "do not press".',
+      '[1] note 1: "do not press",',
+      '[1] note 1: "do not press";',
+      '[1] note 1 — "do not press"',
+      '[1] note 1 - "do not press"',
+      '[1] note 1 – "do not press"',
+      '[1] note 1: "do not press" (Slow broth)',
+      '[1] note 1, "do not press"',
+      '[1] note 1: "do not press"',
+    ]) {
+      expect(parseSources(l)).toEqual(want)
+    }
+    expect(parseSources('- [2] note 1: "say "hi" now".')).toEqual([{ n: 2, note: 1, quote: 'say "hi" now' }])
+  })
+  test("a bulleted reply keeps its mark through the parse and the check", () => {
+    const { body, sources } = splitReply('Do not press [1].\n## Source\n- [1] note 1: "do NOT press the bones".')
+    const r = verifyCites(bodyParts(body), parseSources(sources), [
+      { chip: A, src: "# Broth\n\nDo not press the bones.\n" },
+    ])
+    expect(r.parts).toEqual(["Do not press", 1, "."])
+    expect(r.cites).toHaveLength(1)
+  })
   test("bodyParts: a line break before a mark stays; only spaces and tabs go", () => {
     expect(bodyParts("text\n[1] more")).toEqual(["text\n", 1, " more"])
     expect(bodyParts("a  \t[1]")).toEqual(["a", 1])
