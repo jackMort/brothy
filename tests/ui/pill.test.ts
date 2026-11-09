@@ -239,6 +239,18 @@ describe("the card", () => {
     expect(text(out.rows[5]!).trim()).toBe("asking llama3.2 · 2 s")
     expect(out.stops).toEqual([])
   })
+  test("streaming: the rule's status counts from 1 s: the model alone below it", () => {
+    const at = (secs: number) =>
+      text(
+        rowsOf(
+          { running: { parts: ["It"], arrivals: [], at: 0, live: true, model: "llama3.2", secs } },
+          pendingThread,
+        ).rows.at(-1)!,
+      )
+    expect(at(0)).toMatch(/llama3\.2 · esc cancel$/)
+    expect(at(0)).not.toContain(" 0 s")
+    expect(at(1)).toMatch(/llama3\.2 · 1 s · esc cancel$/)
+  })
   test("streaming: the text indented 2 with a caret, unverified marks muted superscripts, the rule `<model> · N s · esc cancel`", () => {
     const out = rowsOf(
       { running: { parts: ["It clouds", 1, "."], arrivals: [], at: 0, live: true, model: "llama3.2", secs: 3 } },

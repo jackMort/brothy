@@ -371,7 +371,13 @@ const thinkingExchange = (c: Cx, head: Span[][], r: Running): Made => ({
 })
 
 function streamingExchange(c: Cx, head: Span[][], r: Running): Made {
-  const tail: Tail = { status: `${r.model} · ${r.secs} s`, model: r.model, key: "esc", word: "cancel", drop: "status" }
+  const tail: Tail = {
+    status: r.secs >= 1 ? `${r.model} · ${r.secs} s` : r.model,
+    model: r.model,
+    key: "esc",
+    word: "cancel",
+    drop: "status",
+  }
   return { rows: [...head, ...paragraphRows(streamParas(c, r), c.w), [], ruleRow(c.t, c.w, tail)], stops: [] }
 }
 
