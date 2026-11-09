@@ -1,12 +1,12 @@
 // The chat pill's pure side: where the pill and its card sit, their frames, the chips and the input, the card's rows by
 // stage, the `[[` list, the quote's tint, and the ink and steam steps every frame is drawn from. No React, no store.
 import { fmtTokens } from "../ai/client"
-import type { Chip, Part, Thread } from "../ai/thread"
+import type { Chip, Exchange, Part, Thread } from "../ai/thread"
 import { A, type Span, safeLine } from "../lib/spans"
-import { spanWidth, superscript, truncate, truncateLeft, width } from "../lib/text"
+import { mergeSpans, spanWidth, superscript, truncate, truncateLeft, width, wrap } from "../lib/text"
 import type { Theme } from "../theme/theme"
-import { chip, INK_MS, inkAt } from "./chrome"
-import { CARET, footInk } from "./footnote"
+import { chip, INK_MS, inkAt, steamColors } from "./chrome"
+import { CARET, footInk, footnoteRule, type Tail, waitText } from "./footnote"
 import type { QuoteSpan } from "./nav"
 import { STEAM_MS, STILL_TICK, steamRows } from "./welcome"
 
@@ -15,6 +15,11 @@ const PILL_H = 3
 /** A chip's title is cut to this; the input keeps at least INPUT_MIN_W columns beside the chips. */
 const CHIP_MAX_W = 16
 const INPUT_MIN_W = 20
+/** The thinking card's steam field. */
+const CARD_STEAM_W = 14
+const CARD_STEAM_H = 3
+/** An error shows at most this many rows. */
+const ERROR_ROWS = 3
 
 /** What the footer follows. */
 type ChatStage = "input" | "pick" | "waiting" | "answer" | "error"
@@ -218,3 +223,153 @@ export function caretCol(t: Theme, v: PillView): number {
   const shown = inputSpans(t, v.input, true, room, "")[0]
   return v.geo.x + 2 + 3 + (v.input ? width(shown?.text ?? "") : 0)
 }
+
+type CardView = Pick<PillView, "running" | "hl" | "wheres">
+/** One exchange's rows and its cite stops, the stops' rows relative to the exchange. */
+interface Made {
+  rows: Span[][]
+  stops: CardOut["stops"]
+}
+/** What every stage draws with. */
+interface Cx {
+  t: Theme
+  w: number
+  now: number
+  motion: boolean
+}
+
+/** `› question`, bold, a 2-column hang. */
+const questionRows = (t: Theme, q: string, w: number) =>
+  wrap([{ text: safeLine(q), fg: t.text, attr: A.BOLD }], w, [{ text: "› ", fg: t.primary }], [pad(2)])
+
+/** The rule under an answer, indented 2. */
+const ruleRow = (t: Theme, w: number, tail: Tail | null): Span[] => [pad(2), ...footnoteRule(t, w - 2, tail)]
+
+/** No text yet: steam rising, centred, and `asking <model> · N s` under it. */
+function thinkingRows(c: Cx, r: Running): Span[][] {
+  const cols = steamColors(c.t).slice(-CARD_STEAM_H)
+  const centre = (s: Span[]): Span[] => [pad(Math.floor((c.w - spanWidth(s)) / 2)), ...s]
+  const field = steamRows(steamTick(r.at, c.now, c.motion), CARD_STEAM_W, CARD_STEAM_H)
+  const steam = field.map((s, i) => centre([{ text: s.replace(/ /g, "⠀"), fg: cols[i] }]))
+  return [...steam, centre([{ text: waitText(r.model, r.secs, c.w), fg: footInk(c.t).status }])]
+}
+
+/** A mark as a superscript: `fg`, bold on backgroundElement when selected. */
+const markSpan = (t: Theme, n: number, fg: string, sel: boolean): Span =>
+  sel ? { text: superscript(n), fg, attr: A.BOLD, bg: t.backgroundElement } : { text: superscript(n), fg }
+
+/** Streaming parts: each character inked by its arrival, marks muted, then the caret. */
+function streamSpans(c: Cx, r: Running): Span[] {
+  const out: Span[] = []
+  let pos = 0
+  for (const p of r.parts) {
+    if (typeof p === "number") {
+      out.push({ text: superscript(p), fg: c.t.textMuted })
+      pos += String(p).length + 2
+      continue
+    }
+    for (const ch of safeLine(p))
+      out.push({ text: ch, fg: inkAt(c.t, charInk(r.arrivals, pos++, c.now, c.motion), c.t.text) })
+  }
+  return mergeSpans([...out, { text: CARET, fg: footInk(c.t).caret }])
+}
+
+/** A finished answer: text in `text`, marks glowing in from `doneAt`, the selected one bold. */
+function answerSpans(c: Cx, e: Exchange, sel: number | null): Span[] {
+  const glow = inkAt(c.t, inkStep(e.doneAt ?? 0, c.now, c.motion), c.t.primary)
+  return mergeSpans(
+    e.parts.map((p) =>
+      typeof p === "number" ? markSpan(c.t, p, glow, p === sel) : { text: safeLine(p), fg: c.t.text },
+    ),
+  )
+}
+
+/** One row per cite (wrapped under its text), `▌` on the selected; their first rows as offsets. */
+function citeRows(t: Theme, cites: Exchange["cites"], wheres: readonly string[], sel: number | null, w: number) {
+  const ink = footInk(t)
+  const rows: Span[][] = []
+  const at: number[] = []
+  cites.forEach((k, i) => {
+    at.push(rows.length)
+    const body: Span[] = [
+      { text: `${safeLine(wheres[i] ?? "")} · `, fg: ink.status },
+      { text: `“${safeLine(k.quote)}”`, fg: ink.note },
+    ]
+    wrap(body, w - 4).forEach((r, j) => {
+      const cur: Span = k.n === sel && j === 0 ? { text: "▌ ", fg: t.primary } : pad(2)
+      const mark: Span = j ? pad(2) : { text: `${superscript(k.n)} `, fg: ink.mark, attr: k.n === sel ? A.BOLD : 0 }
+      rows.push([cur, mark, ...r])
+    })
+  })
+  return { rows, at }
+}
+
+/** The rule's tail for a finished answer: `↑↓ ⏎ go to · <model>` with marks, the model alone without. */
+const answerTail = (e: Exchange): Tail =>
+  e.cites.length
+    ? { status: e.model, model: e.model, key: "↑↓ ⏎", word: "go to", keyFirst: true }
+    : { status: e.model, model: e.model }
+
+const thinkingExchange = (c: Cx, head: Span[][], r: Running): Made => ({
+  rows: [...head, ...thinkingRows(c, r)],
+  stops: [],
+})
+
+function streamingExchange(c: Cx, head: Span[][], r: Running): Made {
+  const tail: Tail = { status: `${r.model} · ${r.secs} s`, model: r.model, key: "esc", word: "cancel", drop: "status" }
+  return { rows: [...head, ...wrap(streamSpans(c, r), c.w, [pad(2)]), [], ruleRow(c.t, c.w, tail)], stops: [] }
+}
+
+function errorExchange(c: Cx, head: Span[][], error: string): Made {
+  const msg: Span[] = [
+    { text: "✗ ", fg: c.t.error },
+    { text: safeLine(error), fg: c.t.error },
+  ]
+  const err = wrap(msg, c.w, [pad(2)], [pad(4)]).slice(0, ERROR_ROWS)
+  return { rows: [...head, ...err, [], ruleRow(c.t, c.w, { key: "⏎", word: "retry" })], stops: [] }
+}
+
+function answerExchange(c: Cx, head: Span[][], e: Exchange, i: number, view: CardView): Made {
+  const sel = view.hl?.[0] === i ? view.hl[1] : null
+  const body = [...head, ...wrap(answerSpans(c, e, sel), c.w, [pad(2)]), [], ruleRow(c.t, c.w, answerTail(e))]
+  const cites = citeRows(c.t, e.cites, view.wheres[i] ?? [], sel, c.w)
+  const stops = cites.at.map((k, j) => ({ cite: [i, j + 1] as [number, number], row: body.length + k }))
+  return { rows: [...body, ...cites.rows], stops }
+}
+
+/** One exchange by its stage: thinking, streaming, error or answer. */
+function exchangeRows(c: Cx, e: Exchange, i: number, view: CardView): Made {
+  const head = [...questionRows(c.t, e.q, c.w), []]
+  const r = e.raw === null && !e.error ? view.running : null
+  if (r) return r.live ? streamingExchange(c, head, r) : thinkingExchange(c, head, r)
+  if (e.error) return errorExchange(c, head, e.error)
+  return answerExchange(c, head, e, i, view)
+}
+
+/** The whole thread, oldest first, a blank row between exchanges; the cite stops by row. `w` is the card's inner width. */
+export function cardRows(t: Theme, thread: Thread, view: CardView, w: number, now: number, motion: boolean): CardOut {
+  const c: Cx = { t, w, now, motion }
+  const out: CardOut = { rows: [], stops: [] }
+  thread.turns.forEach((e, i) => {
+    if (i) out.rows.push([])
+    const x = exchangeRows(c, e, i, view)
+    out.stops.push(...x.stops.map((s) => ({ ...s, row: s.row + out.rows.length })))
+    out.rows.push(...x.rows)
+  })
+  return out
+}
+
+/** The rows on screen: from `top`, or pinned to the bottom (null); `below` counts the rows under them. */
+export function cardWindow(
+  rows: Span[][],
+  max: number,
+  top: number | null,
+): { rows: Span[][]; top: number; below: number } {
+  const bottom = Math.max(0, rows.length - max)
+  const from = top === null ? bottom : Math.max(0, Math.min(top, bottom))
+  return { rows: rows.slice(from, from + max), top: from, below: Math.max(0, rows.length - from - max) }
+}
+
+/** ` ↓ n more ` for the card's bottom border while it is scrolled up. */
+export const cardFoot = (t: Theme, below: number): Span[] | undefined =>
+  below ? [{ text: ` ↓ ${below} more `, fg: footInk(t).status }] : undefined

@@ -5,6 +5,9 @@ import { width } from "../../src/lib/text"
 import { INK_MS } from "../../src/ui/chrome"
 import { type LayoutState, layout } from "../../src/ui/layout"
 import {
+  cardFoot,
+  cardRows,
+  cardWindow,
   caretCol,
   charInk,
   chatStage,
@@ -194,5 +197,73 @@ describe("the pill row", () => {
       ).length
       expect(caretCol(t, v)).toBe(5 + 2 + at)
     }
+  })
+})
+
+describe("the card", () => {
+  const W = 60
+  const T1 = { path: "/n.md", chips: [], turns: [DONE] }
+  const rowsOf = (v: Partial<PillView>, thread: PillView["thread"] = T1) =>
+    cardRows(t, thread, { running: null, hl: null, wheres: [["Strain and cool", "Simmering", "n"]], ...v }, W, 0, false)
+  const pending = { ...DONE, raw: null, parts: [], cites: [], doneAt: null }
+  const pendingThread = { path: "/n.md", chips: [], turns: [pending] }
+  test("thinking: the question, a blank, 3 steam rows centred, `asking <model> · N s` centred", () => {
+    const out = rowsOf(
+      { running: { parts: [], arrivals: [], at: 0, live: false, model: "llama3.2", secs: 2 } },
+      pendingThread,
+    )
+    expect(text(out.rows[0]!)).toBe("› why cloudy?")
+    expect(text(out.rows[1]!)).toBe("")
+    expect(out.rows.slice(2, 5).every((r) => /[⠀-⣿]/.test(text(r)))).toBe(true)
+    expect(text(out.rows[5]!).trim()).toBe("asking llama3.2 · 2 s")
+    expect(out.stops).toEqual([])
+  })
+  test("streaming: the text indented 2 with a caret, unverified marks muted superscripts, the rule `<model> · N s · esc cancel`", () => {
+    const out = rowsOf(
+      { running: { parts: ["It clouds", 1, "."], arrivals: [], at: 0, live: true, model: "llama3.2", secs: 3 } },
+      pendingThread,
+    )
+    expect(text(out.rows[2]!)).toBe("  It clouds¹.▍")
+    expect(out.rows[2]!.find((s) => s.text.includes("¹"))!.fg).toBe(t.textMuted)
+    expect(text(out.rows.at(-1)!)).toMatch(/^ {2}─+ +llama3\.2 · 3 s · esc cancel$/)
+  })
+  test("answer: marks glow primary, the selected bold on backgroundElement; rule `↑↓ ⏎ go to · <model>`; a row per cite, `▌` on the selected; stops", () => {
+    const out = rowsOf({ hl: [0, 2] })
+    const body = out.rows[2]!
+    expect(body.find((s) => s.text === "²")).toMatchObject({ fg: t.primary, bg: t.backgroundElement })
+    expect(text(out.rows[4]!)).toMatch(/^ {2}─+ +↑↓ ⏎ go to · llama3\.2$/)
+    expect(text(out.rows[5]!)).toBe("  ¹ Strain and cool · “do not press the bones”")
+    expect(text(out.rows[6]!)).toStartWith("▌ ² Simmering · ")
+    expect(out.stops).toEqual([
+      { cite: [0, 1], row: 5 },
+      { cite: [0, 2], row: 6 },
+      { cite: [0, 3], row: 7 },
+    ])
+  })
+  test("a long cite wraps under its text; an answer without marks: the model alone", () => {
+    const long = { ...DONE, cites: [{ ...CITES[0]!, quote: "word ".repeat(12).trim() }], parts: ["x", 1] }
+    const out = rowsOf({}, { path: "/n.md", chips: [], turns: [long] })
+    const i = out.stops[0]!.row
+    expect(text(out.rows[i + 1]!)).toMatch(/^ {4}\S/)
+    const bare = rowsOf({}, { path: "/n.md", chips: [], turns: [{ ...DONE, parts: ["plain."], cites: [] }] })
+    expect(text(bare.rows.at(-1)!)).toMatch(/^ {2}─+ +llama3\.2$/)
+  })
+  test("error: `✗ ` and the message in error, at most 3 rows, rule `⏎ retry`; exchanges apart by a blank", () => {
+    const err = { ...pending, error: "connection refused ".repeat(10) }
+    const out = rowsOf({}, { path: "/n.md", chips: [], turns: [DONE, err] })
+    const k = out.rows.findIndex((r) => text(r).startsWith("  ✗ "))
+    expect(out.rows[k]![1]!.fg).toBe(t.error)
+    expect(out.rows.slice(k).filter((r) => text(r).startsWith("    ")).length).toBeLessThanOrEqual(2)
+    expect(text(out.rows.at(-1)!)).toMatch(/⏎ retry$/)
+    const second = out.rows.findIndex((r, i) => i > 0 && text(r) === "› why cloudy?")
+    expect(text(out.rows[second - 1]!)).toBe("")
+  })
+  test("cardWindow: pinned to the bottom (null), or from `top`; `below` counts rows under it; cardFoot ` ↓ n more `", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => [{ text: String(i) }])
+    expect(cardWindow(rows, 4, null)).toMatchObject({ top: 6, below: 0 })
+    expect(cardWindow(rows, 4, 2)).toMatchObject({ top: 2, below: 4 })
+    expect(cardWindow(rows, 4, 99).top).toBe(6)
+    expect(text(cardFoot(t, 4)!)).toBe(" ↓ 4 more ")
+    expect(cardFoot(t, 0)).toBeUndefined()
   })
 })
