@@ -11,6 +11,8 @@ import { CARET, footInk, footnoteRule, type Tail, waitText } from "./footnote"
 import type { QuoteSpan } from "./nav"
 import { STEAM_MS, STILL_TICK, steamRows } from "./welcome"
 
+/** How far the page and the minimap mix toward the background while the card is up. */
+export const CHAT_DIM = 0.5
 const PILL_W = 72
 const PILL_H = 3
 /** The body rows the pill takes from the bottom while it shows: itself and the clear row above it. */

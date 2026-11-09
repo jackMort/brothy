@@ -30,6 +30,7 @@ import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { type LinkSpot, markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
 import type { ChangeView } from "../ui/panel"
+import { CHAT_DIM } from "../ui/pill"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
 import { landedHere } from "./Chrome"
@@ -349,11 +350,11 @@ function changeMargin(d: Derived): Span[][] | null {
 
 /** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim; the pictures over their rows, the chat pill over them all. */
 function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
-  const { L, t, view, top } = d
+  const { L, view, top } = d
   const { CW, CH } = L
   const scrim = L.mode === "drawer" && L.shown
   const marks = rowMarks(d)
-  const dim = (spans: Span[]) => (scrim ? dimSpans(spans, t, SCRIM_DIM) : spans)
+  const dim = pageDim(d, scrim)
   const foot = landFoot(d)
   const footAt = CH - foot.length
   const margin = changeMargin(d)
@@ -381,6 +382,13 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
       {pillLayer(d, pill)}
     </box>
   )
+}
+
+/** The page's dim: the drawer's scrim, else the card's (they are never on together), else none. */
+function pageDim({ t, pill }: Derived, scrim: boolean) {
+  const card = pill?.card ? CHAT_DIM : 0
+  const amount = scrim ? SCRIM_DIM : card
+  return (spans: Span[]) => (amount ? dimSpans(spans, t, amount) : spans)
 }
 
 /** The rows above the chat pill's band (its clear row and its 3 rows draw no text), all CH while the pill is hidden. */
@@ -454,6 +462,7 @@ export function miniBox(c: AppCtx, d: Derived): ReactNode {
       ? memo.mini(view, CW, bodyH, view.srcRow ? String(view.srcRow.length).length + 2 : 0)
       : null
   const mc = miniColors(t)
+  const ink = (col: string | undefined) => (col && d.pill?.card ? mix(col, t.background, CHAT_DIM) : col)
   return L.mini ? (
     <box
       key="mini"
@@ -476,8 +485,8 @@ export function miniBox(c: AppCtx, d: Derived): ReactNode {
               key={i}
               spans={row.map((cell) => ({
                 text: cell.ch,
-                fg: mc[cell.kind],
-                bg: cell.band ? t.backgroundElement : undefined,
+                fg: ink(mc[cell.kind]),
+                bg: ink(cell.band ? t.backgroundElement : undefined),
               }))}
             />
           ))

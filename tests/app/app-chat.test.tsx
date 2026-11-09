@@ -2,8 +2,9 @@
 import { expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
+import { mix } from "../../src/theme/theme"
 import { hex } from "../helpers/theme"
-import { B, filler, HINT_ROW, keys, OLLAMA, useAppHarness, W120, waitFor, waitFrame, walk } from "./helpers"
+import { B, filler, HINT_ROW, keys, OLLAMA, spansOf, useAppHarness, W120, waitFor, waitFrame, walk } from "./helpers"
 
 const { tmp, mount, mountAI, aiConfig, openNote } = useAppHarness()
 
@@ -406,4 +407,16 @@ test("the band follows the page's background: transparent with T, the theme's wi
   expect(clear().every((sp) => sp.bg.a === 0)).toBe(true)
   expect(textUnderPill(s)).toEqual([])
   expect(s.captureCharFrame().split("\n")[24]!.trim()).toBe("")
+})
+
+test("the page dims by 0.5 while the card is up, not while typing", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", { size: { width: 120, height: 30 } })
+  const fgOf = (word: string) => hex(spansOf(s).find((sp) => sp.text.includes(word))!.fg)
+  await keys(s, "c", "type:q")
+  expect(fgOf("Intro line")).toBe(B.text)
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  await s.renderOnce()
+  expect(fgOf("Intro line")).toBe(mix(B.text, B.background, 0.5))
 })
