@@ -519,6 +519,16 @@ describe("list, tint, range, motion", () => {
     expect(landed(NOTE, false, "Salt &amp; pepper")).toEqual(["salt & pepper"])
     expect(landed(NOTE, false, "- Salt & pepper")).toEqual(["salt & pepper"])
   })
+  test("citeSpot in Preview: a quote from code, drawn as written, lands as written", () => {
+    const shapes: [string, string][] = [
+      ["Write `&nbsp;` for a hard space.", "Write `&nbsp;` for a hard space"],
+      ["Use `a &amp;&amp; b` here.", "Use `a &amp;&amp; b`"],
+      ["```html\n<p>Salt &amp; pepper</p>\n```", "<p>Salt &amp; pepper</p>"],
+      ["```\nsee [x](y.md) here\n```", "see [x](y.md) here"],
+      ["```sh\ncd ~~/x\n```", "cd ~~/x"],
+    ]
+    for (const [body, quote] of shapes) expect(spotOf(`# A\n\n${body}\n`, false, quote)).not.toBeNull()
+  })
   test("citeSpot in Source: the quote as written lands exactly; one that reads otherwise lands on its whole rows", () => {
     expect(landed(NOTE, true, "Keep ~~never~~ boil")).toEqual(["keep ~~never~~ boil"])
     expect(landed(NOTE, true, "bones and salt")).toEqual(["1. [[bones]] and **salt** go in"])

@@ -858,6 +858,18 @@ test("a quote across a callout's two lines lands in Preview, tinted from its fir
   expect(tintedRows(s)[1]).toEndWith("through a sieve")
 })
 
+test("a quote from code lands in Preview as written, with no toast: an inline entity, a fenced link", async () => {
+  const shapes: [string, string][] = [
+    ["Write `&nbsp;` for a hard space.", "Write `&nbsp;` for a hard space"],
+    ["```\nsee [the pot](pot.md) here\n```", "see [the pot](pot.md) here"],
+  ]
+  for (const [body, quote] of shapes) {
+    const { f } = await landOn(body, quote)
+    expect(f).toContain("1 of 1")
+    expect(f).not.toContain("quote no longer in the note")
+  }
+})
+
 test("in Source, a quote of what the note shows (no brackets, no stars) lands on its rows with no toast", async () => {
   const { s, f } = await landOn("Roast the [[bones]] and **salt** first.", "the bones and salt", true)
   expect(f).toContain("1 of 1")

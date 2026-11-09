@@ -6,6 +6,7 @@ import { A, type Span, safeLine } from "../lib/spans"
 import { mergeSpans, spanWidth, superscript, truncate, truncateLeft, width, wrap } from "../lib/text"
 import type { Rendered } from "../markdown/render"
 import { sourceGutter } from "../markdown/source"
+import { plainLine } from "../notes/vault"
 import { mix, type Theme } from "../theme/theme"
 import { chip, INK_MS, inkAt, steamColors } from "./chrome"
 import { CARET, footInk, footnoteRule, type Tail, waitText } from "./footnote"
@@ -511,19 +512,27 @@ const LIST_MARK = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/
 /** What a Preview row leads with: quote and callout bars, then a list bullet, number or task box. */
 const ROW_LEAD = /^(?:\s*▎ ?)*\s*(?:(?:[•◦▪]|\d+[.)])\s+)?(?:\[[ x]\]\s+)?/
 
-/** Preview: the quote as it reads in the rows; else in the rows past their bars and bullets, its columns counting them again. */
+/**
+ * The needles a quote is looked for as in Preview, in turn: as the note reads (`seenLine`), then as code shows it
+ * (`plainLine` alone: code spans and fences are drawn as written, entities, links and `~~` kept); neither with a
+ * leading list or task marker.
+ */
+const previewNeedles = (quote: string) => [
+  seenLine(quote).replace(LIST_MARK, ""),
+  plainLine(quote.replace(LIST_MARK, "")),
+]
+
+/** Preview: a needle in the rows as they are, else past their bars and bullets, its columns counting them again. */
 function previewQuote(rows: readonly string[], quote: string): CiteQuote | null {
-  const needle = seenLine(quote).replace(LIST_MARK, "")
-  const q = quoteSpan(rows, 0, rows.length, needle)
-  if (q) return { ...q, left: 0 }
   const lead = rows.map((r) => ROW_LEAD.exec(r)?.[0].length ?? 0)
-  const s = quoteSpan(
-    rows.map((r, i) => r.slice(lead[i])),
-    0,
-    rows.length,
-    needle,
-  )
-  return s && { ...s, col: s.col + lead[s.row]!, endCol: s.endCol + lead[s.endRow]!, left: 0 }
+  const bare = rows.map((r, i) => r.slice(lead[i]))
+  for (const needle of previewNeedles(quote)) {
+    const q = quoteSpan(rows, 0, rows.length, needle)
+    if (q) return { ...q, left: 0 }
+    const s = quoteSpan(bare, 0, bare.length, needle)
+    if (s) return { ...s, col: s.col + lead[s.row]!, endCol: s.endCol + lead[s.endRow]!, left: 0 }
+  }
+  return null
 }
 
 /**
@@ -542,8 +551,8 @@ function sourceQuote(rows: readonly string[], left: number, quote: string): Cite
 
 /**
  * Where a cite's `quote` (as the model wrote it) is in `view`: `from`, its section's first row (`citeRange`), and the
- * quote, or null when it is no longer there. Preview reads it as the note shows (`seenLine`, no leading list marker),
- * past quote bars and bullets; Source as written, past the line-number gutter, else as the note reads on whole rows.
+ * quote, or null when it is no longer there. Preview reads it as the note shows (`previewNeedles`: `seenLine`, else as
+ * code shows it), past quote bars and bullets; Source as written, past the line-number gutter, else as the note reads on whole rows.
  * Columns count the gutter, bars and bullets again, as the rows' spans do.
  */
 export function citeSpot(
