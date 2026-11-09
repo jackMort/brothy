@@ -3,6 +3,7 @@ import { noteText } from "../../src/ai/client"
 import { PROMPTS } from "../../src/ai/config"
 import {
   bodyParts,
+  bodyRuns,
   CHAT_NOTE_MAX,
   CHAT_PROMPT,
   type Chip,
@@ -145,6 +146,10 @@ describe("the reply", () => {
     expect(bodyParts("a [1] b [1, 2] c [3][4].")).toEqual(["a", 1, " b", 1, 2, " c", 3, 4, "."])
     expect(bodyParts("[x] and [ ] in [2024]")).toEqual(["[x] and [ ] in [2024]"])
     expect(bodyParts("[1] start")).toEqual([1, " start"])
+  })
+  test("bodyRuns: each part's start in the body, the blanks trimmed before a mark still counted", () => {
+    expect(bodyRuns("Ab [1]cd [2, 3] e")).toEqual({ parts: ["Ab", 1, "cd", 2, 3, " e"], starts: [0, 3, 6, 9, 9, 15] })
+    expect(bodyRuns("[1] x").starts).toEqual([0, 3])
   })
   test("parseSources: straight and curly quotes, `note 2:` and `2 -`; other lines dropped", () => {
     expect(parseSources('[1] note 1: "do not press"\n[2] 2 - “clear stock”\nnoise\n[3] note 1 "say "hi" now"')).toEqual(

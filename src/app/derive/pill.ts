@@ -5,7 +5,7 @@
 import { basename } from "node:path"
 import { cleanReply, noteText, shortModel } from "../../ai/client"
 import { type AIConfig, maxCharsOf } from "../../ai/config"
-import { bodyParts, type Cite, chatContext, citeSection, citeWhere, splitReply, type Thread } from "../../ai/thread"
+import { bodyRuns, type Cite, chatContext, citeSection, citeWhere, splitReply, type Thread } from "../../ai/thread"
 import { parseFrontMatter, parseProperties } from "../../markdown/frontmatter"
 import type { Rendered } from "../../markdown/render"
 import { type DocFile, readNote } from "../../notes/doc"
@@ -63,7 +63,7 @@ export function chatMemo(stdin: string | undefined) {
     chatRunning: cached(
       (raw: string, at: number, live: boolean, model: string, secs: number, n: number, log: readonly Arrival[]) =>
         ({
-          parts: bodyParts(splitReply(cleanReply(raw), true).body),
+          ...bodyRuns(splitReply(cleanReply(raw), true).body),
           arrivals: log.slice(0, n),
           at,
           live,

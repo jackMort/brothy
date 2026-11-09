@@ -345,6 +345,20 @@ describe("the card", () => {
     const thinking = viewOf({ card: true, openedAt: -1e9, running: { ...running, at: 0, live: false } })
     expect(cardClock(thinking, 99 * INK_MS, true)).toEqual({ now: 99 * INK_MS, motion: true }) // the steam
   })
+  test("streaming ink counts the blanks a mark took: the text after it inks by its own arrival", () => {
+    // "Ab [1]cd": the blank before [1] is trimmed, yet "cd" still starts at character 6 of the reply
+    const arrivals = [
+      { len: 6, at: 0 },
+      { len: 8, at: 10_000 },
+    ]
+    const parts = ["Ab", 1, "cd"]
+    const live = { parts, starts: [0, 3, 6], arrivals, at: 0, live: true, model: "m", secs: 1 }
+    const out = cardRows(t, pendingThread, { running: live, hl: null, wheres: [] }, W, 10_000, true)
+    const row = out.rows[2]!
+    expect(text(row)).toBe("  Ab¹cd▍")
+    expect(row.find((x) => x.text.includes("A"))!.fg).toBe(t.text)
+    expect(row.find((x) => x.text.startsWith("c"))!.fg).not.toBe(t.text) // arrived just now, as d did
+  })
   test("cardWindow: pinned to the bottom (null), or from `top`; `below` counts rows under it; cardFoot ` ↓ n more `", () => {
     const rows = Array.from({ length: 10 }, (_, i) => [{ text: String(i) }])
     expect(cardWindow(rows, 4, null)).toMatchObject({ top: 6, below: 0 })

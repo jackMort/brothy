@@ -60,6 +60,8 @@ export interface PickItem {
 /** The exchange in flight: its answer so far, arrivals, start, whether text came, the model and its seconds. */
 export interface Running {
   parts: Part[]
+  /** where each part starts in the reply (`bodyRuns`); absent, the parts run back to back */
+  starts?: readonly number[]
   arrivals: readonly Arrival[]
   at: number
   live: boolean
@@ -305,13 +307,19 @@ const PARA_BREAK = /(\n[ \t]*\n\s*)/
 
 /**
  * Answer parts as paragraphs of spans: a text part is split on its blank lines (a single newline stays a space, through
- * `safeLine`); `text(run, pos)` draws a run that starts at character `pos` of the reply, `mark` a mark. Empty paragraphs
- * are dropped.
+ * `safeLine`); `text(run, pos)` draws a run that starts at character `pos` of the reply (a part at its `starts` entry),
+ * `mark` a mark. Empty paragraphs are dropped.
  */
-function paragraphs(parts: Part[], text: (run: string, pos: number) => Span[], mark: (n: number) => Span): Span[][] {
+function paragraphs(
+  parts: Part[],
+  text: (run: string, pos: number) => Span[],
+  mark: (n: number) => Span,
+  starts: readonly number[] = [],
+): Span[][] {
   const out: Span[][] = [[]]
   let pos = 0
-  for (const p of parts) {
+  for (const [i, p] of parts.entries()) {
+    pos = starts[i] ?? pos
     if (typeof p === "number") {
       out.at(-1)!.push(mark(p))
       pos += String(p).length + 2
@@ -335,7 +343,7 @@ function streamParas(c: Cx, r: Running): Span[][] {
   const step = inkWalk(r.arrivals, c.now, c.motion)
   const ink = (run: string, from: number) =>
     [...safeLine(run)].map((ch, k) => ({ text: ch, fg: inkAt(c.t, step(from + k), c.t.text) }))
-  const paras = paragraphs(r.parts, ink, (n) => ({ text: superscript(n), fg: c.t.textMuted }))
+  const paras = paragraphs(r.parts, ink, (n) => ({ text: superscript(n), fg: c.t.textMuted }), r.starts)
   const caret: Span = { text: CARET, fg: footInk(c.t).caret }
   const last = paras.pop() ?? []
   return [...paras, mergeSpans([...last, caret])]

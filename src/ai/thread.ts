@@ -169,19 +169,31 @@ export function splitReply(text: string, streaming = false): { body: string; sou
 /** `[n]`, `[n, m]`, n 1–99: the marks; anything else in brackets is text. */
 const MARK = /\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]/g
 
-/** The body as text runs and mark numbers (`[1][2]` is two marks); a mark attaches to the word before it. */
-export function bodyParts(body: string): Part[] {
-  const out: Part[] = []
+/**
+ * The body as text runs and mark numbers (`[1][2]` is two marks); a mark attaches to the word before it, the blanks
+ * before it dropped. `starts`: where each part starts in `body` (a mark's numbers all at its `[`), so the dropped
+ * blanks still count.
+ */
+export function bodyRuns(body: string): { parts: Part[]; starts: number[] } {
+  const parts: Part[] = []
+  const starts: number[] = []
+  const push = (p: Part, at: number) => {
+    parts.push(p)
+    starts.push(at)
+  }
   let last = 0
   for (const m of body.matchAll(MARK)) {
     const run = body.slice(last, m.index).replace(/[ \t]+$/, "")
-    if (run) out.push(run)
-    for (const n of (m[1] ?? "").split(",")) out.push(Number(n.trim()))
+    if (run) push(run, last)
+    for (const n of (m[1] ?? "").split(",")) push(Number(n.trim()), m.index)
     last = m.index + m[0].length
   }
-  if (last < body.length) out.push(body.slice(last))
-  return out
+  if (last < body.length) push(body.slice(last), last)
+  return { parts, starts }
 }
+
+/** `bodyRuns`' parts alone. */
+export const bodyParts = (body: string): Part[] => bodyRuns(body).parts
 
 /** One `[n] note <id>: "words"` line, as parsed. */
 export interface Source {
