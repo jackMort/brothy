@@ -194,4 +194,11 @@ describe("where a cite is", () => {
     expect(citeWhere(c("/v/sim.md", 6), "/v/a.md", SRC, "simmering")).toBe("simmering › Strain and cool")
     expect(citeWhere(c("/v/a.md", 0), "/v/a.md", SRC, "Slow broth")).toBe("Slow broth")
   })
+  test("citeWhere: a heading that repeats its note's title (any case, spaces around) names the note once", () => {
+    const c = (line: number) => ({ n: 1, path: "/v/b.md", quote: "q", line })
+    const src = "# Simmering notes\n\nx\n"
+    expect(citeWhere(c(2), "/v/a.md", src, "Simmering notes")).toBe("Simmering notes")
+    expect(citeWhere(c(2), "/v/a.md", "#  simmering NOTES \n\nx\n", "Simmering notes")).toBe("Simmering notes")
+    expect(citeWhere(c(2), "/v/b.md", src, "Simmering notes")).toBe("Simmering notes")
+  })
 })

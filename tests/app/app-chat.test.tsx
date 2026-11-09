@@ -800,7 +800,7 @@ test("a cite in a chip's note deleted since: ⏎ toasts note gone and the card s
   expect(f).toContain("note gone")
   expect(f).toContain("Slow broth") // still on the thread's note
   expect(hints(f)).toContain("go to") // the card stays up with the keys
-  expect(f).toContain("Stock › Stock · “Roast the bones first”")
+  expect(f).toContain("¹ Stock · “Roast the bones first”")
 })
 
 test("[ ] step the folded cites; at the ends: last mark / first mark; esc hides", async () => {
