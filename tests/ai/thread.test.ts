@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { PROMPTS } from "../../src/ai/config"
 import {
+  bodyParts,
   CHAT_NOTE_MAX,
   CHAT_PROMPT,
   type Chip,
@@ -8,6 +9,8 @@ import {
   chatRequest,
   type Exchange,
   MAX_CHAT,
+  parseSources,
+  splitReply,
 } from "../../src/ai/thread"
 
 const A: Chip = { path: "/v/a.md", title: "a" }
@@ -84,5 +87,33 @@ describe("chatRequest", () => {
     expect(r.maxOut).toBe(MAX_CHAT)
     expect(r.clean("<think>x</think> hi ")).toBe("hi")
     expect(r.keep!("One. " + "w ".repeat(4000))).toBe("One.")
+  })
+})
+
+describe("the reply", () => {
+  test("splitReply: at the last Sources line (bold, colon optional); none yet: all body", () => {
+    expect(splitReply('A [1].\nSources:\n[1] note 1: "a"')).toEqual({ body: "A [1].", sources: '[1] note 1: "a"' })
+    expect(splitReply("A.\n**Sources**\nx\nsources:\ny")).toEqual({ body: "A.\n**Sources**\nx", sources: "y" })
+    expect(splitReply("A [1].")).toEqual({ body: "A [1].", sources: "" })
+  })
+  test("splitReply while streaming hides a last line that is still becoming `Sources:`", () => {
+    expect(splitReply("A [1].\nSour", true).body).toBe("A [1].")
+    expect(splitReply("A [1].\n**so", true).body).toBe("A [1].")
+    expect(splitReply("A [1].\nSoup is", true).body).toBe("A [1].\nSoup is")
+    expect(splitReply("A [1].\nSour", false).body).toBe("A [1].\nSour")
+  })
+  test("bodyParts: [1], [1, 2] and [1][2] become numbers, space before a mark dropped; [x], [ ] and [2024] stay text", () => {
+    expect(bodyParts("a [1] b [1, 2] c [3][4].")).toEqual(["a", 1, " b", 1, 2, " c", 3, 4, "."])
+    expect(bodyParts("[x] and [ ] in [2024]")).toEqual(["[x] and [ ] in [2024]"])
+    expect(bodyParts("[1] start")).toEqual([1, " start"])
+  })
+  test("parseSources: straight and curly quotes, `note 2:` and `2 -`; other lines dropped", () => {
+    expect(parseSources('[1] note 1: "do not press"\n[2] 2 - “clear stock”\nnoise\n[3] note 1 "say "hi" now"')).toEqual(
+      [
+        { n: 1, note: 1, quote: "do not press" },
+        { n: 2, note: 2, quote: "clear stock" },
+        { n: 3, note: 1, quote: 'say "hi" now' },
+      ],
+    )
   })
 })

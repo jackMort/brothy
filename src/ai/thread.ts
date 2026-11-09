@@ -116,3 +116,54 @@ export function chatRequest(ctx: Pick<SentContext, "notes" | "turns">, question:
     keep: (s) => keepSentences(s, MAX_CHAT),
   }
 }
+
+/** The line that starts the sources: `Sources:`, `**Sources**`, any case. */
+const SOURCES = /^\s*\**sources:?\**\s*$/i
+/** A last line that may still become SOURCES while it streams. */
+const isSourcesStart = (line: string) => {
+  const s = line.trim().toLowerCase().replace(/^\*+/, "")
+  return s.length > 0 && "sources:".startsWith(s)
+}
+
+/** The reply split at its last SOURCES line; before one exists, all body (`streaming`: a last line still becoming one is held back). */
+export function splitReply(text: string, streaming = false): { body: string; sources: string } {
+  const lines = text.split("\n")
+  const at = lines.findLastIndex((l) => SOURCES.test(l))
+  if (at >= 0) return { body: lines.slice(0, at).join("\n").trimEnd(), sources: lines.slice(at + 1).join("\n") }
+  if (streaming && lines.length > 1 && isSourcesStart(lines.at(-1) ?? "")) lines.pop()
+  return { body: lines.join("\n").trimEnd(), sources: "" }
+}
+
+/** `[n]`, `[n, m]`, n 1–99: the marks; anything else in brackets is text. */
+const MARK = /\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]/g
+
+/** The body as text runs and mark numbers (`[1][2]` is two marks); a mark attaches to the word before it. */
+export function bodyParts(body: string): Part[] {
+  const out: Part[] = []
+  let last = 0
+  for (const m of body.matchAll(MARK)) {
+    const run = body.slice(last, m.index).trimEnd()
+    if (run) out.push(run)
+    for (const n of (m[1] ?? "").split(",")) out.push(Number(n.trim()))
+    last = m.index + m[0].length
+  }
+  if (last < body.length) out.push(body.slice(last))
+  return out
+}
+
+/** One `[n] note <id>: "words"` line, as parsed. */
+export interface Source {
+  n: number
+  note: number
+  quote: string
+}
+const SOURCE_LINE = /^\s*\[(\d{1,2})\]\s*(?:note\s*)?(\d+)\s*[:\-–]?\s*["“](.*)["”]\s*$/i
+
+/** The source lines that parse; the rest are dropped. */
+export function parseSources(sources: string): Source[] {
+  return sources.split("\n").flatMap((line) => {
+    const m = SOURCE_LINE.exec(line)
+    const quote = m?.[3]?.trim()
+    return m && quote ? [{ n: Number(m[1]), note: Number(m[2]), quote }] : []
+  })
+}
