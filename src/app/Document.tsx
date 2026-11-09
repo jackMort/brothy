@@ -31,7 +31,7 @@ import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { type LinkSpot, markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
 import type { ChangeView } from "../ui/panel"
-import { CHAT_DIM, inkStep, quoteTint, tintBg } from "../ui/pill"
+import { CHAT_DIM, quoteTint, tintBg } from "../ui/pill"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
 import { landedHere } from "./Chrome"
@@ -265,11 +265,11 @@ function landingMark(d: Derived): { row: number; mark: Span } | null {
 /** A mark over Preview's rows: after the row's text (else in the gutter), or only in the gutter. */
 type RowMark = { source: MarkSource; mark: Span; gutter: boolean }
 
-/** Folded on a chat cite in the note on screen: its quote, its number and the ink step it fades in at; else null. */
-function chatLanding({ pill, s }: Derived) {
+/** Folded on a chat cite in the note on screen: its quote, its number and the ink step it fades in at (derive's, so every row of a frame shares it); else null. */
+function chatLanding({ pill }: Derived) {
   const land = pill?.land
   if (!land || !pill.quote) return null
-  return { q: pill.quote, n: land.n, step: inkStep(land.at, Date.now(), s.motion) }
+  return { q: pill.quote, n: land.n, step: pill.tint }
 }
 
 /** The folded cite's mark: its number in the gutter of the quote's first row, inked in primary. */

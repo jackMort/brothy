@@ -23,6 +23,7 @@ import {
   cardRows,
   chatStage,
   citeSpot,
+  inkStep,
   PICK_ROWS,
   type PickItem,
   type PillView,
@@ -176,7 +177,8 @@ export function pillView(
   const stage = chatStage({ pick, running, card: p.card, thread })
   const view = memo.cardView(running, p.hl, sent.wheres)
   const cardOut = p.card ? memo.card(t, thread, view, base.geo.w - 4, s.motion ? now : 0, s.motion) : null
-  return { ...base, pick, stage, cardOut, quote: quoteFor(s, memo, opened.view, thread) }
+  const tint = inkStep(p.land?.at ?? 0, now, s.motion)
+  return { ...base, pick, stage, cardOut, quote: quoteFor(s, memo, opened.view, thread), tint }
 }
 
 /**

@@ -20,12 +20,14 @@ import {
 import { clamp } from "../lib/text"
 import { stem } from "../notes/files"
 import { STDIN } from "../notes/workspace"
-import { cardWindow } from "../ui/pill"
+import { INK_MS } from "../ui/chrome"
+import { cardWindow, type PillView, pillMoving } from "../ui/pill"
+import { STEAM_MS } from "../ui/welcome"
 import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import { erase } from "./input"
 import type { Links } from "./links"
-import { jobKey, type PillState } from "./store"
+import { jobKey, type PillState, type UI } from "./store"
 
 /** The `[[` query at the input's end: `[[` and what follows it, up to a `]`. */
 const PICK_TAIL = /\[\[([^\]]*)$/
@@ -481,10 +483,41 @@ function makeCites(c: AppCtx, animate: () => void) {
   return { citeGo, citeStep }
 }
 
+/** What the pill's timer reads: motion, the pill on screen, the timers, whether the app is mounted, the redraw. */
+type MotionCtx = Pick<AppCtx, "timers" | "alive" | "bump"> & {
+  ui: { current: Pick<UI, "motion"> }
+  derive: () => { pill: PillView | null }
+}
+
+/**
+ * The pill's one animation timer (spec §9): armed while motion is on and something moves (the border's ink, a thinking
+ * steam, an arrival, the marks' glow, the cite's tint), a redraw every STEAM_MS while steaming, else every INK_MS. Every
+ * frame is drawn from timestamps, so it only redraws; it never calls the network (the seconds stay with ensureWaitTick).
+ */
+export function makePillMotion(c: MotionCtx) {
+  const { ui, derive, timers, alive, bump } = c
+  const animate = () => {
+    if (!ui.current.motion || timers.current.chat) return
+    const v = derive().pill
+    const moving = v && pillMoving(v, Date.now())
+    if (!moving) return
+    timers.current.chat = setTimeout(
+      () => {
+        timers.current.chat = undefined
+        if (!alive.current) return
+        bump((x) => x + 1)
+        animate()
+      },
+      moving === "steam" ? STEAM_MS : INK_MS,
+    )
+  }
+  return { animate }
+}
+
 /** The pill: every action behind `c` and the `chat` mode. */
 export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   const jobs = makeJobs(c)
-  const animate = () => {} // the pill's animation timer comes later
+  const { animate } = makePillMotion(c)
   const input = makePillInput(c, links)
   const { pickMove, pickAdd } = makePick(c, input.setInput)
   const { citeGo, citeStep } = makeCites(c, animate)

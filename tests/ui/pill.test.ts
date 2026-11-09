@@ -138,6 +138,7 @@ function viewOf(o: Partial<PillView>): PillView {
     wheres: [["Strain and cool", "Simmering", "n"]],
     stage: "input",
     quote: null,
+    tint: 3,
     cardOut: null,
     ...o,
   }

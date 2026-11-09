@@ -92,6 +92,8 @@ export interface PillView {
   stage: ChatStage
   /** the folded cite's quote in the view on screen */
   quote: CiteQuote | null
+  /** the folded cite's ink step (0–3) at this derive's `now`, one for every row of the frame; 3 with motion off */
+  tint: number
   cardOut: CardOut | null
 }
 

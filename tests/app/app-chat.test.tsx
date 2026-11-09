@@ -1,5 +1,5 @@
 // App: the chat pill: c, the input, sending, the card, marks and cites.
-import { expect, test } from "bun:test"
+import { expect, setSystemTime, test } from "bun:test"
 import { rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { mix } from "../../src/theme/theme"
@@ -842,4 +842,45 @@ test("folded: z hides the pill; at 90 columns tab, 1 and ^b (the drawer) hide it
     expect(f).not.toContain("do not press the bones”")
     s.renderer.destroy()
   }
+})
+
+test("motion on: the pill's border inks in from border to borderActive", async () => {
+  aiConfig(OLLAMA)
+  const s = await mount(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", { motion: true })
+  const corner = () => hex(spansOf(s).find((sp) => sp.text.startsWith("╭"))!.fg)
+  // the clock held while c lands: the first frame is the ink's first step whatever the load
+  setSystemTime(new Date())
+  let first: string | null
+  try {
+    await keys(s, "c")
+    first = corner()
+  } finally {
+    setSystemTime()
+  }
+  expect(first).toBe(B.border)
+  // nothing else redraws within HINT_HOLD: only the pill's timer can bring the border to borderActive
+  await waitFor(s, () => corner() === B.borderActive, 1500)
+})
+
+test("motion on: the folded cite's tint fades in from the page to the full tint", async () => {
+  aiConfig(OLLAMA)
+  const two =
+    "# Slow broth\n\nIntro line.\n\n## Strain and cool\n\nPour the broth through a sieve;\ndo not press the bones.\n"
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": two }), "Slow broth.md", { motion: true })
+  await keys(s, "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Sieve, not press [1].\nSources:\n[1] note 1: "through a sieve; do not press"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  await Bun.sleep(1100) // the marks' glow and the wait tick (on the whole second) are done: only the fold can redraw
+  // the clock held while ⏎ folds: the tint's first step, the page's own colour
+  setSystemTime(new Date())
+  try {
+    await keys(s, "enter")
+    expect([...bgOf(s, "through a sieve;"), ...bgOf(s, "do not press")]).toEqual([B.background, B.background])
+  } finally {
+    setSystemTime()
+  }
+  await waitFor(s, () => bgOf(s, "do not press").includes(B.backgroundElement), 1500)
+  expect(bgOf(s, "through a sieve;")).toEqual([B.backgroundElement])
 })
