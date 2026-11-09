@@ -79,3 +79,14 @@ test("the pill's timer: one at a time; after unmount it fires without a redraw",
   expect(r.bumps()).toBe(0)
   expect(r.timers.current.chat).toBeUndefined()
 })
+
+test("doneExchange: a reply cut inside its Sources keeps the marks whose source line finished and drops the rest", () => {
+  const src =
+    "# Slow broth\n\nIntro line.\n\n## Strain and cool\n\nPour it; do not press the bones: pressing clouds it.\n"
+  const chip = { path: "/n/Slow broth.md", title: "Slow broth" }
+  const ex = { q: "why?", at: 1, model: "llama3.2", raw: null, parts: [], cites: [], error: null, doneAt: null }
+  const cut = 'A [1]. B [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "Intro li'
+  const done = doneExchange(ex, cut, [{ chip, src }], 5)
+  expect(done.cites.map((c) => c.n)).toEqual([1])
+  expect(done.parts).toEqual(["A", 1, ". B."])
+})

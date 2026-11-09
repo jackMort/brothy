@@ -4,7 +4,20 @@ import { rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { mix } from "../../src/theme/theme"
 import { hex } from "../helpers/theme"
-import { B, filler, HINT_ROW, keys, OLLAMA, spansOf, useAppHarness, W120, waitFor, waitFrame, walk } from "./helpers"
+import {
+  B,
+  filler,
+  HINT_ROW,
+  keys,
+  OLLAMA,
+  spansOf,
+  useAppHarness,
+  W120,
+  waitFor,
+  waitFrame,
+  walk,
+  withEnv,
+} from "./helpers"
 
 const { tmp, mount, mountAI, aiConfig, openNote } = useAppHarness()
 
@@ -974,4 +987,147 @@ test("the [[ list stays inside the pill's span at a narrow width", async () => {
   expect(list).toBeGreaterThan(-1)
   expect(rows[list]!.indexOf("│")).toBeGreaterThanOrEqual(lo)
   expect(rows[list]!.lastIndexOf("│")).toBeLessThanOrEqual(hi)
+})
+
+// ------------------------------------------------------------- the spec's remaining states and limits
+
+test("a key error opens the pill; ⏎ toasts which variable to set, sends nothing and keeps the input", async () => {
+  aiConfig({ provider: "openrouter", model: "x/y" })
+  await withEnv({ OPENROUTER_API_KEY: undefined }, async () => {
+    const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md")
+    expect(hints(await keys(s, "c"))).toContain("⏎ send")
+    const f = await keys(s, "type:why?", "enter")
+    expect(f).toContain("AI: set OPENROUTER_API_KEY")
+    expect(ai.calls).toHaveLength(0)
+    expect(f).toContain("why?▍")
+    expect(hints(f)).toContain("⏎ send")
+  })
+})
+
+test("a chip's note deleted before ⏎ is left out with a toast", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp(LINKED)
+  const { s, ai } = await mountAI(d, "Slow broth.md")
+  await keys(s, "c", "type:[[sim", "enter")
+  rmSync(join(d, "simmering.md"))
+  const f = await keys(s, "type:why?", "enter")
+  expect(f).toContain("simmering gone · left out")
+  await waitFor(s, () => ai.calls.length === 1)
+  const system = ai.calls[0]!.body.messages[0]!.content
+  expect(system).toContain('<note id="1" title="Slow broth">')
+  expect(system).not.toContain('<note id="2"')
+})
+
+test("a follow-up after a failure drops the failed exchange first and never sends it", async () => {
+  const { s, ai } = await asked("why cloudy?")
+  ai.fail(0, "model not found")
+  await waitFrame(s, (x) => hints(x).includes("⏎ retry"))
+  await keys(s, "type:and salt?", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  const m = ai.calls[1]!.body.messages
+  expect(m.map((x) => x.role)).toEqual(["system", "user"])
+  expect(m[1]!.content).toBe("and salt?")
+  const f = await keys(s)
+  expect(f).toContain("› and salt?")
+  expect(f).not.toContain("why cloudy?")
+  expect(f).not.toContain("✗")
+})
+
+test("⏎ on a failed exchange's empty input replaces it: one question in the card, the ✗ row gone", async () => {
+  const { s, ai } = await asked("why cloudy?")
+  ai.fail(0, "model not found")
+  await waitFrame(s, (x) => hints(x).includes("⏎ retry"))
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  const f = await keys(s)
+  expect(f.split("\n").filter((r) => r.includes("› why cloudy?"))).toHaveLength(1)
+  expect(f).not.toContain("✗")
+})
+
+/** The pill sent from soup.md and hidden behind the drawer, then pears.md opened: the answer is still to come. */
+async function runningElsewhere() {
+  const { s, ai } = await behindDrawer({ "pears.md": "# Pears\n\nRipe.\n" }, "type:why?", "enter")
+  expect(ai.calls).toHaveLength(1)
+  expect(await keys(s, "/", "type:pears", "enter")).toContain("Ripe.")
+  return { s, ai }
+}
+
+test("an answer that lands while another note is open is kept and toasts ready; the card is there on return", async () => {
+  const { s, ai } = await runningElsewhere()
+  ai.send(0, REPLY)
+  ai.end(0)
+  const f = await waitFrame(s, (x) => x.includes("answer ready · soup"))
+  expect(hints(f)).not.toContain("go to")
+  await openNote(s, "soup")
+  expect(hints(await keys(s, "c"))).toContain("go to")
+})
+
+test("a failure that lands with no card on screen toasts, naming the note when it is not the open one", async () => {
+  const { s, ai } = await runningElsewhere()
+  ai.fail(0, "model not found")
+  const f = await waitFrame(s, (x) => x.includes("model not found"))
+  expect(f).toContain("soup")
+  await openNote(s, "soup")
+  expect(await keys(s, "c")).toContain("✗ model not found") // the exchange kept the error
+})
+
+test("a click on the folded pill brings the card back", async () => {
+  const { s, f } = await answered()
+  expect(f).toContain("go to")
+  const g = await keys(s, "enter")
+  const row = g.split("\n").findIndex((r) => r.includes("1 of 2") || r.includes("of 2"))
+  expect(row).toBeGreaterThan(-1)
+  await s.mockMouse.click(g.split("\n")[row]!.indexOf("“") + 1, row)
+  const h = await keys(s)
+  expect(hints(h)).toContain("go to")
+  expect(h).not.toContain("of 2")
+})
+
+test("↑ on an empty input with no card recalls the thread's last question", async () => {
+  const { s, ai } = await asked("why cloudy?")
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (x) => hints(x).includes("go to"))
+  let f = await keys(s, "esc") // the card folds into the pill
+  expect(pillOf(f)).not.toContain("why cloudy?")
+  f = await keys(s, "up")
+  expect(pillOf(f)).toContain("why cloudy?▍")
+})
+
+test("⏎ while the thread's answer runs sends nothing", async () => {
+  const { s, ai } = await asked("why cloudy?")
+  await keys(s, "type:and salt?", "enter")
+  await s.renderOnce()
+  expect(ai.calls).toHaveLength(1)
+})
+
+test("piped: ⏎ sends the document as the note, keyed on stdin", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({}), undefined, { stdin: NOTE })
+  await keys(s, "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(ai.calls[0]!.body.messages[0]!.content).toContain("Intro line.")
+})
+
+test("below the minimum size the pill's state is kept: back at size, the card is as it was", async () => {
+  const { s, ai } = await asked("why?")
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (x) => hints(x).includes("go to"))
+  s.resize(40, 10)
+  await s.renderOnce()
+  s.resize(100, 30)
+  const f = await keys(s)
+  expect(hints(f)).toContain("go to")
+  expect(f).toContain("› why?")
+})
+
+test("threads survive r: hidden, rescanned, c shows the card again", async () => {
+  const { s, ai } = await asked("why?")
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (x) => hints(x).includes("go to"))
+  await keys(s, "esc", "C-u", "esc")
+  await keys(s, "r")
+  expect(hints(await keys(s, "c"))).toContain("go to")
 })
