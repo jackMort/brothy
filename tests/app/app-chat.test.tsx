@@ -426,6 +426,6 @@ test("the page dims by 0.5 while the card is up, not while typing", async () => 
   await keys(s, "enter")
   await waitFor(s, () => ai.calls.length === 1)
   await s.renderOnce()
-  expect(hex(miniFg())).toBe(mix(lit, B.background, 0.5))
+  expect(hex(miniFg())).toBe(mix(lit!, B.background, 0.5))
   expect(fgOf("Intro line")).toBe(mix(B.text, B.background, 0.5))
 })
