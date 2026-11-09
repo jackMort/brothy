@@ -13,6 +13,7 @@ import {
   MAX_CHAT,
   parseSources,
   quoteLines,
+  seenLine,
   splitReply,
   verifyCites,
 } from "../../src/ai/thread"
@@ -178,6 +179,45 @@ describe("verifyCites", () => {
       notes,
     )
     expect(r).toEqual({ parts: ["x"], cites: [] })
+  })
+})
+
+describe("quotes as the note reads", () => {
+  const NOTE =
+    "# Pot\n\nUse [the stock pot](pot.md) for the broth.\n\n> Skim the foam\n> every ten minutes.\n\n> [!tip] Salt\n> Salt late and taste\n> before you serve.\n\nKeep ~~never~~ boil it.\nSalt &amp; pepper, &lt;3.\n"
+  const notes = [{ chip: A, src: NOTE }]
+  const lineOf = (quote: string) => verifyCites(["x ", 1], [{ n: 1, note: 1, quote }], notes).cites[0]?.line ?? null
+
+  test("seenLine: quote bars and callout headers, link targets, ~~ and entities go, as plainLine's marks do", () => {
+    expect(seenLine("> > Skim *the* foam")).toBe("Skim the foam")
+    expect(seenLine("> [!tip]+ Salt")).toBe("Salt")
+    expect(seenLine("Use [the **stock** pot](pot.md) for")).toBe("Use the stock pot for")
+    expect(seenLine("Keep ~~never~~ boil")).toBe("Keep never boil")
+    expect(seenLine("Salt &amp; pepper &#39;n&#39; &nbsp;")).toBe("Salt & pepper 'n' \u00a0")
+    expect(seenLine("a > b, ![pic](p.png)")).toBe("a > b, ![pic](p.png)")
+  })
+
+  test("a quote through a link verifies as written and as seen", () => {
+    expect(lineOf("Use [the stock pot](pot.md) for the broth")).toBe(2)
+    expect(lineOf("Use the stock pot for the broth")).toBe(2)
+  })
+
+  test("a quote across the lines of a blockquote or a callout verifies", () => {
+    expect(lineOf("Skim the foam every ten minutes")).toBe(4)
+    expect(lineOf("Salt late and taste before you serve")).toBe(8)
+    expect(lineOf("> Salt late and taste")).toBe(8)
+  })
+
+  test("struck text and entities verify, as written and as seen", () => {
+    expect(lineOf("Keep never boil it")).toBe(11)
+    expect(lineOf("Keep ~~never~~ boil it")).toBe(11)
+    expect(lineOf("Salt & pepper, <3")).toBe(12)
+    expect(lineOf("Salt &amp; pepper")).toBe(12)
+  })
+
+  test("a list item's bullet is not taken away: a quote across two items does not verify", () => {
+    const r = verifyCites(["x ", 1], [{ n: 1, note: 1, quote: "one two" }], [{ chip: A, src: "- one\n- two\n" }])
+    expect(r.cites).toEqual([])
   })
 })
 

@@ -768,6 +768,59 @@ test("in Source, a quote wrapping across two source lines lands and tints its te
   expect(f.split("\n").find((r) => r.includes("through a sieve;"))).toMatch(/¹ +7 +Pour the broth/)
 })
 
+/** The text on the background-element tint, row by row. */
+const tintedRows = (s: Awaited<ReturnType<typeof asked>>["s"]) =>
+  s
+    .captureSpans()
+    .lines.map((l) =>
+      l.spans
+        .filter((sp) => hex(sp.bg) === B.backgroundElement)
+        .map((sp) => sp.text)
+        .join(""),
+    )
+    .filter(Boolean)
+
+/** NOTE's section with `body` instead, the pill asked about it (in Source with `source`) and answered with `quote`; the frame after ⏎. */
+async function landOn(body: string, quote: string, source = false) {
+  aiConfig(OLLAMA)
+  const note = `# Slow broth\n\nIntro line.\n\n## Strain and cool\n\n${body}\n`
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": note }), "Slow broth.md")
+  await keys(s, ...(source ? ["s"] : []), "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, `Gently [1].\nSources:\n[1] note 1: "${quote}"`)
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  return { s, f: await keys(s, "enter") }
+}
+
+test("a quote through a link lands in Preview and tints the link's text, as written or as seen", async () => {
+  const body = "Pour the broth through [a fine sieve](sieve.md) and wait."
+  for (const quote of ["through [a fine sieve](sieve.md) and", "through a fine sieve and"]) {
+    const { s, f } = await landOn(body, quote)
+    expect(f).toContain("1 of 1")
+    expect(f).not.toContain("quote no longer in the note")
+    expect(tintedRows(s)).toEqual(["through a fine sieve and"])
+  }
+})
+
+test("a quote across a callout's two lines lands in Preview, tinted from its first word", async () => {
+  const { s, f } = await landOn(
+    "> [!tip] Strain\n> Pour the broth slowly\n> through a sieve.",
+    "broth slowly through a sieve",
+  )
+  expect(f).toContain("1 of 1")
+  expect(f).not.toContain("quote no longer in the note")
+  expect(tintedRows(s)[0]).toBe("broth slowly")
+  expect(tintedRows(s)[1]).toEndWith("through a sieve")
+})
+
+test("in Source, a quote of what the note shows (no brackets, no stars) lands on its rows with no toast", async () => {
+  const { s, f } = await landOn("Roast the [[bones]] and **salt** first.", "the bones and salt", true)
+  expect(f).toContain("1 of 1")
+  expect(f).not.toContain("quote no longer in the note")
+  expect(tintedRows(s)).toEqual(["Roast the [[bones]] and **salt** first."])
+})
+
 test("a quote edited away lands on its section with a toast", async () => {
   const d = tmp({ "Slow broth.md": NOTE })
   aiConfig(OLLAMA)

@@ -4,6 +4,7 @@
 
 import { parseFrontMatter } from "../markdown/frontmatter"
 import { normalize, scanComments } from "../markdown/lexer"
+import { decode } from "../markdown/render"
 import { type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
 import { quoteSpan } from "../ui/nav"
@@ -183,12 +184,24 @@ export function parseSources(sources: string): Source[] {
   })
 }
 
-/** One string per source line, as quotes are checked against it: front matter and comments blank, inline marks gone, code kept. */
+/** A blockquote's `>` run at a line's start, and a callout's `[!kind]` header after it. */
+const QUOTE_BAR = /^\s*(?:>\s?)+(?:\[![^\]\n]*\][+-]?\s*)?/
+/** A Markdown link (not an image): its text stays. */
+const LINK = /(?<!!)\[([^\]\n]*)\]\([^)\n]*\)/g
+
+/**
+ * A line as the note reads, for quotes (a source line, or a quote): `plainLine`'s marks, and quote bars and callout
+ * headers, link targets, `~~` and entities gone. The vault index keeps `plainLine` alone.
+ */
+export const seenLine = (line: string): string =>
+  decode(plainLine(line.replace(QUOTE_BAR, "")).replace(LINK, "$1").replace(/~~/g, ""))
+
+/** One string per source line, as quotes are checked against it: front matter and comments blank, `seenLine`, code kept. */
 export function quoteLines(src: string): string[] {
   const lines = normalize(src).split("\n")
   const { offset } = parseFrontMatter(src)
   const { kept, hidden } = scanComments(lines, offset)
-  return lines.map((_, i) => (i < offset || hidden[i] ? "" : plainLine(kept[i] ?? "")))
+  return lines.map((_, i) => (i < offset || hidden[i] ? "" : seenLine(kept[i] ?? "")))
 }
 
 /** Append `text` to `out`; right after a dropped mark, a blank before punctuation goes. */
@@ -206,7 +219,7 @@ function verified(sources: readonly Source[], notes: readonly { chip: Chip; src:
     const note = notes[s.note - 1]
     const own = lines[s.note - 1]
     if (out.has(s.n) || !note || !own) continue
-    const at = quoteSpan(own, 0, own.length, plainLine(s.quote))
+    const at = quoteSpan(own, 0, own.length, seenLine(s.quote))
     if (at) out.set(s.n, { n: 0, path: note.chip.path, quote: s.quote, line: at.row })
   }
   return out

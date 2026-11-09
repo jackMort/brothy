@@ -5,7 +5,6 @@
 import { basename } from "node:path"
 import { cleanReply, noteText, shortModel } from "../../ai/client"
 import { type AIConfig, maxCharsOf } from "../../ai/config"
-import { quoteNeedle } from "../../ai/delta"
 import { bodyParts, type Cite, chatContext, citeSection, citeWhere, splitReply, type Thread } from "../../ai/thread"
 import { parseFrontMatter, parseProperties } from "../../markdown/frontmatter"
 import type { Rendered } from "../../markdown/render"
@@ -98,7 +97,7 @@ export function chatMemo(stdin: string | undefined) {
     ),
     /** where cite `cite` is in `view` of its note `src`: its section's first row and its quote (`citeSpot`) */
     citeSpot: cached((view: Rendered, source: boolean, src: string, cite: Cite) =>
-      citeSpot(view, source, citeSection(src, cite.line).index, cite.line, quoteNeedle(cite.quote, source)),
+      citeSpot(view, source, citeSection(src, cite.line).index, cite.line, cite.quote),
     ),
   }
 }

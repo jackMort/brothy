@@ -275,7 +275,7 @@ export function inline(
 const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" }
 
 /** Single-pass entity decode, so "&amp;lt;" becomes "&lt;" and not "<". */
-function decode(s: string): string {
+export function decode(s: string): string {
   return safe(s).replace(
     /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(amp|lt|gt|quot|apos|nbsp));/g,
     (m, dec, hex, name) => {

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import type { Exchange, Thread } from "../../src/ai/thread"
+import { citeSection, type Exchange, type Thread, verifyCites } from "../../src/ai/thread"
 import { MIN_H, MIN_W } from "../../src/app/store"
 import { width } from "../../src/lib/text"
+import { render } from "../../src/markdown/render"
+import { renderSource } from "../../src/markdown/source"
 import { mix } from "../../src/theme/theme"
 import { INK_MS } from "../../src/ui/chrome"
 import { type LayoutState, layout } from "../../src/ui/layout"
@@ -327,6 +329,46 @@ describe("the card", () => {
   })
 })
 
+/** A note with the shapes a quote must read through. */
+const NOTE = [
+  "# Pot",
+  "",
+  "Use [the stock pot](pot.md) for the broth.",
+  "",
+  "> Skim the foam",
+  "> every ten minutes.",
+  "",
+  "> [!tip] Salt",
+  "> Salt late and taste",
+  "> before you serve.",
+  "",
+  "- Keep ~~never~~ boil it",
+  "- Salt &amp; pepper",
+  "1. [[bones]] and **salt** go in",
+  "",
+].join("\n")
+/** Where `quote` lands in `src`'s Preview or Source at 60 columns, after verifying it as a send would. */
+function spotOf(src: string, source: boolean, quote: string) {
+  const view = source ? renderSource(src, 60, t) : render(src, 60, t)
+  const cite = verifyCites(["x ", 1], [{ n: 1, note: 1, quote }], [{ chip: { path: "/a.md", title: "a" }, src }])
+  const line = cite.cites[0]?.line
+  if (line === undefined) throw new Error(`not verified: ${quote}`)
+  const q = citeSpot(view, source, citeSection(src, line).index, line, quote).quote
+  return q && { view, q }
+}
+/** The text `spotOf`'s quote tints, row by row. */
+function landed(src: string, source: boolean, quote: string) {
+  const at = spotOf(src, source, quote)
+  if (!at) return null
+  const { view, q } = at
+  return view.plain.slice(q.row, q.endRow + 1).map((row, i) =>
+    quoteTint([{ text: row }], row, q.row + i, q, "#123456")
+      .filter((sp) => sp.bg === "#123456")
+      .map((sp) => sp.text)
+      .join(""),
+  )
+}
+
 describe("list, tint, range, motion", () => {
   const text = (r: { text: string }[]) => r.map((s) => s.text).join("")
   test("pickRows: at most 5, `▌` and bold on backgroundElement for the highlight, `linked from here` muted", () => {
@@ -417,6 +459,35 @@ describe("list, tint, range, motion", () => {
       from: 1,
       quote: { row: 1, col: 20, endRow: 2, endCol: 13, left: 4 },
     })
+  })
+  test("citeSpot in Preview: a quote through a link, as written or as seen, lands on the link's text", () => {
+    expect(landed(NOTE, false, "Use [the stock pot](pot.md) for the broth")).toEqual([
+      "use the stock pot for the broth",
+    ])
+    expect(landed(NOTE, false, "the stock pot for")).toEqual(["the stock pot for"])
+  })
+  test("citeSpot in Preview: a quote across a callout's or a blockquote's lines lands past the bars", () => {
+    const callout = spotOf(NOTE, false, "Salt late and taste before you serve")!
+    expect(callout.view.plain[callout.q.row]!.slice(callout.q.col)).toBe("salt late and taste")
+    expect(callout.view.plain[callout.q.endRow]!.slice(0, callout.q.endCol)).toBe("▎ before you serve")
+    const quote = spotOf(NOTE, false, "Skim the foam every ten minutes.")!
+    expect(quote.view.plain[quote.q.row]!.slice(quote.q.col)).toBe("skim the foam")
+    expect(quote.view.plain[quote.q.endRow]!.slice(0, quote.q.endCol)).toBe("▎ every ten minutes.")
+  })
+  test("citeSpot in Preview: struck text, entities and list bullets read as they show", () => {
+    expect(landed(NOTE, false, "Keep ~~never~~ boil it")).toEqual(["keep never boil it"])
+    expect(landed(NOTE, false, "Salt &amp; pepper")).toEqual(["salt & pepper"])
+    expect(landed(NOTE, false, "- Salt & pepper")).toEqual(["salt & pepper"])
+  })
+  test("citeSpot in Source: the quote as written lands exactly; one that reads otherwise lands on its whole rows", () => {
+    expect(landed(NOTE, true, "Keep ~~never~~ boil")).toEqual(["keep ~~never~~ boil"])
+    expect(landed(NOTE, true, "bones and salt")).toEqual(["1. [[bones]] and **salt** go in"])
+    expect(landed(NOTE, true, "the stock pot for the broth")).toEqual(["use [the stock pot](pot.md) for the broth."])
+    expect(landed(NOTE, true, "Salt late and taste before you serve")).toEqual([
+      "> salt late and taste",
+      "> before you serve.",
+    ])
+    expect(citeSpot(renderSource(NOTE, 60, t), true, 0, 2, "not in the note").quote).toBeNull()
   })
   test("quoteTint: the first row from the quote's column, the next from its text past the gutter, the last to its end", () => {
     const q = { row: 1, col: 20, endRow: 2, endCol: 13, left: 4 }

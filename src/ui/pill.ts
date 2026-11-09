@@ -1,7 +1,7 @@
 // The chat pill's pure side: where the pill and its card sit, their frames, the chips and the input, the card's rows by
 // stage, the `[[` list, the quote's tint, and the ink and steam steps every frame is drawn from. No React, no store.
 import { fmtTokens } from "../ai/client"
-import type { Chip, Exchange, Part, Thread } from "../ai/thread"
+import { type Chip, type Exchange, type Part, seenLine, type Thread } from "../ai/thread"
 import { A, type Span, safeLine } from "../lib/spans"
 import { mergeSpans, spanWidth, superscript, truncate, truncateLeft, width, wrap } from "../lib/text"
 import type { Rendered } from "../markdown/render"
@@ -491,27 +491,57 @@ export function citeRange(
 /** A cite's quote in the view: `quoteSpan`'s rows and columns, and `left`, where a row's text starts (Source: past its line numbers). */
 export type CiteQuote = QuoteSpan & { left: number }
 
+/** A list or task marker at a quote's start: Preview draws its own. */
+const LIST_MARK = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/
+/** What a Preview row leads with: quote and callout bars, then a list bullet, number or task box. */
+const ROW_LEAD = /^(?:\s*▎ ?)*\s*(?:(?:[•◦▪]|\d+[.)])\s+)?(?:\[[ x]\]\s+)?/
+
+/** Preview: the quote as it reads in the rows; else in the rows past their bars and bullets, its columns counting them again. */
+function previewQuote(rows: readonly string[], quote: string): CiteQuote | null {
+  const needle = seenLine(quote).replace(LIST_MARK, "")
+  const q = quoteSpan(rows, 0, rows.length, needle)
+  if (q) return { ...q, left: 0 }
+  const lead = rows.map((r) => ROW_LEAD.exec(r)?.[0].length ?? 0)
+  const s = quoteSpan(
+    rows.map((r, i) => r.slice(lead[i])),
+    0,
+    rows.length,
+    needle,
+  )
+  return s && { ...s, col: s.col + lead[s.row]!, endCol: s.endCol + lead[s.endRow]!, left: 0 }
+}
+
 /**
- * Where a cite's quote `needle` is in `view`: `from`, its section's first row (`citeRange`), and the quote, or null when
- * it is no longer there. Source rows are read past their line-number gutter, so a quote wrapping across two source
- * lines is found; its columns count the gutter again, as the rows' spans do.
+ * Source: past the line numbers (`left`), the quote as written, its columns counting them again; else the quote as the
+ * note reads (`seenLine` on both sides), whose columns don't map back: its whole rows, from their text to their end.
+ */
+function sourceQuote(rows: readonly string[], left: number, quote: string): CiteQuote | null {
+  const text = rows.map((r) => r.slice(left))
+  const q = quoteSpan(text, 0, text.length, quote)
+  if (q) return { ...q, col: q.col + left, endCol: q.endCol + left, left }
+  const s = quoteSpan(text.map(seenLine), 0, text.length, seenLine(quote))
+  if (!s) return null
+  const col = left + Math.max(0, text[s.row]!.search(/\S/))
+  return { row: s.row, col, endRow: s.endRow, endCol: left + text[s.endRow]!.trimEnd().length, left }
+}
+
+/**
+ * Where a cite's `quote` (as the model wrote it) is in `view`: `from`, its section's first row (`citeRange`), and the
+ * quote, or null when it is no longer there. Preview reads it as the note shows (`seenLine`, no leading list marker),
+ * past quote bars and bullets; Source as written, past the line-number gutter, else as the note reads on whole rows.
+ * Columns count the gutter, bars and bullets again, as the rows' spans do.
  */
 export function citeSpot(
   view: Pick<Rendered, "headings" | "lines" | "srcRow" | "plain">,
   source: boolean,
   index: number,
   line: number,
-  needle: string,
+  quote: string,
 ): { from: number; quote: CiteQuote | null } {
   const { from, to } = citeRange(view, source, index, line)
-  const left = source ? sourceGutter(view.srcRow?.length ?? 0) : 0
-  const rows = view.plain.slice(from, to).map((r) => r.slice(left))
-  const q = quoteSpan(rows, 0, rows.length, needle)
-  if (!q) return { from, quote: null }
-  return {
-    from,
-    quote: { row: q.row + from, col: q.col + left, endRow: q.endRow + from, endCol: q.endCol + left, left },
-  }
+  const rows = view.plain.slice(from, to)
+  const q = source ? sourceQuote(rows, sourceGutter(view.srcRow?.length ?? 0), quote) : previewQuote(rows, quote)
+  return { from, quote: q && { ...q, row: q.row + from, endRow: q.endRow + from } }
 }
 
 /**
