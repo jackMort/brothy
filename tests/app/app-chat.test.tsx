@@ -17,6 +17,7 @@ import {
   waitFor,
   waitFrame,
   walk,
+  withClock,
   withEnv,
 } from "./helpers"
 
@@ -647,6 +648,21 @@ test("six notes at most: at six, [[ toasts and opens no list; nothing more is ad
   expect(system).not.toContain("foxtrot")
 })
 
+test("at six notes [[ toasts once: the keys typed after it toast no more", async () => {
+  aiConfig(OLLAMA)
+  const names = ["alpha", "bravo", "charlie", "delta", "echo"]
+  const files = Object.fromEntries(names.map((n) => [`${n}.md`, `# ${n}\n\n${n} text.\n`]))
+  const { s } = await mountAI(tmp({ "Slow broth.md": NOTE, ...files }), "Slow broth.md")
+  await keys(s, "c")
+  for (const n of names) await keys(s, `type:[[${n.slice(0, 4)}`, "enter")
+  expect(await keys(s, "type:[[")).toContain("6 notes at most")
+  await withClock(new Date(Date.now() + 10_000), async () => {
+    const f = await keys(s, "type:al")
+    expect(f).toContain("[[al▍")
+    expect(f).not.toContain("6 notes at most") // the first toast has faded and no new one came
+  })
+})
+
 test("a note over 24k characters: `clipped` on its chip, the system text cut", async () => {
   aiConfig({ ...OLLAMA, maxChars: 100_000 })
   const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE + "x ".repeat(13_000) }), "Slow broth.md")
@@ -1097,6 +1113,23 @@ test("a chip's note deleted before ⏎ is left out with a toast", async () => {
   const system = ai.calls[0]!.body.messages[0]!.content
   expect(system).toContain('<note id="1" title="Slow broth">')
   expect(system).not.toContain('<note id="2"')
+})
+
+test("several chips' notes deleted before ⏎: one toast names them all", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({
+    ...LINKED,
+    "Slow broth.md": `${LINKED["Slow broth.md"]}And [[stock]].\n`,
+    "stock.md": "# Stock\n\nbones\n",
+  })
+  const { s, ai } = await mountAI(d, "Slow broth.md")
+  await keys(s, "c", "type:[[sim", "enter", "type:[[sto", "enter")
+  rmSync(join(d, "simmering.md"))
+  rmSync(join(d, "stock.md"))
+  const f = await keys(s, "type:why?", "enter")
+  expect(f).toContain("simmering, stock gone · left out")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(ai.calls[0]!.body.messages[0]!.content).not.toContain('<note id="2"')
 })
 
 test("a follow-up after a failure drops the failed exchange first and never sends it", async () => {

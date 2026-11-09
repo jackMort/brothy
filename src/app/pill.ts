@@ -119,11 +119,14 @@ function makePillInput(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
   const { ui, flash } = c
   const { patch, setThread } = pillState(c)
 
-  /** Whether a `[[` list may open: not on a thread at CHAT_MAX_CHIPS (a toast); opening scans the links first. */
-  const mayOpen = () => {
+  /**
+   * Whether a `[[` list may open for query `q`: not on a thread at CHAT_MAX_CHIPS (a toast as the input becomes `[[`,
+   * not on every key after it); opening scans the links first.
+   */
+  const mayOpen = (q: string) => {
     const p = ui.current.pill
     if ((p ? (ui.current.threads[p.path]?.chips.length ?? 0) : 0) >= CHAT_MAX_CHIPS) {
-      flash(CHIPS_FULL)
+      if (q === "") flash(CHIPS_FULL)
       return false
     }
     ensureLinks()
@@ -134,7 +137,7 @@ function makePillInput(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
   const setInput = (input: string) => {
     const q = pickQ(input)
     const was = ui.current.pill?.pick
-    patch({ input, pick: q !== null && (was || mayOpen()) ? { q, hl: was?.q === q ? was.hl : 0 } : null })
+    patch({ input, pick: q !== null && (was || mayOpen(q)) ? { q, hl: was?.q === q ? was.hl : 0 } : null })
   }
   const pillType = (text: string) => setInput((ui.current.pill?.input ?? "") + text)
 
@@ -313,14 +316,18 @@ function makePillSend(c: AppCtx, jobs: Jobs, animate: () => void, citeGo: (at?: 
     return aiGate(ai)
   }
 
-  /** The chips' notes read now (an edit between turns is picked up); a gone one is left out with a toast. */
-  const readChips = (t: Thread): SentNote[] =>
-    t.chips.flatMap((chip) => {
+  /** The chips' notes read now (an edit between turns is picked up); gone ones are left out, with one toast naming them. */
+  const readChips = (t: Thread): SentNote[] => {
+    const gone: string[] = []
+    const notes = t.chips.flatMap((chip) => {
       const f = memo.readNow(chip.path)
       if (!f.error) return [{ chip, src: f.src }]
-      flash(`${chip.title} gone · left out`)
+      gone.push(chip.title)
       return []
     })
+    if (gone.length) flash(`${gone.join(", ")} gone · left out`)
+    return notes
+  }
 
   /** The new exchange in its thread (failed ones dropped: a retry replaces, a follow-up drops), the card up and pinned. */
   const push = (t: Thread, chips: Chip[], ex: Exchange) => {
