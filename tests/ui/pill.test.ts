@@ -1,11 +1,27 @@
 import { describe, expect, test } from "bun:test"
 import type { Exchange, Thread } from "../../src/ai/thread"
 import { MIN_H, MIN_W } from "../../src/app/store"
+import { width } from "../../src/lib/text"
 import { INK_MS } from "../../src/ui/chrome"
 import { type LayoutState, layout } from "../../src/ui/layout"
-import { charInk, chatStage, inkStep, pillGeo, steamTick } from "../../src/ui/pill"
+import {
+  caretCol,
+  charInk,
+  chatStage,
+  chipRow,
+  frameRows,
+  inkStep,
+  inputSpans,
+  type PillView,
+  pillBorder,
+  pillGeo,
+  pillRow,
+  sizeFoot,
+  steamTick,
+} from "../../src/ui/pill"
 import { STEAM_MS, STILL_TICK } from "../../src/ui/welcome"
 import { ZEN_DEFAULTS } from "../../src/ui/zen"
+import { brothy as t } from "../helpers/theme"
 
 const LS: LayoutState = {
   wide: false,
@@ -73,5 +89,101 @@ describe("motion", () => {
   test("steamTick: a frame per STEAM_MS; STILL_TICK with motion off", () => {
     expect(steamTick(0, 3 * STEAM_MS + 1, true)).toBe(3)
     expect(steamTick(0, 99_999, false)).toBe(STILL_TICK)
+  })
+})
+
+const text = (row: { text: string }[]) => row.map((s) => s.text).join("")
+const CITES = [1, 2, 3].map((n) => ({ n, path: "/n.md", quote: n === 1 ? "do not press the bones" : `q${n}`, line: n }))
+const DONE = {
+  q: "why cloudy?",
+  at: 0,
+  model: "llama3.2",
+  raw: "r",
+  parts: ["Press ", 1, " no ", 2, 3, "."],
+  cites: CITES,
+  error: null,
+  doneAt: 0,
+}
+function viewOf(o: Partial<PillView>): PillView {
+  return {
+    path: "/n.md",
+    focus: true,
+    card: false,
+    input: "",
+    thread: {
+      path: "/n.md",
+      chips: [{ path: "/n.md", title: "n" }],
+      turns: o.card === undefined && !o.land ? [] : [DONE],
+    },
+    running: null,
+    hl: null,
+    top: null,
+    pick: null,
+    land: null,
+    openedAt: 0,
+    geo: { x: 0, w: 72, top: 20, cardMax: 18 },
+    size: 10,
+    clipped: [],
+    wheres: [["Strain and cool", "Simmering", "n"]],
+    stage: "input",
+    quote: null,
+    cardOut: null,
+    ...o,
+  }
+}
+
+describe("the pill row", () => {
+  test("frameRows: rounded, `w` wide, content padded on the panel colour, the foot right on the bottom border", () => {
+    const rows = frameRows([[{ text: "hi" }]], 20, t.border, t.backgroundPanel, [{ text: " ~1 tokens " }])
+    expect(rows.map(text)).toEqual(["╭──────────────────╮", "│ hi               │", "╰───── ~1 tokens ──╯"])
+    expect(rows.every((r) => r.every((s) => s.bg === t.backgroundPanel))).toBe(true)
+  })
+  test("chipRow: the first chip secondary, the others accent, ` · clipped` muted; the last fold into +n", () => {
+    const chips = [
+      { path: "/a", title: "Slow broth" },
+      { path: "/b", title: "simmering" },
+      { path: "/c", title: "stock" },
+    ]
+    const all = chipRow(t, chips, ["/a"], 80)
+    expect(text(all)).toBe(" Slow broth · clipped   simmering   stock ")
+    expect(all.find((s) => s.text === "Slow broth")?.fg).toBe(t.secondary)
+    expect(all.find((s) => s.text === "simmering")?.fg).toBe(t.accent)
+    expect(all.find((s) => s.text === " · clipped")?.fg).toBe(t.textMuted)
+    expect(text(chipRow(t, chips, [], 26))).toBe(" Slow broth   +2 ")
+  })
+  test("inputSpans: the caret after the text's tail; the placeholder muted after the caret; graphemes whole", () => {
+    expect(text(inputSpans(t, "", true, 30, "ask about this note…"))).toBe("▍ask about this note…")
+    const tail = text(inputSpans(t, "why does my broth go cloudy", true, 12, "x"))
+    expect(tail).toStartWith("…")
+    expect(tail).toEndWith("cloudy▍")
+    expect(width(tail)).toBe(12)
+    expect(text(inputSpans(t, "soup 🍜🍜🍜", true, 5, "x"))).toBe("…🍜▍") // a 2-column grapheme is never cut
+  })
+  test("pillBorder: borderActive inked in from border while focused; border when folded", () => {
+    expect(pillBorder(t, { focus: true, openedAt: 0 }, 0, true)).toBe(t.border)
+    expect(pillBorder(t, { focus: true, openedAt: 0 }, 0, false)).toBe(t.borderActive)
+    expect(pillBorder(t, { focus: false, openedAt: 0 }, 0, false)).toBe(t.border)
+  })
+  test("sizeFoot: ` ~N tokens ` in the status colour", () => {
+    expect(text(sizeFoot(t, 3100))).toBe(" ~3.1k tokens ")
+  })
+  test("pillRow: wisp, input or placeholder, chips right; folded: the cite and `1 of 3 · ] next`", () => {
+    const v = viewOf({})
+    expect(text(pillRow(t, v, 0, false))).toMatch(/^⠳⢆ ▍ask about this note…\s+ n $/)
+    const folded = viewOf({ focus: false, land: { exchange: 0, n: 1, path: "/n.md", at: 0 } })
+    expect(text(pillRow(t, folded, 0, false))).toMatch(/^¹ “do not press the bones”\s+1 of 3 · \] next$/)
+    const last = viewOf({ focus: false, land: { exchange: 0, n: 3, path: "/n.md", at: 0 } })
+    expect(text(pillRow(t, last, 0, false))).toEndWith("3 of 3 · [ prev")
+  })
+  test("pillRow: `ask a follow-up` only after a successful answer; a failed one keeps the first placeholder", () => {
+    const ok = viewOf({ card: true })
+    expect(text(pillRow(t, ok, 0, false))).toContain("ask a follow-up")
+    const failed = viewOf({ card: true })
+    failed.thread = { ...failed.thread, turns: [{ ...DONE, raw: null, error: "boom" }] }
+    expect(text(pillRow(t, failed, 0, false))).toContain("ask about this note…")
+  })
+  test("caretCol: after the wisp and the typed text, from the pill's left", () => {
+    expect(caretCol(viewOf({ input: "abc" }))).toBe(2 + 3 + 3)
+    expect(caretCol(viewOf({ input: "abc", geo: { x: 5, w: 72, top: 20, cardMax: 18 } }))).toBe(5 + 2 + 3 + 3)
   })
 })
