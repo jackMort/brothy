@@ -106,6 +106,11 @@ describe("the reply", () => {
     expect(splitReply("A [1].\nSoup is", true).body).toBe("A [1].\nSoup is")
     expect(splitReply("A [1].\nSour", false).body).toBe("A [1].\nSour")
   })
+  test("bodyParts: a line break before a mark stays; only spaces and tabs go", () => {
+    expect(bodyParts("text\n[1] more")).toEqual(["text\n", 1, " more"])
+    expect(bodyParts("a  \t[1]")).toEqual(["a", 1])
+  })
+
   test("bodyParts: [1], [1, 2] and [1][2] become numbers, space before a mark dropped; [x], [ ] and [2024] stay text", () => {
     expect(bodyParts("a [1] b [1, 2] c [3][4].")).toEqual(["a", 1, " b", 1, 2, " c", 3, 4, "."])
     expect(bodyParts("[x] and [ ] in [2024]")).toEqual(["[x] and [ ] in [2024]"])

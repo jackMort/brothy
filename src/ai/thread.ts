@@ -148,7 +148,7 @@ export function bodyParts(body: string): Part[] {
   const out: Part[] = []
   let last = 0
   for (const m of body.matchAll(MARK)) {
-    const run = body.slice(last, m.index).trimEnd()
+    const run = body.slice(last, m.index).replace(/[ \t]+$/, "")
     if (run) out.push(run)
     for (const n of (m[1] ?? "").split(",")) out.push(Number(n.trim()))
     last = m.index + m[0].length
