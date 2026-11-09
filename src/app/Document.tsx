@@ -357,7 +357,8 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
   const dim = pageDim(d, scrim)
   const foot = landFoot(d)
   const footAt = CH - foot.length
-  const picCut = Math.min(footAt, pillCut(d))
+  // pictures stop at the pill's top by the user's decision (the image may reach into the clear row); the text stops at the clear row (pillCut)
+  const picCut = d.pill ? Math.min(footAt, d.pill.geo.top) : footAt
   const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
@@ -369,7 +370,7 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
         ),
       )}
       {d.pill?.card ? pictureAlts(d, picCut) : pictureLayer(c, d, picCut)}
-      {pictureLabels(d, footAt)}
+      {pictureLabels(d, picCut)}
       {margin ? (
         <box
           key="change-side"

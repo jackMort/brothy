@@ -770,6 +770,7 @@ test("chat: while typing the picture is cut above the pill", async () => {
   await keys(s, "c")
   const [img] = imagesOf(s)
   expect(img!.y + img!.height).toBeLessThanOrEqual(BODY_END - 3)
+  expect(img!.y + img!.height).toBeGreaterThan(BODY_END - 5)
 })
 
 test("chat: with the card up no <image>, a muted ▣ alt row at the picture's first row", async () => {
