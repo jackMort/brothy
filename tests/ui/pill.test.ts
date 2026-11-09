@@ -194,6 +194,18 @@ describe("the pill row", () => {
     failed.thread = { ...failed.thread, turns: [{ ...DONE, raw: null, error: "boom" }] }
     expect(text(pillRow(t, failed, 0, false))).toContain("ask about this note…")
   })
+  test("pillRow: an empty input says `esc cancels` while an answer runs and `⏎ asks again` after a failure; typed text replaces it", () => {
+    const wait = viewOf({ running })
+    expect(text(pillRow(t, wait, 0, false))).toContain("▍esc cancels")
+    expect(pillRow(t, wait, 0, false).find((s) => s.text === "esc cancels")?.fg).toBe(
+      pillRow(t, viewOf({}), 0, false).find((s) => s.text === "ask about this note…")?.fg,
+    )
+    const failed = viewOf({ card: true, stage: "error" })
+    failed.thread = { ...failed.thread, turns: [{ ...DONE, raw: null, error: "boom" }] }
+    expect(text(pillRow(t, failed, 0, false))).toContain("▍⏎ asks again")
+    expect(text(pillRow(t, { ...failed, input: "why" }, 0, false))).not.toContain("asks again")
+    expect(text(pillRow(t, { ...wait, input: "why" }, 0, false))).not.toContain("esc cancels")
+  })
   test("caretCol: the column of the caret glyph pillRow draws, short input or long with one short chip", () => {
     for (const input of ["abc", "why does my broth go cloudy when I press the bones so hard every time"]) {
       const v = viewOf({ input, geo: { x: 5, w: 72, top: 20, cardMax: 18 } })

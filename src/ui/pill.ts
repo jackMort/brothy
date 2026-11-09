@@ -223,6 +223,13 @@ function typingLayout(t: Theme, v: PillView) {
   return { iw, chips, room }
 }
 
+/** What an empty input says: a wait or a failure first (muted like the placeholders), else the placeholder. */
+function placeholderOf(v: Pick<PillView, "running" | "stage">, answered: boolean): string {
+  if (v.running) return "esc cancels"
+  if (v.stage === "error") return "⏎ asks again"
+  return answered ? "ask a follow-up" : "ask about this note…"
+}
+
 /** The pill's middle row, `w − 4` wide: the wisp, the input or placeholder, the chips right; folded, the cite. */
 export function pillRow(t: Theme, v: PillView, now: number, motion: boolean): Span[] {
   if (v.land) return citeRow(t, v, v.geo.w - 4)
@@ -230,7 +237,7 @@ export function pillRow(t: Theme, v: PillView, now: number, motion: boolean): Sp
   const tick = v.running ? steamTick(v.running.at, now, motion) : STILL_TICK
   const wisp: Span = { text: (steamRows(tick, 2, 1)[0] ?? "").replace(/ /g, "⠀"), fg: t.primary }
   const answered = v.thread.turns.some((e) => e.raw !== null)
-  const placeholder = answered ? "ask a follow-up" : "ask about this note…"
+  const placeholder = placeholderOf(v, answered)
   return right([wisp, pad(1), ...inputSpans(t, v.input, v.focus, room, placeholder)], chips, iw)
 }
 
