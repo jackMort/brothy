@@ -23,6 +23,7 @@ import {
 } from "../ui/pill"
 import { dimSpans } from "../ui/zen"
 import type { Derived } from "./derive"
+import { pixelsOnRow } from "./pictures"
 import type { Pill } from "./pill"
 import { Row } from "./Row"
 import { WHEEL_ROWS } from "./store"
@@ -73,10 +74,20 @@ export function pillLayer(d: Derived, a: PillActions): ReactNode[] {
  * The band: the pill's rows and the row above it, the gutter's 3 columns included, on the page's own fill (clear with
  * `T`). The note draws no text there (`noteLines` stops above it); the band keeps whatever else lies under it out.
  */
-function bandBlock({ L, t, s }: Derived, v: PillView): ReactNode {
+function bandBlock({ L, t, s, view, top, picMode, picFiles }: Derived, v: PillView): ReactNode {
   const w = L.CW + GUTTER
-  const bg = surface(t, s.transparent).main
-  const rows = Array.from({ length: BAND_ROWS }, () => [{ text: " ".repeat(w), bg }])
+  const clear = surface(t, s.transparent).main
+  // under `T` a row an image lies on takes the page fill, since a `<text>` with no real bg over an <image> paints black;
+  // the images stop at the pill's top (`picCut`), and none draw with the card up
+  const onImage = (y: number) =>
+    s.transparent &&
+    !v.card &&
+    picMode === "pixels" &&
+    !!s.cell &&
+    pixelsOnRow(view, y, top, v.geo.top, s.cell, picFiles.file)
+  const rows = Array.from({ length: BAND_ROWS }, (_, i) => [
+    { text: " ".repeat(w), bg: onImage(v.geo.top - 1 + i) ? t.background : clear },
+  ])
   return block("chat-band", -GUTTER, v.geo.top - 1, w, rows)
 }
 

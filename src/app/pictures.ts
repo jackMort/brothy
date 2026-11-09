@@ -158,6 +158,21 @@ export function picWindow(p: Pic, top: number, rows: number, cell: Cell, lo = 0,
   }
 }
 
+/** Whether a picture drawn as pixels (what `pictureLayer` draws) lies on row `y` of the `rows` rows from `top`. */
+export function pixelsOnRow(
+  view: Rendered,
+  y: number,
+  top: number,
+  rows: number,
+  cell: Cell,
+  file: (src: string) => unknown,
+) {
+  return (view.pics ?? []).some((p) => {
+    const at = file(p.src) ? picWindow(p, top, rows, cell) : null
+    return !!at && y >= at.y && y < at.y + at.rows
+  })
+}
+
 /** Which rows are a picture's reserved rows (not its caption or a placeholder row). */
 export function reservedRows(view: Rendered): boolean[] {
   const rows = Array<boolean>(view.lines.length).fill(false)

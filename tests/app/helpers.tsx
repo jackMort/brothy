@@ -32,6 +32,7 @@ export interface MountOpts {
   /** `auto`: follow the terminal's light/dark (what the CLI computes from config and `--theme`) */
   auto?: boolean
   motion?: boolean
+  transparent?: boolean
   stdin?: string
   linkScanDelay?: number
   edit?: AppProps["edit"]

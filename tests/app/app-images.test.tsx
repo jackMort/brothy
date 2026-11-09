@@ -819,3 +819,31 @@ test("chat: with the card up a text-mode or missing picture keeps its own row, o
     .find((x) => x.text.startsWith("▣"))!
   expect(hex(mark.fg)).toBe(mix(B.primary, B.background, 0.5))
 })
+
+/** The band cells of the clear row above the pill, under `T`: the page fill where a picture lies, else clear. */
+async function bandFill(note: string) {
+  aiConfig(OLLAMA)
+  const s = await mount(vault(note), "n.md", { fetch: aiStub().f, transparent: true })
+  kittyTerminal(s)
+  setResolution(s, RES)
+  await shown(s)
+  await keys(s, "c")
+  const [img] = imagesOf(s)
+  const frame = s.captureCharFrame().split("\n")
+  // the clear row is the one above the pill's top border (a row starting `╭` after the gutter)
+  const top = frame.findIndex((r) => r.includes("╭"))
+  const clear = s.captureSpans().lines[top - 1]!.spans
+  return { img: img!, clear: top - 1, cells: clear.filter((x) => x.text.trim() === "" || x.text.length > 0) }
+}
+
+test("chat under T: a picture reaching the band's clear row gets the page fill on it", async () => {
+  const { img, clear, cells } = await bandFill(`# Top\n\n${filler(8)}\n\n![Plan](plan.png)\n\nend`)
+  expect(img.y + img.height).toBe(clear + 1)
+  expect(cells.some((x) => hex(x.bg) === B.background)).toBe(true)
+})
+
+test("chat under T: with no picture on the clear row it stays transparent", async () => {
+  const { img, clear, cells } = await bandFill(`# Top\n\n![Plan](plan.png)\n\n${filler(30)}`)
+  expect(img.y + img.height).toBeLessThan(clear)
+  expect(cells.every((x) => hex(x.bg) === null)).toBe(true)
+})
