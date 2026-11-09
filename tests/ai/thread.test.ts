@@ -10,7 +10,9 @@ import {
   type Exchange,
   MAX_CHAT,
   parseSources,
+  quoteLines,
   splitReply,
+  verifyCites,
 } from "../../src/ai/thread"
 
 const A: Chip = { path: "/v/a.md", title: "a" }
@@ -115,5 +117,59 @@ describe("the reply", () => {
         { n: 3, note: 1, quote: 'say "hi" now' },
       ],
     )
+  })
+})
+
+describe("verifyCites", () => {
+  const SRC =
+    "---\ntitle: x\n---\n# Broth\n\nPour it through a sieve; do **not\npress** the bones.\n%%do not press secret%%\n\n```\nlet x = 1\n```\n"
+  const notes = [
+    { chip: A, src: SRC },
+    { chip: B, src: "# B\n\nClear stock stays clear.\n" },
+  ]
+
+  test("quoteLines: one per source line, front matter and comments blank, marks gone, code kept", () => {
+    const l = quoteLines(SRC)
+    expect(l.slice(0, 3)).toEqual(["", "", ""])
+    expect(l[3]).toBe("Broth")
+    expect(l[5]).toBe("Pour it through a sieve; do not")
+    expect(l[7]).toBe("")
+    expect(l[10]).toBe("let x = 1")
+  })
+
+  test("a quote across a line break and through inline marks, any case, verifies with its start line", () => {
+    const r = verifyCites(["Do not ", 1, "."], [{ n: 1, note: 1, quote: "Do NOT press the bones" }], notes)
+    expect(r.cites).toEqual([{ n: 1, path: A.path, quote: "Do NOT press the bones", line: 5 }])
+    expect(r.parts).toEqual(["Do not ", 1, "."])
+  })
+
+  test("an unverified mark is dropped, its sentence kept; the rest renumbered by first appearance; a repeat keeps its number", () => {
+    const r = verifyCites(
+      ["A ", 7, ". B ", 9, ". C ", 3, ". D ", 7, "."],
+      [
+        { n: 7, note: 2, quote: "clear stock" },
+        { n: 9, note: 1, quote: "not in the note" },
+        { n: 3, note: 1, quote: "let x = 1" },
+      ],
+      notes,
+    )
+    expect(r.parts).toEqual(["A ", 1, ". B. C ", 2, ". D ", 1, "."])
+    expect(r.cites.map((c) => [c.n, c.path, c.line])).toEqual([
+      [1, B.path, 2],
+      [2, A.path, 10],
+    ])
+  })
+
+  test("a quote from the wrong note, a missing note id, or a comment does not verify", () => {
+    const r = verifyCites(
+      ["x ", 1, 2, 3],
+      [
+        { n: 1, note: 1, quote: "clear stock" },
+        { n: 2, note: 5, quote: "Broth" },
+        { n: 3, note: 1, quote: "secret" },
+      ],
+      notes,
+    )
+    expect(r).toEqual({ parts: ["x"], cites: [] })
   })
 })

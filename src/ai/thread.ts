@@ -1,6 +1,11 @@
 // Chat about the open note, pure: what a thread holds, what one send carries (the notes clipped to the budget, the
 // earlier turns, the question), the prompt, and the reply taken apart into text, marks and verified quotes.
 // The app side is app/pill.ts; drawing is ui/pill.ts.
+
+import { parseFrontMatter } from "../markdown/frontmatter"
+import { normalize, scanComments } from "../markdown/lexer"
+import { plainLine } from "../notes/vault"
+import { quoteSpan } from "../ui/nav"
 import { type ChatReq, cleanReply, clip, type Msg, tokens } from "./client"
 import { keepSentences } from "./gloss"
 
@@ -166,4 +171,61 @@ export function parseSources(sources: string): Source[] {
     const quote = m?.[3]?.trim()
     return m && quote ? [{ n: Number(m[1]), note: Number(m[2]), quote }] : []
   })
+}
+
+/** One string per source line, as quotes are checked against it: front matter and comments blank, inline marks gone, code kept. */
+export function quoteLines(src: string): string[] {
+  const lines = normalize(src).split("\n")
+  const { offset } = parseFrontMatter(src)
+  const { kept, hidden } = scanComments(lines, offset)
+  return lines.map((_, i) => (i < offset || hidden[i] ? "" : plainLine(kept[i] ?? "")))
+}
+
+/** Append `text` to `out`; right after a dropped mark, a blank before punctuation goes. */
+function pushText(out: Part[], text: string, dropped: boolean) {
+  const prev = out.at(-1)
+  if (typeof prev !== "string") return void out.push(text)
+  out[out.length - 1] = dropped && /^[.,;:!?)]/.test(text) ? prev.trimEnd() + text : prev + text
+}
+
+/** Each source's mark whose quote occurs in its note's `quoteLines`; the first source for a mark wins. */
+function verified(sources: readonly Source[], notes: readonly { chip: Chip; src: string }[]): Map<number, Cite> {
+  const lines = notes.map((n) => quoteLines(n.src))
+  const out = new Map<number, Cite>()
+  for (const s of sources) {
+    const note = notes[s.note - 1]
+    const own = lines[s.note - 1]
+    if (out.has(s.n) || !note || !own) continue
+    const at = quoteSpan(own, 0, own.length, plainLine(s.quote))
+    if (at) out.set(s.n, { n: 0, path: note.chip.path, quote: s.quote, line: at.row })
+  }
+  return out
+}
+
+/** The answer with only verified marks, renumbered 1..k by first appearance, and their cites. */
+export function verifyCites(
+  parts: Part[],
+  sources: readonly Source[],
+  notes: readonly { chip: Chip; src: string }[],
+): { parts: Part[]; cites: Cite[] } {
+  const found = verified(sources, notes)
+  const num = new Map<number, number>()
+  const cites: Cite[] = []
+  const out: Part[] = []
+  let dropped = false
+  for (const p of parts) {
+    const c = typeof p === "number" ? found.get(p) : undefined
+    if (typeof p === "string") pushText(out, p, dropped)
+    else if (c) {
+      if (!num.has(p)) {
+        cites.push({ ...c, n: cites.length + 1 })
+        num.set(p, cites.length)
+      }
+      out.push(num.get(p) ?? 0)
+    }
+    dropped = typeof p === "number" && !c
+  }
+  const last = out.at(-1)
+  if (dropped && typeof last === "string") out[out.length - 1] = last.trimEnd()
+  return { parts: out, cites }
 }
