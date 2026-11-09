@@ -5,6 +5,8 @@ description: "Turn on the opt-in AI features with an ai block in config.json: lo
 
 AI is off until you add an `ai` block to `config.json`. Nothing is ever sent on its own: every request starts from an explicit key, goes to the configured endpoint only, and is the only network traffic brothy has. Up to 3 requests run at once, over every feature; a 4th says `AI busy · 3 requests running` and sends nothing.
 
+The features: a [TL;DR](/brothy/ai/tldr/) (<kbd>a</kbd>), the [zen gloss](/brothy/ai/zen-gloss/), [what changed](/brothy/ai/what-changed/) (<kbd>D</kbd>), [ask your vault](/brothy/ai/ask-your-vault/) and [chat about the note](/brothy/ai/chat/) (<kbd>c</kbd>).
+
 Local first: no key, nothing leaves your machine.
 
 ```json
@@ -51,6 +53,6 @@ Ollama cuts an over-long prompt from the front without an error: raise `num_ctx`
 
 ## Cache and network
 
-The summary cache is `$XDG_CACHE_HOME/brothy/summaries.json` (else `~/.cache/brothy/`), private to your user, newest 500 notes. Glosses are cached beside it in `glosses.json` (newest 2 000 sections, per style). Reload explanations and ask answers are never written to disk. The compiled binary honors `HTTPS_PROXY` and extra CAs from `NODE_EXTRA_CA_CERTS`. HTTP redirects are refused: set `baseURL` to the final URL.
+The summary cache is `$XDG_CACHE_HOME/brothy/summaries.json` (else `~/.cache/brothy/`), private to your user, newest 500 notes. Glosses are cached beside it in `glosses.json` (newest 2 000 sections, per style). Reload explanations, ask answers and chat threads are never written to disk. The compiled binary honors `HTTPS_PROXY` and extra CAs from `NODE_EXTRA_CA_CERTS`. HTTP redirects are refused: set `baseURL` to the final URL.
 
 See [What is sent](/brothy/ai/what-is-sent/) for exactly what each key sends.

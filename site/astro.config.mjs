@@ -111,7 +111,10 @@ export default defineConfig({
           label: "AI",
           items: [
             "ai/setup",
-            { label: "Features", items: ["ai/tldr", "ai/zen-gloss", "ai/what-changed", "ai/ask-your-vault"] },
+            {
+              label: "Features",
+              items: ["ai/tldr", "ai/zen-gloss", "ai/what-changed", "ai/ask-your-vault", "ai/chat"],
+            },
             "ai/what-is-sent",
           ],
         },

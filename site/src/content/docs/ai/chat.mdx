@@ -1,0 +1,85 @@
+---
+title: Chat about the note
+description: "Press c to ask a question about the open note, read the answer over the text, and jump from each mark to the words it rests on."
+---
+
+Press <kbd>c</kbd> to ask a question about the open note. A pill rises over the last rows of the text; type, press <kbd>⏎</kbd>, and the answer appears in a card above it, with a mark `¹ ² ³` after each claim. <kbd>↑</kbd> <kbd>↓</kbd> pick a mark and <kbd>⏎</kbd> takes you to the exact words in the note that the claim rests on.
+
+Nothing is sent until you press <kbd>⏎</kbd>. Nothing is written to disk.
+
+- With no [`ai` block](/brothy/ai/setup/), <kbd>c</kbd> toasts `AI off · set "ai" in config.json` and no pill opens.
+- On an empty note it toasts `nothing to ask about`.
+- Below 100 columns <kbd>c</kbd> closes an open drawer first; the pill and the drawer never show together.
+- Not in zen.
+
+## The pill
+
+The pill is 72 columns wide at the normal 80-column measure and widens with the text column (<kbd>w</kbd>, or zen's full measure), up to 100. It is centred over the last 3 rows of the text.
+
+- On the left, a small steam wisp and the input. The placeholder reads `ask about this note…`, and `ask a follow-up` once there is an answer. With the input empty it reads `esc cancels` while an answer runs and `⏎ asks again` after a failure.
+- On the right, one chip per note in the thread, named by the note's title, the same title the top line shows: the front-matter `title`, else the file name. The first chip is the open note.
+- On the bottom border, the size of what <kbd>⏎</kbd> would send, such as `~3.1k tokens`.
+
+## Adding and removing notes
+
+Type `[[` to add another note to the question. A small list above the caret shows up to 5 notes, ranked as you type; notes the open note links to are marked `linked from here`. <kbd>↑</kbd> <kbd>↓</kbd> move, <kbd>tab</kbd> completes the name, <kbd>⏎</kbd> adds the note and <kbd>esc</kbd> goes back to the input.
+
+- <kbd>⌫</kbd> on an empty input removes the last chip. The first note cannot be removed (`chat needs a note`).
+- A thread holds at most 6 notes. `[[` with six already added toasts `6 notes at most` and opens no list.
+- A note that is cut to fit the request has `· clipped` on its chip (see [Limits](#limits)).
+- The notes are read again on every <kbd>⏎</kbd>, so an edit between turns is picked up. A note deleted from disk is left out, with a toast.
+
+## The answer
+
+After <kbd>⏎</kbd> the card rises above the pill with one clear row between them. It holds the whole thread, oldest exchange first, pinned to the bottom. The rows of the text above the card are dimmed, and the card's rows clear the text column. The wheel scrolls the card 3 rows; <kbd>pgup</kbd> <kbd>pgdn</kbd> move a page. When it is scrolled up, its bottom border says ` ↓ n more `.
+
+While the model has not answered, steam rises in the card with `asking <model> · 2 s`. The answer then streams in; marks are muted until they are checked.
+
+When the answer is done, each mark that brothy could verify glows. A mark is kept only when the quote the model gave for it is found in the note, so a mark can never point at words that are not there. A claim whose quote is not found loses its mark and the others are renumbered. Under the answer, one row per mark names the section (`<note> › <heading>` for another note) and shows the quote.
+
+If the model gave no usable sources, the answer is shown with no marks.
+
+## Jumping to a mark
+
+<kbd>↑</kbd> <kbd>↓</kbd> pick a mark and <kbd>⏎</kbd> on an empty input goes to it. If the mark belongs to another note, that note opens (<kbd>H</kbd> goes back). The card folds away, the page is undimmed, the quote is tinted in the text and its mark sits in the gutter. The pill holds the mark instead of the input: `¹ “do not press the bones…”`, with `1 of 3 · ] next` on the right.
+
+- <kbd>[</kbd> <kbd>]</kbd> walk the marks of that answer (`last mark` / `first mark` at the ends).
+- <kbd>c</kbd> or a click on the pill brings the card back.
+- <kbd>esc</kbd> hides the pill. The thread is kept.
+- If the note was edited and the quote is gone, you land on its section with `quote no longer in the note`.
+
+## Follow-ups, cancel and errors
+
+Type again and press <kbd>⏎</kbd> to ask a follow-up; earlier successful turns go with it. Threads are kept in memory per note, survive <kbd>r</kbd> and a reload, and are dropped when you switch project.
+
+- <kbd>esc</kbd> while an answer runs cancels it: the exchange is removed and its question goes back into the input.
+- <kbd>esc</kbd> on an idle card folds it into the pill; <kbd>esc</kbd> again hides the pill. <kbd>↑</kbd> on an empty input with no card recalls your last question.
+- After a failure the card shows `✗` and the reason in the error colour. Retrying happens from the card: <kbd>⏎</kbd> on an empty input asks again. A folded pill does not retry; <kbd>c</kbd> brings the card back. Typing a new question instead drops the failed one.
+- A missing key opens the pill; the error toast comes only when you press <kbd>⏎</kbd>, and the input is kept. Three requests at a time at most (`AI busy · 3 requests running`).
+- An answer that finishes while the pill is hidden is kept; if you are in another note, a toast says `answer ready · <note>`.
+- The pill hides when you enter zen, open the drawer, or move to a note that is neither the thread's nor the one of a mark you landed on.
+
+## Limits
+
+- One note sends at most 24 000 characters. Notes share what is left of your `maxChars` in chip order; a cut note shows `· clipped`.
+- Earlier turns take at most 25 % of `maxChars`, oldest left out first. They stay visible in the card.
+- With ollama or LM Studio (`maxChars` 8 000 by default) the open note is clipped sooner.
+- An answer is cut at 6000 characters, at its last finished sentence.
+- At most 6 notes in a thread.
+
+## Keys
+
+| Key | Action |
+| --- | --- |
+| <kbd>c</kbd> | open the pill (or the card, when the thread has answers) |
+| <kbd>⏎</kbd> | send; go to the selected mark (empty input); retry after a failure |
+| <kbd>[[</kbd> | add a note |
+| <kbd>↑</kbd> <kbd>↓</kbd> | marks; the `[[` list's rows; <kbd>↑</kbd> on an empty input recalls your last question |
+| <kbd>tab</kbd> | complete the `[[` list's note |
+| <kbd>⌫</kbd> | a character, else the last chip |
+| <kbd>ctrl+u</kbd> | clear the input |
+| <kbd>pgup</kbd> <kbd>pgdn</kbd> | scroll the card a page (the wheel: 3 rows) |
+| <kbd>esc</kbd> | cancel a running answer · fold the card · hide the pill |
+| <kbd>[</kbd> <kbd>]</kbd> | folded on a mark: the previous · next mark |
+
+While the pill has focus every other key is typed, `?` and `c` included.

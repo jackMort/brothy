@@ -10,6 +10,7 @@ description: "Exactly what each AI key sends, and what never leaves your machine
 | <kbd>a</kbd> | TL;DR | the note body, cut to `maxChars` |
 | <kbd>a</kbd> in zen | gloss | note title, heading path, the section's own text (its subtree when it has under 20 words), cut to 12 000 characters |
 | <kbd>D</kbd> | explain a change | note title, the changed hunks with 1 context line (each removed section: its first 20 lines), cut to 16 000 characters; later sections by heading only |
+| <kbd>c</kbd> · <kbd>⏎</kbd> | chat | the text of the notes in the pill (the open note and any you added with `[[`), each cut to 24 000 characters and all to `maxChars`, the question, and earlier turns of the thread (at most 25 % of `maxChars`); only on <kbd>⏎</kbd>, nothing cached on disk |
 | `?` · <kbd>⏎</kbd> | ask, tier 0 | the question only |
 | `?` · rerank row | ask, tier 1 | the question, and for up to 12 candidates: note name, heading path, 300 characters of text |
 
