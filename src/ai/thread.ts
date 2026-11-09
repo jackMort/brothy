@@ -9,7 +9,7 @@ import { type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
 import { type Flat, flatten, spanIn } from "../ui/nav"
 import { sameText } from "../ui/status"
-import { type ChatReq, cleanReply, clip, type Msg, tokens } from "./client"
+import { type ChatReq, cleanReply, clip, type Msg, tokensOf } from "./client"
 import { keepSentences } from "./gloss"
 
 /** characters of one note sent at most */
@@ -90,15 +90,23 @@ function recentTurns(turns: readonly Exchange[], room: number): Msg[] {
   return out
 }
 
+/** Code points of `s`, counted to `max + 1` at most: enough to tell whether `clip` cuts it at `max`. */
+function cpUpTo(s: string, max: number): number {
+  if (s.length <= max) return cp(s)
+  let n = 0
+  for (let i = 0; i < s.length && n <= max; n++) i += s.codePointAt(i)! > 0xffff ? 2 : 1
+  return n
+}
+
 /** Each note in chip order, clipped to CHAT_NOTE_MAX and to what is `left`; one left with nothing is empty and clipped. */
 function clipNotes(texts: readonly string[], chips: readonly Chip[], left: number): SentNote[] {
   return chips.map((chip, i) => {
     const full = texts[i] ?? ""
     const cap = Math.min(CHAT_NOTE_MAX, left)
-    const n = cp(full)
+    const n = cpUpTo(full, Math.max(0, cap))
     left = Math.max(0, left - Math.min(n, cap))
     if (cap <= 0) return { chip, text: "", clipped: true }
-    return { chip, text: clip(full, cap), clipped: n > cap }
+    return n > cap ? { chip, text: clip(full, cap), clipped: true } : { chip, text: full, clipped: false }
   })
 }
 
@@ -113,18 +121,26 @@ export function chatContext(
   const sent = recentTurns(turns, Math.floor(maxChars * CHAT_TURNS_SHARE))
   const used = cp(CHAT_PROMPT) + cp(question) + sent.reduce((n, m) => n + cp(m.content), 0)
   const notes = clipNotes(texts, chips, maxChars - used)
-  const r = chatRequest({ notes, turns: sent }, question)
-  return { notes, turns: sent, size: tokens(r.system + sent.map((m) => m.content).join("") + question) }
+  return { notes, turns: sent, size: tokensOf(used + systemTail(notes)) }
 }
 
 /** A `title` attribute's value: no double quote can end it. */
 const attr = (s: string) => s.replace(/"/g, "'")
+/** Note `i`'s tag around its text. */
+const noteOpen = (n: SentNote, i: number) => `<note id="${i + 1}" title="${attr(n.chip.title)}">\n`
+const NOTE_CLOSE = "\n</note>"
+/** The system message after CHAT_PROMPT: the blank line, then the notes' tags one per line. */
+const SYSTEM_GAP = "\n\n"
+
+/** Code points the system message holds past CHAT_PROMPT, counted from its parts rather than built. */
+const systemTail = (notes: readonly SentNote[]) =>
+  notes.reduce((k, n, i) => k + (i ? 1 : 0) + cp(noteOpen(n, i)) + cp(n.text) + NOTE_CLOSE.length, SYSTEM_GAP.length)
 
 /** The request for `question` over `ctx`: the notes as `<note>` tags after the prompt, the turns, the question. */
 export function chatRequest(ctx: Pick<SentContext, "notes" | "turns">, question: string): ChatReq {
-  const notes = ctx.notes.map((n, i) => `<note id="${i + 1}" title="${attr(n.chip.title)}">\n${n.text}\n</note>`)
+  const notes = ctx.notes.map((n, i) => `${noteOpen(n, i)}${n.text}${NOTE_CLOSE}`)
   return {
-    system: `${CHAT_PROMPT}\n\n${notes.join("\n")}`,
+    system: `${CHAT_PROMPT}${SYSTEM_GAP}${notes.join("\n")}`,
     turns: ctx.turns,
     user: question,
     maxOut: MAX_CHAT,

@@ -1,7 +1,8 @@
 // App: the chat pill: c, the input, sending, the card, marks and cites.
-import { expect, setSystemTime, test } from "bun:test"
+import { expect, setSystemTime, spyOn, test } from "bun:test"
 import { rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import * as client from "../../src/ai/client"
 import { mix } from "../../src/theme/theme"
 import { hex } from "../helpers/theme"
 import {
@@ -654,6 +655,20 @@ test("a note over 24k characters: `clipped` on its chip, the system text cut", a
   await keys(s, "type:q", "enter")
   await waitFor(s, () => ai.calls.length === 1)
   expect(ai.calls[0]!.body.messages[0]!.content).toContain("[truncated]")
+})
+
+test("typing reads no note again: the chips' text is taken once per chip list and reload", async () => {
+  aiConfig({ ...OLLAMA, maxChars: 100_000 })
+  const { s } = await mountAI(tmp({ "Slow broth.md": NOTE + "x ".repeat(13_000) }), "Slow broth.md")
+  await keys(s, "c", "type:w")
+  const spy = spyOn(client, "noteText")
+  try {
+    const f = await keys(s, "type:hy so cloudy")
+    expect(f).toContain("why so cloudy▍")
+    expect(spy).not.toHaveBeenCalled()
+  } finally {
+    spy.mockRestore()
+  }
 })
 
 test("a clipped note: a quote from past the clip, which the model never saw, keeps no mark", async () => {

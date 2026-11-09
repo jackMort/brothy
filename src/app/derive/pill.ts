@@ -19,6 +19,7 @@ import { cached } from "../../ui/nav"
 import { resolveLink } from "../../ui/panel"
 import {
   type Arrival,
+  cardClock,
   cardRows,
   chatStage,
   citeSpot,
@@ -53,14 +54,10 @@ export function chatMemo(stdin: string | undefined) {
     /** the chips' notes (`\0`-joined paths), read once per chip list and reload */
     chatRead: cached((chips: string, reload: number) => paths(chips).map((p) => read(p, reload))),
     chatMax: cached((ai: AIConfig | null) => (ai ? maxCharsOf(ai) : 0)),
-    chatSize: cached((thread: Thread, files: readonly DocFile[], input: string, max: number) => {
-      const ctx = chatContext(
-        files.map((f) => noteText(f.src)),
-        thread.chips,
-        thread.turns,
-        input,
-        max,
-      )
+    /** the chips' notes as sent (`noteText`), once per `chatRead` */
+    chatTexts: cached((files: readonly DocFile[]) => files.map((f) => noteText(f.src))),
+    chatSize: cached((thread: Thread, texts: readonly string[], input: string, max: number) => {
+      const ctx = chatContext(texts, thread.chips, thread.turns, input, max)
       return { size: ctx.size, clipped: ctx.notes.filter((n) => n.clipped).map((n) => n.chip.path) }
     }),
     chatRunning: cached(
@@ -155,13 +152,13 @@ const chipKey = (thread: Thread) => thread.chips.map((c) => c.path).join(SEP)
 
 /** What `⏎` would send, its size and clipped chips, and where each cite is. */
 function sentOf(s: UI, memo: Memo, thread: Thread, input: string) {
-  const files = memo.chatRead(chipKey(thread), s.reload)
-  return { ...memo.chatSize(thread, files, input, memo.chatMax(s.ai)), wheres: memo.chatWheres(thread, s.reload) }
+  const texts = memo.chatTexts(memo.chatRead(chipKey(thread), s.reload))
+  return { ...memo.chatSize(thread, texts, input, memo.chatMax(s.ai)), wheres: memo.chatWheres(thread, s.reload) }
 }
 
 /**
  * The pill on screen: null while hidden, in zen, on the welcome page, on a note that can't be read, with the drawer
- * open, or without its thread. `now` keys the card's ink only with motion on.
+ * open, or without its thread. `now` keys the card's ink only while something on it moves (`cardClock`).
  */
 export function pillView(
   s: UI,
@@ -181,7 +178,8 @@ export function pillView(
   const pick = p.pick && { ...p.pick, items: pickFor(s, memo, refs.ix, thread, p.pick.q) }
   const stage = chatStage({ pick, running, card: p.card, thread })
   const view = memo.cardView(running, p.hl, sent.wheres)
-  const cardOut = p.card ? memo.card(t, thread, view, base.geo.w - 4, s.motion ? now : 0, s.motion) : null
+  const clock = cardClock(base, now, s.motion)
+  const cardOut = p.card ? memo.card(t, thread, view, base.geo.w - 4, clock.now, clock.motion) : null
   const tint = inkStep(p.land?.at ?? 0, now, s.motion)
   return { ...base, pick, stage, cardOut, quote: quoteFor(s, memo, opened.view, thread), tint }
 }

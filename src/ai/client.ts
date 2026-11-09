@@ -102,7 +102,9 @@ export function extractJSON(raw: string): unknown {
 }
 
 /** A rough input estimate for cost labels: a token is about 4 code points. */
-export const tokens = (text: string) => Math.ceil([...text].length / 4)
+export const tokens = (text: string) => tokensOf([...text].length)
+/** `tokens` of a text `codePoints` long. */
+export const tokensOf = (codePoints: number) => Math.ceil(codePoints / 4)
 
 /** `~850 tokens`, `~1.3k tokens`, `~12k tokens`. */
 export function fmtTokens(n: number): string {

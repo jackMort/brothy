@@ -45,6 +45,33 @@ describe("chatContext", () => {
     expect(c.size).toBe(Math.ceil(cp(r.system + "why?") / 4))
   })
 
+  test("size is tokens of the request as built, whatever is clipped, cut by the budget, empty or astral", () => {
+    const sentSize = (c: ReturnType<typeof chatContext>, q: string) => {
+      const r = chatRequest(c, q)
+      return Math.ceil(cp(r.system + c.turns.map((m) => m.content).join("") + q) / 4)
+    }
+    const turns = [ex("q1 😀", "a 漢".repeat(30)), ex("q2", "b")]
+    const chips: Chip[] = [A, { path: "/v/c.md", title: 'Say "hi" 😀' }, B]
+    const texts = ["😀x".repeat(CHAT_NOTE_MAX), "short", "z".repeat(500)]
+    for (const max of [1_000_000, cp(CHAT_PROMPT) + 300, cp(CHAT_PROMPT) + 50, 10]) {
+      for (const q of ["why?", "😀 why 漢?"]) {
+        const c = chatContext(texts, chips, turns, q, max)
+        expect(c.size).toBe(sentSize(c, q))
+      }
+    }
+    const c = chatContext(["", "😀".repeat(30)], [A, B], [], "q", cp(CHAT_PROMPT) + 21)
+    expect(c.notes.map((n) => n.clipped)).toEqual([false, true])
+    expect(c.size).toBe(sentSize(c, "q"))
+  })
+
+  test("a note just at the cap goes whole; one code point past it is clipped, surrogate pairs counted once", () => {
+    const at = chatContext(["😀".repeat(CHAT_NOTE_MAX)], [A], [], "q", 1_000_000)
+    expect(at.notes[0]!.clipped).toBe(false)
+    const past = chatContext(["😀".repeat(CHAT_NOTE_MAX + 1)], [A], [], "q", 1_000_000)
+    expect(past.notes[0]!.clipped).toBe(true)
+    expect(past.notes[0]!.text).toBe(`${"😀".repeat(CHAT_NOTE_MAX)}\n[truncated]`)
+  })
+
   test("each note is capped at CHAT_NOTE_MAX and marked clipped", () => {
     const c = chatContext(["x".repeat(CHAT_NOTE_MAX + 10)], [A], [], "q", 1_000_000)
     expect(c.notes[0]!.clipped).toBe(true)

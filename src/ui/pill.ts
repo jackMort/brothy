@@ -127,10 +127,19 @@ export function chatStage(v: Pick<PillView, "pick" | "running" | "card" | "threa
 export const inkStep = (since: number, now: number, motion: boolean) =>
   motion ? Math.max(0, Math.min(3, Math.floor((now - since) / INK_MS))) : 3
 
-/** The ink step of answer character `i`: that of the delta it arrived in; past the log, full. */
-export function charInk(arrivals: readonly Arrival[], i: number, now: number, motion: boolean): number {
-  const a = arrivals.find((x) => x.len > i)
-  return a ? inkStep(a.at, now, motion) : 3
+/**
+ * The ink step of each answer character `i`: that of the delta it arrived in (the first arrival longer than `i`); past
+ * the log, full. Characters asked in order walk the log once; one asked out of order starts the walk over.
+ */
+export function inkWalk(arrivals: readonly Arrival[], now: number, motion: boolean): (i: number) => number {
+  let k = 0
+  let last = -1
+  return (i) => {
+    if (i < last) k = 0
+    last = i
+    while (k < arrivals.length && arrivals[k]!.len <= i) k++
+    return k < arrivals.length ? inkStep(arrivals[k]!.at, now, motion) : 3
+  }
 }
 
 /** The steam frame `now`; STILL_TICK with motion off. */
@@ -323,11 +332,9 @@ const paragraphRows = (paras: Span[][], w: number): Span[][] =>
 
 /** Streaming parts: each character inked by its arrival, marks muted, then the caret at the very end. */
 function streamParas(c: Cx, r: Running): Span[][] {
+  const step = inkWalk(r.arrivals, c.now, c.motion)
   const ink = (run: string, from: number) =>
-    [...safeLine(run)].map((ch, k) => ({
-      text: ch,
-      fg: inkAt(c.t, charInk(r.arrivals, from + k, c.now, c.motion), c.t.text),
-    }))
+    [...safeLine(run)].map((ch, k) => ({ text: ch, fg: inkAt(c.t, step(from + k), c.t.text) }))
   const paras = paragraphs(r.parts, ink, (n) => ({ text: superscript(n), fg: c.t.textMuted }))
   const caret: Span = { text: CARET, fg: footInk(c.t).caret }
   const last = paras.pop() ?? []
@@ -556,14 +563,23 @@ export function quoteTint(spans: Span[], plain: string, n: number, q: CiteQuote,
 
 const INKING = 3 * INK_MS
 const recent = (at: number | null | undefined, now: number) => at != null && now - at < INKING
-const openGlow = (v: PillView, now: number) => v.focus && recent(v.openedAt, now)
+/** What `pillMoving` reads. */
+type Moving = Pick<PillView, "focus" | "openedAt" | "land" | "thread" | "running">
+const openGlow = (v: Moving, now: number) => v.focus && recent(v.openedAt, now)
 /** Folded, the tint fades from the landing; unfolded, the last answer from when it finished. */
-const answerGlow = (v: PillView, now: number) =>
+const answerGlow = (v: Moving, now: number) =>
   v.land ? recent(v.land.at, now) : recent(v.thread.turns.at(-1)?.doneAt, now)
-const arrivalGlow = (v: PillView, now: number) => recent(v.running?.arrivals.at(-1)?.at, now)
+const arrivalGlow = (v: Moving, now: number) => recent(v.running?.arrivals.at(-1)?.at, now)
 
 /** What still moves on the pill: the steam (STEAM_MS frames), something inking (INK_MS frames), or nothing. */
-export function pillMoving(v: PillView, now: number): "steam" | "ink" | null {
+export function pillMoving(v: Moving, now: number): "steam" | "ink" | null {
   if (v.running && !v.running.live) return "steam"
   return openGlow(v, now) || arrivalGlow(v, now) || answerGlow(v, now) ? "ink" : null
 }
+
+/**
+ * The clock `cardRows` draws at: `now` while something on the pill moves; else a still one (motion off draws every
+ * step done, as they all are by then), so the card's memo holds between frames.
+ */
+export const cardClock = (v: Moving, now: number, motion: boolean): { now: number; motion: boolean } =>
+  motion && pillMoving(v, now) ? { now, motion } : { now: 0, motion: false }

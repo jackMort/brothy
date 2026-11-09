@@ -8,17 +8,18 @@ import { mix } from "../../src/theme/theme"
 import { INK_MS } from "../../src/ui/chrome"
 import { type LayoutState, layout } from "../../src/ui/layout"
 import {
+  cardClock,
   cardFoot,
   cardRows,
   cardWindow,
   caretCol,
-  charInk,
   chatStage,
   chipRow,
   citeRange,
   citeSpot,
   frameRows,
   inkStep,
+  inkWalk,
   inputSpans,
   type PillView,
   pickRows,
@@ -96,15 +97,27 @@ describe("motion", () => {
     expect([0, INK_MS, 2 * INK_MS, 9 * INK_MS].map((t) => inkStep(0, t, true))).toEqual([0, 1, 2, 3])
     expect(inkStep(0, 0, false)).toBe(3)
   })
-  test("charInk: a character's step is its arrival's; past the log, full", () => {
+  test("inkWalk: a character's step is its arrival's; past the log, full", () => {
     const log = [
       { len: 5, at: 0 },
       { len: 9, at: 2 * INK_MS },
     ]
-    expect(charInk(log, 2, 2 * INK_MS, true)).toBe(2)
-    expect(charInk(log, 7, 2 * INK_MS, true)).toBe(0)
-    expect(charInk(log, 20, 0, true)).toBe(3)
-    expect(charInk(log, 7, 0, false)).toBe(3)
+    expect(inkWalk(log, 2 * INK_MS, true)(2)).toBe(2)
+    expect(inkWalk(log, 2 * INK_MS, true)(7)).toBe(0)
+    expect(inkWalk(log, 0, true)(20)).toBe(3)
+    expect(inkWalk(log, 0, false)(7)).toBe(3)
+  })
+  test("inkWalk: walking the characters in order gives each the first arrival past it, a log that shrank too", () => {
+    // cleaning can shorten the reply (a <think> closed), so the lengths need not grow
+    const log = [3, 8, 6, 12, 12, 20].map((len, k) => ({ len, at: k * INK_MS }))
+    const first = (i: number) => {
+      const a = log.find((x) => x.len > i)
+      return a ? inkStep(a.at, 4 * INK_MS, true) : 3
+    }
+    const walk = inkWalk(log, 4 * INK_MS, true)
+    const ids = Array.from({ length: 24 }, (_, i) => i)
+    expect(ids.map((i) => walk(i))).toEqual(ids.map(first))
+    expect([5, 2, 15].map((i) => walk(i))).toEqual([5, 2, 15].map(first)) // back again: it starts over
   })
   test("steamTick: a frame per STEAM_MS; STILL_TICK with motion off", () => {
     expect(steamTick(0, 3 * STEAM_MS + 1, true)).toBe(3)
@@ -318,6 +331,19 @@ describe("the card", () => {
     // "One" arrived long ago: full ink; "Two" (after the 2 separator characters) just now: not yet
     expect(out.rows[2]!.find((x) => x.text.includes("One"))!.fg).toBe(t.text)
     expect(out.rows[4]!.find((x) => x.text.includes("T"))!.fg).not.toBe(t.text)
+  })
+  test("cardClock: the card is drawn at `now` only while something on it moves; else a still clock that draws the same", () => {
+    const answered = viewOf({ card: true, focus: true, openedAt: 0 })
+    expect(cardClock(answered, 2 * INK_MS, true)).toEqual({ now: 2 * INK_MS, motion: true }) // the border inks
+    const still = cardClock(answered, 99 * INK_MS, true)
+    expect(still).toEqual({ now: 0, motion: false })
+    expect(cardClock(answered, 2 * INK_MS, false)).toEqual({ now: 0, motion: false })
+    const view = { running: null, hl: null, wheres: [["Strain and cool", "Simmering", "n"]] }
+    expect(cardRows(t, answered.thread, view, W, still.now, still.motion)).toEqual(
+      cardRows(t, answered.thread, view, W, 99 * INK_MS, true),
+    )
+    const thinking = viewOf({ card: true, openedAt: -1e9, running: { ...running, at: 0, live: false } })
+    expect(cardClock(thinking, 99 * INK_MS, true)).toEqual({ now: 99 * INK_MS, motion: true }) // the steam
   })
   test("cardWindow: pinned to the bottom (null), or from `top`; `below` counts rows under it; cardFoot ` ↓ n more `", () => {
     const rows = Array.from({ length: 10 }, (_, i) => [{ text: String(i) }])
