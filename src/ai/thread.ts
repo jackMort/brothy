@@ -28,7 +28,7 @@ export interface Chip {
   title: string
 }
 /** A verified mark: `n` 1..k after renumbering, the note and the words it rests on, the source line they start on. */
-interface Cite {
+export interface Cite {
   n: number
   path: string
   quote: string

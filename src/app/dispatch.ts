@@ -24,7 +24,7 @@ function dispatch(actions: Actions, modes: Mode[], k: KeyEvent, skip: readonly K
 }
 
 /** The open popup's bindings, else typing into it; false with no popup open. */
-function makePopupKey({ workspace, switcher, popups, graph }: Features, actions: Actions) {
+function makePopupKey(c: AppCtx, { workspace, switcher, popups, graph, pill }: Features, actions: Actions) {
   const { themeSet, promptType } = popups
   /** The popups that take every key, in precedence order: each one's mode, and where a printable key no binding takes goes. */
   const popupModes: { mode: Mode; open: (s: UI) => boolean; type?: (s: UI, text: string) => void }[] = [
@@ -44,6 +44,8 @@ function makePopupKey({ workspace, switcher, popups, graph }: Features, actions:
       type: (s, text) => graph.graphType((s.graph?.q ?? "") + text),
     },
     { mode: "graph", open: (s) => !!s.graph },
+    // a focused pill derive doesn't show (zen, behind the drawer, a note that can't be read) takes no keys
+    { mode: "chat", open: (s) => !!s.pill?.focus && c.derive().pill !== null, type: (_, text) => pill.pillType(text) },
     { mode: "prompt", open: (s) => !!s.prompt, type: (s, text) => s.prompt && promptType(s.prompt.value + text) },
   ]
 
@@ -92,7 +94,7 @@ function makeModalKey(c: AppCtx, { links, popups }: Features, actions: Actions) 
 export function makeOnKey(c: AppCtx, f: Features, actions: Actions, docMode: () => Ctx) {
   const { ui, derive } = c
   const { welcomeKey, stopWelcome } = f.workspace
-  const popupKey = makePopupKey(f, actions)
+  const popupKey = makePopupKey(c, f, actions)
   const modalKey = makeModalKey(c, f, actions)
 
   /** Zen, the welcome page, or the global keys and the focused view's. */

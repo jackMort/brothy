@@ -39,10 +39,9 @@ import { normalize } from "../markdown/lexer"
 import { type Geometry, type PictureOpts, type Rendered, render } from "../markdown/render"
 import { renderSource } from "../markdown/source"
 import { type Stats, stats, wordStats } from "../markdown/stats"
-import { type DocFile, readDoc } from "../notes/doc"
+import { type DocFile, readDoc, readNote } from "../notes/doc"
 import { type FileNode, rankNotes, visibleRows } from "../notes/files"
 import { fsDirIO, loadProjects, openRows, type ProjectEntry } from "../notes/projects"
-import { MAX_BYTES } from "../notes/stdin"
 import { recentSection, searchVault, switchRows, type VaultIndex } from "../notes/vault"
 import { extractLinks } from "../notes/wikilinks"
 import { STDIN } from "../notes/workspace"
@@ -57,7 +56,6 @@ import {
   type ChangeState,
   type ChangeView,
   type FileMeta,
-  fmtSize,
   type InfoItem,
   infoItems,
   type LinkRef,
@@ -67,10 +65,11 @@ import {
   type SummaryView,
 } from "../ui/panel"
 import { halfBlocks } from "../ui/picture"
-import type { Arrival } from "../ui/pill"
+import { type Arrival, PILL_ROOM } from "../ui/pill"
 import { proofRows } from "../ui/proof"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import { sectionRanges, wordSuffix } from "../ui/zen"
+import { chatMemo, pillShown, pillView } from "./derive/pill"
 import {
   changeSideAt,
   filesCursor,
@@ -102,13 +101,7 @@ import type { Explained, FileRow, Job, UI } from "./store"
 /** Memo builders for the open note: read, lexed and rendered, its properties, stats and AI hashes. */
 function documentMemo(stdin: string | undefined) {
   return {
-    read: cached((path: string, nonce: number): DocFile => {
-      if (path !== STDIN || stdin === undefined) return readDoc(path, nonce)
-      if (Buffer.byteLength(stdin) > MAX_BYTES) {
-        return { src: "", info: null, error: `input too large (${fmtSize(Buffer.byteLength(stdin))}, limit 5 MB)` }
-      }
-      return { src: stdin, info: null, error: null }
-    }),
+    read: cached((path: string, nonce: number): DocFile => readNote(path, nonce, stdin)),
     fm: cached(parseFrontMatter),
     picFiles: cached(pictureFiles),
     // the sheet's half-block rows for a decoded image: the rows, not the raster, go on to the component
@@ -390,7 +383,15 @@ function cachedAsk() {
 
 /** The memoized builders behind `derive()` and render (`cached`: one entry each, so one call site with primitive args); `stdin` is the piped document. */
 export function makeMemo(stdin: string | undefined) {
-  return { ...documentMemo(stdin), ...panelMemo(), ...viewMemo(), ...pickerMemo(), ...askRowsMemo(), ...graphMemo() }
+  return {
+    ...documentMemo(stdin),
+    ...panelMemo(),
+    ...viewMemo(),
+    ...pickerMemo(),
+    ...askRowsMemo(),
+    ...graphMemo(),
+    ...chatMemo(stdin),
+  }
 }
 /** The memo table: one `cached` builder per derived value. */
 export type Memo = ReturnType<typeof makeMemo>
@@ -434,6 +435,7 @@ export function makeDerive({
   sidebarSeen,
   scrolls,
   matchSeen,
+  chatInk,
 }: DeriveRefs) {
   /** Everything computed from the store; cheap to call repeatedly thanks to `memo`. The steps run in this order. */
   return () => {
@@ -446,7 +448,8 @@ export function makeDerive({
     const note = truncationNote(s, L)
     const info = infoPanel(s, L, opened, memo, jobs.current)
     const switcher = switcherList(s, memo, vault.current.ix, dims.current.W, jobs.current)
-    const scroll = scrollState(s, L, view, memo, scrolls.current)
+    // the pill keeps its rows and the clear one above it at the bottom: the note scrolls on until its end clears them
+    const scroll = scrollState(s, L, view, memo, scrolls.current, pillShown(s, L, file) ? PILL_ROOM : 0)
     const { scrollKey, geo, maxTop, top, tw } = scroll
     const matches = matchState(s, view, memo, matchSeen)
     // the heading the reader is in: last one at (or just above) the top line
@@ -481,6 +484,15 @@ export function makeDerive({
       matchIdx: matchIndex(matches, s.matchLine),
       currentHeading,
       land: landingView(s, L, doc, info.cv, memo, jobs.current),
+      pill: pillView(
+        s,
+        L,
+        opened,
+        memo,
+        { jobs: jobs.current, chatInk: chatInk.current, ix: vault.current.ix },
+        t,
+        Date.now(),
+      ),
       proof: proofSheet(s, dims.current.W, dims.current.H, info.cv, info.title, memo),
       picSheet: pictureSheet(
         s,

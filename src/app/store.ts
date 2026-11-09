@@ -74,7 +74,7 @@ type DeltaState = {
   earlier: Explained | null
 }
 /** The chat pill on screen (`app/pill.ts`): `focus` takes the keys, `card` shows the thread, `land` is set while folded on a cite. */
-type PillState = {
+export type PillState = {
   /** the thread on screen */
   path: string
   focus: boolean

@@ -20,11 +20,13 @@ import type { InfoItem } from "../ui/panel"
 import { errText, fadeStep, HINT_HOLD } from "../ui/status"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
+import type { Derived } from "./derive"
 import { makeOnKey } from "./dispatch"
 import type { Graph } from "./graph"
 import type { Ctx, KeyId } from "./keymap"
 import type { Links } from "./links"
 import type { PictureSheet } from "./picture-sheet"
+import type { Pill } from "./pill"
 import type { Popups } from "./popups"
 import type { Proof } from "./proof"
 import type { Focus, UI } from "./store"
@@ -57,6 +59,7 @@ export interface Features {
   proof: Proof
   pictureSheet: PictureSheet
   graph: Graph
+  pill: Pill
   edit: ((argv: string[], piped: boolean) => EditResult | void | Promise<EditResult | void>) | undefined
 }
 
@@ -82,7 +85,7 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makeProofActions(c, f),
     ...makePictureActions(f),
     ...makeGraphActions(f),
-    ...makeChatActions(),
+    ...makeChatActions(f),
   }
   const { currentCtx, pokeHints } = keys
   return {
@@ -119,14 +122,13 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
   /** Context id now: an open popup, else zen, else the panel view or the document. */
   const currentCtx = (): Ctx => {
     const s = ui.current
-    const popup = popupCtx(s)
+    const popup = popupCtx(s, () => derive().pill !== null)
     if (popup) return popup
     if (liveLabels()) return "label"
     if (s.help) return "help"
     const d = derive()
     if (d.L.zen) return "zen"
-    const doc = docMode()
-    return doc === "doc" && d.land ? "landing" : doc
+    return docCtx(docMode(), d)
   }
   const hintsVisible = () => {
     const s = ui.current
@@ -137,8 +139,18 @@ function makeKeyContext(c: AppCtx, { liveLabels }: Pick<Links, "liveLabels">) {
 }
 type KeyContext = ReturnType<typeof makeKeyContext>
 
-/** The open popup's context (they take every key, in this order), else null. */
-function popupCtx(s: UI): Ctx | null {
+/** The document's context while folded on a chat cite (`chatLanded`) or landed on a change (`landing`), else `doc`. */
+function docCtx(doc: Ctx, d: Derived): Ctx {
+  if (doc !== "doc") return doc
+  if (d.s.pill?.land && d.pill) return "chatLanded"
+  return d.land ? "landing" : doc
+}
+
+/**
+ * The open popup's context (they take every key, in this order), else null. `pillShown`: the focused pill takes the
+ * keys only while it is on screen, as dispatch has it.
+ */
+function popupCtx(s: UI, pillShown: () => boolean): Ctx | null {
   const open: [unknown, Ctx][] = [
     [s.themePick, "theme"],
     [s.zenOrig !== null, "zenSettings"],
@@ -147,6 +159,7 @@ function popupCtx(s: UI): Ctx | null {
     [s.proof, "proof"],
     [s.picture, "picture"],
     [s.graph, s.graph?.typing ? "graphFilter" : "graph"],
+    [s.pill?.focus && pillShown(), "chat"],
     [s.prompt, "prompt"],
   ]
   return open.find(([on]) => on)?.[1] ?? null

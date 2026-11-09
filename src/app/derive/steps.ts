@@ -405,15 +405,25 @@ export function openerList(s: UI, memo: Memo) {
 
 // ------------------------------------------------------------- reading position
 
-/** The scroll entry for this note and view, remapped after a re-layout, and the top line clamped to `maxTop`. */
-export function scrollState(s: UI, L: Layout, view: Rendered, memo: Memo, scrolls: Map<string, ScrollEntry>) {
+/**
+ * The scroll entry for this note and view, remapped after a re-layout, and the top line clamped to `maxTop`; `room`
+ * body rows at the bottom are covered (the chat pill), so the note may scroll that much further.
+ */
+export function scrollState(
+  s: UI,
+  L: Layout,
+  view: Rendered,
+  memo: Memo,
+  scrolls: Map<string, ScrollEntry>,
+  room: number,
+) {
   const scrollKey = `${s.openPath}:${s.source ? "source" : "preview"}`
   const geo = memo.geo(view)
   // typewriter: the scroll top *is* the reading line, so it may go down to the last line
   const tw = L.zen && s.zenCfg.flow === "scroll" && s.zenCfg.typewriter
   // pages: the scroll top is the page anchor (its section is the page), so it may be any line too
   const pages = L.zen && s.zenCfg.flow === "pages"
-  const maxTop = tw || pages ? Math.max(0, view.lines.length - 1) : Math.max(0, view.lines.length - L.CH)
+  const maxTop = tw || pages ? Math.max(0, view.lines.length - 1) : Math.max(0, view.lines.length - L.CH + room)
   const entry = scrolls.get(scrollKey)
   if (entry && entry.geo !== geo) {
     // re-laid out (resize, reload): keep the reading position

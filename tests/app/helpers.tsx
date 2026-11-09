@@ -211,7 +211,8 @@ export const OLLAMA = { provider: "ollama", model: "llama3.2" }
 /** A fetch whose streams the test feeds: send(i, text), fail(i, message), end(i). */
 export function aiStub() {
   const streams: ReadableStreamDefaultController<Uint8Array>[] = []
-  const calls: { url: string; body: { messages: { content: string }[] }; signal?: AbortSignal | null }[] = []
+  const calls: { url: string; body: { messages: { role: string; content: string }[] }; signal?: AbortSignal | null }[] =
+    []
   const f = (async (url: string, init: RequestInit) => {
     calls.push({ url: String(url), body: JSON.parse(String(init.body)), signal: init.signal })
     const body = new ReadableStream<Uint8Array>({ start: (c) => void streams.push(c) })

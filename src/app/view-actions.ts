@@ -312,16 +312,16 @@ export function makePictureActions({ pictureSheet: p }: Pick<Features, "pictureS
 }
 
 /** The chat pill's keys: placeholders until its actions land (the keys, the footer and help read the keymap). */
-export function makeChatActions() {
+export function makeChatActions({ pill }: Pick<Features, "pill">) {
   return {
-    chat: typing,
-    chatSend: typing,
-    chatMove: typing,
-    chatScroll: typing,
-    chatErase: typing,
-    chatClear: typing,
-    chatComplete: typing,
-    chatEsc: typing,
+    chat: pill.pillOpen,
+    chatSend: pill.pillSend,
+    chatMove: (k) => pill.pillMove(isDown(k) ? 1 : -1),
+    chatScroll: (k) => pill.pillScroll(isDown(k) ? 1 : -1),
+    chatErase: pill.pillErase,
+    chatClear: pill.pillClear,
+    chatComplete: pill.pickAdd,
+    chatEsc: pill.pillEsc,
     chatType: typing,
     chatFollow: typing,
     chatWalk: typing,

@@ -27,6 +27,7 @@ import {
 import { panelBox } from "./app/Panel"
 import { makePictureSheet } from "./app/picture-sheet"
 import { DEFAULT_CELL, PictureCache } from "./app/pictures"
+import { makePill } from "./app/pill"
 import { makePopups } from "./app/popups"
 import { makeProof } from "./app/proof"
 import { type FileRow, type GraphImage, initUI, type Job, MIN_H, MIN_W, type Spot, type UI, ZEN_DIM } from "./app/store"
@@ -124,6 +125,7 @@ export function App({
   const popups = makePopups(ctx)
   const proof = makeProof(ctx, links)
   const graph = makeGraph(ctx, links, switcher)
+  const pill = makePill(ctx, links)
   const { currentCtx, pokeHints, outlineGo, infoGo, onKey } = makeActions(ctx, {
     aiJobs,
     links,
@@ -134,6 +136,7 @@ export function App({
     proof,
     pictureSheet,
     graph,
+    pill,
     edit: editImpl,
   })
 
@@ -162,7 +165,7 @@ export function App({
   const ghostEl = ghostLine(ctx, d, {
     ctx: ctxNow,
     pinned: PINNED.includes(ctxNow),
-    hints: (c) => footerHints(c, footer, footerWords(d), d.askStage),
+    hints: (c) => footerHints(c, footer, footerWords(d), d.askStage, d.pill?.stage),
   })
 
   const helpEl = helpOverlay(ctx, d, { version: VERSION, helpGo: popups.helpGo })
@@ -288,7 +291,12 @@ function footerWords(d: Derived): Partial<Record<KeyId, string>> {
   if (dWord) words.explainChange = words.proofExplain = dWord
   words.pictures = d.picMode === "pixels" ? "text" : "pixels"
   if (d.graph) words.graphRender = d.graph.mode === "pixels" ? "braille" : "pixels"
-  return { ...words, ...stopWords(d.infoRows[d.linkRows[d.infoCur] ?? -1], d.s.tldrOpen) }
+  return { ...words, ...stopWords(d.infoRows[d.linkRows[d.infoCur] ?? -1], d.s.tldrOpen), ...chatWords(d.pill) }
+}
+
+/** The pill's: typed text makes `⏎` a send in every stage but the `[[` list. */
+function chatWords(v: Derived["pill"]): Partial<Record<KeyId, string>> {
+  return v?.input && v.stage !== "pick" ? { chatSend: "send" } : {}
 }
 
 /** On Info's cursor row: `↑↓ move  ⏎ more|less` (the TL;DR's stop), `↑↓ changes  ⏎ proof` (the Changed label), `⏎ go to` (a change), `⏎ all|fewer` (`+ n more`). */

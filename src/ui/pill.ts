@@ -13,6 +13,8 @@ import { STEAM_MS, STILL_TICK, steamRows } from "./welcome"
 
 const PILL_W = 72
 const PILL_H = 3
+/** The body rows the pill takes from the bottom while it shows: itself and the clear row above it. */
+export const PILL_ROOM = PILL_H + 1
 /** A chip's title is cut to this; the input keeps at least INPUT_MIN_W columns beside the chips. */
 const CHIP_MAX_W = 16
 const INPUT_MIN_W = 20
@@ -23,7 +25,7 @@ const CARD_STEAM_H = 3
 const ERROR_ROWS = 3
 /** The `[[` list: its width (a frame's inner width is PICK_W − 4) and most rows. */
 const PICK_W = 36
-const PICK_ROWS = 5
+export const PICK_ROWS = 5
 const PICK_MARK = 2
 const PICK_HINT = "  linked from here"
 
@@ -45,13 +47,13 @@ interface PillGeo {
   top: number
   cardMax: number
 }
-interface PickItem {
+export interface PickItem {
   path: string
   name: string
   linked: boolean
 }
 /** The exchange in flight: its answer so far, arrivals, start, whether text came, the model and its seconds. */
-interface Running {
+export interface Running {
   parts: Part[]
   arrivals: readonly Arrival[]
   at: number

@@ -119,7 +119,7 @@ const loopback = (h: string) =>
   h === "localhost" || h === "[::1]" || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
 
 /** What a request to `cfg` may send, in characters: its own `maxChars`, else the preset's, else CUSTOM_MAX. */
-function maxCharsOf(cfg: AIConfig): number {
+export function maxCharsOf(cfg: AIConfig): number {
   const preset = cfg.provider === "custom" ? undefined : PRESETS[cfg.provider]
   return cfg.maxChars ?? preset?.maxChars ?? CUSTOM_MAX
 }
