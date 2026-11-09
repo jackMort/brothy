@@ -446,10 +446,10 @@ function pictureLabels({ s, L, t, view, top }: Derived, bottom: number) {
   })
 }
 
-/** Line `n` of the note: find matches marked, a folded chat cite's quote tinted, the `f` labels over its links. */
+/** Line `n` of the note: a folded chat cite's quote tinted, find matches marked over it, the `f` labels over its links. */
 function lineSpans(d: Derived, n: number): Span[] {
   const { s, L, t, view, top } = d
-  let spans = chatTint(d, n, markMatches(view.lines[n]?.spans ?? [], s.query, t))
+  let spans = markMatches(chatTint(d, n, view.lines[n]?.spans ?? []), s.query, t)
   const lb = s.labels && s.labels.geo === labelGeo(s, L.CW, view.lines.length, top) ? s.labels : null
   lb?.spots.forEach((sp, k) => {
     const label = lb.labels[k]!

@@ -855,7 +855,21 @@ test("a quote across a callout's two lines lands in Preview, tinted from its fir
   expect(f).toContain("1 of 1")
   expect(f).not.toContain("quote no longer in the note")
   expect(tintedRows(s)[0]).toBe("broth slowly")
-  expect(tintedRows(s)[1]).toEndWith("through a sieve")
+  expect(tintedRows(s)[1]).toBe("through a sieve")
+})
+
+test("a find hit inside the tinted quote keeps the find highlight's colours", async () => {
+  const { s } = await landOn(
+    "> [!tip] Strain\n> Pour the broth slowly\n> through a sieve.",
+    "broth slowly through a sieve",
+  )
+  await keys(s, "/", "type:slowly", "enter")
+  const hit = spansOf(s).find((sp) => sp.text === "slowly")
+  expect(hit).toBeDefined()
+  expect(hex(hit!.bg)).toBe(B.secondary)
+  expect(hex(hit!.fg)).toBe(B.background)
+  // the rest of the quote is still tinted
+  expect(tintedRows(s).join(" ")).toContain("broth")
 })
 
 test("a quote from code lands in Preview as written, with no toast: an inline entity, a fenced link", async () => {

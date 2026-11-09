@@ -555,6 +555,18 @@ describe("list, tint, range, motion", () => {
       bg: "#123456",
     })
   })
+  test("quoteTint: a continuation row in a blockquote or callout starts after the bar, not at it", () => {
+    const q = { row: 1, col: 2, endRow: 3, endCol: 10, left: 0 }
+    const tinted = (row: string, n: number) =>
+      quoteTint([{ text: row }], row, n, q, "#123456")
+        .filter((sp) => sp.bg === "#123456")
+        .map((sp) => sp.text)
+    expect(tinted("▎ first row", 1)).toEqual(["first row"])
+    expect(tinted("▎ second row of it", 2)).toEqual(["second row of it"])
+    expect(tinted("▎ ▎ nested row", 2)).toEqual(["nested row"])
+    expect(tinted("  ▎ indented bar", 2)).toEqual(["indented bar"])
+    expect(tinted("▎ last of it", 3)).toEqual(["last of "])
+  })
   test("pillMoving: the border inking, a thinking steam, a recent arrival or glow, the tint; else null", () => {
     expect(pillMoving(viewOf({ openedAt: 0 }), INK_MS)).toBe("ink")
     expect(pillMoving(viewOf({ openedAt: 0 }), 10 * INK_MS)).toBeNull()

@@ -568,13 +568,16 @@ export function citeSpot(
   return { from, quote: q && { ...q, row: q.row + from, endRow: q.endRow + from } }
 }
 
+/** What a continuation row starts with before its text: blanks and the `▎ ` bars. */
+const BAR_LEAD = /^\s*(?:▎\s*)*/
+
 /**
  * Row `n`'s spans with the part of quote `q` on it on `bg`: from the quote's column on its first row, else from the
- * row's text (past `left` and any indent), to its end column on its last row. `plain` is the row's `view.plain`.
+ * row's text (past `left`, any indent and the `▎` bars of a blockquote or callout), to its end column on its last row. `plain` is the row's `view.plain`.
  */
 export function quoteTint(spans: Span[], plain: string, n: number, q: CiteQuote, bg: string): Span[] {
   if (n < q.row || n > q.endRow) return spans
-  const start = n === q.row ? q.col : q.left + Math.max(0, plain.slice(q.left).search(/\S/))
+  const start = n === q.row ? q.col : q.left + (BAR_LEAD.exec(plain.slice(q.left))?.[0].length ?? 0)
   return tintSpans(spans, start, n === q.endRow ? q.endCol : Number.POSITIVE_INFINITY, bg)
 }
 
