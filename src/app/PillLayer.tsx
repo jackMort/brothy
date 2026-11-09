@@ -5,6 +5,7 @@
 import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
 import type { Span } from "../lib/spans"
+import { surface } from "../theme/theme"
 import {
   cardFoot,
   cardWindow,
@@ -63,10 +64,14 @@ export function pillLayer(d: Derived, a: PillActions): ReactNode[] {
   return [bandBlock(d, v), pillBlock(d, v, a), cardBlock(d, v, a), pickBlock(d, v, a)].filter((n) => n !== null)
 }
 
-/** The band: the pill's rows and the row above it cleared, the gutter's marks included. */
-function bandBlock({ L, t }: Derived, v: PillView): ReactNode {
+/**
+ * The band: the pill's rows and the row above it, the gutter's 3 columns included, on the page's own fill (clear with
+ * `T`). The note draws no text there (`noteLines` stops above it); the band keeps whatever else lies under it out.
+ */
+function bandBlock({ L, t, s }: Derived, v: PillView): ReactNode {
   const w = L.CW + GUTTER
-  const rows = Array.from({ length: BAND_ROWS }, () => [{ text: " ".repeat(w), bg: t.background }])
+  const bg = surface(t, s.transparent).main
+  const rows = Array.from({ length: BAND_ROWS }, () => [{ text: " ".repeat(w), bg }])
   return block("chat-band", -GUTTER, v.geo.top - 1, w, rows)
 }
 

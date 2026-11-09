@@ -2,7 +2,8 @@
 import { expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
-import { filler, HINT_ROW, keys, OLLAMA, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
+import { hex } from "../helpers/theme"
+import { B, filler, HINT_ROW, keys, OLLAMA, useAppHarness, W120, waitFor, waitFrame, walk } from "./helpers"
 
 const { tmp, mount, mountAI, aiConfig, openNote } = useAppHarness()
 
@@ -299,7 +300,7 @@ test("esc while streaming: the question is back in the input", async () => {
   expect(f).toContain("first?▍")
 })
 
-/** A reply of `n` sentences, each its own wrapped row or more. */
+/** A reply of `n` sentences, a paragraph each (a blank row apart in the card). */
 const longReply = (n: number) =>
   Array.from({ length: n }, (_, i) => `Sentence ${i} of a long answer that goes on.`).join("\n\n")
 
@@ -383,4 +384,26 @@ test("a click on the minimap while the pill has focus leaves the page where it w
   const g = await keys(s)
   expect(g.split("\n")[3]).toBe(f.split("\n")[3])
   expect(hints(g)).toContain("⏎ send")
+})
+
+/** The pill's band at 120×30: the clear row (24) and the pill's rows (25..27). */
+const BAND = [24, 25, 26, 27]
+/** Note text drawn on the band's rows (under the pill), by the text renderables there. */
+const textUnderPill = (s: Awaited<ReturnType<typeof mount>>) =>
+  walk(s.renderer.root).flatMap((r) => {
+    const text = "plainText" in r ? String(r.plainText) : ""
+    return BAND.includes(r.screenY) && text.includes("filler") ? [text] : []
+  })
+
+test("the band follows the page's background: transparent with T, the theme's without; no note text under the pill", async () => {
+  aiConfig(OLLAMA)
+  const { s } = await mountAI(tmp({ "long.md": `# Long\n\n${filler(60)}\n` }), "long.md", { size: W120 })
+  await keys(s, "c")
+  const clear = () => s.captureSpans().lines[24]!.spans
+  expect(clear().some((sp) => hex(sp.bg) === B.background)).toBe(true)
+  expect(textUnderPill(s)).toEqual([])
+  await keys(s, "esc", "T", "c")
+  expect(clear().every((sp) => sp.bg.a === 0)).toBe(true)
+  expect(textUnderPill(s)).toEqual([])
+  expect(s.captureCharFrame().split("\n")[24]!.trim()).toBe("")
 })

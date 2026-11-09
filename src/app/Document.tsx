@@ -359,7 +359,7 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
   const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
-      {Array.from({ length: foot.length ? CH : Math.min(CH, view.lines.length - top) }, (_, i) =>
+      {Array.from({ length: Math.min(pillCut(d), foot.length ? CH : view.lines.length - top) }, (_, i) =>
         i >= footAt ? (
           <Row key={`change-foot-${i - footAt}`} spans={dim(foot[i - footAt]!)} />
         ) : (
@@ -382,6 +382,9 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
     </box>
   )
 }
+
+/** The rows above the chat pill's band (its clear row and its 3 rows draw no text), all CH while the pill is hidden. */
+const pillCut = ({ pill, L }: Derived) => (pill ? pill.geo.top - 1 : L.CH)
 
 /** The spot is a picture's label on its reserved rows (a blank row has no text to draw it in, an image sits under it). */
 function onReserved(view: Rendered, sp: LinkSpot) {
