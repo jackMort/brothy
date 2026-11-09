@@ -264,6 +264,25 @@ describe("the card", () => {
     const second = out.rows.findIndex((r, i) => i > 0 && text(r) === "› why cloudy?")
     expect(text(out.rows[second - 1]!)).toBe("")
   })
+  test("paragraphs: a blank line in the answer is a blank row between wrapped paragraphs; the cite stops follow", () => {
+    const two = { ...DONE, parts: ["First part", 1, ".\n\n  Second\npart", 2, "."] }
+    const out = rowsOf({}, { path: "/n.md", chips: [], turns: [two] })
+    expect(out.rows.slice(2, 5).map(text)).toEqual(["  First part¹.", "", "  Second part²."])
+    expect(text(out.rows[out.stops[0]!.row]!)).toBe("  ¹ Strain and cool · “do not press the bones”")
+    expect(out.stops.map((x) => x.row)).toEqual([7, 8, 9])
+  })
+  test("paragraphs while streaming: a blank row between them, each character inked by its arrival, the caret at the end", () => {
+    const arrivals = [
+      { len: 3, at: 0 },
+      { len: 99, at: 10_000 },
+    ]
+    const running = { parts: ["One\n\nTwo"], arrivals, at: 0, live: true, model: "m", secs: 1 }
+    const out = cardRows(t, pendingThread, { running, hl: null, wheres: [] }, W, 10_000, true)
+    expect(out.rows.slice(2, 5).map(text)).toEqual(["  One", "", "  Two▍"])
+    // "One" arrived long ago: full ink; "Two" (after the 2 separator characters) just now: not yet
+    expect(out.rows[2]!.find((x) => x.text.includes("One"))!.fg).toBe(t.text)
+    expect(out.rows[4]!.find((x) => x.text.includes("T"))!.fg).not.toBe(t.text)
+  })
   test("cardWindow: pinned to the bottom (null), or from `top`; `below` counts rows under it; cardFoot ` ↓ n more `", () => {
     const rows = Array.from({ length: 10 }, (_, i) => [{ text: String(i) }])
     expect(cardWindow(rows, 4, null)).toMatchObject({ top: 6, below: 0 })

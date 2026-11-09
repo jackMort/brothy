@@ -266,29 +266,56 @@ function thinkingRows(c: Cx, r: Running): Span[][] {
 const markSpan = (t: Theme, n: number, fg: string, sel: boolean): Span =>
   sel ? { text: superscript(n), fg, attr: A.BOLD, bg: t.backgroundElement } : { text: superscript(n), fg }
 
-/** Streaming parts: each character inked by its arrival, marks muted, then the caret. */
-function streamSpans(c: Cx, r: Running): Span[] {
-  const out: Span[] = []
+/** A blank line between paragraphs, and the blank space after it. */
+const PARA_BREAK = /(\n[ \t]*\n\s*)/
+
+/**
+ * Answer parts as paragraphs of spans: a text part is split on its blank lines (a single newline stays a space, through
+ * `safeLine`); `text(run, pos)` draws a run that starts at character `pos` of the reply, `mark` a mark. Empty paragraphs
+ * are dropped.
+ */
+function paragraphs(parts: Part[], text: (run: string, pos: number) => Span[], mark: (n: number) => Span): Span[][] {
+  const out: Span[][] = [[]]
   let pos = 0
-  for (const p of r.parts) {
+  for (const p of parts) {
     if (typeof p === "number") {
-      out.push({ text: superscript(p), fg: c.t.textMuted })
+      out.at(-1)!.push(mark(p))
       pos += String(p).length + 2
       continue
     }
-    for (const ch of safeLine(p))
-      out.push({ text: ch, fg: inkAt(c.t, charInk(r.arrivals, pos++, c.now, c.motion), c.t.text) })
+    p.split(PARA_BREAK).forEach((run, k) => {
+      if (k % 2) out.push([])
+      else out.at(-1)!.push(...text(run, pos))
+      pos += run.length
+    })
   }
-  return mergeSpans([...out, { text: CARET, fg: footInk(c.t).caret }])
+  return out.map(mergeSpans).filter((r) => spanWidth(r) > 0)
+}
+
+/** Paragraphs wrapped with the 2-column indent, a blank row between them. */
+const paragraphRows = (paras: Span[][], w: number): Span[][] =>
+  paras.flatMap((p, i) => [...(i ? [[]] : []), ...wrap(p, w, [pad(2)])])
+
+/** Streaming parts: each character inked by its arrival, marks muted, then the caret at the very end. */
+function streamParas(c: Cx, r: Running): Span[][] {
+  const ink = (run: string, from: number) =>
+    [...safeLine(run)].map((ch, k) => ({
+      text: ch,
+      fg: inkAt(c.t, charInk(r.arrivals, from + k, c.now, c.motion), c.t.text),
+    }))
+  const paras = paragraphs(r.parts, ink, (n) => ({ text: superscript(n), fg: c.t.textMuted }))
+  const caret: Span = { text: CARET, fg: footInk(c.t).caret }
+  const last = paras.pop() ?? []
+  return [...paras, mergeSpans([...last, caret])]
 }
 
 /** A finished answer: text in `text`, marks glowing in from `doneAt`, the selected one bold. */
-function answerSpans(c: Cx, e: Exchange, sel: number | null): Span[] {
+function answerParas(c: Cx, e: Exchange, sel: number | null): Span[][] {
   const glow = inkAt(c.t, inkStep(e.doneAt ?? 0, c.now, c.motion), c.t.primary)
-  return mergeSpans(
-    e.parts.map((p) =>
-      typeof p === "number" ? markSpan(c.t, p, glow, p === sel) : { text: safeLine(p), fg: c.t.text },
-    ),
+  return paragraphs(
+    e.parts,
+    (run) => [{ text: safeLine(run), fg: c.t.text }],
+    (n) => markSpan(c.t, n, glow, n === sel),
   )
 }
 
@@ -325,7 +352,7 @@ const thinkingExchange = (c: Cx, head: Span[][], r: Running): Made => ({
 
 function streamingExchange(c: Cx, head: Span[][], r: Running): Made {
   const tail: Tail = { status: `${r.model} · ${r.secs} s`, model: r.model, key: "esc", word: "cancel", drop: "status" }
-  return { rows: [...head, ...wrap(streamSpans(c, r), c.w, [pad(2)]), [], ruleRow(c.t, c.w, tail)], stops: [] }
+  return { rows: [...head, ...paragraphRows(streamParas(c, r), c.w), [], ruleRow(c.t, c.w, tail)], stops: [] }
 }
 
 function errorExchange(c: Cx, head: Span[][], error: string): Made {
@@ -339,7 +366,7 @@ function errorExchange(c: Cx, head: Span[][], error: string): Made {
 
 function answerExchange(c: Cx, head: Span[][], e: Exchange, i: number, view: CardView): Made {
   const sel = view.hl?.[0] === i ? view.hl[1] : null
-  const body = [...head, ...wrap(answerSpans(c, e, sel), c.w, [pad(2)]), [], ruleRow(c.t, c.w, answerTail(e))]
+  const body = [...head, ...paragraphRows(answerParas(c, e, sel), c.w), [], ruleRow(c.t, c.w, answerTail(e))]
   const cites = citeRows(c.t, e.cites, view.wheres[i] ?? [], sel, c.w)
   const stops = cites.at.map((k, j) => ({ cite: [i, j + 1] as [number, number], row: body.length + k }))
   return { rows: [...body, ...cites.rows], stops }
