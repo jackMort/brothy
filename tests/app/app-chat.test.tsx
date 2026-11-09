@@ -152,3 +152,38 @@ test("with 3 requests running ⏎ toasts busy and keeps the input", async () => 
   expect(ai.calls).toHaveLength(3)
   expect(hints(f)).toContain("⏎ send") // the input kept: still the input stage
 })
+
+test("esc while streaming aborts and puts the question back; esc again hides; c brings back the card with the earlier thread", async () => {
+  const { s, ai } = await asked("first?")
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (f) => hints(f).includes("go to"))
+  await keys(s, "type:second?", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  let f = await keys(s, "esc")
+  expect(ai.calls[1]!.signal?.aborted).toBe(true)
+  expect(hints(f)).toContain("↑↓ marks") // the card stays: an exchange remains (⏎ says send: the question is back)
+  expect(hints(f)).toContain("⏎ send")
+  f = await keys(s, "esc") // card → input
+  expect(hints(f)).not.toContain("↑↓ marks")
+  f = await keys(s, "C-u", "esc") // input → hidden
+  expect(hints(f)).not.toContain("⏎ send")
+  f = await keys(s, "c")
+  expect(hints(f)).toContain("⏎ go to")
+})
+
+test("esc on the only running exchange: back to the input with its question, which ⏎ sends again as the first turn", async () => {
+  const { s, ai } = await asked("why cloudy?")
+  ai.send(0, "Do not")
+  await waitFrame(s, (f) => hints(f).includes("esc cancel"))
+  const f = await keys(s, "esc")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+  expect(hints(f)).toContain("esc hide") // the input stage: no exchange left for a card
+  expect(hints(f)).toContain("⏎ send")
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  expect(ai.calls[1]!.body.messages.map((x) => [x.role, x.role === "user" ? x.content : ""])).toEqual([
+    ["system", ""],
+    ["user", "why cloudy?"],
+  ])
+})

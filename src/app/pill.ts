@@ -129,17 +129,30 @@ function makePillInput(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
   return { pillType, pillErase, pillClear, pillRecall, setInput }
 }
 
-/** `esc` without a request: the `[[` list, then the card, then the pill; hiding keeps the thread. */
-function makePillEsc(c: AppCtx, setInput: (input: string) => void) {
+/** `esc`: the `[[` list, then a running answer, then the card, then the pill; hiding keeps the thread. */
+function makePillEsc(c: AppCtx, { cancelJob }: Pick<Jobs, "cancelJob">, setInput: (input: string) => void) {
   const { ui, set } = c
-  const { patch } = pillState(c)
+  const { patch, setThread } = pillState(c)
   const pillHide = () => {
     if (ui.current.pill) set({ pill: null })
   }
+
+  /** Cancel thread `path`'s running answer: its exchange removed, its question back in the input; false when none runs. */
+  const cancel = (path: string) => {
+    const t = ui.current.threads[path]
+    if (!t || !cancelJob(jobKey("chat", path))) return false
+    const gone = t.turns.at(-1)
+    const turns = t.turns.slice(0, -1)
+    setThread({ ...t, turns })
+    patch({ input: gone?.q ?? "", card: turns.length > 0, hl: null, top: null })
+    return true
+  }
+
   const pillEsc = () => {
     const p = ui.current.pill
     if (!p) return
     if (p.pick) return setInput(dropPick(p.input))
+    if (cancel(p.path)) return
     if (p.card) return patch({ card: false })
     pillHide()
   }
@@ -304,7 +317,7 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   return {
     ...makePillOpen(c, jobs, animate),
     ...input,
-    ...makePillEsc(c, input.setInput),
+    ...makePillEsc(c, jobs, input.setInput),
     /** `↑↓`: recall for now; the card's marks come later */
     pillMove: (dir: 1 | -1) => {
       if (dir < 0) input.pillRecall()

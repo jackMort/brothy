@@ -123,6 +123,28 @@ describe("startJob and the wait tick", () => {
     ])
   })
 
+  test("a chat job's delta stops once another job holds its key: a stray stream never reaches the new exchange", async () => {
+    const r = runner()
+    const seen: string[][] = [[], []]
+    const send = (i: number) =>
+      r.jobs.startJob(
+        "chat",
+        "/n.md",
+        target,
+        { ...req, clean: (x) => x },
+        { stream: true, delta: (raw) => void seen[i]!.push(raw), done: () => {} },
+      )
+    send(0)
+    await settle(() => r.ai.calls.length > 0)
+    send(1) // the key now holds the second job; the first one's stream is still open
+    await settle(() => r.ai.calls.length > 1)
+    r.ai.send(0, "stray")
+    r.ai.send(1, "fresh")
+    await settle(() => seen[1]!.length === 1)
+    await settle(() => false) // give the stray chunk every chance to land
+    expect(seen).toEqual([[], ["fresh"]])
+  })
+
   test("a cancelled or failed job stops it", async () => {
     const r = runner()
     r.start("a.md")

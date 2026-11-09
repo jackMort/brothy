@@ -44,7 +44,7 @@ interface JobRun {
   stream?: boolean
   /** runs once the job is registered, before the request goes out */
   begin?: () => void
-  /** each raw delta, after `job.raw` is set (chat's arrival log) */
+  /** each raw delta, after `job.raw` is set, while the job is still the one under its key (chat's arrival log) */
   delta?: (raw: string) => void
   /** the result, only while the job is still the one under its key (not cancelled or replaced), once it left `jobs`, and while App is mounted */
   done: (r: ChatResult, job: Job) => void
@@ -100,7 +100,8 @@ function makeRunner(c: AppCtx) {
       ? (raw: string) => {
           job.raw = raw
           if (!job.live) job.live = req.clean(raw) !== ""
-          run.delta?.(raw)
+          // a job cancelled or replaced under its key never feeds its successor's arrival log
+          if (jobs.current.get(key) === job) run.delta?.(raw)
           aiRedraw()
         }
       : undefined
