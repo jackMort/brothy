@@ -453,7 +453,9 @@ test("a hover re-check after a key (no pointer move) keeps the key's selection",
   await s.mockMouse.moveTo(rows[second]!.indexOf("²"), second)
   await waitFrame(s, (y) => y.split("\n")[second]!.includes("▌ ²"))
   await keys(s, "up")
-  // what OpenTUI does after a render whose hit grid changed: an `over` at the resting pointer's cell
+  // what OpenTUI does after a render whose hit grid changed: an `over` at the resting pointer's cell. Forced through
+  // two renderer internals of @opentui/core 0.8.1 (`lastOverRenderable`, `recheckHoverState`): a key keeps the card's
+  // row renderables, so no natural re-check lands on another one
   const r = s.renderer as unknown as { lastOverRenderable?: unknown; recheckHoverState: () => void }
   r.lastOverRenderable = undefined
   r.recheckHoverState()
@@ -518,6 +520,24 @@ test("↑ walks back to an earlier exchange's cite, the card scrolled to keep it
   expect(f).toContain("Answer 3¹")
   expect(f).not.toMatch(/↓ \d+ more/)
   expect(f).toMatch(/▌ ¹/)
+})
+
+test("one wheel notch over a tall card scrolls it 3 rows, not a page; back down it pins again", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, longReply(30))
+  ai.end(0)
+  const rowOf = (f: string, text: string) => f.split("\n").findIndex((r) => r.includes(text))
+  const f = await waitFrame(s, (x) => x.includes("Sentence 29"))
+  const at = rowOf(f, "Sentence 25")
+  const x = f.split("\n")[at]!.indexOf("Sentence")
+  await s.mockMouse.scroll(x, at, "up")
+  let g = await keys(s)
+  expect(rowOf(g, "Sentence 25")).toBe(at + 3)
+  expect(g).toMatch(/╰─+ ↓ 3 more ─+╯/)
+  await s.mockMouse.scroll(x, at, "down")
+  g = await keys(s)
+  expect(rowOf(g, "Sentence 25")).toBe(at)
+  expect(g).not.toMatch(/↓ \d+ more/)
 })
 
 test("the terminal shrinks with the card up: the card re-pins and keeps the top line and a clear row", async () => {

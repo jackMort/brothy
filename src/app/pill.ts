@@ -363,11 +363,12 @@ function makePillCard(c: AppCtx) {
     patch({ hl: st.cite, top: pinned(keepInView(st.row, from, k.max), k.out.rows.length, k.max) })
   }
 
-  const pillScroll = (dir: 1 | -1) => {
+  /** `step` rows (the wheel's), else a page; `hl` stays where it is: the next `↑↓` brings it back into view. */
+  const pillScroll = (dir: 1 | -1, step?: number) => {
     const k = card()
     if (!k) return
     const bottom = Math.max(0, k.out.rows.length - k.max)
-    const top = clamp((k.top ?? bottom) + dir * Math.max(1, k.max - 1), 0, bottom)
+    const top = clamp((k.top ?? bottom) + dir * (step ?? Math.max(1, k.max - 1)), 0, bottom)
     patch({ top: pinned(top, k.out.rows.length, k.max) })
   }
   return { pillMark, pillScroll }

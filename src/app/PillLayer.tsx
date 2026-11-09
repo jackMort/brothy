@@ -24,6 +24,7 @@ import { dimSpans } from "../ui/zen"
 import type { Derived } from "./derive"
 import type { Pill } from "./pill"
 import { Row } from "./Row"
+import { WHEEL_ROWS } from "./store"
 
 /** What the layer acts with: the pill's mouse actions and the pointer (`usePointer`). */
 export type PillActions = Pick<Pill, "pillOpen" | "citeGo" | "pillScroll" | "pillHover"> & {
@@ -117,7 +118,7 @@ function cardBlock({ t }: Derived, v: PillView, a: PillActions): ReactNode {
       const at = a.moved(e) ? citeAt(e) : undefined
       if (at) a.pillHover(at)
     },
-    onMouseScroll: own(a, (e) => a.pillScroll(e.scroll?.direction === "up" ? -1 : 1)),
+    onMouseScroll: own(a, (e) => a.pillScroll(e.scroll?.direction === "up" ? -1 : 1, WHEEL_ROWS)),
   })
 }
 
