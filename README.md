@@ -114,6 +114,7 @@ A local model needs no key:
 - `D` explains what changed in the file since you opened it. [What changed](https://jackmort.github.io/brothy/ai/what-changed/)
 - `?` in `ctrl+p` asks a question. The model only suggests search words and brothy finds the
   sections itself. [Ask your vault](https://jackmort.github.io/brothy/ai/ask-your-vault/)
+- `c` asks about the note (and notes you add with `[[`), with marks that land on the quoted words. [Chat](https://jackmort.github.io/brothy/ai/chat/)
 
 <table>
 <tr>
