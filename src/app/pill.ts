@@ -39,8 +39,8 @@ const dropPick = (input: string) => input.replace(PICK_TAIL, "")
 /** The toast when a thread already holds CHAT_MAX_CHIPS notes. */
 const CHIPS_FULL = `${CHAT_MAX_CHIPS} notes at most`
 
-/** The chip of the open note: its stem, or the piped document's title. */
-const chipOf = (path: string, title: string): Chip => ({ path, title: path === STDIN ? title : stem(basename(path)) })
+/** The chip of the open note: the title the top line shows. */
+const chipOf = (path: string, title: string): Chip => ({ path, title })
 
 /** Small helpers every pill factory shares. */
 function pillState(c: AppCtx) {
@@ -160,7 +160,7 @@ function makePillInput(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
 
 /** The `[[` list: `↑↓` move its highlight (held at the ends), `⏎` / `tab` add the highlighted note as a chip. */
 function makePick(c: AppCtx, setInput: (input: string) => void) {
-  const { ui, derive, flash } = c
+  const { ui, derive, flash, memo } = c
   const { patch, setThread } = pillState(c)
 
   /** The list on screen with its notes, its highlight held within them, and the pill's thread; else null. */
@@ -183,7 +183,7 @@ function makePick(c: AppCtx, setInput: (input: string) => void) {
     const it = l?.items[l.hl]
     if (!l || !it) return
     if (l.t.chips.length >= CHAT_MAX_CHIPS) return flash(CHIPS_FULL) // `[[` never opens then: a backstop
-    setThread({ ...l.t, chips: [...l.t.chips, { path: it.path, title: it.name }] })
+    setThread({ ...l.t, chips: [...l.t.chips, { path: it.path, title: memo.chipTitle(it.path) }] })
     setInput(dropPick(l.input))
   }
   return { pickMove, pickAdd }

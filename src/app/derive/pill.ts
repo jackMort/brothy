@@ -7,7 +7,7 @@ import { cleanReply, noteText, shortModel } from "../../ai/client"
 import { type AIConfig, maxCharsOf } from "../../ai/config"
 import { quoteNeedle } from "../../ai/delta"
 import { bodyParts, type Cite, chatContext, citeSection, citeWhere, splitReply, type Thread } from "../../ai/thread"
-import { parseFrontMatter } from "../../markdown/frontmatter"
+import { parseFrontMatter, parseProperties } from "../../markdown/frontmatter"
 import type { Rendered } from "../../markdown/render"
 import { type DocFile, readNote } from "../../notes/doc"
 import { type FileNode, rankNotes, stem } from "../../notes/files"
@@ -30,6 +30,7 @@ import {
   pillGeo,
   type Running,
 } from "../../ui/pill"
+import { noteTitle } from "../../ui/status"
 import type { Memo } from "../derive"
 import { type Job, jobKey, type UI } from "../store"
 
@@ -45,6 +46,11 @@ export function chatMemo(stdin: string | undefined) {
   return {
     /** a fresh read, for a send: notes edited between turns are picked up */
     readNow: (path: string) => read(path, 0),
+    /** a note's title as the top line shows it (front-matter `title`, else the stem), read once at add time */
+    chipTitle: (path: string) => {
+      const f = read(path, 0)
+      return f.error ? stem(basename(path)) : noteTitle(parseProperties(f.src), path)
+    },
     /** the chips' notes (`\0`-joined paths), read once per chip list and reload */
     chatRead: cached((chips: string, reload: number) => paths(chips).map((p) => read(p, reload))),
     chatMax: cached((ai: AIConfig | null) => (ai ? maxCharsOf(ai) : 0)),

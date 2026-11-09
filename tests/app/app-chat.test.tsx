@@ -898,3 +898,21 @@ test("the card's rows clear the text column: no note text beside the card, the r
   expect(rows.slice(top, top + 8).filter((r) => r.includes("fill"))).toEqual([])
   expect(rows.slice(2, top).some((r) => r.includes("filler"))).toBe(true)
 })
+
+test("a chip is named by the note's front-matter title, as the top line is; no title: the stem", async () => {
+  aiConfig(OLLAMA)
+  const files = {
+    "Slow broth.md": `---\ntitle: The slow broth\n---\n${NOTE}\nSee [[simmering]] and [[stock]].\n`,
+    "simmering.md": "---\ntitle: Gentle heat\n---\n# Simmering\n\nLow.\n",
+    "stock.md": "# Stock\n\nBones.\n",
+  }
+  const { s, ai } = await mountAI(tmp(files), "Slow broth.md")
+  await keys(s, "c", "type:[[sim", "enter", "type:[[sto", "enter")
+  const f = await keys(s, "type:why?", "enter")
+  expect(pillOf(f)).toContain("The slow broth")
+  await waitFor(s, () => ai.calls.length === 1)
+  const system = ai.calls[0]!.body.messages[0]!.content
+  expect(system).toContain('<note id="1" title="The slow broth">')
+  expect(system).toContain('<note id="2" title="Gentle heat">')
+  expect(system).toContain('<note id="3" title="stock">')
+})
