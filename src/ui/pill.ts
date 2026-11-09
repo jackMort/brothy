@@ -139,8 +139,9 @@ export const sizeFoot = (t: Theme, size: number): Span[] => [{ text: ` ${fmtToke
 /** One chip: the first note secondary, the others accent, a clipped one's ` · clipped` muted. */
 function oneChip(t: Theme, c: Chip, first: boolean, clipped: boolean): Span[] {
   const spans = chip(t, truncate(safeLine(c.title), CHIP_MAX_W), first ? t.secondary : t.accent)
-  if (clipped) spans.splice(2, 0, { text: " · clipped", fg: t.textMuted, bg: t.backgroundElement })
-  return spans
+  if (!clipped) return spans
+  const tail = spans.pop()
+  return [...spans, { text: " · clipped", fg: t.textMuted, bg: t.backgroundElement }, ...(tail ? [tail] : [])]
 }
 
 /** The chips in `room` columns; while they don't fit, the last ones fold into a `+n` chip. */
@@ -188,14 +189,20 @@ function citeRow(t: Theme, v: PillView, iw: number): Span[] {
   )
 }
 
-/** The pill's middle row, `w − 4` wide: the wisp, the input or placeholder, the chips right; folded, the cite. */
-export function pillRow(t: Theme, v: PillView, now: number, motion: boolean): Span[] {
+/** The typing row's pieces, shared by the row and the caret so they cannot disagree: chips and the input's room. */
+function typingLayout(t: Theme, v: PillView) {
   const iw = v.geo.w - 4
-  if (v.land) return citeRow(t, v, iw)
-  const tick = v.running ? steamTick(v.running.at, now, motion) : STILL_TICK
-  const wisp: Span = { text: (steamRows(tick, 2, 1)[0] ?? "").replace(/ /g, "⠀"), fg: t.primary }
   const chips = chipRow(t, v.thread.chips, v.clipped, Math.max(0, iw - 4 - INPUT_MIN_W))
   const room = iw - 3 - spanWidth(chips) - (chips.length ? 1 : 0)
+  return { iw, chips, room }
+}
+
+/** The pill's middle row, `w − 4` wide: the wisp, the input or placeholder, the chips right; folded, the cite. */
+export function pillRow(t: Theme, v: PillView, now: number, motion: boolean): Span[] {
+  if (v.land) return citeRow(t, v, v.geo.w - 4)
+  const { iw, chips, room } = typingLayout(t, v)
+  const tick = v.running ? steamTick(v.running.at, now, motion) : STILL_TICK
+  const wisp: Span = { text: (steamRows(tick, 2, 1)[0] ?? "").replace(/ /g, "⠀"), fg: t.primary }
   const answered = v.thread.turns.some((e) => e.raw !== null)
   const placeholder = answered ? "ask a follow-up" : "ask about this note…"
   return right([wisp, pad(1), ...inputSpans(t, v.input, v.focus, room, placeholder)], chips, iw)
@@ -205,8 +212,9 @@ export function pillRow(t: Theme, v: PillView, now: number, motion: boolean): Sp
 export const pillBorder = (t: Theme, v: Pick<PillView, "focus" | "openedAt">, now: number, motion: boolean) =>
   v.focus ? inkAt(t, inkStep(v.openedAt, now, motion), t.borderActive) : t.border
 
-/** The caret's column from the text column: where the `[[` list sits. */
-export function caretCol(v: PillView): number {
-  const iw = v.geo.w - 4
-  return v.geo.x + 2 + 3 + Math.min(width(safeLine(v.input)), iw - 3 - INPUT_MIN_W)
+/** The caret's column from the text column (where `[[` anchors its list): after the wisp and the input as pillRow draws it. */
+export function caretCol(t: Theme, v: PillView): number {
+  const { room } = typingLayout(t, v)
+  const shown = inputSpans(t, v.input, true, room, "")[0]
+  return v.geo.x + 2 + 3 + (v.input ? width(shown?.text ?? "") : 0)
 }

@@ -182,8 +182,17 @@ describe("the pill row", () => {
     failed.thread = { ...failed.thread, turns: [{ ...DONE, raw: null, error: "boom" }] }
     expect(text(pillRow(t, failed, 0, false))).toContain("ask about this note…")
   })
-  test("caretCol: after the wisp and the typed text, from the pill's left", () => {
-    expect(caretCol(viewOf({ input: "abc" }))).toBe(2 + 3 + 3)
-    expect(caretCol(viewOf({ input: "abc", geo: { x: 5, w: 72, top: 20, cardMax: 18 } }))).toBe(5 + 2 + 3 + 3)
+  test("caretCol: the column of the caret glyph pillRow draws, short input or long with one short chip", () => {
+    for (const input of ["abc", "why does my broth go cloudy when I press the bones so hard every time"]) {
+      const v = viewOf({ input, geo: { x: 5, w: 72, top: 20, cardMax: 18 } })
+      const row = pillRow(t, v, 0, false)
+      const at = text(
+        row.slice(
+          0,
+          row.findIndex((s) => s.text === "▍"),
+        ),
+      ).length
+      expect(caretCol(t, v)).toBe(5 + 2 + at)
+    }
   })
 })
