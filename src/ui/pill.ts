@@ -24,7 +24,7 @@ const CARD_STEAM_H = 3
 /** An error shows at most this many rows. */
 const ERROR_ROWS = 3
 /** The `[[` list: its width (a frame's inner width is PICK_W − 4) and most rows. */
-const PICK_W = 36
+export const PICK_W = 36
 export const PICK_ROWS = 5
 const PICK_MARK = 2
 const PICK_HINT = "  linked from here"

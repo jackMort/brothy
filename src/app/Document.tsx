@@ -38,7 +38,9 @@ import type { Derived } from "./derive"
 import { keyDef, WELCOME_KEYS } from "./keymap"
 import { labelGeo } from "./links"
 import { pictureLayer, reservedBlank } from "./PictureLayer"
+import { type PillActions, pillLayer } from "./PillLayer"
 import type { PictureSheet } from "./picture-sheet"
+import { pressOutside } from "./pill"
 import { Row } from "./Row"
 import { SCRIM_DIM, WHEEL_ROWS } from "./store"
 import type { WorkspaceControl } from "./workspace"
@@ -48,14 +50,17 @@ import type { Zen } from "./zen"
 export function docBox(
   c: AppCtx,
   d: Derived,
-  ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> & Pick<Zen, "zenScroll"> & Pick<PictureSheet, "clickRow">,
+  ws: Pick<WorkspaceControl, "welcomeRows" | "welcomeOpen"> &
+    Pick<Zen, "zenScroll"> &
+    Pick<PictureSheet, "clickRow"> &
+    PillActions,
 ): ReactNode {
   const { focusDoc, scrollBy } = c
   const { s, L, file } = d
   const pageContent = () => {
     if (!s.openPath) return welcomePage(c, d, ws)
     if (file?.error) return openError(d, file.error)
-    return L.zen ? zenLines(c, d) : noteLines(c, d)
+    return L.zen ? zenLines(c, d) : noteLines(c, d, ws)
   }
   const content = pageContent()
   return (
@@ -68,11 +73,11 @@ export function docBox(
         paddingLeft: L.zen ? L.padL - 2 : L.padL,
         overflow: "hidden", // the body clips, not `lines`: marks and notes sit left and right of its text column
       }}
-      onMouseDown={(e: MouseEvent) => {
+      onMouseDown={pressOutside(c, (e: MouseEvent) => {
         focusDoc()
         // the row under the pointer, from the box's top: a picture's rows, caption or placeholder open its sheet
         if (e.button === MouseButton.LEFT && s.openPath) ws.clickRow(e.y - (e.currentTarget?.screenY ?? 0))
-      }}
+      })}
       onMouseScroll={(e: MouseEvent) =>
         (L.zen ? ws.zenScroll : scrollBy)(e.scroll?.direction === "up" ? -WHEEL_ROWS : WHEEL_ROWS)
       }
@@ -342,8 +347,8 @@ function changeMargin(d: Derived): Span[][] | null {
   return rows
 }
 
-/** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim; the pictures over their rows. */
-function noteLines(c: AppCtx, d: Derived) {
+/** The note's lines on screen: find matches marked, link labels over them, the marks and the landing's footnote, dimmed under the drawer's scrim; the pictures over their rows, the chat pill over them all. */
+function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
   const { L, t, view, top } = d
   const { CW, CH } = L
   const scrim = L.mode === "drawer" && L.shown
@@ -373,6 +378,7 @@ function noteLines(c: AppCtx, d: Derived) {
           ))}
         </box>
       ) : null}
+      {pillLayer(d, pill)}
     </box>
   )
 }
@@ -449,10 +455,10 @@ export function miniBox(c: AppCtx, d: Derived): ReactNode {
     <box
       key="mini"
       style={{ width: MINI_W - 1, height: bodyH, flexDirection: "column", flexShrink: 0 }}
-      onMouseDown={(e: MouseEvent) => {
+      onMouseDown={pressOutside(c, (e: MouseEvent) => {
         if (e.button !== MouseButton.LEFT || !miniInkData) return
         setTop(miniJump(e.y - 1 - L.gap, miniInkData, CH, maxTop))
-      }}
+      })}
     >
       {miniInkData
         ? miniCells(miniInkData, {

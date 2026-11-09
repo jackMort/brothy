@@ -307,16 +307,17 @@ function makePillSend(c: AppCtx, jobs: Jobs, animate: () => void, citeGo: (at?: 
     animate()
   }
 
-  /** `⏎`: the `[[` list adds; text sends; empty: retry a failed last exchange, else go to the selected mark. */
+  /** `⏎`: the `[[` list adds; text sends; empty, with the card up: retry a failed last exchange, else go to the selected mark. */
   const pillSend = (pickAdd: () => void) => {
     const p = ui.current.pill
     if (!p) return
     if (p.pick) return pickAdd()
     const q = p.input.trim()
     if (q) return ask(p.path, q)
+    if (!p.card) return // the input stage: nothing to send, and its footer says send
     const last = ui.current.threads[p.path]?.turns.at(-1)
     if (last?.error) return ask(p.path, last.q)
-    if (p.card && p.hl) citeGo(p.hl)
+    if (p.hl) citeGo(p.hl)
   }
 
   return { pillSend }
@@ -344,7 +345,18 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
     pickAdd,
     citeGo,
     citeStep: (_dir: 1 | -1) => false,
-    pillHover: none as (at: [number, number]) => void,
+    /** the pointer moved onto a cite row of the card: it is selected */
+    pillHover: (at: [number, number]) => pillState(c).patch({ hl: at }),
   }
 }
+
+/** The pill has the keys and is on screen: a press outside it, its card and its list does nothing. */
+const pillHolds = (c: Pick<AppCtx, "ui" | "derive">) => !!c.ui.current.pill?.focus && c.derive().pill !== null
+
+/** Press handler `f`, ignored while the pill holds the keys (the panel, the document and the minimap, spec §11.14). */
+export const pressOutside =
+  <E>(c: Pick<AppCtx, "ui" | "derive">, f: (e: E) => void) =>
+  (e: E) => {
+    if (!pillHolds(c)) f(e)
+  }
 export type Pill = ReturnType<typeof makePill>

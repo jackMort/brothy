@@ -267,3 +267,120 @@ test("a new workspace drops every thread and cancels its running answer", async 
   expect(hints(f)).toContain("⏎ send") // an empty thread: the input, no card
   expect(hints(f)).not.toContain("esc cancel")
 })
+
+// ------------------------------------------------------------- drawing: the pill, the card, the list; the mouse
+
+test("c draws the pill: wisp, placeholder, the note's chip, ~N tokens on its bottom border", async () => {
+  aiConfig(OLLAMA)
+  const { s } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md")
+  const f = await keys(s, "c")
+  expect(f).toContain("⠳⢆ ▍ask about this note…")
+  expect(f).toContain(" Slow broth ")
+  expect(f).toMatch(/╰─+ ~\d+ tokens ──╯/)
+})
+
+test("the card: the question, the streamed text, the rule `esc cancel`; done: one ¹ kept, the other mark gone, its sentence kept", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, "Do not press the bones [1]. It clears [2].")
+  let f = await waitFrame(s, (x) => x.includes("It clears"))
+  expect(f).toContain("› why cloudy?")
+  expect(f).toMatch(/esc cancel/)
+  ai.send(0, '\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "not in the note"')
+  ai.end(0)
+  f = await waitFrame(s, (x) => x.includes("go to"))
+  expect(f).toContain("Do not press the bones¹. It clears.")
+  expect(f).not.toMatch(/clears²/)
+  expect(f).toContain("¹ Strain and cool · “do not press the bones”")
+})
+
+test("esc while streaming: the question is back in the input", async () => {
+  const { s } = await asked("first?")
+  const f = await keys(s, "esc")
+  expect(f).toContain("first?▍")
+})
+
+/** A reply of `n` sentences, each its own wrapped row or more. */
+const longReply = (n: number) =>
+  Array.from({ length: n }, (_, i) => `Sentence ${i} of a long answer that goes on.`).join("\n\n")
+
+test("a tall card stays on screen: its top border below the first body row, one clear row above the pill", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, longReply(30))
+  ai.end(0)
+  const f = await waitFrame(s, (x) => x.includes("Sentence 29"))
+  const rows = f.split("\n")
+  const tops = rows.flatMap((r, i) => (r.includes("╭") ? [i] : []))
+  // body rows 2..27 at 100×30 (CH 26): the pill's 3 rows from 25, the gap row 24, the card at most CH − 5 = 21 rows
+  expect(tops).toEqual([3, 25])
+  expect(rows[24]!.trim()).toBe("")
+  expect(rows[23]).toContain("╰")
+})
+
+test("an error: the card's ✗ row; folded to the pill, ⏎ on an empty input sends nothing and says send", async () => {
+  const { s, ai } = await asked()
+  ai.fail(0, "model not found")
+  let f = await waitFrame(s, (x) => hints(x).includes("⏎ retry"))
+  expect(f).toContain("✗ model not found")
+  f = await keys(s, "esc") // the card folds: the input stage
+  expect(hints(f)).toContain("⏎ send")
+  await keys(s, "enter")
+  expect(ai.calls).toHaveLength(1)
+})
+
+const TWO =
+  'Do not press the bones [1]. Strain it [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "Pour the broth through a sieve"'
+
+/** The card answered with TWO: the app, the stub, the frame. */
+async function answered(files?: Record<string, string>) {
+  const { s, ai } = await asked("why cloudy?", files)
+  ai.send(0, TWO)
+  ai.end(0)
+  const f = await waitFrame(s, (x) => x.includes("go to"))
+  return { s, ai, f }
+}
+
+test("hovering a cite row selects it", async () => {
+  const { s, f } = await answered()
+  const rows = f.split("\n")
+  const second = rows.findIndex((r) => r.includes("² Strain and cool"))
+  expect(rows[second - 1]).toContain("▌ ¹")
+  const x = rows[second]!.indexOf("²")
+  await s.mockMouse.moveTo(x, second)
+  const g = await waitFrame(s, (y) => y.split("\n")[second]!.includes("▌ ²"))
+  expect(g.split("\n")[second - 1]).not.toContain("▌")
+})
+
+test("the wheel over the card leaves the page where it was", async () => {
+  const { s, f } = await answered({ "Slow broth.md": `${NOTE}\n${filler(40)}\n` })
+  const rows = f.split("\n")
+  const card = rows.findIndex((r) => r.includes("› why cloudy?"))
+  const x = rows[card]!.indexOf("›")
+  for (let i = 0; i < 3; i++) await s.mockMouse.scroll(x, card, "down")
+  const g = await keys(s)
+  expect(g.split("\n")[2]).toBe(rows[2])
+})
+
+test("a click on the Files panel while the pill has focus does nothing", async () => {
+  aiConfig(OLLAMA)
+  const { s } = await mountAI(tmp({ "Slow broth.md": NOTE, "b.md": "# B\n\nPears.\n" }), "Slow broth.md", {
+    size: W120,
+  })
+  // the Files list on screen, the note's focus back: `b` is its first row, under the tab strip and its rule
+  const B_ROW = 4
+  expect((await keys(s, "1", "esc")).split("\n")[B_ROW]).toMatch(/^ {4}b {2}/)
+  await keys(s, "c")
+  await s.mockMouse.click(4, B_ROW)
+  const f = await keys(s)
+  expect(f).not.toContain("Pears.")
+  expect(hints(f)).toContain("⏎ send")
+})
+
+test("a click on the minimap while the pill has focus leaves the page where it was", async () => {
+  aiConfig(OLLAMA)
+  const { s } = await mountAI(tmp({ "long.md": `# Long\n\n${filler(60)}\n` }), "long.md", { size: W120 })
+  const f = await keys(s, "c")
+  await s.mockMouse.click(117, 26) // the minimap's last columns, near its bottom
+  const g = await keys(s)
+  expect(g.split("\n")[3]).toBe(f.split("\n")[3])
+  expect(hints(g)).toContain("⏎ send")
+})

@@ -154,7 +154,7 @@ export function App({
   // the panel and the document write the list tops and the welcome row back to the store as they draw: always built,
   // even when zen or a too-small terminal leaves them off screen
   const panelEl = panelBox(ctx, d, { outlineGo, infoGo })
-  const docEl = docBox(ctx, d, { ...workspace, ...zen, ...pictureSheet })
+  const docEl = docBox(ctx, d, { ...workspace, ...zen, ...pictureSheet, ...pill, ...pointer })
   const miniEl = miniBox(ctx, d)
   const progressEl = progressLine(ctx, d)
 

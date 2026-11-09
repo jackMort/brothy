@@ -14,6 +14,7 @@ import { keepVisible, stripLayout, thumb } from "../ui/nav"
 import { fileRowSpans, type InfoItem, infoSpans, outlineRowSpans } from "../ui/panel"
 import type { AppCtx } from "./ctx"
 import type { Derived } from "./derive"
+import { pressOutside } from "./pill"
 import { Row } from "./Row"
 import { MAX_DEPTH, WHEEL_ROWS } from "./store"
 
@@ -58,7 +59,7 @@ function panelKit(c: AppCtx, d: Derived): PanelKit {
     const cells = o.sel ? body.map((sp) => ({ ...sp, fg: selFg, bg: t.primary })) : body
     cells.push({ text: o.thumb ? "▐" : " ", fg: thumbFg })
     return (
-      <box key={key} style={{ height: 1, flexShrink: 0 }} onMouseDown={o.onDown}>
+      <box key={key} style={{ height: 1, flexShrink: 0 }} onMouseDown={o.onDown && pressOutside(c, o.onDown)}>
         <Row spans={cells} />
       </box>
     )
