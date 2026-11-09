@@ -45,12 +45,6 @@ export interface Exchange {
   /** when the marks start to glow */
   doneAt: number | null
 }
-/** A conversation about one note (`path`), kept in memory only. */
-interface Thread {
-  path: string
-  chips: Chip[]
-  turns: Exchange[]
-}
 interface SentNote {
   chip: Chip
   text: string
