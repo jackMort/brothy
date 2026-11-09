@@ -4,9 +4,11 @@
 // page, or take a press for a picture row), so they record the pointer themselves.
 import { MouseButton, type MouseEvent } from "@opentui/core"
 import type { ReactNode } from "react"
-import type { Span } from "../lib/spans"
+import { type Span, safeLine } from "../lib/spans"
+import { truncate } from "../lib/text"
 import { surface } from "../theme/theme"
 import {
+  CHAT_DIM,
   cardFoot,
   cardWindow,
   caretCol,
@@ -18,6 +20,7 @@ import {
   pillRow,
   sizeFoot,
 } from "../ui/pill"
+import { dimSpans } from "../ui/zen"
 import type { Derived } from "./derive"
 import type { Pill } from "./pill"
 import { Row } from "./Row"
@@ -128,4 +131,21 @@ function pickBlock({ t, L }: Derived, v: PillView, a: PillActions): ReactNode {
   const at = caretCol(t, { ...v, input: v.input.slice(0, v.input.lastIndexOf("[[")) })
   const left = Math.max(0, Math.min(at - 2, L.CW - PICK_W))
   return block("chat-pick", left, v.geo.top - rows.length, PICK_W, rows, { onMouseDown: own(a) })
+}
+
+/** With the card up no image draws: each picture on screen gets `▣ <alt>` muted, dimmed with the page, at its first visible reserved row above `rows`. */
+export function pictureAlts({ t, view, top, L }: Derived, rows: number): ReactNode[] {
+  return (view.pics ?? []).flatMap((p) => {
+    const y = Math.max(p.line, top) - top
+    if (p.line + p.rows <= top || y >= rows) return []
+    const text = `▣ ${truncate(safeLine(p.alt), Math.max(1, L.CW - p.left - 2))}`
+    return [
+      <box
+        key={`pic-alt-${p.id}`}
+        style={{ position: "absolute", left: p.left, top: y, width: L.CW - p.left, height: 1 }}
+      >
+        <Row spans={dimSpans([{ text, fg: t.textMuted }], t, CHAT_DIM)} />
+      </box>,
+    ]
+  })
 }

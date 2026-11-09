@@ -39,7 +39,7 @@ import type { Derived } from "./derive"
 import { keyDef, WELCOME_KEYS } from "./keymap"
 import { labelGeo } from "./links"
 import { pictureLayer, reservedBlank } from "./PictureLayer"
-import { type PillActions, pillLayer } from "./PillLayer"
+import { type PillActions, pictureAlts, pillLayer } from "./PillLayer"
 import type { PictureSheet } from "./picture-sheet"
 import { pressOutside } from "./pill"
 import { Row } from "./Row"
@@ -357,6 +357,7 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
   const dim = pageDim(d, scrim)
   const foot = landFoot(d)
   const footAt = CH - foot.length
+  const picCut = Math.min(footAt, pillCut(d))
   const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
@@ -367,7 +368,7 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
           lineRow(d, top + i, marks.get(top + i), dim)
         ),
       )}
-      {pictureLayer(c, d, footAt)}
+      {d.pill?.card ? pictureAlts(d, picCut) : pictureLayer(c, d, picCut)}
       {pictureLabels(d, footAt)}
       {margin ? (
         <box

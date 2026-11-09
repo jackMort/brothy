@@ -7,6 +7,7 @@ import { hexOf } from "../../src/graph/canvas"
 import { blankPng, solidPng } from "../helpers/png"
 import { hex } from "../helpers/theme"
 import {
+  aiStub,
   B,
   filler,
   HINT_ROW,
@@ -47,7 +48,7 @@ const LONG = `# Top\n\n![Plan](plan.png)\n\n${filler(40)}\n\n![Plan](plan.png)\n
 
 /** The note mounted on a kitty terminal that has said its pixel size. */
 async function pictured(note = NOTE, files?: Record<string, Uint8Array>, size?: typeof W120) {
-  const s = await mount(vault(note, files), "n.md", size && { size })
+  const s = await mount(vault(note, files), "n.md", { ...(size && { size }), fetch: aiStub().f })
   kittyTerminal(s)
   setResolution(s, RES)
   return s
@@ -760,4 +761,26 @@ test("f: in zen, labels stay off", async () => {
   const f = await keys(s, "f")
   expect(f).not.toContain("no links")
   expect(imagesOf(s)).toHaveLength(1)
+})
+
+test("chat: while typing the picture is cut above the pill", async () => {
+  aiConfig(OLLAMA)
+  const s = await pictured(`# Top\n\n${filler(8)}\n\n![Plan](plan.png)\n\nend`)
+  await shown(s)
+  await keys(s, "c")
+  const [img] = imagesOf(s)
+  expect(img!.y + img!.height).toBeLessThanOrEqual(BODY_END - 3)
+})
+
+test("chat: with the card up no <image>, a muted ▣ alt row at the picture's first row", async () => {
+  aiConfig(OLLAMA)
+  const s = await pictured(`# Top\n\n${filler(1)}\n\n![Plan](plan.png)\n\nend`)
+  await shown(s)
+  await keys(s, "c", "type:q", "enter")
+  await waitFor(s, () => imagesOf(s).length === 0)
+  const row = s
+    .captureCharFrame()
+    .split("\n")
+    .find((r) => r.includes("▣ Plan"))
+  expect(row).toBeDefined()
 })
