@@ -429,3 +429,112 @@ test("the page dims by 0.5 while the card is up, not while typing", async () => 
   expect(hex(miniFg())).toBe(mix(lit!, B.background, 0.5))
   expect(fgOf("Intro line")).toBe(mix(B.text, B.background, 0.5))
 })
+
+// ------------------------------------------------------------- marks and scrolling in the card
+
+test("↑↓ walk every cite of the card with no wrap; the selected one gets ▌", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, 'A [1]. B [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "Intro line"')
+  ai.end(0)
+  let f = await waitFrame(s, (x) => x.includes("go to"))
+  expect(f).toMatch(/▌ ¹ Strain and cool/)
+  f = await keys(s, "down")
+  expect(f).toMatch(/▌ ² Slow broth · “Intro line”/)
+  f = await keys(s, "down")
+  expect(f).toMatch(/▌ ² /)
+  f = await keys(s, "up", "up")
+  expect(f).toMatch(/▌ ¹ /)
+})
+
+test("a hover re-check after a key (no pointer move) keeps the key's selection", async () => {
+  const { s, f } = await answered()
+  const rows = f.split("\n")
+  const second = rows.findIndex((r) => r.includes("² Strain and cool"))
+  await s.mockMouse.moveTo(rows[second]!.indexOf("²"), second)
+  await waitFrame(s, (y) => y.split("\n")[second]!.includes("▌ ²"))
+  await keys(s, "up")
+  // what OpenTUI does after a render whose hit grid changed: an `over` at the resting pointer's cell
+  const r = s.renderer as unknown as { lastOverRenderable?: unknown; recheckHoverState: () => void }
+  r.lastOverRenderable = undefined
+  r.recheckHoverState()
+  const g = await keys(s)
+  expect(g.split("\n")[second - 1]).toContain("▌ ¹")
+  expect(g.split("\n")[second]).not.toContain("▌")
+})
+
+const PGUP = "\x1b[5~"
+const PGDN = "\x1b[6~"
+/** The answer to exchange `i`: one sentence and its cite. */
+const cited = (i: number) => `Answer ${i} [1].\nSources:\n[1] note 1: "do not press the bones"`
+
+/** A thread of `n` answered exchanges at 100×20, the card taller than its room. */
+async function longThread(n: number) {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", { size: { width: 100, height: 20 } })
+  await keys(s, "c")
+  for (let i = 0; i < n; i++) {
+    await keys(s, `type:question ${i}?`, "enter")
+    await waitFor(s, () => ai.calls.length === i + 1)
+    ai.send(i, cited(i))
+    ai.end(i)
+    await waitFrame(s, (x) => x.includes(`Answer ${i}¹`))
+  }
+  return s
+}
+
+test("pgup scrolls the card up (↓ n more on its bottom border); pgdn pins it back to the bottom", async () => {
+  const s = await longThread(4)
+  let f = await keys(s)
+  expect(f).toContain("Answer 3¹")
+  expect(f).not.toContain("more ─")
+  expect(f).not.toContain("› question 0?")
+  f = await keys(s, PGUP, PGUP, PGUP)
+  expect(f).toMatch(/╰─+ ↓ \d+ more ─+╯/)
+  expect(f).toContain("› question 0?") // at the top: the oldest exchange
+  expect(f).not.toContain("Answer 3¹")
+  f = await keys(s, PGDN, PGDN, PGDN)
+  expect(f).not.toMatch(/↓ \d+ more/)
+  expect(f).toContain("Answer 3¹")
+})
+
+test("↑ walks back to an earlier exchange's cite, the card scrolled to keep it in view; ↓ brings it back", async () => {
+  const s = await longThread(4)
+  let f = ""
+  for (let i = 0; i < 3; i++) {
+    f = await keys(s, "up")
+    expect(f).toMatch(/▌ ¹/)
+  }
+  // exchange 0's cite selected and on screen, the newest scrolled out of view
+  const sel = f.split("\n").findIndex((r) => r.includes("▌ ¹"))
+  expect(sel).toBeGreaterThan(-1)
+  expect(f).toMatch(/↓ \d+ more/)
+  expect(f).not.toContain("Answer 3¹")
+  f = await keys(s, "up") // no wrap: still the first stop
+  expect(f.split("\n").findIndex((r) => r.includes("▌ ¹"))).toBe(sel)
+  for (let i = 0; i < 4; i++) {
+    f = await keys(s, "down")
+    expect(f).toMatch(/▌ ¹/) // every stop on the way is kept in view
+  }
+  expect(f).toContain("Answer 3¹")
+  expect(f).not.toMatch(/↓ \d+ more/)
+  expect(f).toMatch(/▌ ¹/)
+})
+
+test("the terminal shrinks with the card up: the card re-pins and keeps the top line and a clear row", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, `${"A long answer sentence. ".repeat(30)}[1]\nSources:\n[1] note 1: "do not press the bones"`)
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  await keys(s, PGUP) // scrolled up first: the smaller room re-pins it
+  s.resize(60, 14) // MIN_W × MIN_H: the note still draws
+  const f = await keys(s)
+  const rows = f.split("\n")
+  expect(rows[0]).toContain("Slow broth") // the top line is still there
+  const tops = rows.flatMap((r, i) => (r.includes("╭") ? [i] : []))
+  expect(tops).toHaveLength(2) // the card's and the pill's: the card's top border is not clipped
+  // 60×14: the top line, then the body from row 1 (no gap row below 28); body row 0 kept clear
+  expect(tops[0]).toBeGreaterThanOrEqual(2)
+  const pillTop = tops[1]!
+  expect(rows[pillTop - 1]!.trim()).toBe("") // the clear row between the card and the pill
+  expect(rows[pillTop - 2]).toContain("╰")
+})

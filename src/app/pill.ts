@@ -14,8 +14,10 @@ import {
   type Thread,
   verifyCites,
 } from "../ai/thread"
+import { clamp } from "../lib/text"
 import { stem } from "../notes/files"
 import { STDIN } from "../notes/workspace"
+import { cardWindow } from "../ui/pill"
 import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import { erase } from "./input"
@@ -323,6 +325,54 @@ function makePillSend(c: AppCtx, jobs: Jobs, animate: () => void, citeGo: (at?: 
   return { pillSend }
 }
 
+/** The stop `dir` from stop `i` of `n`, held at the ends; with none selected (`i` −1), the first or the last. */
+function stepStop(i: number, dir: 1 | -1, n: number): number {
+  if (i < 0) return dir > 0 ? 0 : n - 1
+  return clamp(i + dir, 0, n - 1)
+}
+
+/** The card's first row that keeps `row` in a window of `max` rows now starting at `from`. */
+function keepInView(row: number, from: number, max: number): number {
+  if (row < from) return row
+  if (row >= from + max) return row - max + 1
+  return from
+}
+
+/** The stored top for first row `top` of `rows` in `max`: null (pinned to the bottom) once it reaches the bottom. */
+const pinned = (top: number, rows: number, max: number) => (top >= rows - max ? null : top)
+
+/** `↑↓` over the card's cite stops (no wrap), the card scrolled to keep the stop in view; pgup/pgdn and the wheel page it. */
+function makePillCard(c: AppCtx) {
+  const { derive } = c
+  const { patch } = pillState(c)
+
+  /** The card on screen: its rows and stops, its window's room (cardMax less its border rows) and stored top; else null. */
+  const card = () => {
+    const v = derive().pill
+    const out = v?.card ? v.cardOut : null
+    return v && out ? { out, max: v.geo.cardMax - 2, top: v.top, hl: v.hl } : null
+  }
+
+  const pillMark = (dir: 1 | -1) => {
+    const k = card()
+    const stops = k?.out.stops ?? []
+    if (!k || !stops.length) return
+    const i = stops.findIndex((st) => st.cite[0] === k.hl?.[0] && st.cite[1] === k.hl?.[1])
+    const st = stops[stepStop(i, dir, stops.length)]!
+    const from = cardWindow(k.out.rows, k.max, k.top).top
+    patch({ hl: st.cite, top: pinned(keepInView(st.row, from, k.max), k.out.rows.length, k.max) })
+  }
+
+  const pillScroll = (dir: 1 | -1) => {
+    const k = card()
+    if (!k) return
+    const bottom = Math.max(0, k.out.rows.length - k.max)
+    const top = clamp((k.top ?? bottom) + dir * Math.max(1, k.max - 1), 0, bottom)
+    patch({ top: pinned(top, k.out.rows.length, k.max) })
+  }
+  return { pillMark, pillScroll }
+}
+
 /** The pill: every action behind `c` and the `chat` mode. */
 export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   const jobs = makeJobs(c)
@@ -332,16 +382,20 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   const citeGo = none as (at?: [number, number] | null) => void // landing on a cite comes later
   const pickAdd = none // the `[[` list's add comes later
   const { pillSend } = makePillSend(c, jobs, animate, citeGo)
+  const { pillMark, pillScroll } = makePillCard(c)
   return {
     ...makePillOpen(c, jobs, animate),
     ...input,
     ...makePillEsc(c, jobs, input.setInput),
-    /** `↑↓`: recall for now; the card's marks come later */
+    /** `↑↓`: the `[[` list's own (later), else the card's marks, else `↑` recalls */
     pillMove: (dir: 1 | -1) => {
-      if (dir < 0) input.pillRecall()
+      const p = c.ui.current.pill
+      if (!p || p.pick) return
+      if (p.card) pillMark(dir)
+      else if (dir < 0) input.pillRecall()
     },
     pillSend: () => pillSend(pickAdd),
-    pillScroll: none as (dir: 1 | -1) => void,
+    pillScroll,
     pickAdd,
     citeGo,
     citeStep: (_dir: 1 | -1) => false,
