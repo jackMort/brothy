@@ -1,15 +1,26 @@
 // The chat pill: `c`, its input and `[[` chips, sending a question about the open note, cancelling, the card's marks,
 // folding onto a cite and stepping through the cites, and the one animation timer. Not pure: closes over the app context.
 import { basename } from "node:path"
-import { noteText } from "../ai/client"
-import type { Chip, Thread } from "../ai/thread"
+import { aiMessage, type ChatResult, cleanReply, type Failure, noteText, shortModel } from "../ai/client"
+import type { AITarget } from "../ai/config"
+import {
+  bodyParts,
+  type Chip,
+  chatContext,
+  chatRequest,
+  type Exchange,
+  parseSources,
+  splitReply,
+  type Thread,
+  verifyCites,
+} from "../ai/thread"
 import { stem } from "../notes/files"
 import { STDIN } from "../notes/workspace"
 import { AI_OFF, type Jobs, makeJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
 import { erase } from "./input"
 import type { Links } from "./links"
-import type { PillState } from "./store"
+import { jobKey, type PillState } from "./store"
 
 /** The `[[` query at the input's end: `[[` and what follows it, up to a `]`. */
 const PICK_TAIL = /\[\[([^\]]*)$/
@@ -135,12 +146,161 @@ function makePillEsc(c: AppCtx, setInput: (input: string) => void) {
   return { pillEsc, pillHide }
 }
 
+/** A chip's note as a send read it. */
+type SentNote = { chip: Chip; src: string }
+
+/** The toast an ended request gets (spec §3): a success only off its note; a failure only with no card on screen. */
+export function answerToast(ok: boolean, here: boolean, cardUp: boolean): "ready" | "failed" | null {
+  if (ok) return here ? null : "ready"
+  return cardUp ? null : "failed"
+}
+
+/** A finished reply as the exchange shows it: its marks verified against the notes as sent. */
+export function doneExchange(ex: Exchange, text: string, notes: readonly SentNote[], now: number): Exchange {
+  const { body, sources } = splitReply(text)
+  const v = verifyCites(bodyParts(body), parseSources(sources), notes)
+  return { ...ex, raw: text, parts: v.parts, cites: v.cites, doneAt: now }
+}
+
+/** Where a request's end lands: its thread, the exchange, the notes as sent and the target. */
+type Sent = { path: string; ex: Exchange; notes: SentNote[]; target: AITarget }
+
+/** A request's end: the exchange replaced in its thread (kept whatever is on screen), and the toast when §3 wants one. */
+function makePillDone(c: AppCtx, { failText }: Pick<Jobs, "failText">, animate: () => void) {
+  const { ui, derive, flash } = c
+  const { patch, setThread } = pillState(c)
+
+  /** Exchange `ex` of thread `path` becomes `next`; false when the thread or the exchange is gone. */
+  const replace = (path: string, ex: Exchange, next: Exchange) => {
+    const t = ui.current.threads[path]
+    if (!t?.turns.includes(ex)) return false
+    setThread({ ...t, turns: t.turns.map((e) => (e === ex ? next : e)) })
+    return true
+  }
+
+  /** The toast `ok` gets for thread `path`, and the note's stem when it is not the open one. */
+  const toastFor = (path: string, ok: boolean) => {
+    const here = ui.current.openPath === path
+    const p = ui.current.pill
+    const cardUp = p?.path === path && p.card && derive().pill !== null
+    return { toast: answerToast(ok, here, cardUp), note: here ? undefined : stem(basename(path)) }
+  }
+
+  /** The answer: its marks verified, its first cite selected while its thread is on the pill. */
+  const answered = ({ path, ex, notes }: Sent, text: string) => {
+    const { toast, note } = toastFor(path, true)
+    const done = doneExchange(ex, text, notes, Date.now())
+    const i = ui.current.threads[path]?.turns.indexOf(ex) ?? -1
+    if (!replace(path, ex, done)) return
+    if (ui.current.pill?.path === path) patch({ hl: done.cites.length ? [i, 1] : null })
+    if (toast) flash(`answer ready · ${note}`)
+  }
+
+  /** The failure: kept on the exchange (the card's `✗` row); a toast only with no card on screen. */
+  const failed = ({ path, ex, target }: Sent, f: Failure) => {
+    const { toast, note } = toastFor(path, false)
+    const error = aiMessage(f, { host: target.host, keyEnv: target.keyEnv, key: target.key, noun: "answer" })
+    if (!replace(path, ex, { ...ex, error })) return
+    if (toast) flash(failText(target, f, "answer", note), "error")
+  }
+
+  /** `done` of a chat job; a cancelled one changes nothing (`esc` already took its exchange). */
+  return (sent: Sent, r: ChatResult) => {
+    if (r.ok) answered(sent, r.text)
+    else if ("failure" in r) failed(sent, r.failure)
+    else return
+    animate()
+  }
+}
+
+/** `⏎`: send the question, or retry a failed one; the request's end lands in its thread. */
+function makePillSend(c: AppCtx, jobs: Jobs, animate: () => void, citeGo: (at?: [number, number] | null) => void) {
+  const { ui, memo, flash, chatInk } = c
+  const { reloadAI, aiGate, startJob } = jobs
+  const { patch, setThread } = pillState(c)
+  const finish = makePillDone(c, jobs, animate)
+
+  /** The target for a send on thread `path`: AI on, no request of its own running, room and a key; else null. */
+  const gate = (path: string): AITarget | null => {
+    const ai = reloadAI()
+    if (!ai) {
+      flash(AI_OFF)
+      return null
+    }
+    if (c.jobs.current.has(jobKey("chat", path))) return null
+    return aiGate(ai)
+  }
+
+  /** The chips' notes read now (an edit between turns is picked up); a gone one is left out with a toast. */
+  const readChips = (t: Thread): SentNote[] =>
+    t.chips.flatMap((chip) => {
+      const f = memo.readNow(chip.path)
+      if (!f.error) return [{ chip, src: f.src }]
+      flash(`${chip.title} gone · left out`)
+      return []
+    })
+
+  /** The new exchange in its thread (failed ones dropped: a retry replaces, a follow-up drops), the card up and pinned. */
+  const push = (t: Thread, chips: Chip[], ex: Exchange) => {
+    setThread({ ...t, chips, turns: [...t.turns.filter((e) => !e.error), ex] })
+    patch({ input: "", card: true, top: null, hl: null, pick: null })
+    chatInk.current.set(t.path, [])
+  }
+
+  /** Send `q` for the pill's thread `path`. */
+  const ask = (path: string, q: string) => {
+    const t = ui.current.threads[path]
+    const target = t && gate(path)
+    if (!t || !target) return
+    const notes = readChips(t)
+    if (!notes.length) return flash("nothing to ask about")
+    const chips = notes.map((n) => n.chip)
+    const done = t.turns.filter((e) => !e.error)
+    const ctx = chatContext(
+      notes.map((n) => noteText(n.src)),
+      chips,
+      done,
+      q,
+      target.maxChars,
+    )
+    const model = shortModel(target.model)
+    const ex: Exchange = { q, at: Date.now(), model, raw: null, parts: [], cites: [], error: null, doneAt: null }
+    push(t, chips, ex)
+    startJob("chat", path, target, chatRequest(ctx, q), {
+      stream: true,
+      delta: (raw) => {
+        chatInk.current.get(path)?.push({ len: cleanReply(raw).length, at: Date.now() })
+        animate()
+      },
+      done: (r) => finish({ path, ex, notes, target }, r),
+    })
+    animate()
+  }
+
+  /** `⏎`: the `[[` list adds; text sends; empty: retry a failed last exchange, else go to the selected mark. */
+  const pillSend = (pickAdd: () => void) => {
+    const p = ui.current.pill
+    if (!p) return
+    if (p.pick) return pickAdd()
+    const q = p.input.trim()
+    if (q) return ask(p.path, q)
+    const last = ui.current.threads[p.path]?.turns.at(-1)
+    if (last?.error) return ask(p.path, last.q)
+    if (p.card && p.hl) citeGo(p.hl)
+  }
+
+  return { pillSend }
+}
+
 /** The pill: every action behind `c` and the `chat` mode. */
 export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   const jobs = makeJobs(c)
   const animate = () => {} // the pill's animation timer comes later
   const input = makePillInput(c, links)
   const none = () => {}
+  const citeGo = none as (at?: [number, number] | null) => void // landing on a cite comes later
+  const pickAdd = none // the `[[` list's add comes later
+  const { pillSend } = makePillSend(c, jobs, animate, citeGo)
   return {
     ...makePillOpen(c, jobs, animate),
     ...input,
@@ -149,10 +309,10 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
     pillMove: (dir: 1 | -1) => {
       if (dir < 0) input.pillRecall()
     },
-    pillSend: none,
+    pillSend: () => pillSend(pickAdd),
     pillScroll: none as (dir: 1 | -1) => void,
-    pickAdd: none,
-    citeGo: none as (at?: [number, number] | null) => void,
+    pickAdd,
+    citeGo,
     citeStep: (_dir: 1 | -1) => false,
     pillHover: none as (at: [number, number]) => void,
   }

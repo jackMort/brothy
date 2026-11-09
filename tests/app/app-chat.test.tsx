@@ -2,9 +2,9 @@
 import { expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
-import { filler, HINT_ROW, keys, OLLAMA, useAppHarness, waitFrame } from "./helpers"
+import { filler, HINT_ROW, keys, OLLAMA, useAppHarness, W120, waitFor, waitFrame } from "./helpers"
 
-const { tmp, mount, mountAI, aiConfig } = useAppHarness()
+const { tmp, mount, mountAI, aiConfig, openNote } = useAppHarness()
 
 const NOTE =
   "# Slow broth\n\nIntro line.\n\n## Strain and cool\n\nPour the broth through a sieve; do not press the bones: pressing clouds it.\n"
@@ -92,4 +92,63 @@ test("with the pill up, the note scrolls far enough for its last row to clear th
   const last = rows.findIndex((r) => r.includes("filler 39"))
   // body rows 2..27 at 100×30 (CH 26): the pill takes the last 3, the row above it stays clear
   expect(last).toBe(2 + 26 - 3 - 2)
+})
+
+/** The pill opened on NOTE with `q` sent; resolves with the app and the stub. */
+async function asked(q = "why cloudy?", files: Record<string, string> = { "Slow broth.md": NOTE }) {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp(files), "Slow broth.md")
+  await keys(s, "c", `type:${q}`, "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  return { s, ai }
+}
+const REPLY =
+  'Do not press the bones [1]. It clears [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "not in the note"'
+
+test("⏎ sends one request: system with the note tag, the question; the footer says esc cancel while it streams", async () => {
+  const { s, ai } = await asked()
+  const m = ai.calls[0]!.body.messages
+  expect(m.map((x) => x.role)).toEqual(["system", "user"])
+  expect(m[0]!.content).toContain('<note id="1" title="Slow broth">')
+  expect(m[1]!.content).toBe("why cloudy?")
+  ai.send(0, "Do not press")
+  expect(hints(await waitFrame(s, (f) => hints(f).includes("esc cancel")))).toContain("esc cancel")
+})
+
+test("a follow-up sends [system, user, assistant, user]; a failed exchange is never sent", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (f) => hints(f).includes("go to"))
+  await keys(s, "type:and salt?", "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  expect(ai.calls[1]!.body.messages.map((x) => x.role)).toEqual(["system", "user", "assistant", "user"])
+  expect(ai.calls[1]!.body.messages[2]!.content).toBe(REPLY)
+})
+
+test("an error shows in the card, no toast; ⏎ on an empty input retries as the second call", async () => {
+  const { s, ai } = await asked()
+  ai.fail(0, "model not found")
+  const f = await waitFrame(s, (x) => hints(x).includes("⏎ retry"))
+  expect(f).not.toContain("AI: model not found") // the toast; the card shows the message alone
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 2)
+  expect(ai.calls[1]!.body.messages.map((x) => x.role)).toEqual(["system", "user"])
+})
+
+test("with 3 requests running ⏎ toasts busy and keeps the input", async () => {
+  aiConfig(OLLAMA)
+  const files = { "a.md": "# A\n\nA.\n", "b.md": "# B\n\nB.\n", "c.md": "# C\n\nC.\n", "Slow broth.md": NOTE }
+  const { s, ai } = await mountAI(tmp(files), "a.md", { size: W120 })
+  await keys(s, "a")
+  for (const n of ["b", "c"]) {
+    await openNote(s, n)
+    await keys(s, "a")
+  }
+  await waitFor(s, () => ai.calls.length === 3)
+  await openNote(s, "Slow broth")
+  const f = await keys(s, "c", "type:again", "enter")
+  expect(f).toContain("AI busy · 3 requests running")
+  expect(ai.calls).toHaveLength(3)
+  expect(hints(f)).toContain("⏎ send") // the input kept: still the input stage
 })
