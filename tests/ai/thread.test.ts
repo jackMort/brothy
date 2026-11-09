@@ -7,6 +7,8 @@ import {
   type Chip,
   chatContext,
   chatRequest,
+  citeSection,
+  citeWhere,
   type Exchange,
   MAX_CHAT,
   parseSources,
@@ -171,5 +173,20 @@ describe("verifyCites", () => {
       notes,
     )
     expect(r).toEqual({ parts: ["x"], cites: [] })
+  })
+})
+
+describe("where a cite is", () => {
+  const SRC = "Lead text.\n\n# Slow broth\n\n## Strain and *cool*\n\nPour.\n"
+  test("citeSection: the section whose own range holds the line; the lead-in is -1", () => {
+    expect(citeSection(SRC, 0).index).toBe(-1)
+    expect(citeSection(SRC, 6).index).toBe(1)
+    expect(citeSection(SRC, 2).index).toBe(0)
+  })
+  test("citeWhere: the heading here, `<note> › <heading>` elsewhere, the title for a lead-in", () => {
+    const c = (path: string, line: number) => ({ n: 1, path, quote: "q", line })
+    expect(citeWhere(c("/v/a.md", 6), "/v/a.md", SRC, "a")).toBe("Strain and cool")
+    expect(citeWhere(c("/v/sim.md", 6), "/v/a.md", SRC, "simmering")).toBe("simmering › Strain and cool")
+    expect(citeWhere(c("/v/a.md", 0), "/v/a.md", SRC, "Slow broth")).toBe("Slow broth")
   })
 })

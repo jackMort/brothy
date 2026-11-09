@@ -4,6 +4,7 @@
 
 import { parseFrontMatter } from "../markdown/frontmatter"
 import { normalize, scanComments } from "../markdown/lexer"
+import { type NoteSection, noteSections } from "../markdown/sections"
 import { plainLine } from "../notes/vault"
 import { quoteSpan } from "../ui/nav"
 import { type ChatReq, cleanReply, clip, type Msg, tokens } from "./client"
@@ -228,4 +229,18 @@ export function verifyCites(
   const last = out.at(-1)
   if (dropped && typeof last === "string") out[out.length - 1] = last.trimEnd()
   return { parts: out, cites }
+}
+
+/** The section of `src` whose own lines hold `line`; the lead-in (index -1) when none does. */
+export function citeSection(src: string, line: number): NoteSection {
+  const secs = noteSections(src)
+  return secs.findLast((s) => s.own[0] <= line && line < s.own[1]) ?? secs[0]!
+}
+
+/** A cite's place for its card row: the heading in the thread's note, `<title> › <heading>` in another, the title for a lead-in. */
+export function citeWhere(cite: Cite, threadPath: string, src: string, title: string): string {
+  const sec = citeSection(src, cite.line)
+  if (sec.index < 0) return title
+  const heading = plainLine(sec.text)
+  return cite.path === threadPath ? heading : `${title} › ${heading}`
 }
