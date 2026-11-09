@@ -67,6 +67,7 @@ import {
   type SummaryView,
 } from "../ui/panel"
 import { halfBlocks } from "../ui/picture"
+import type { Arrival } from "../ui/pill"
 import { proofRows } from "../ui/proof"
 import { WELCOME_RECENTS } from "../ui/welcome"
 import { sectionRanges, wordSuffix } from "../ui/zen"
@@ -417,6 +418,8 @@ export interface DeriveRefs {
   scrolls: { current: Map<string, ScrollEntry> }
   /** the match list last derived, to remap `matchLine` when the lines are re-wrapped */
   matchSeen: { current: { matches: number[]; query: string } }
+  /** chat arrival logs by thread path: deltas append without a `set` */
+  chatInk: { current: Map<string, Arrival[]> }
 }
 
 /** `derive()` over these refs. */

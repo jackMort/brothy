@@ -30,7 +30,7 @@ const PICK_HINT = "  linked from here"
 /** What the footer follows. */
 type ChatStage = "input" | "pick" | "waiting" | "answer" | "error"
 /** One delta: the cleaned reply's length after it, and when it came. */
-interface Arrival {
+export interface Arrival {
   len: number
   at: number
 }

@@ -6,6 +6,7 @@ import type { AskState, Candidate, Landed } from "../ai/ask"
 import { type Glosses, loadSummaries, type Summaries } from "../ai/cache"
 import type { AIConfig } from "../ai/config"
 import type { Change, DeltaNote } from "../ai/delta"
+import type { Thread } from "../ai/thread"
 import type { GraphTerm } from "../graph/sheet"
 import type { HeadingStyle } from "../markdown/heading-style"
 import type { Geometry } from "../markdown/render"
@@ -72,8 +73,24 @@ type DeltaState = {
   error: string | null
   earlier: Explained | null
 }
+/** The chat pill on screen (`app/pill.ts`): `focus` takes the keys, `card` shows the thread, `land` is set while folded on a cite. */
+type PillState = {
+  /** the thread on screen */
+  path: string
+  focus: boolean
+  card: boolean
+  input: string
+  /** selected cite: exchange index, n */
+  hl: [number, number] | null
+  /** card scroll; null = pinned to its bottom */
+  top: number | null
+  pick: { q: string; hl: number } | null
+  land: { exchange: number; n: number; path: string; at: number } | null
+  /** the border's ink-in */
+  openedAt: number
+}
 /** What an AI job is for. Its key in `jobs` is `<kind>:<id>` (`tldr:<path>`, `gloss:<sectionId>`, `delta:<path>`), or the bare kind for `ask` (one at a time). */
-export type JobKind = "tldr" | "gloss" | "delta" | "ask"
+export type JobKind = "tldr" | "gloss" | "delta" | "ask" | "chat"
 /** The `jobs` key of a job: `<kind>:<id>`, or the bare kind without an id. */
 export const jobKey = (kind: JobKind, id?: string) => (id === undefined ? kind : `${kind}:${id}`)
 /** A request in flight: its kind, the raw text streamed so far, how to cancel it, and what its waiting row shows. */
@@ -274,6 +291,10 @@ export interface UI {
   picFailed: boolean
   /** the picture sheet while open */
   picture: { id: number } | null
+  /** chat threads by note path, this run only (`switchWorkspace` drops them) */
+  threads: Record<string, Thread>
+  /** the chat pill; null while hidden */
+  pill: PillState | null
 }
 
 /** The fields that start from config.json (the `--theme`, `--transparent` and `motion` arguments win over it). */
@@ -321,6 +342,9 @@ const pictureSettings = (
   picture: null,
 })
 
+/** The chat's fields at mount: no thread, no pill. */
+const chatSettings = (): Pick<UI, "threads" | "pill"> => ({ threads: {}, pill: null })
+
 /** The store at mount: the workspace from the CLI's root and note (or the piped document), the saved config, the summary cache. */
 export function initUI(
   root: string,
@@ -339,6 +363,7 @@ export function initUI(
     ...savedSettings(cfg, themeName, transparent, piped, motion, auto, termMode),
     ...graphSettings(cfg),
     ...pictureSettings(cfg),
+    ...chatSettings(),
     themePick: null,
     ...w,
     filter: "",

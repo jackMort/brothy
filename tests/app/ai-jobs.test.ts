@@ -98,6 +98,31 @@ describe("startJob and the wait tick", () => {
     expect(r.c.timers.current.wait).toBeUndefined()
   })
 
+  test("a chat job's delta hears each raw stream, after job.raw is set", async () => {
+    const r = runner()
+    const seen: [string, string][] = []
+    r.jobs.startJob(
+      "chat",
+      "/n.md",
+      target,
+      { ...req, clean: (x) => x },
+      {
+        stream: true,
+        delta: (raw) => void seen.push([raw, r.c.jobs.current.get(jobKey("chat", "/n.md"))!.raw]),
+        done: () => {},
+      },
+    )
+    await settle(() => r.ai.calls.length > 0)
+    r.ai.send(0, "he")
+    await settle(() => seen.length === 1)
+    r.ai.send(0, "llo")
+    await settle(() => seen.length === 2)
+    expect(seen).toEqual([
+      ["he", "he"],
+      ["hello", "hello"],
+    ])
+  })
+
   test("a cancelled or failed job stops it", async () => {
     const r = runner()
     r.start("a.md")

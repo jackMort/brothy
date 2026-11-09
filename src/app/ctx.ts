@@ -34,6 +34,8 @@ export interface Timers {
   hush?: ReturnType<typeof setTimeout>
   /** looking for the terminal's resolution, which arrives with no event */
   cell?: ReturnType<typeof setTimeout>
+  /** the chat pill's one animation timer: steam, ink, glow, tint */
+  chat?: ReturnType<typeof setTimeout>
 }
 
 /** The welcome page: highlighted row, recents generation, steam tick, ink frame, animation state, its start and size. */

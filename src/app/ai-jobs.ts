@@ -27,7 +27,7 @@ import type { Derived } from "./derive"
 import type { Links } from "./links"
 import { type Job, type JobKind, jobKey, type UI } from "./store"
 
-/** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask) */
+/** AI requests in flight at once, over every kind (TL;DR, gloss, reload explain, ask, chat) */
 const MAX_JOBS = 3
 /** streamed summary text re-renders at most this often (ms) */
 const AI_FRAME = 100
@@ -44,6 +44,8 @@ interface JobRun {
   stream?: boolean
   /** runs once the job is registered, before the request goes out */
   begin?: () => void
+  /** each raw delta, after `job.raw` is set (chat's arrival log) */
+  delta?: (raw: string) => void
   /** the result, only while the job is still the one under its key (not cancelled or replaced), once it left `jobs`, and while App is mounted */
   done: (r: ChatResult, job: Job) => void
 }
@@ -98,6 +100,7 @@ function makeRunner(c: AppCtx) {
       ? (raw: string) => {
           job.raw = raw
           if (!job.live) job.live = req.clean(raw) !== ""
+          run.delta?.(raw)
           aiRedraw()
         }
       : undefined

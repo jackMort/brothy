@@ -42,6 +42,7 @@ import { INK_STEPS } from "./ui/chrome"
 import { DRAWER_BELOW } from "./ui/layout"
 import { usePointer } from "./ui/overlay"
 import { changeKey, type InfoItem, tldrHead, tldrWord } from "./ui/panel"
+import type { Arrival } from "./ui/pill"
 import { fadeStep, GHOST_STEPS, tooSmall } from "./ui/status"
 import { STILL_TICK } from "./ui/welcome"
 
@@ -232,6 +233,7 @@ function useAppRefs(stdin: string | undefined, W: number, H: number) {
 function useAIRefs() {
   return {
     jobs: useRef(new Map<string, Job>()),
+    chatInk: useRef(new Map<string, Arrival[]>()),
     askMemo: useRef(new Map<string, { queries: string[]; model: string }>()),
     rerankMemo: useRef(new Map<string, { order: string[]; why: Record<string, string>; model: string }>()),
   }
