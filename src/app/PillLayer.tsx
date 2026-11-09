@@ -10,6 +10,7 @@ import { surface } from "../theme/theme"
 import {
   CHAT_DIM,
   cardFoot,
+  cardTop,
   cardWindow,
   caretCol,
   frameRows,
@@ -108,7 +109,7 @@ function cardBlock({ t }: Derived, v: PillView, a: PillActions): ReactNode {
     const row = e.y - (e.currentTarget?.screenY ?? 0) - 1 + win.top
     return out.stops.find((st) => st.row === row)?.cite
   }
-  return block("chat-card", v.geo.x, v.geo.top - 1 - rows.length, v.geo.w, rows, {
+  return block("chat-card", v.geo.x, cardTop(v), v.geo.w, rows, {
     onMouseDown: own(a, (e) => {
       const at = e.button === MouseButton.LEFT ? citeAt(e) : undefined
       if (at) a.citeGo(at)

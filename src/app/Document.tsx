@@ -31,7 +31,7 @@ import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { type LinkSpot, markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
 import type { ChangeView } from "../ui/panel"
-import { CHAT_DIM, quoteTint, tintBg } from "../ui/pill"
+import { CHAT_DIM, cardTop, quoteTint, tintBg } from "../ui/pill"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
 import { landedHere } from "./Chrome"
@@ -382,8 +382,9 @@ function noteLines(c: AppCtx, d: Derived, pill: PillActions) {
   const dim = pageDim(d, scrim)
   const foot = landFoot(d)
   const footAt = CH - foot.length
-  // pictures stop at the pill's top by the user's decision (the image may reach into the clear row); the text stops at the clear row (pillCut)
-  const picCut = d.pill ? Math.min(footAt, d.pill.geo.top) : footAt
+  // pictures stop at the pill's top by the user's decision (the image may reach into the clear row), at the card's top
+  // while it is up; the text stops at pillCut
+  const picCut = d.pill ? Math.min(footAt, d.pill.card ? pillCut(d) : d.pill.geo.top) : footAt
   const margin = changeMargin(d)
   return (
     <box key="lines" style={{ flexDirection: "column", width: CW, height: CH, flexShrink: 0 }}>
@@ -418,8 +419,8 @@ function pageDim({ t, pill }: Derived, scrim: boolean) {
   return (spans: Span[]) => (amount ? dimSpans(spans, t, amount) : spans)
 }
 
-/** The rows above the chat pill's band (its clear row and its 3 rows draw no text), all CH while the pill is hidden. */
-const pillCut = ({ pill, L }: Derived) => (pill ? pill.geo.top - 1 : L.CH)
+/** The rows above what the chat pill covers: the card's top border while it is up, else the band's clear row; all CH while the pill is hidden. The text column is clear from there down. */
+const pillCut = ({ pill, L }: Derived) => (pill ? cardTop(pill) : L.CH)
 
 /** The spot is a picture's label on its reserved rows (a blank row has no text to draw it in, an image sits under it). */
 function onReserved(view: Rendered, sp: LinkSpot) {

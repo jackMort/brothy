@@ -102,6 +102,14 @@ export function pillGeo(L: { CW: number; CH: number }): PillGeo {
   return { x: Math.floor((L.CW - w) / 2), w, top: L.CH - PILL_H, cardMax: L.CH - PILL_H - 2 }
 }
 
+/** The card's total height as drawn: its window of rows and the two border rows (0 when no card is up). */
+function cardHeight(v: Pick<PillView, "card" | "cardOut" | "geo">): number {
+  return v.card && v.cardOut ? Math.min(v.cardOut.rows.length, v.geo.cardMax - 2) + 2 : 0
+}
+
+/** The first row the pill's layers cover: the card's top border while it is up, else the clear row above the pill. */
+export const cardTop = (v: Pick<PillView, "card" | "cardOut" | "geo">): number => v.geo.top - 1 - cardHeight(v)
+
 export function chatStage(v: Pick<PillView, "pick" | "running" | "card" | "thread">): ChatStage {
   if (v.pick) return "pick"
   if (v.running) return "waiting"

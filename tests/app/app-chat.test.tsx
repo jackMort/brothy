@@ -884,3 +884,17 @@ test("motion on: the folded cite's tint fades in from the page to the full tint"
   await waitFor(s, () => bgOf(s, "do not press").includes(B.backgroundElement), 1500)
   expect(bgOf(s, "through a sieve;")).toEqual([B.backgroundElement])
 })
+
+test("the card's rows clear the text column: no note text beside the card, the rows above stay", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({ "long.md": `# Long\n\n${filler(60)}\n` }), "long.md", { size: W120 })
+  await keys(s, "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, "Short answer.")
+  ai.end(0)
+  const f = await waitFrame(s, (x) => x.includes("Short answer."))
+  const rows = f.split("\n")
+  const top = rows.findIndex((r) => r.includes("╭"))
+  expect(rows.slice(top, top + 8).filter((r) => r.includes("fill"))).toEqual([])
+  expect(rows.slice(2, top).some((r) => r.includes("filler"))).toBe(true)
+})
