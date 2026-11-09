@@ -15,6 +15,7 @@ import {
   matchRanges,
   narrowLabels,
   overlayAt,
+  quoteSpan,
   relocate,
   remapTop,
   selectedText,
@@ -355,4 +356,17 @@ test("findItems: a numbered row per match in Preview, the hits in primary, cut t
   expect(text(c)).toContain("needle")
   expect(text(c).startsWith("…")).toBe(true)
   expect(findItems(lines, [], "x", false, 40, t)).toEqual([])
+})
+
+test("quoteSpan: where a phrase starts and ends, across rows, case and blank runs folded", () => {
+  const plain = ["  the quick", "brown   fox jumps", "", "over"]
+  expect(quoteSpan(plain, 0, plain.length, "Quick Brown fox")).toEqual({ row: 0, col: 6, endRow: 1, endCol: 11 })
+  expect(quoteSpan(plain, 0, plain.length, "jumps over")).toEqual({ row: 1, col: 12, endRow: 3, endCol: 4 })
+  expect(quoteSpan(plain, 2, plain.length, "quick")).toBeNull()
+  expect(quoteSpan(plain, 0, plain.length, "   ")).toBeNull()
+})
+
+test("quoteSpan: a character whose lowercase is longer does not shift columns", () => {
+  const plain = ["İİ the quick fox"]
+  expect(quoteSpan(plain, 0, 1, "QUICK")).toEqual({ row: 0, col: 7, endRow: 0, endCol: 12 })
 })

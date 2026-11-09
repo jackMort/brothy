@@ -3,6 +3,7 @@
 import { lineText, type Span } from "../lib/spans"
 import { clamp, pushSpan, segmenter, superscript, width } from "../lib/text"
 import type { Geometry, Pic } from "../markdown/render"
+import { foldSame } from "../notes/vault"
 import type { Theme } from "../theme/theme"
 import { fitHits, hitSpans, type PickerItem } from "./rows"
 
@@ -380,27 +381,61 @@ export function copiedCount(text: string): [number, string] {
   return n > 1 ? [n, "line"] : [[...text].length, "char"]
 }
 
-/**
- * Row where `needle` starts within rows `from..to` of `plain` (lowercase rows), read as one
- * space-joined text so a phrase may wrap; case-insensitive, whitespace runs count as one space.
- */
-export function findQuote(plain: string[], from: number, to: number, needle: string): number | null {
-  const want = needle.toLowerCase().replace(/\s+/g, " ").trim()
-  if (!want) return null
-  const rows: number[] = []
-  const starts: number[] = []
-  let text = ""
-  for (let i = Math.max(0, from); i < Math.min(to, plain.length); i++) {
-    const row = plain[i]!.toLowerCase().replace(/\s+/g, " ").trim()
-    if (!row) continue
-    if (text) text += " "
-    rows.push(i)
-    starts.push(text.length)
-    text += row
+/** Where a quote sits in the rows: its first and last rows, and the columns in them (`endCol` exclusive). */
+export interface QuoteSpan {
+  row: number
+  col: number
+  endRow: number
+  endCol: number
+}
+
+/** The rows as one folded, space-joined text, with the row and column each of its characters came from. */
+interface Flat {
+  text: string
+  at: [number, number][]
+}
+
+/** Adds one row to `flat`: blank runs fold to one space (at the run's first column), rows join with a space. */
+function flatRow(flat: Flat, row: string, i: number) {
+  let gap = -1
+  for (let c = 0; c < row.length; c++) {
+    if (/\s/.test(row[c]!)) {
+      if (gap < 0) gap = c
+      continue
+    }
+    if (flat.text && (gap >= 0 || flat.at.at(-1)![0] !== i)) {
+      flat.text += " "
+      flat.at.push([i, gap >= 0 ? gap : c])
+    }
+    gap = -1
+    flat.text += row[c]
+    flat.at.push([i, c])
   }
-  const at = text.indexOf(want)
-  if (at < 0) return null
-  let k = 0
-  while (k + 1 < starts.length && starts[k + 1]! <= at) k++
-  return rows[k]!
+}
+
+function flatten(plain: readonly string[], from: number, to: number): Flat {
+  const flat: Flat = { text: "", at: [] }
+  for (let i = Math.max(0, from); i < Math.min(to, plain.length); i++) flatRow(flat, foldSame(plain[i]!), i)
+  return flat
+}
+
+/**
+ * Where `needle` sits within rows `from..to` of `plain`, read as one space-joined text so a phrase may wrap;
+ * case-insensitive (length-keeping, so columns hold), whitespace runs count as one space. Columns are
+ * offsets into each row's text.
+ */
+export function quoteSpan(plain: readonly string[], from: number, to: number, needle: string): QuoteSpan | null {
+  const want = foldSame(needle).replace(/\s+/g, " ").trim()
+  if (!want) return null
+  const { text, at } = flatten(plain, from, to)
+  const k = text.indexOf(want)
+  if (k < 0) return null
+  const [row, col] = at[k]!
+  const [endRow, last] = at[k + want.length - 1]!
+  return { row, col, endRow, endCol: last + 1 }
+}
+
+/** Row where `needle` starts within rows `from..to` of `plain` (`quoteSpan`'s first row). */
+export function findQuote(plain: string[], from: number, to: number, needle: string): number | null {
+  return quoteSpan(plain, from, to, needle)?.row ?? null
 }
