@@ -133,11 +133,12 @@ function pickBlock({ t, L }: Derived, v: PillView, a: PillActions): ReactNode {
   return block("chat-pick", left, v.geo.top - rows.length, PICK_W, rows, { onMouseDown: own(a) })
 }
 
-/** With the card up no image draws: each picture on screen gets `▣ <alt>` muted, dimmed with the page, at its first visible reserved row above `rows`. */
-export function pictureAlts({ t, view, top, L }: Derived, rows: number): ReactNode[] {
+/** With the card up no image draws: each picture drawn as pixels on screen gets `▣ <alt>` muted, dimmed with the page, at its first visible reserved row above `rows`. */
+export function pictureAlts({ t, view, top, L, picMode }: Derived, rows: number): ReactNode[] {
+  if (picMode !== "pixels") return []
   return (view.pics ?? []).flatMap((p) => {
     const y = Math.max(p.line, top) - top
-    if (p.line + p.rows <= top || y >= rows) return []
+    if (p.problem || p.line + p.rows <= top || y >= rows) return []
     const text = `▣ ${truncate(safeLine(p.alt), Math.max(1, L.CW - p.left - 2))}`
     return [
       <box

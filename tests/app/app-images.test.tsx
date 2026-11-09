@@ -4,6 +4,7 @@ import { existsSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { NativeImage, TextRenderable } from "@opentui/core"
 import { hexOf } from "../../src/graph/canvas"
+import { mix } from "../../src/theme/theme"
 import { blankPng, solidPng } from "../helpers/png"
 import { hex } from "../helpers/theme"
 import {
@@ -777,6 +778,7 @@ test("chat: with the card up no <image>, a muted ▣ alt row at the picture's fi
   aiConfig(OLLAMA)
   const s = await pictured(`# Top\n\n${filler(1)}\n\n![Plan](plan.png)\n\nend`)
   await shown(s)
+  const imgRow = imagesOf(s)[0]!.y
   await keys(s, "c", "type:q", "enter")
   await waitFor(s, () => imagesOf(s).length === 0)
   const row = s
@@ -784,4 +786,36 @@ test("chat: with the card up no <image>, a muted ▣ alt row at the picture's fi
     .split("\n")
     .find((r) => r.includes("▣ Plan"))
   expect(row).toBeDefined()
+  const at = s
+    .captureCharFrame()
+    .split("\n")
+    .findIndex((r) => r.includes("▣ Plan"))
+  const first = imgRow
+  expect(at).toBe(first)
+  const sp = s.captureSpans().lines[at]!.spans.find((x) => x.text.includes("▣ Plan"))!
+  expect(hex(sp.fg)).toBe(mix(B.textMuted, B.background, 0.5))
+})
+
+test("chat: with the card up a text-mode or missing picture keeps its own row, once, without an alt overlay", async () => {
+  aiConfig(OLLAMA)
+  const text = await mount(vault(NOTE), "n.md", { fetch: aiStub().f })
+  await waitFrame(text, (x) => x.includes("▣ Plan · 200×100 · ⏎ view"))
+  await keys(text, "c", "type:q", "enter")
+  await waitFrame(text, (x) => x.includes("asking llama3.2"))
+  const rows = (s: Setup) => s.captureCharFrame().split("\n")
+  expect(rows(text).filter((r) => r.includes("▣ Plan"))).toHaveLength(1)
+  expect(rows(text).find((r) => r.includes("▣ Plan"))).toContain("▣ Plan · 200×100")
+  const gone = await pictured("# Top\n\n![Gone](nope.png)\n\nend")
+  await waitFrame(gone, (x) => x.includes("▣ Gone"))
+  await keys(gone, "c", "type:q", "enter")
+  await waitFrame(gone, (x) => x.includes("asking llama3.2"))
+  const hit = rows(gone).filter((r) => r.includes("▣ Gone"))
+  expect(hit).toHaveLength(1)
+  expect(hit[0]).toMatch(/▣ Gone · \S/)
+  // the row's own glyph colour (primary, dimmed with the page), not an overlay's muted one
+  const mark = gone
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .find((x) => x.text.startsWith("▣"))!
+  expect(hex(mark.fg)).toBe(mix(B.primary, B.background, 0.5))
 })

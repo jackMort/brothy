@@ -413,10 +413,19 @@ test("the page dims by 0.5 while the card is up, not while typing", async () => 
   aiConfig(OLLAMA)
   const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", { size: { width: 120, height: 30 } })
   const fgOf = (word: string) => hex(spansOf(s).find((sp) => sp.text.includes(word))!.fg)
+  // the minimap's first lit cell in the body's upper rows (columns 116-119)
+  const miniFg = () =>
+    s
+      .captureSpans()
+      .lines.slice(3, 9)
+      .flatMap((l) => l.spans)
+      .find((sp) => /[\u2800-\u28ff]/.test(sp.text) && sp.fg)!.fg
   await keys(s, "c", "type:q")
   expect(fgOf("Intro line")).toBe(B.text)
+  const lit = hex(miniFg())
   await keys(s, "enter")
   await waitFor(s, () => ai.calls.length === 1)
   await s.renderOnce()
+  expect(hex(miniFg())).toBe(mix(lit, B.background, 0.5))
   expect(fgOf("Intro line")).toBe(mix(B.text, B.background, 0.5))
 })
