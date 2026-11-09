@@ -14,12 +14,12 @@ import type { VaultIndex } from "../../notes/vault"
 import type { Theme } from "../../theme/theme"
 import { waitSecs } from "../../ui/footnote"
 import type { layout } from "../../ui/layout"
-import { cached, quoteSpan } from "../../ui/nav"
+import { cached } from "../../ui/nav"
 import {
   type Arrival,
   cardRows,
   chatStage,
-  citeRange,
+  citeSpot,
   PICK_ROWS,
   type PickItem,
   type PillView,
@@ -78,11 +78,10 @@ export function chatMemo(stdin: string | undefined) {
     ),
     card: cached(cardRows),
     pickItems: cached(pickList),
-    citeSpan: cached((view: Rendered, source: boolean, src: string, cite: Cite) => {
-      const sec = citeSection(src, cite.line)
-      const r = citeRange(view, source, sec.index, cite.line)
-      return quoteSpan(view.plain, r.from, r.to, quoteNeedle(cite.quote, source))
-    }),
+    /** where cite `cite` is in `view` of its note `src`: its section's first row and its quote (`citeSpot`) */
+    citeSpot: cached((view: Rendered, source: boolean, src: string, cite: Cite) =>
+      citeSpot(view, source, citeSection(src, cite.line).index, cite.line, quoteNeedle(cite.quote, source)),
+    ),
   }
 }
 
@@ -174,9 +173,13 @@ function pickFor(s: UI, memo: Memo, opened: Opened, ix: VaultIndex, thread: Thre
   return memo.pickItems(s.linkTree, q, ix, linked.join(SEP), thread.chips.map((c) => c.path).join(SEP))
 }
 
-/** The folded cite's quote in the view on screen; null when it isn't folded here. */
+/**
+ * The folded cite's quote in the view on screen; null when it isn't folded here. Only for a cite in the open note:
+ * `memo.read` holds one entry, the open note's (`citeGo` opens the cite's note before it folds).
+ */
 function quoteFor(s: UI, memo: Memo, view: Rendered, thread: Thread) {
   const land = s.pill?.land
-  const cite = land && land.path === s.openPath ? thread.turns[land.exchange]?.cites.find((k) => k.n === land.n) : null
-  return cite ? memo.citeSpan(view, s.source, memo.read(cite.path, s.reload).src, cite) : null
+  const cite = land ? thread.turns[land.exchange]?.cites.find((k) => k.n === land.n) : null
+  if (!cite || cite.path !== s.openPath) return null
+  return memo.citeSpot(view, s.source, memo.read(cite.path, s.reload).src, cite).quote
 }

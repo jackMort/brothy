@@ -426,6 +426,9 @@ function sourceSpans(
 const isProse = (c: SourceStyle, i: number, h: SourceHeading | undefined, setext: SourceHeading | null) =>
   i >= c.fmLines && !c.hidden[i] && !c.fenceLines.has(i) && !c.codeLines.has(i) && !h && !setext
 
+/** The width of Source's line-number gutter for a note of `lines` source lines: the widest number and two spaces. */
+export const sourceGutter = (lines: number) => String(lines).length + 2
+
 /** Raw Markdown with a line-number gutter and light syntax coloring. */
 export function renderSource(src: string, max: number, t: Theme, opts: RenderOpts = {}): Rendered {
   src = normalize(src)
@@ -436,7 +439,7 @@ export function renderSource(src: string, max: number, t: Theme, opts: RenderOpt
   const { kept, hidden } = scanComments(orig, fmLines)
   const { headings: found, fenceLines, codeLines } = sourceStructure(kept, fmLines, t, hidden)
   const style: SourceStyle = { t, fmLines, hidden, fenceLines, codeLines }
-  const gw = String(raw.length).length
+  const gw = sourceGutter(raw.length) - 2
   const lines: Line[] = []
   const headings: Heading[] = []
   const srcRow: number[] = []

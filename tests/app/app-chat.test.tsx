@@ -1,6 +1,6 @@
 // App: the chat pill: c, the input, sending, the card, marks and cites.
 import { expect, test } from "bun:test"
-import { rmSync } from "node:fs"
+import { rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { mix } from "../../src/theme/theme"
 import { hex } from "../helpers/theme"
@@ -557,4 +557,164 @@ test("the terminal shrinks with the card up: the card re-pins and keeps the top 
   const pillTop = tops[1]!
   expect(rows[pillTop - 1]!.trim()).toBe("") // the clear row between the card and the pill
   expect(rows[pillTop - 2]).toContain("╰")
+})
+
+// ------------------------------------------------------------- folded on a cite
+
+/** The backgrounds of the page's spans holding `word` (the pill's `“quote”` left out). */
+const bgOf = (s: Awaited<ReturnType<typeof asked>>["s"], word: string) =>
+  s
+    .captureSpans()
+    .lines.flatMap((l) => l.spans)
+    .filter((sp) => sp.text.includes(word) && !sp.text.includes("“"))
+    .map((sp) => hex(sp.bg))
+
+test("⏎ on ¹ folds onto it: no card, the pill holds the cite, its row on screen with ¹ in the gutter, the chatLanded footer", async () => {
+  const long = NOTE.replace("## Strain", `${"filler\n\n".repeat(30)}## Strain`)
+  const { s, ai } = await asked("why?", { "Slow broth.md": long })
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  const f = await keys(s, "enter")
+  expect(f).toContain("¹ “do not press the bones”")
+  expect(f).toContain("1 of 1")
+  expect(f).not.toContain("go to") // the card is gone
+  const row = f.split("\n").find((r) => r.includes("do not press the bones:"))
+  expect(row).toMatch(/¹ +Pour the broth/)
+  expect(hints(f)).toContain("[ ] marks")
+  expect(hints(f)).toContain("c answer")
+  // the quote is tinted (motion off: the full tint), the text before it is not; the page is not dimmed
+  expect(bgOf(s, "do not press the bones")).toEqual([B.backgroundElement])
+  expect(bgOf(s, "Pour the broth")).not.toContain(B.backgroundElement)
+  expect(hex(spansOf(s).find((sp) => sp.text.includes("Pour the broth"))!.fg)).toBe(B.text)
+})
+
+test("the tint and the mark follow the fold as the view scrolls", async () => {
+  const long = `${NOTE.replace("## Strain", `${"filler\n\n".repeat(30)}## Strain`)}\n${"after\n\n".repeat(30)}`
+  const { s, ai } = await asked("why?", { "Slow broth.md": long })
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  await keys(s, "enter")
+  const f = await keys(s, "k", "k")
+  expect(f).toContain("1 of 1") // moving the view keeps the fold
+  expect(f.split("\n").find((r) => r.includes("do not press the bones:"))).toMatch(/¹ +Pour the broth/)
+  expect(bgOf(s, "do not press the bones")).toEqual([B.backgroundElement])
+})
+
+test("in Source, a quote wrapping across two source lines lands and tints its text, not the line numbers", async () => {
+  const two =
+    "# Slow broth\n\nIntro line.\n\n## Strain and cool\n\nPour the broth through a sieve;\ndo not press the bones.\n"
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": two }), "Slow broth.md")
+  await keys(s, "s", "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Gently [1].\nSources:\n[1] note 1: "a sieve; do not press"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  const f = await keys(s, "enter")
+  expect(f).toContain("1 of 1")
+  expect(f).not.toContain("quote no longer in the note")
+  const tinted = s
+    .captureSpans()
+    .lines.map((l) =>
+      l.spans
+        .filter((sp) => hex(sp.bg) === B.backgroundElement)
+        .map((sp) => sp.text)
+        .join(""),
+    )
+    .filter(Boolean)
+  expect(tinted).toEqual(["a sieve;", "do not press"])
+  expect(f.split("\n").find((r) => r.includes("through a sieve;"))).toMatch(/¹ +7 +Pour the broth/)
+})
+
+test("a quote edited away lands on its section with a toast", async () => {
+  const d = tmp({ "Slow broth.md": NOTE })
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(d, "Slow broth.md")
+  await keys(s, "c", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  writeFileSync(join(d, "Slow broth.md"), NOTE.replace("do not press the bones", "leave the bones"))
+  await waitFrame(s, (x) => x.includes("leave the bones"))
+  const f = await keys(s, "enter") // the card still has the keys: ⏎ on the selected ¹
+  expect(f).toContain("quote no longer in the note")
+  expect(f).toContain("1 of 1") // folded all the same, on the section
+  expect(f).toContain("Strain and cool")
+  expect(bgOf(s, "leave the bones")).not.toContain(B.backgroundElement)
+})
+
+// a second chip comes with `[[` ⏎ (pickAdd, the next task): this runs once it lands
+test.todo("a cite in a chip's note deleted since: ⏎ toasts note gone and the card stays as it was", async () => {
+  const d = tmp({ "Slow broth.md": NOTE, "Stock.md": "# Stock\n\nRoast the bones first.\n" })
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(d, "Slow broth.md")
+  await keys(s, "c", "type:[[sto", "enter", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Roast first [1].\nSources:\n[1] note 2: "Roast the bones first"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  rmSync(join(d, "Stock.md"))
+  await keys(s, "wait:300")
+  const f = await keys(s, "enter")
+  expect(f).toContain("note gone")
+  expect(f).toContain("Slow broth") // still on the thread's note
+  expect(hints(f)).toContain("go to") // the card stays up with the keys
+  expect(f).toContain("Stock › Stock · “Roast the bones first”")
+})
+
+test("[ ] step the folded cites; at the ends: last mark / first mark; esc hides", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, 'A [1]. B [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "Intro line"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  let f = await keys(s, "enter", "]")
+  expect(f).toContain("2 of 2")
+  expect(f).toContain("² “Intro line”")
+  expect(bgOf(s, "Intro line")).toEqual([B.backgroundElement])
+  f = await keys(s, "]")
+  expect(f).toContain("last mark")
+  expect(f).toContain("2 of 2")
+  f = await keys(s, "[", "[")
+  expect(f).toContain("1 of 2")
+  expect(f).toContain("first mark")
+  f = await keys(s, "esc")
+  expect(f).not.toContain("1 of 2")
+  expect(hints(f)).not.toContain("[ ] marks")
+  expect(bgOf(s, "do not press the bones")).not.toContain(B.backgroundElement)
+})
+
+test("folded: c brings the card back with the cite selected", async () => {
+  const { s, ai } = await asked()
+  ai.send(0, 'A [1]. B [2].\nSources:\n[1] note 1: "do not press the bones"\n[2] note 1: "Intro line"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  const f = await keys(s, "down", "enter", "c")
+  expect(hints(f)).toContain("go to")
+  expect(f).toMatch(/▌ ² /)
+})
+
+test("folded: z hides the pill; at 90 columns tab, 1 and ^b (the drawer) hide it too", async () => {
+  const cases = [
+    [undefined, "z"],
+    [{ width: 90, height: 30 }, "tab"],
+    [{ width: 90, height: 30 }, "1"],
+    [{ width: 90, height: 30 }, "C-b"],
+  ] as const
+  for (const [size, key] of cases) {
+    aiConfig(OLLAMA)
+    const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", size ? { size } : {})
+    await keys(s, "c", "type:why?", "enter")
+    await waitFor(s, () => ai.calls.length === 1)
+    ai.send(0, REPLY)
+    ai.end(0)
+    await waitFrame(s, (x) => x.includes("go to"))
+    expect(await keys(s, "enter")).toContain("1 of 1")
+    const f = await keys(s, key)
+    expect(f).not.toContain("1 of 1")
+    expect(f).not.toContain("do not press the bones”")
+    s.renderer.destroy()
+  }
 })

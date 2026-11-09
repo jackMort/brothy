@@ -17,16 +17,18 @@ import { erase } from "./input"
 import { HELP_GROUPS, isDown } from "./keymap"
 import type { Links } from "./links"
 import { pictureLayout } from "./pictures"
+import type { Pill } from "./pill"
 import type { Popups } from "./popups"
 
 /** The bindings without keys (`type`, `a–z`, `^p ?`) are there for help and the footer: `onKey` routes the typing itself. */
 const typing = () => {}
 
-/** The document: scrolling, headings (the changes while landed on one), matches, and the link labels. */
+/** The document: scrolling, headings (a folded chat cite's marks, else the changes while landed on one), matches, and the link labels. */
 export function makeDocActions(
   c: AppCtx,
   { startLabels, landStep }: Pick<Links, "startLabels" | "landStep">,
   { jumpHeading, jumpMatch }: Moves,
+  { citeStep }: Pick<Pill, "citeStep">,
 ) {
   const { ui, set, derive, setTop, scrollBy, focusPanel } = c
   const { flash, persist, renderer, lastCell } = c
@@ -47,7 +49,7 @@ export function makeDocActions(
     docEnds: (k) => setTop(k.name === "home" || (k.name === "g" && !k.shift) ? 0 : derive().maxTop),
     docHeading: (k) => {
       const dir = k.sequence === "]" || k.sequence === "}" ? 1 : -1
-      if (!landStep(dir)) jumpHeading(dir)
+      if (!citeStep(dir) && !landStep(dir)) jumpHeading(dir)
     },
     docMatch: (k) => jumpMatch(k.shift ? -1 : 1),
     back: () => focusPanel(),

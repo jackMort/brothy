@@ -5,10 +5,11 @@ import type { Chip, Exchange, Part, Thread } from "../ai/thread"
 import { A, type Span, safeLine } from "../lib/spans"
 import { mergeSpans, spanWidth, superscript, truncate, truncateLeft, width, wrap } from "../lib/text"
 import type { Rendered } from "../markdown/render"
+import { sourceGutter } from "../markdown/source"
 import { mix, type Theme } from "../theme/theme"
 import { chip, INK_MS, inkAt, steamColors } from "./chrome"
 import { CARET, footInk, footnoteRule, type Tail, waitText } from "./footnote"
-import type { QuoteSpan } from "./nav"
+import { type QuoteSpan, quoteSpan } from "./nav"
 import { STEAM_MS, STILL_TICK, steamRows } from "./welcome"
 
 /** How far the page and the minimap mix toward the background while the card is up. */
@@ -90,7 +91,7 @@ export interface PillView {
   wheres: readonly (readonly string[])[]
   stage: ChatStage
   /** the folded cite's quote in the view on screen */
-  quote: QuoteSpan | null
+  quote: CiteQuote | null
   cardOut: CardOut | null
 }
 
@@ -455,6 +456,42 @@ export function citeRange(
   const to = view.headings[index + 1]?.line ?? view.lines.length
   if (source) return { from: view.srcRow?.[line] ?? 0, to }
   return { from: index < 0 ? 0 : (view.headings[index]?.line ?? 0), to }
+}
+
+/** A cite's quote in the view: `quoteSpan`'s rows and columns, and `left`, where a row's text starts (Source: past its line numbers). */
+export type CiteQuote = QuoteSpan & { left: number }
+
+/**
+ * Where a cite's quote `needle` is in `view`: `from`, its section's first row (`citeRange`), and the quote, or null when
+ * it is no longer there. Source rows are read past their line-number gutter, so a quote wrapping across two source
+ * lines is found; its columns count the gutter again, as the rows' spans do.
+ */
+export function citeSpot(
+  view: Pick<Rendered, "headings" | "lines" | "srcRow" | "plain">,
+  source: boolean,
+  index: number,
+  line: number,
+  needle: string,
+): { from: number; quote: CiteQuote | null } {
+  const { from, to } = citeRange(view, source, index, line)
+  const left = source ? sourceGutter(view.srcRow?.length ?? 0) : 0
+  const rows = view.plain.slice(from, to).map((r) => r.slice(left))
+  const q = quoteSpan(rows, 0, rows.length, needle)
+  if (!q) return { from, quote: null }
+  return {
+    from,
+    quote: { row: q.row + from, col: q.col + left, endRow: q.endRow + from, endCol: q.endCol + left, left },
+  }
+}
+
+/**
+ * Row `n`'s spans with the part of quote `q` on it on `bg`: from the quote's column on its first row, else from the
+ * row's text (past `left` and any indent), to its end column on its last row. `plain` is the row's `view.plain`.
+ */
+export function quoteTint(spans: Span[], plain: string, n: number, q: CiteQuote, bg: string): Span[] {
+  if (n < q.row || n > q.endRow) return spans
+  const start = n === q.row ? q.col : q.left + Math.max(0, plain.slice(q.left).search(/\S/))
+  return tintSpans(spans, start, n === q.endRow ? q.endCol : Number.POSITIVE_INFINITY, bg)
 }
 
 const INKING = 3 * INK_MS

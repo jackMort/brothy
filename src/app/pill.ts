@@ -1,11 +1,13 @@
 // The chat pill: `c`, its input and `[[` chips, sending a question about the open note, cancelling, the card's marks,
 // folding onto a cite and stepping through the cites, and the one animation timer. Not pure: closes over the app context.
+import { existsSync } from "node:fs"
 import { basename } from "node:path"
 import { aiMessage, type ChatResult, cleanReply, type Failure, noteText, shortModel } from "../ai/client"
 import type { AITarget } from "../ai/config"
 import {
   bodyParts,
   type Chip,
+  type Cite,
   chatContext,
   chatRequest,
   type Exchange,
@@ -374,14 +376,73 @@ function makePillCard(c: AppCtx) {
   return { pillMark, pillScroll }
 }
 
+/** Where a cite sits: exchange index, n. */
+type At = [number, number]
+
+/** Folding onto a cite: open its note, scroll to its quote, hold it in the pill; `[` `]` step the exchange's cites. */
+function makeCites(c: AppCtx, animate: () => void) {
+  const { ui, set, memo, derive, flash, setTop, openFile, focusDoc } = c
+
+  /** The pill's thread's cite at `at`, or null. */
+  const citeAt = (at: At | null): Cite | null => {
+    const p = ui.current.pill
+    if (!p || !at) return null
+    return ui.current.threads[p.path]?.turns[at[0]]?.cites.find((k) => k.n === at[1]) ?? null
+  }
+
+  /** The note `cite` quotes is gone from disk (a piped document never is). */
+  const gone = (cite: Cite) => cite.path !== STDIN && !existsSync(cite.path)
+
+  /** The view on screen (the cite's note, open by now) scrolled to the quote, one row above it as `jumpChange` does; else its section, with a toast. */
+  const scrollTo = (cite: Cite) => {
+    const d = derive()
+    // memo.read holds the open note: the cite's, which `citeGo` opened first
+    const { from, quote } = memo.citeSpot(d.view, d.s.source, memo.read(cite.path, d.s.reload).src, cite)
+    setTop(quote ? Math.max(from, quote.row - 1) : from)
+    if (!quote) flash("quote no longer in the note")
+  }
+
+  /** The pill folded on the cite at `at`, the keys back to the document. */
+  const fold = (at: At, cite: Cite) => {
+    const p = ui.current.pill
+    if (!p) return
+    const land = { exchange: at[0], n: at[1], path: cite.path, at: Date.now() }
+    set({ pill: { ...p, focus: false, card: false, pick: null, hl: at, land } })
+    focusDoc()
+  }
+
+  /** `⏎` on a mark (or a click on its row): its note opened (history records it, so `H` returns), the pill folded on it. */
+  const citeGo = (pos?: At | null) => {
+    const at = pos ?? ui.current.pill?.hl ?? null
+    const cite = citeAt(at)
+    if (!at || !cite) return
+    if (gone(cite)) return flash("note gone")
+    openFile(cite.path, "open")
+    fold(at, cite)
+    scrollTo(cite)
+    animate()
+  }
+
+  /** `[` `]` while folded: the exchange's previous / next cite; at the ends a toast. False when not folded. */
+  const citeStep = (dir: 1 | -1) => {
+    const land = ui.current.pill?.land
+    if (!land || !derive().pill) return false
+    const n = land.n + dir
+    if (!citeAt([land.exchange, n])) flash(dir > 0 ? "last mark" : "first mark")
+    else citeGo([land.exchange, n])
+    return true
+  }
+
+  return { citeGo, citeStep }
+}
+
 /** The pill: every action behind `c` and the `chat` mode. */
 export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   const jobs = makeJobs(c)
   const animate = () => {} // the pill's animation timer comes later
   const input = makePillInput(c, links)
-  const none = () => {}
-  const citeGo = none as (at?: [number, number] | null) => void // landing on a cite comes later
-  const pickAdd = none // the `[[` list's add comes later
+  const pickAdd = () => {} // the `[[` list's add comes later
+  const { citeGo, citeStep } = makeCites(c, animate)
   const { pillSend } = makePillSend(c, jobs, animate, citeGo)
   const { pillMark, pillScroll } = makePillCard(c)
   return {
@@ -399,7 +460,7 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
     pillScroll,
     pickAdd,
     citeGo,
-    citeStep: (_dir: 1 | -1) => false,
+    citeStep,
     /** the pointer moved onto a cite row of the card: it is selected */
     pillHover: (at: [number, number]) => pillState(c).patch({ hl: at }),
   }

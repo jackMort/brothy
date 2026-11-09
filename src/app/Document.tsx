@@ -11,6 +11,7 @@ import { A, type Span } from "../lib/spans"
 import { superscript, truncate, width } from "../lib/text"
 import type { Rendered } from "../markdown/render"
 import { contrastOn, mix, type Theme } from "../theme/theme"
+import { inkAt } from "../ui/chrome"
 import {
   CARET,
   footInk,
@@ -30,7 +31,7 @@ import { MINI_W, miniCells, miniColors, miniJump } from "../ui/minimap"
 import { type LinkSpot, markMatches, overlayAt } from "../ui/nav"
 import { Welcome } from "../ui/overlay"
 import type { ChangeView } from "../ui/panel"
-import { CHAT_DIM } from "../ui/pill"
+import { CHAT_DIM, inkStep, quoteTint, tintBg } from "../ui/pill"
 import { fadeStep, GHOST_STEPS, notePath } from "../ui/status"
 import { dimSpans, SPOT_DIM } from "../ui/zen"
 import { landedHere } from "./Chrome"
@@ -264,9 +265,32 @@ function landingMark(d: Derived): { row: number; mark: Span } | null {
 /** A mark over Preview's rows: after the row's text (else in the gutter), or only in the gutter. */
 type RowMark = { source: MarkSource; mark: Span; gutter: boolean }
 
+/** Folded on a chat cite in the note on screen: its quote, its number and the ink step it fades in at; else null. */
+function chatLanding({ pill, s }: Derived) {
+  const land = pill?.land
+  if (!land || !pill.quote) return null
+  return { q: pill.quote, n: land.n, step: inkStep(land.at, Date.now(), s.motion) }
+}
+
+/** The folded cite's mark: its number in the gutter of the quote's first row, inked in primary. */
+function chatMarks(d: Derived): [number, RowMark][] {
+  const l = chatLanding(d)
+  if (!l) return []
+  return [
+    [l.q.row, { source: "chat", mark: { text: markText(l.n), fg: inkAt(d.t, l.step, d.t.primary) }, gutter: true }],
+  ]
+}
+
+/** Row `n` with the folded cite's quote tinted on it (fading in from the background). */
+function chatTint(d: Derived, n: number, spans: Span[]): Span[] {
+  const l = chatLanding(d)
+  return l ? quoteTint(spans, d.view.plain[n] ?? "", n, l.q, tintBg(d.t, l.step)) : spans
+}
+
 /**
  * The marks on Preview's rows, by row: each changed heading's number (muted once explained), the lead-in's and a removed
- * section's in the gutter (a removed one muted), an ask landing's; one per row, change first (`markFor`).
+ * section's in the gutter (a removed one muted), an ask landing's, a folded chat cite's; one per row, chat first
+ * (`markFor`).
  */
 function rowMarks(d: Derived): Map<number, RowMark> {
   const c = footInk(d.t)
@@ -279,6 +303,7 @@ function rowMarks(d: Derived): Map<number, RowMark> {
       gutter: m.kind !== "heading",
     },
   ])
+  cands.push(...chatMarks(d))
   const ask = landingMark(d)
   if (ask) cands.push([ask.row, { source: "ask", mark: ask.mark, gutter: false }])
   // the landing's quoted line: its number in the gutter, beside the changed text
@@ -420,9 +445,10 @@ function pictureLabels({ s, L, t, view, top }: Derived, bottom: number) {
   })
 }
 
-/** Line `n` of the note: find matches marked, the `f` labels over its links. */
-function lineSpans({ s, L, t, view, top }: Derived, n: number): Span[] {
-  let spans = markMatches(view.lines[n]?.spans ?? [], s.query, t)
+/** Line `n` of the note: find matches marked, a folded chat cite's quote tinted, the `f` labels over its links. */
+function lineSpans(d: Derived, n: number): Span[] {
+  const { s, L, t, view, top } = d
+  let spans = chatTint(d, n, markMatches(view.lines[n]?.spans ?? [], s.query, t))
   const lb = s.labels && s.labels.geo === labelGeo(s, L.CW, view.lines.length, top) ? s.labels : null
   lb?.spots.forEach((sp, k) => {
     const label = lb.labels[k]!

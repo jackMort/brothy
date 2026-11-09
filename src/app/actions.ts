@@ -74,7 +74,7 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makeToggleActions(c, f, keys),
     ...makeGlobalActions(c, f, keys),
     ...makeEditAction(c, f),
-    ...makeDocActions(c, f.links, moves),
+    ...makeDocActions(c, f.links, moves, f.pill),
     ...makeZenActions(c, f, moves),
     ...makeOutlineActions(c, moves),
     ...makeInfoActions(c, moves),

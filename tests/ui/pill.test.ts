@@ -14,6 +14,7 @@ import {
   chatStage,
   chipRow,
   citeRange,
+  citeSpot,
   frameRows,
   inkStep,
   inputSpans,
@@ -23,6 +24,7 @@ import {
   pillGeo,
   pillMoving,
   pillRow,
+  quoteTint,
   sizeFoot,
   steamTick,
   tintBg,
@@ -353,6 +355,40 @@ describe("list, tint, range, motion", () => {
     expect(citeRange(view as never, false, -1, 99)).toEqual({ from: 0, to: 4 })
     expect(citeRange(view as never, false, 1, 99)).toEqual({ from: 9, to: 20 })
     expect(citeRange(view as never, true, 0, 5)).toEqual({ from: 6, to: 9 })
+  })
+  test("citeSpot: Preview finds a wrapped quote in its section; else the section's first row and null", () => {
+    const plain = ["# a", "", "pour it through a", "sieve; do not press", "## b", "do not press"]
+    const view = { headings: [{ line: 0 }, { line: 4 }], lines: plain, plain }
+    expect(citeSpot(view as never, false, 0, 9, "a sieve; do not")).toEqual({
+      from: 0,
+      quote: { row: 2, col: 16, endRow: 3, endCol: 13, left: 0 },
+    })
+    expect(citeSpot(view as never, false, 0, 9, "gone")).toEqual({ from: 0, quote: null })
+  })
+  test("citeSpot: Source reads past the line numbers; its columns count them again", () => {
+    // 10 source lines: a gutter of 2 digits and 2 spaces
+    const plain = [" 1  # a", " 2  pour it through a", " 3  sieve; do not press", " 4  ## b"]
+    const view = { headings: [{ line: 0 }, { line: 3 }], lines: plain, plain, srcRow: [0, 1, 2, 3, 3, 3, 3, 3, 3, 3] }
+    expect(citeSpot(view as never, true, 0, 1, "a sieve; do")).toEqual({
+      from: 1,
+      quote: { row: 1, col: 20, endRow: 2, endCol: 13, left: 4 },
+    })
+  })
+  test("quoteTint: the first row from the quote's column, the next from its text past the gutter, the last to its end", () => {
+    const q = { row: 1, col: 20, endRow: 2, endCol: 13, left: 4 }
+    const tinted = (row: string, n: number) =>
+      quoteTint([{ text: row }], row, n, q, "#123456")
+        .filter((sp) => sp.bg === "#123456")
+        .map((sp) => sp.text)
+    expect(tinted(" 2  pour it through a", 1)).toEqual(["a"])
+    expect(tinted(" 3  sieve; do not press", 2)).toEqual(["sieve; do"])
+    expect(tinted(" 1  # a", 0)).toEqual([])
+    // a row's indent is not tinted either
+    const row = "   indented quote"
+    expect(quoteTint([{ text: row }], row, 2, { ...q, left: 0 }, "#123456")[1]).toEqual({
+      text: row.slice(3, 13),
+      bg: "#123456",
+    })
   })
   test("pillMoving: the border inking, a thinking steam, a recent arrival or glow, the tint; else null", () => {
     expect(pillMoving(viewOf({ openedAt: 0 }), INK_MS)).toBe("ink")
