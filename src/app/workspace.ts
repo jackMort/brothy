@@ -16,6 +16,7 @@ import { errText } from "../ui/status"
 import { STEAM_MS, welcomeFit } from "../ui/welcome"
 import type { AIJobs } from "./ai-jobs"
 import type { AppCtx } from "./ctx"
+import { dropChat } from "./pill"
 import type { SwitcherControl } from "./switcher"
 
 /** The recent-projects record and the last one on the way out. */
@@ -81,6 +82,7 @@ function makeSwitch(c: AppCtx, { recordProject, dropAsk, dropIndex, dropDelta }:
     zenBack.current = null
     dropIndex() // a build still running sees it is stale and stops
     dropDelta() // even when `o` reopens the same note: the effect takes a fresh baseline
+    dropChat(c) // threads belong to their workspace
     sidebarSeen.current = { rows: null, cursorPath: null }
     const w = workspace(root, keepNote, single && !!keepNote)
     const s = ui.current

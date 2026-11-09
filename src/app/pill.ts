@@ -72,10 +72,16 @@ function makePillOpen(c: AppCtx, jobs: Jobs, animate: () => void) {
     return path
   }
 
+  /** The drawer closes: the pill never shows with it. */
+  const closeDrawer = () => {
+    const { L } = derive()
+    if (L.mode === "drawer" && L.shown) focusDoc()
+  }
+
   /** The pill on `path`'s thread (made with the open note's chip when new): the card up when it has exchanges. */
   const show = (path: string) => {
     const d = derive()
-    if (d.L.mode === "drawer" && d.L.shown) focusDoc()
+    closeDrawer()
     const t = ui.current.threads[path] ?? { path, chips: [chipOf(path, d.title)], turns: [] }
     setThread(t)
     const card = t.turns.length > 0
@@ -89,7 +95,10 @@ function makePillOpen(c: AppCtx, jobs: Jobs, animate: () => void) {
     const p = ui.current.pill
     if (p && !p.focus) return unfold()
     const path = askable()
-    if (path) show(path)
+    if (!path) return
+    // still open on this note, only hidden behind the drawer (a resize opened it): it comes back as it was
+    if (p?.path === path) return closeDrawer()
+    show(path)
   }
   return { pillOpen }
 }
@@ -157,6 +166,14 @@ function makePillEsc(c: AppCtx, { cancelJob }: Pick<Jobs, "cancelJob">, setInput
     pillHide()
   }
   return { pillEsc, pillHide }
+}
+
+/** A new workspace: every thread dropped, each running answer cancelled, the pill hidden. */
+export function dropChat(c: AppCtx) {
+  const { cancelJob } = makeJobs(c)
+  for (const key of [...c.jobs.current.keys()]) if (key.startsWith(jobKey("chat", ""))) cancelJob(key)
+  c.chatInk.current.clear()
+  c.set({ threads: {}, pill: null })
 }
 
 /** A chip's note as a send read it. */

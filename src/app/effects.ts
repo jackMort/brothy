@@ -21,6 +21,7 @@ import { releaseImage } from "./graph"
 import type { Ctx } from "./keymap"
 import type { Links } from "./links"
 import { watchCell } from "./pictures"
+import type { UI } from "./store"
 import type { WorkspaceControl } from "./workspace"
 
 /** What the effects call from the feature factories. */
@@ -69,6 +70,9 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, flash }: AppCtx, dr
     if (ui.current.picture) set({ picture: null })
   }, [openPath, reload])
   useEffect(() => {
+    if (pillAway(ui.current)) set({ pill: null })
+  }, [openPath])
+  useEffect(() => {
     const f = derive().file
     if (f?.error && openPath) flash(`cannot open “${basename(openPath)}”: ${f.error}`, "error")
     if (!openPath || !f || f.error) return dropDelta()
@@ -77,6 +81,9 @@ function useNoteWatch({ ui, set, bump, derive, memo, timers, flash }: AppCtx, dr
     set({ baseline: { path: openPath, text: memo.note(f.src), props: memo.propsKey(memo.fm(f.src)), at: Date.now() } })
   }, [openPath, reload])
 }
+
+/** The pill hides once the open note is neither its thread's note nor the landed cite's (so `H` back keeps it). */
+const pillAway = ({ pill, openPath }: UI) => !!pill && openPath !== pill.path && openPath !== pill.land?.path
 
 /** What runs once at mount: the project record, the config theme toast and a piped document's link scan. */
 function useStartup(

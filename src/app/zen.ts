@@ -102,7 +102,7 @@ export function makeZen(c: AppCtx, { ensureGlosses }: Pick<AIJobs, "ensureGlosse
     clearTimeout(timers.current.ghost)
     const s = ui.current
     if (on) {
-      set({ landing: null })
+      set({ landing: null, pill: null }) // the pill hides; its thread and a running answer are kept
       if (!s.zen && !s.source) {
         const d = derive()
         zenBack.current = { key: d.scrollKey, top: d.top, geo: d.geo }

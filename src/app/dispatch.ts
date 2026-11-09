@@ -97,6 +97,13 @@ export function makeOnKey(c: AppCtx, f: Features, actions: Actions, docMode: () 
   const popupKey = makePopupKey(c, f, actions)
   const modalKey = makeModalKey(c, f, actions)
 
+  /** `esc` on the document while the pill is folded on a cite hides it, before `clear`'s query, landing and zen steps. */
+  const foldedEsc = (s: UI, key: KeyEvent) => {
+    if (!matchKey("escape", key) || !s.pill || s.pill.focus || docMode() !== "doc") return false
+    f.pill.pillHide()
+    return true
+  }
+
   /** Zen, the welcome page, or the global keys and the focused view's. */
   const viewKey = (s: UI, key: KeyEvent) => {
     // zen bindings shadow the document ones; n / N and the global keys fall through
@@ -112,7 +119,7 @@ export function makeOnKey(c: AppCtx, f: Features, actions: Actions, docMode: () 
     const s = ui.current
     if (s.zen && s.zenCfg.ghost) f.zen.pokeGhost()
     const text = typed(key)
-    if (popupKey(s, key, text) || modalKey(s, key, text)) return
+    if (popupKey(s, key, text) || modalKey(s, key, text) || foldedEsc(s, key)) return
     viewKey(s, key)
   }
 }

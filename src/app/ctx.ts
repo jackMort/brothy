@@ -290,7 +290,8 @@ function makeFocus(c: Base & ReturnType<typeof makeFeedback> & ReturnType<typeof
     const { L, rows, s, oRows } = derive()
     set({
       focus: "panel",
-      ...(L.mode === "drawer" ? { drawerOpen: true } : { hidden: false }),
+      // the pill hides as the drawer opens (`^b`, a view key): every key-made way to the drawer comes through here
+      ...(L.mode === "drawer" ? { drawerOpen: true, pill: null } : { hidden: false }),
       ...(!was && s.view === "outline"
         ? {
             outlineCur: Math.max(

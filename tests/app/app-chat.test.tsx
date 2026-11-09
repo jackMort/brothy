@@ -187,3 +187,83 @@ test("esc on the only running exchange: back to the input with its question, whi
     ["user", "why cloudy?"],
   ])
 })
+
+// ------------------------------------------------------------- hiding and dropping
+
+test("c in zen does nothing chat-related (c is in ZEN_OFF)", async () => {
+  aiConfig(OLLAMA)
+  const s = await mount(tmp({ "Slow broth.md": NOTE }), "Slow broth.md")
+  const f = await keys(s, "z", "c")
+  expect(f).not.toContain("ask about this note…")
+  expect(f).not.toContain("⏎ send")
+})
+
+test("90×30 with the drawer open: c closes the drawer and opens the pill", async () => {
+  aiConfig(OLLAMA)
+  const s = await mount(tmp({ "Slow broth.md": NOTE }), "Slow broth.md", { size: { width: 90, height: 30 } })
+  expect(await keys(s, "C-b")).toMatch(/Files\s+²Outline/)
+  const f = await keys(s, "c")
+  expect(hints(f)).toContain("⏎ send")
+  expect(f).not.toMatch(/Files\s+²Outline/)
+})
+
+test("threads per note: ask in A, open B (hidden), c in B is empty, back in A c shows A's card", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE, "pears.md": "# Pears\n\nRipe.\n" }), "Slow broth.md")
+  await keys(s, "c", "type:why?", "enter")
+  ai.send(0, REPLY)
+  ai.end(0)
+  await waitFrame(s, (f) => hints(f).includes("go to"))
+  await keys(s, "esc", "esc")
+  expect(await openNote(s, "pears")).toContain("Ripe.")
+  let f = await keys(s, "c")
+  expect(hints(f)).toContain("⏎ send")
+  await keys(s, "esc")
+  await openNote(s, "Slow broth")
+  f = await keys(s, "c")
+  expect(hints(f)).toContain("go to")
+})
+
+/** The pill opened on soup.md with the panel focused, `ks` pressed in it, then hidden behind the drawer a resize to 90×30 opens. */
+async function behindDrawer(files: Record<string, string>, ...ks: string[]) {
+  aiConfig(OLLAMA)
+  const d = tmp({ "soup.md": NOTE, ...files })
+  const { s, ai } = await mountAI(d, "soup.md")
+  // the panel has focus, then the pill: narrowing turns the focused panel into an open drawer, which hides the pill
+  expect(hints(await keys(s, "1", "c"))).toContain("⏎ send")
+  await keys(s, ...ks)
+  s.resize(90, 30)
+  await s.renderOnce()
+  return { s, ai, d }
+}
+
+test("the pill hides when another note opens: a note picked in the drawer's Files leaves no pill over it", async () => {
+  const { s } = await behindDrawer({ "pears.md": "# Pears\n\nRipe.\n" })
+  const f = await keys(s, "/", "type:pears", "enter")
+  expect(f).toContain("Ripe.")
+  expect(hints(f)).not.toContain("⏎ send")
+  expect(hints(await keys(s, "j"))).not.toContain("esc hide") // j scrolls the note: the keys are the document's
+})
+
+test("c on a pill the drawer hides: the drawer closes and the pill comes back as it was, its input kept", async () => {
+  const { s, ai } = await behindDrawer({}, "type:keep me")
+  const f = await keys(s, "c")
+  expect(f).not.toMatch(/Files\s+²Outline/)
+  expect(hints(f)).toContain("⏎ send")
+  await keys(s, "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(ai.calls[0]!.body.messages.at(-1)!.content).toBe("keep me")
+})
+
+test("a new workspace drops every thread and cancels its running answer", async () => {
+  const other = tmp({ "pears.md": "# Pears\n\nRipe.\n" })
+  // sent, then hidden behind the drawer with its answer running: `o` reaches the opener
+  const { s, ai, d } = await behindDrawer({}, "type:why?", "enter")
+  expect(ai.calls).toHaveLength(1)
+  expect(await keys(s, "o", `type:${other}/pears`, "enter")).toContain("Ripe.")
+  expect(ai.calls[0]!.signal?.aborted).toBe(true)
+  await keys(s, "o", `type:${d}/soup`, "enter")
+  const f = await keys(s, "c")
+  expect(hints(f)).toContain("⏎ send") // an empty thread: the input, no card
+  expect(hints(f)).not.toContain("esc cancel")
+})
