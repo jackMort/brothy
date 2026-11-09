@@ -30,16 +30,12 @@ export const SYSTEM_PROMPT =
 /** Cap on the raw reply, so a model that thinks forever still ends. */
 const MAX_RAW = 64_000
 
-/** `redirect: "manual"`: the note text only goes to the configured endpoint (a 3xx fails as `redirect`). No max_tokens (reasoning models spend it thinking) and no temperature (some models reject it). Callers clip `user`. */
-export function buildRequest(t: AITarget, system: string, user: string): { url: string; init: RequestInit } {
-  const body = {
-    model: t.model,
-    stream: true,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-  }
+/** One chat message as the OpenAI-compatible API takes it. */
+export type Msg = { role: "system" | "user" | "assistant"; content: string }
+
+/** `redirect: "manual"`: the note text only goes to the configured endpoint (a 3xx fails as `redirect`). No max_tokens (reasoning models spend it thinking) and no temperature (some models reject it). Callers clip the messages. */
+export function buildRequest(t: AITarget, messages: readonly Msg[]): { url: string; init: RequestInit } {
+  const body = { model: t.model, stream: true, messages }
   return { url: t.url, init: { method: "POST", headers: t.headers, body: JSON.stringify(body), redirect: "manual" } }
 }
 
@@ -273,6 +269,8 @@ export interface ChatOpts {
 export interface ChatReq {
   system: string
   user: string
+  /** earlier exchanges, sent between `system` and `user` (chat); absent for every other request */
+  turns?: readonly Msg[]
   /** cleaned text longer than this aborts the request (`tooLong`) */
   maxOut: number
   /** applied to the accumulated stream on every delta: idempotent and cheap */
@@ -462,7 +460,12 @@ async function send(t: AITarget, req: ChatReq, o: ChatOpts): Promise<ChatResult>
   const g = guard(o)
   try {
     g.poke()
-    const { url, init } = buildRequest(t, req.system, req.user)
+    const messages: Msg[] = [
+      { role: "system", content: req.system },
+      ...(req.turns ?? []),
+      { role: "user", content: req.user },
+    ]
+    const { url, init } = buildRequest(t, messages)
     let res: Response
     try {
       res = await (o.fetch ?? fetch)(url, { ...init, signal: g.signal })

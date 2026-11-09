@@ -209,7 +209,12 @@ describe("request", () => {
     expect(clip("😀😀😀", 2)).toBe("😀😀\n[truncated]")
   })
   test("redirects are not followed: the body only goes to the configured endpoint, the 3xx is its own failure", async () => {
-    expect(buildRequest(T, "s", "u").init.redirect).toBe("manual")
+    expect(
+      buildRequest(T, [
+        { role: "system", content: "s" },
+        { role: "user", content: "u" },
+      ]).init.redirect,
+    ).toBe("manual")
     let hits = 0
     const other = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => (hits++, new Response("{}")) })
     const first = Bun.serve({
@@ -238,17 +243,57 @@ describe("request", () => {
       other.stop(true)
     }
   })
-  test("body: model, stream, system + user as given (callers clip), no max_tokens or temperature", () => {
-    const { url, init } = buildRequest(T, SYSTEM_PROMPT, "x".repeat(1200))
+  test("body: model, stream, the messages as given (callers clip), no max_tokens or temperature", () => {
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: "x".repeat(1200) },
+    ] as const
+    const { url, init } = buildRequest(T, messages)
     expect(url).toBe(T.url)
     expect(init.method).toBe("POST")
     expect(init.headers).toEqual(T.headers)
     const body = JSON.parse(String(init.body))
     expect(Object.keys(body).sort()).toEqual(["messages", "model", "stream"])
     expect(body.stream).toBe(true)
-    expect(body.messages).toEqual([
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: "x".repeat(1200) },
+    expect(body.messages).toEqual(messages)
+  })
+
+  test("a request's turns go between its system and user messages; none: system + user, byte for byte", async () => {
+    const bodies: string[] = []
+    const f = (async (_: string, init: RequestInit) => {
+      bodies.push(String(init.body))
+      return new Response('{"choices":[{"message":{"content":"ok"}}]}', {
+        headers: { "content-type": "application/json" },
+      })
+    }) as unknown as typeof fetch
+    const base = { system: "s", user: "u", maxOut: 10, clean: (r: string) => r }
+    await chat(T, base, { fetch: f })
+    await chat(
+      T,
+      {
+        ...base,
+        turns: [
+          { role: "user", content: "q0" },
+          { role: "assistant", content: "a0" },
+        ],
+      },
+      { fetch: f },
+    )
+    expect(bodies[0]).toBe(
+      JSON.stringify({
+        model: T.model,
+        stream: true,
+        messages: [
+          { role: "system", content: "s" },
+          { role: "user", content: "u" },
+        ],
+      }),
+    )
+    expect(JSON.parse(bodies[1]!).messages.map((m: { role: string }) => m.role)).toEqual([
+      "system",
+      "user",
+      "assistant",
+      "user",
     ])
   })
 })
