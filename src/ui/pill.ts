@@ -415,9 +415,11 @@ export const cardFoot = (t: Theme, below: number): Span[] | undefined =>
 /** The `[[` list's rows: at most PICK_ROWS names, the highlight `▌` and bold on backgroundElement, `linked from here` muted. */
 export function pickRows(t: Theme, items: readonly PickItem[], hl: number): Span[][] {
   const c = footInk(t)
-  const nameW = PICK_W - 4 - PICK_MARK - width(PICK_HINT)
+  // the frame's inner width less the mark; a linked row leaves room for its hint
+  const room = PICK_W - 4 - PICK_MARK
   return items.slice(0, PICK_ROWS).map((it, i) => {
     const sel = i === hl
+    const nameW = it.linked ? room - width(PICK_HINT) : room
     const row: Span[] = [
       sel ? { text: "▌ ", fg: t.primary } : pad(PICK_MARK),
       { text: truncate(safeLine(it.name), nameW), fg: sel ? t.text : c.other, attr: sel ? A.BOLD : 0 },

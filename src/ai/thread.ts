@@ -16,6 +16,8 @@ export const CHAT_NOTE_MAX = 24_000
 const CHAT_TURNS_SHARE = 0.25
 /** the cleaned reply's cap; a longer one is kept to its last finished sentence */
 export const MAX_CHAT = 6000
+/** notes one thread holds at most (its chips) */
+export const CHAT_MAX_CHIPS = 6
 /** words of one quote the prompt asks for at most */
 const QUOTE_MAX_WORDS = 20
 

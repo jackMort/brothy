@@ -311,6 +311,14 @@ describe("list, tint, range, motion", () => {
     expect(width(text(rows[0]!))).toBe(36 - 4)
     expect(text(rows[0]!)).toContain("…")
   })
+  test("pickRows: an unlinked name takes the hint's room too: mark and name fill the framed row", () => {
+    const long = "a very long note name indeed, longer than the row"
+    const rows = pickRows(t, [{ path: "/a", name: long, linked: false }], 0)
+    expect(width(text(rows[0]!))).toBe(36 - 4)
+    expect(text(rows[0]!)).toBe(`▌ ${long.slice(0, 29)}…`)
+    // a short one is not padded out
+    expect(text(pickRows(t, [{ path: "/b", name: "short", linked: false }], 0)[0]!)).toBe("▌ short")
+  })
   test("tintSpans: the range gets the background, the text and the rest kept", () => {
     const out = tintSpans(
       [

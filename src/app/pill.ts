@@ -6,6 +6,7 @@ import { aiMessage, type ChatResult, cleanReply, type Failure, noteText, shortMo
 import type { AITarget } from "../ai/config"
 import {
   bodyParts,
+  CHAT_MAX_CHIPS,
   type Chip,
   type Cite,
   chatContext,
@@ -140,6 +141,37 @@ function makePillInput(c: AppCtx, { ensureLinks }: Pick<Links, "ensureLinks">) {
   }
 
   return { pillType, pillErase, pillClear, pillRecall, setInput }
+}
+
+/** The `[[` list: `↑↓` move its highlight (held at the ends), `⏎` / `tab` add the highlighted note as a chip. */
+function makePick(c: AppCtx, setInput: (input: string) => void) {
+  const { ui, derive, flash } = c
+  const { patch, setThread } = pillState(c)
+
+  /** The list on screen with its notes, its highlight held within them, and the pill's thread; else null. */
+  const list = () => {
+    const v = derive().pill
+    const t = v && ui.current.threads[v.path]
+    const items = v?.pick?.items ?? []
+    if (!v?.pick || !t || !items.length) return null
+    return { input: v.input, q: v.pick.q, hl: clamp(v.pick.hl, 0, items.length - 1), items, t }
+  }
+
+  const pickMove = (dir: 1 | -1) => {
+    const l = list()
+    if (l) patch({ pick: { q: l.q, hl: clamp(l.hl + dir, 0, l.items.length - 1) } })
+  }
+
+  /** The highlighted note joins the thread's chips and the `[[query` leaves the input; at CHAT_MAX_CHIPS a toast. */
+  const pickAdd = () => {
+    const l = list()
+    const it = l?.items[l.hl]
+    if (!l || !it) return
+    if (l.t.chips.length >= CHAT_MAX_CHIPS) return flash(`${CHAT_MAX_CHIPS} notes at most`)
+    setThread({ ...l.t, chips: [...l.t.chips, { path: it.path, title: it.name }] })
+    setInput(dropPick(l.input))
+  }
+  return { pickMove, pickAdd }
 }
 
 /** `esc`: the `[[` list, then a running answer, then the card, then the pill; hiding keeps the thread. */
@@ -441,7 +473,7 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
   const jobs = makeJobs(c)
   const animate = () => {} // the pill's animation timer comes later
   const input = makePillInput(c, links)
-  const pickAdd = () => {} // the `[[` list's add comes later
+  const { pickMove, pickAdd } = makePick(c, input.setInput)
   const { citeGo, citeStep } = makeCites(c, animate)
   const { pillSend } = makePillSend(c, jobs, animate, citeGo)
   const { pillMark, pillScroll } = makePillCard(c)
@@ -449,11 +481,12 @@ export function makePill(c: AppCtx, links: Pick<Links, "ensureLinks">) {
     ...makePillOpen(c, jobs, animate),
     ...input,
     ...makePillEsc(c, jobs, input.setInput),
-    /** `↑↓`: the `[[` list's own (later), else the card's marks, else `↑` recalls */
+    /** `↑↓`: the `[[` list's own, else the card's marks, else `↑` recalls */
     pillMove: (dir: 1 | -1) => {
       const p = c.ui.current.pill
-      if (!p || p.pick) return
-      if (p.card) pillMark(dir)
+      if (!p) return
+      if (p.pick) pickMove(dir)
+      else if (p.card) pillMark(dir)
       else if (dir < 0) input.pillRecall()
     },
     pillSend: () => pillSend(pickAdd),

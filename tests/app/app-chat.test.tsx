@@ -559,6 +559,131 @@ test("the terminal shrinks with the card up: the card re-pins and keeps the top 
   expect(rows[pillTop - 2]).toContain("╰")
 })
 
+// ------------------------------------------------------------- chips: the `[[` list
+
+/** The pill's own row (its wisp, the input, the chips). */
+const pillOf = (f: string) => f.split("\n").find((r) => r.includes("⠳⢆")) ?? ""
+
+const LINKED = {
+  "Slow broth.md": `${NOTE}\nSee [[simmering]].\n`,
+  "simmering.md": "# Simmering\n\nKeep it below a boil.\n",
+}
+
+test("[[sim ⏎ adds a chip; the next body holds two <note> tags; ⌫ on an empty input removes it; on the only chip it toasts", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp(LINKED), "Slow broth.md")
+  let f = await keys(s, "c", "type:[[sim")
+  expect(f).toContain("simmering  linked from here")
+  f = await keys(s, "enter")
+  expect(pillOf(f)).toContain(" Slow broth   simmering ")
+  expect(f).not.toContain("[[sim")
+  expect(hints(f)).toContain("esc hide") // back to the input's footer
+  await keys(s, "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  const system = ai.calls[0]!.body.messages[0]!.content
+  expect(system).toContain('<note id="1" title="Slow broth">')
+  expect(system).toContain('<note id="2" title="simmering">')
+  await keys(s, "esc") // cancel: the question back in the input
+  f = await keys(s, "C-u", "backspace")
+  expect(pillOf(f)).not.toContain("simmering")
+  expect(pillOf(f)).toContain(" Slow broth ")
+  f = await keys(s, "backspace")
+  expect(f).toContain("chat needs a note")
+})
+
+test("[[ alone lists the notes the thread's note links to; ↓ moves the highlight and tab adds it, keeping the text before", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({
+    "Slow broth.md": `${NOTE}\nSee [[simmering]] and [[stock]].\n`,
+    "simmering.md": "# Simmering\n\nLow.\n",
+    "stock.md": "# Stock\n\nBones.\n",
+    "other.md": "# Other\n\nNot linked.\n",
+  })
+  const { s } = await mountAI(d, "Slow broth.md")
+  let f = await keys(s, "c", "type:and [[")
+  expect(f).toContain("▌ simmering  linked from here")
+  expect(f).toContain("  stock  linked from here")
+  expect(f).not.toContain("│   other")
+  f = await keys(s, "down")
+  expect(f).toContain("▌ stock  linked from here")
+  f = await keys(s, "down") // held at the last
+  expect(f).toContain("▌ stock  linked from here")
+  f = await keys(s, "up", "down", "tab")
+  expect(pillOf(f)).toContain(" Slow broth   stock ")
+  expect(pillOf(f)).not.toContain("simmering")
+  expect(pillOf(f)).toContain("⠳⢆ and ▍")
+})
+
+test("six notes at most: the seventh [[…⏎ toasts and adds nothing", async () => {
+  aiConfig(OLLAMA)
+  const names = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+  const files = Object.fromEntries(names.map((n) => [`${n}.md`, `# ${n}\n\n${n} text.\n`]))
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE, ...files }), "Slow broth.md")
+  await keys(s, "c")
+  for (const n of names.slice(0, 5)) await keys(s, `type:[[${n.slice(0, 4)}`, "enter")
+  const f = await keys(s, "type:[[foxt", "enter")
+  expect(f).toContain("6 notes at most")
+  await keys(s, "esc", "type:q", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  const system = ai.calls[0]!.body.messages[0]!.content
+  expect(system).toContain('<note id="6" title="echo">')
+  expect(system).not.toContain('<note id="7"')
+  expect(system).not.toContain("foxtrot")
+})
+
+test("a note over 24k characters: `clipped` on its chip, the system text cut", async () => {
+  aiConfig({ ...OLLAMA, maxChars: 100_000 })
+  const { s, ai } = await mountAI(tmp({ "Slow broth.md": NOTE + "x ".repeat(13_000) }), "Slow broth.md")
+  const f = await keys(s, "c")
+  expect(f).toContain("Slow broth · clipped")
+  await keys(s, "type:q", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  expect(ai.calls[0]!.body.messages[0]!.content).toContain("[truncated]")
+})
+
+test("a cite in another note: ⏎ opens it; H returns with the pill still folded", async () => {
+  aiConfig(OLLAMA)
+  const { s, ai } = await mountAI(tmp(LINKED), "Slow broth.md")
+  await keys(s, "c", "type:[[sim", "enter", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Keep it low [1].\nSources:\n[1] note 2: "Keep it below a boil"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  let f = await keys(s, "enter")
+  expect(f.split("\n")[0]).toContain("simmering")
+  expect(f).toContain("1 of 1")
+  f = await keys(s, "H")
+  expect(f.split("\n")[0]).toContain("Slow broth")
+  expect(f).toContain("1 of 1")
+})
+
+test("folded on a cite in another note, [[ still lists what the thread's note links to", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({
+    "Slow broth.md": `${NOTE}\nSee [[simmering]] and [[stock]].\n`,
+    "simmering.md": "# Simmering\n\nKeep it below a boil.\n",
+    "stock.md": "# Stock\n\nBones.\n",
+  })
+  const { s, ai } = await mountAI(d, "Slow broth.md")
+  await keys(s, "c", "type:[[sim", "enter", "type:why?", "enter")
+  await waitFor(s, () => ai.calls.length === 1)
+  ai.send(0, 'Keep it low [1].\nSources:\n[1] note 2: "Keep it below a boil"')
+  ai.end(0)
+  await waitFrame(s, (x) => x.includes("go to"))
+  await keys(s, "enter") // simmering is open now; it links to nothing
+  const f = await keys(s, "c", "type:[[")
+  expect(f).toContain("▌ stock  linked from here")
+})
+
+test("piped: the thread is keyed on stdin and [[ lists the notes of the cwd", async () => {
+  aiConfig(OLLAMA)
+  const d = tmp({ "simmering.md": "# Simmering\n\nLow.\n" })
+  const { s } = await mountAI(d, undefined, { stdin: NOTE })
+  const f = await keys(s, "c", "type:[[sim")
+  expect(f).toContain("▌ simmering")
+  expect(pillOf(await keys(s, "enter"))).toContain(" simmering ")
+})
+
 // ------------------------------------------------------------- folded on a cite
 
 /** The backgrounds of the page's spans holding `word` (the pill's `“quote”` left out). */
@@ -646,8 +771,7 @@ test("a quote edited away lands on its section with a toast", async () => {
   expect(bgOf(s, "leave the bones")).not.toContain(B.backgroundElement)
 })
 
-// a second chip comes with `[[` ⏎ (pickAdd, the next task): this runs once it lands
-test.todo("a cite in a chip's note deleted since: ⏎ toasts note gone and the card stays as it was", async () => {
+test("a cite in a chip's note deleted since: ⏎ toasts note gone and the card stays as it was", async () => {
   const d = tmp({ "Slow broth.md": NOTE, "Stock.md": "# Stock\n\nRoast the bones first.\n" })
   aiConfig(OLLAMA)
   const { s, ai } = await mountAI(d, "Slow broth.md")
@@ -657,7 +781,6 @@ test.todo("a cite in a chip's note deleted since: ⏎ toasts note gone and the c
   ai.end(0)
   await waitFrame(s, (x) => x.includes("go to"))
   rmSync(join(d, "Stock.md"))
-  await keys(s, "wait:300")
   const f = await keys(s, "enter")
   expect(f).toContain("note gone")
   expect(f).toContain("Slow broth") // still on the thread's note

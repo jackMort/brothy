@@ -7,14 +7,17 @@ import { cleanReply, noteText, shortModel } from "../../ai/client"
 import { type AIConfig, maxCharsOf } from "../../ai/config"
 import { quoteNeedle } from "../../ai/delta"
 import { bodyParts, type Cite, chatContext, citeSection, citeWhere, splitReply, type Thread } from "../../ai/thread"
+import { parseFrontMatter } from "../../markdown/frontmatter"
 import type { Rendered } from "../../markdown/render"
 import { type DocFile, readNote } from "../../notes/doc"
 import { type FileNode, rankNotes, stem } from "../../notes/files"
 import type { VaultIndex } from "../../notes/vault"
+import { extractLinks } from "../../notes/wikilinks"
 import type { Theme } from "../../theme/theme"
 import { waitSecs } from "../../ui/footnote"
 import type { layout } from "../../ui/layout"
 import { cached } from "../../ui/nav"
+import { resolveLink } from "../../ui/panel"
 import {
   type Arrival,
   cardRows,
@@ -77,6 +80,11 @@ export function chatMemo(stdin: string | undefined) {
       }),
     ),
     card: cached(cardRows),
+    /** the notes `src` (the thread's note, `from`) links to, `\0`-joined */
+    pickLinked: cached((src: string, tree: FileNode, from: string) => {
+      const found = extractLinks(parseFrontMatter(src).body).flatMap((k) => resolveLink(k, tree, from) ?? [])
+      return [...new Set(found)].join(SEP)
+    }),
     pickItems: cached(pickList),
     /** where cite `cite` is in `view` of its note `src`: its section's first row and its quote (`citeSpot`) */
     citeSpot: cached((view: Rendered, source: boolean, src: string, cite: Cite) =>
@@ -111,7 +119,6 @@ type PillLayout = Pick<ReturnType<typeof layout>, "CW" | "CH" | "zen" | "mode" |
 interface Opened {
   file: DocFile | null
   view: Rendered
-  fm: { body: string }
 }
 interface PillRefs {
   jobs: Map<string, Job>
@@ -134,9 +141,12 @@ function runningOf(memo: Memo, job: Job | undefined, log: readonly Arrival[], no
   return job ? memo.chatRunning(job.raw, job.at, job.live, job.model, waitSecs(now, job.at), log.length, log) : null
 }
 
+/** The thread's chips' paths, `\0`-joined (a memo key). */
+const chipKey = (thread: Thread) => thread.chips.map((c) => c.path).join(SEP)
+
 /** What `⏎` would send, its size and clipped chips, and where each cite is. */
 function sentOf(s: UI, memo: Memo, thread: Thread, input: string) {
-  const files = memo.chatRead(thread.chips.map((c) => c.path).join(SEP), s.reload)
+  const files = memo.chatRead(chipKey(thread), s.reload)
   return { ...memo.chatSize(thread, files, input, memo.chatMax(s.ai)), wheres: memo.chatWheres(thread, s.reload) }
 }
 
@@ -159,18 +169,21 @@ export function pillView(
   const running = runningOf(memo, refs.jobs.get(jobKey("chat", p.path)), refs.chatInk.get(p.path) ?? NO_ARRIVALS, now)
   const sent = sentOf(s, memo, thread, p.input)
   const base = { ...p, thread, running, geo: pillGeo(L), ...sent }
-  const pick = p.pick && { ...p.pick, items: pickFor(s, memo, opened, refs.ix, thread, p.pick.q) }
+  const pick = p.pick && { ...p.pick, items: pickFor(s, memo, refs.ix, thread, p.pick.q) }
   const stage = chatStage({ pick, running, card: p.card, thread })
   const view = memo.cardView(running, p.hl, sent.wheres)
   const cardOut = p.card ? memo.card(t, thread, view, base.geo.w - 4, s.motion ? now : 0, s.motion) : null
   return { ...base, pick, stage, cardOut, quote: quoteFor(s, memo, opened.view, thread) }
 }
 
-/** The `[[` list's notes for `q`: what the open note links to marks them. */
-function pickFor(s: UI, memo: Memo, opened: Opened, ix: VaultIndex, thread: Thread, q: string) {
-  const refs = memo.links(memo.linkTargets(opened.fm.body), s.linkTree, s.openPath)
-  const linked = [...new Set(refs.flatMap((l) => (l.path ? [l.path] : [])))]
-  return memo.pickItems(s.linkTree, q, ix, linked.join(SEP), thread.chips.map((c) => c.path).join(SEP))
+/**
+ * The `[[` list's notes for `q`: what the thread's note links to marks them (read as its chip; the open note differs
+ * while folded on a cite in another note).
+ */
+function pickFor(s: UI, memo: Memo, ix: VaultIndex, thread: Thread, q: string) {
+  const own = memo.chatRead(chipKey(thread), s.reload)[thread.chips.findIndex((c) => c.path === thread.path)]
+  const linked = memo.pickLinked(own?.src ?? "", s.linkTree, thread.path)
+  return memo.pickItems(s.linkTree, q, ix, linked, chipKey(thread))
 }
 
 /**
