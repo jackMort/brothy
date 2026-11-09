@@ -5,7 +5,7 @@
 import { isRecord } from "../lib/json"
 
 /** Prompt versions per feature: bump one whenever its prompt changes, and its cached results show as outdated. */
-export const PROMPTS = { tldr: 1, gloss: 1, delta: 3, ask: 1, rerank: 1 } as const
+export const PROMPTS = { tldr: 1, gloss: 1, delta: 3, ask: 1, rerank: 1, chat: 1 } as const
 /** The TL;DR's version (`SYSTEM_PROMPT`); what `summaries.json` entries carry as `v`. */
 export const PROMPT_V = PROMPTS.tldr
 
@@ -118,6 +118,12 @@ export interface AITarget {
 const loopback = (h: string) =>
   h === "localhost" || h === "[::1]" || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
 
+/** What a request to `cfg` may send, in characters: its own `maxChars`, else the preset's, else CUSTOM_MAX. */
+function maxCharsOf(cfg: AIConfig): number {
+  const preset = cfg.provider === "custom" ? undefined : PRESETS[cfg.provider]
+  return cfg.maxChars ?? preset?.maxChars ?? CUSTOM_MAX
+}
+
 /** The request target, or the toast for why there is none (missing key, key or custom headers over plain http). */
 export function resolveAI(
   cfg: AIConfig,
@@ -143,7 +149,7 @@ export function resolveAI(
     host: u.host,
     headers,
     model: cfg.model,
-    maxChars: cfg.maxChars ?? preset?.maxChars ?? CUSTOM_MAX,
+    maxChars: maxCharsOf(cfg),
     keyEnv,
     key,
   }
