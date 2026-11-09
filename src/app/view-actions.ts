@@ -311,6 +311,24 @@ export function makePictureActions({ pictureSheet: p }: Pick<Features, "pictureS
   return { docEnter: p.viewPicture, pictureClose: p.closePicture } satisfies Partial<Actions>
 }
 
+/** The chat pill's keys: placeholders until its actions land (the keys, the footer and help read the keymap). */
+export function makeChatActions() {
+  return {
+    chat: typing,
+    chatSend: typing,
+    chatMove: typing,
+    chatScroll: typing,
+    chatErase: typing,
+    chatClear: typing,
+    chatComplete: typing,
+    chatEsc: typing,
+    chatType: typing,
+    chatFollow: typing,
+    chatWalk: typing,
+    chatAgain: typing,
+  } satisfies Partial<Actions>
+}
+
 /** The Graph sheet and its filter. */
 export function makeGraphActions({ graph: g }: Pick<Features, "graph">) {
   return {

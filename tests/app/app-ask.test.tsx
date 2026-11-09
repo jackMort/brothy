@@ -75,7 +75,10 @@ test("the help sheet names ask in the AI group", async () => {
   await withClock(PAST_HINTS(), async () => {
     await keys(s, "?")
     await keys(s, "?")
-    expect(await keys(s, "j")).toContain("ask your notes: ^p then ?question")
+    await keys(s, "j")
+    await keys(s, "j")
+    await keys(s, "j")
+    expect(await keys(s, "j")).toContain("ask your notes: ^p then ?question") // the document gained ⏎ and the AI group c, whose description takes rows
   })
 })
 

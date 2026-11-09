@@ -30,6 +30,7 @@ import type { Proof } from "./proof"
 import type { Focus, UI } from "./store"
 import type { SwitcherControl } from "./switcher"
 import {
+  makeChatActions,
   makeDocActions,
   makeFilesActions,
   makeFilterActions,
@@ -81,6 +82,7 @@ export function makeActions(c: AppCtx, f: Features) {
     ...makeProofActions(c, f),
     ...makePictureActions(f),
     ...makeGraphActions(f),
+    ...makeChatActions(),
   }
   const { currentCtx, pokeHints } = keys
   return {

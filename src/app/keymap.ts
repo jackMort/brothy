@@ -3,6 +3,7 @@ import type { KeyEvent } from "@opentui/core"
 import type { AskStage } from "../ai/ask"
 import type { View } from "../system/config"
 import type { HelpGroup } from "../ui/help"
+import type { ChatStage } from "../ui/pill"
 import type { HintItem } from "../ui/status"
 
 /** A group of bindings: global, the document, a panel view or a popup; dispatch tries them in order. */
@@ -25,7 +26,8 @@ export type Mode =
   | "picture"
   | "graph"
   | "graphFilter"
-/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change). */
+  | "chat"
+/** Context id: one id for keys, hints and help (`panel:<view>` while the panel has focus; `landing`: the document, landed on a change; `chatLanded`: the document, folded on a chat cite). */
 export type Ctx =
   | "doc"
   | "landing"
@@ -43,6 +45,8 @@ export type Ctx =
   | "picture"
   | "graph"
   | "graphFilter"
+  | "chat"
+  | "chatLanded"
 /** One binding: its keys, how help and the footer show it. */
 export interface KeyDef {
   modes: readonly Mode[]
@@ -166,6 +170,16 @@ const KEYMAP = {
     hint: "explain",
     group: "AI",
     when: "changes",
+  },
+  chat: {
+    modes: ["global"],
+    keys: ["c"],
+    label: "c",
+    desc: "chat about the note: ⏎ send · [[ add a note · ↑↓ ⏎ go to a mark · esc fold, hide",
+    hint: "chat",
+    group: "AI",
+    spare: true,
+    when: "ai",
   },
   edit: {
     modes: ["global"],
@@ -375,6 +389,19 @@ const KEYMAP = {
   promptApply: { modes: ["prompt"], keys: ["return", "enter"], label: "⏎", hint: "apply" },
   promptClear: { modes: ["prompt"], keys: ["escape"], label: "esc", hint: "clear" },
   promptErase: { modes: ["prompt"], keys: ["backspace"], label: "⌫" },
+  // the chat pill while it has focus: every other key is typed, `?` and `c` included
+  chatSend: { modes: ["chat"], keys: ["return", "enter"], label: "⏎", hint: "send" },
+  chatMove: { modes: ["chat"], keys: ["up", "down"], label: "↑↓", hint: "marks" },
+  chatScroll: { modes: ["chat"], keys: ["pageup", "pagedown"], label: "pgup pgdn", hint: "scroll", spare: true },
+  chatErase: { modes: ["chat"], keys: ["backspace"], label: "⌫", hint: "chip" },
+  chatClear: { modes: ["chat"], keys: ["C-u"], label: "^u", hint: "clear", spare: true },
+  chatComplete: { modes: ["chat"], keys: ["tab"], label: "tab", hint: "complete" },
+  chatEsc: { modes: ["chat"], keys: ["escape"], label: "esc", hint: "hide" },
+  chatType: { modes: ["chat"], keys: [], label: "[[", hint: "note" },
+  chatFollow: { modes: ["chat"], keys: [], label: "type", hint: "follow-up" },
+  // hint-only, while folded on a cite: `[ ]` (docHeading) walk the cites and `c` (chat) reopens the card
+  chatWalk: { modes: ["doc"], keys: [], label: "[ ]", hint: "marks" },
+  chatAgain: { modes: ["doc"], keys: [], label: "c", hint: "answer" },
   swType: { modes: ["switch"], keys: [], label: "type", hint: "search" },
   swMove: { modes: ["switch"], keys: ["down", "up", "C-n", "C-p"], label: "↑↓", hint: "select" },
   swSection: { modes: ["switch"], keys: ["tab"], label: "tab", hint: "section" },
@@ -499,12 +526,15 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
     "histBack",
     "edit",
     "summarizeHint",
+    "chat",
     "docEnter",
     "pictures",
     ["focus", "panel"],
     "help",
   ],
   landing: ["landWalk", "landInfo", "explainChange", ["clear", "hide"]],
+  chat: ["chatSend", "chatType", "chatErase", ["chatEsc", "hide"]],
+  chatLanded: ["chatWalk", "chatAgain", ["clear", "hide"], "docLine"],
   "panel:files": [
     "filesMove",
     "filesOpen",
@@ -529,6 +559,18 @@ export const FOOTERS: Record<Ctx, Hint[]> = {
   picture: ["pictureClose"],
   graph: ["graphMove", "graphGo", "graphCentre", "graphBack", "graphDepth", "graphRender", "graphFilter", "graphClose"],
   graphFilter: ["gfType", "gfMove", "gfGo", "gfLeave", "gfClear"],
+}
+
+/** The pill's footer by what it shows (`chatStage`). */
+const CHAT_FOOTERS: Record<ChatStage, Hint[]> = {
+  input: ["chatSend", "chatType", "chatErase", ["chatEsc", "hide"]],
+  pick: ["chatComplete", ["chatSend", "add"], ["chatEsc", "back"]],
+  waiting: [["chatEsc", "cancel"]],
+  answer: ["chatMove", ["chatSend", "go to"], "chatFollow", ["chatEsc", "fold"]],
+  error: [
+    ["chatSend", "retry"],
+    ["chatEsc", "fold"],
+  ],
 }
 
 /** The switcher's footer while the query is a question, by what the ask shows (`askStage`). */
@@ -560,20 +602,29 @@ export const PINNED: readonly Ctx[] = [
   "picture",
   "graph",
   "graphFilter",
+  "chat",
 ]
+
+/** The hints before `when` and the words: a question's or the pill's stage, else the context's own. */
+function hintsFor(c: Ctx, ask?: AskStage | null, chat?: ChatStage | null): Hint[] {
+  if (c === "switch" && ask) return ASK_FOOTERS[ask]
+  if (c === "chat" && chat) return CHAT_FOOTERS[chat]
+  return FOOTERS[c]
+}
 
 /**
  * Footer hints for context `c`, before fitting; a binding with `when` shows only while `on` says so. `words` are the
  * words that follow the state (`a cancel` while the TL;DR runs); they win over the context's and the binding's own.
- * `ask`: the switcher holds a question, and its footer follows the ask's stage.
+ * `ask`: the switcher holds a question, and its footer follows the ask's stage; `chat`: so does the pill's.
  */
 export function footerHints(
   c: Ctx,
   on: FooterState,
   words: Partial<Record<KeyId, string>> = {},
   ask?: AskStage | null,
+  chat?: ChatStage | null,
 ): HintItem[] {
-  return (c === "switch" && ask ? ASK_FOOTERS[ask] : FOOTERS[c]).flatMap((h) => {
+  return hintsFor(c, ask, chat).flatMap((h) => {
     const [id, word] = Array.isArray(h) ? h : [h, undefined]
     const def = keyDef(id)
     return def.when && !on[def.when]
@@ -600,7 +651,10 @@ export const HELP_GROUPS: HelpGroup[] = HELP_SECTIONS.map(([modes, title]) => ({
 }))
 
 /** KEYMAP mode of a context id (`panel:files` → `files`). */
-export const modeOf = (c: Ctx): Mode => (c.startsWith("panel:") ? (c.slice(6) as Mode) : (c as Mode))
+export function modeOf(c: Ctx): Mode {
+  if (c === "chatLanded") return "doc"
+  return c.startsWith("panel:") ? (c.slice(6) as Mode) : (c as Mode)
+}
 
 /** Direction of a paired binding (j/k, d/u, space/b, …): true for the "forward" key. */
 export const isDown = (k: KeyEvent) =>
@@ -618,6 +672,7 @@ export const ZEN_OFF: readonly KeyId[] = [
   "edit",
   "minimap",
   "graphOpen",
+  "chat",
 ]
 /** The welcome page has no panel and no note: these would only change the panel, the view or the measure out of sight. */
 export const WELCOME_OFF: readonly KeyId[] = [
@@ -631,4 +686,5 @@ export const WELCOME_OFF: readonly KeyId[] = [
   "source",
   "width",
   "headings",
+  "chat",
 ]

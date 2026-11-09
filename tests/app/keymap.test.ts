@@ -5,9 +5,11 @@ import {
   footerHints,
   HELP_GROUPS,
   isDown,
+  KEY_IDS,
   keyDef,
   modeOf,
   PINNED,
+  WELCOME_OFF,
   ZEN_OFF,
 } from "../../src/app/keymap"
 
@@ -35,6 +37,7 @@ test("document hints: short keys, a context's own word over the binding's", () =
     "H L history",
     "e edit",
     "a summarize",
+    "c chat",
     "⏎ view",
     "p pictures",
     "tab panel",
@@ -83,7 +86,7 @@ test("spare hints are the optional ones", () => {
     footerHints(c, ALL)
       .filter((h) => h.spare)
       .map((h) => h.key)
-  expect(spare("doc")).toEqual(["f", "H L", "e", "a", "p"])
+  expect(spare("doc")).toEqual(["f", "H L", "e", "a", "c", "p"])
   expect(spare("panel:info")).toEqual(["a"]) // D shows only while it has something to do: it is never dropped first
   expect(spare("theme")).toEqual(["type"])
   expect(spare("switch")).toEqual(["?"])
@@ -124,9 +127,11 @@ test("a typing binding's empty word stays empty", () => {
   expect(footerHints("filter", ALL).map((h) => h.word)).toEqual(["", "", "open", "clear"])
 })
 
-test("popups and typing pin their hints; the document (landed too), the panel and zen fade theirs", () => {
+test("popups and typing pin their hints; the document (landed too, on a cite too), the panel and zen fade theirs", () => {
   for (const c of Object.keys(FOOTERS) as (keyof typeof FOOTERS)[])
-    expect(PINNED.includes(c)).toBe(!(c === "doc" || c === "landing" || c === "zen" || c.startsWith("panel:")))
+    expect(PINNED.includes(c)).toBe(
+      !(c === "doc" || c === "landing" || c === "chatLanded" || c === "zen" || c.startsWith("panel:")),
+    )
 })
 
 test("modeOf maps a panel context to its view's mode", () => {
@@ -145,7 +150,7 @@ test("isDown is the forward key of each pair", () => {
 
 test("the help sheet groups: AI collects its bindings, a binding without a description stays out", () => {
   const ai = HELP_GROUPS.find((g) => g.title === "AI")!
-  expect(ai.entries.map((e) => e.keys)).toEqual(["a", "D", "^p ?"])
+  expect(ai.entries.map((e) => e.keys)).toEqual(["a", "D", "c", "^p ?"])
   const all = HELP_GROUPS.flatMap((g) => g.entries.map((e) => e.desc))
   expect(all).not.toContain(undefined)
   expect(HELP_GROUPS.map((g) => g.title)).toEqual(["Global", "Document", "Zen", "Panel", "Graph", "AI"])
@@ -188,4 +193,32 @@ test("p pictures waits for a picture in Preview; its word is what p switches to"
   expect(footerHints("doc", { ...NONE, pics: true }, { pictures: "text" }).map((h) => `${h.key} ${h.word}`)).toContain(
     "p text",
   )
+})
+
+test("the pill's footer follows its stage; landed on a cite: [ ] marks, c answer, esc hide, j k scroll", () => {
+  const say = (stage: Parameters<typeof footerHints>[4]) =>
+    footerHints("chat", ALL, {}, null, stage).map((h) => `${h.key} ${h.word}`)
+  expect(say("input")).toEqual(["⏎ send", "[[ note", "⌫ chip", "esc hide"])
+  expect(say("pick")).toEqual(["tab complete", "⏎ add", "esc back"])
+  expect(say("waiting")).toEqual(["esc cancel"])
+  expect(say("answer")).toEqual(["↑↓ marks", "⏎ go to", "type follow-up", "esc fold"])
+  expect(say("error")).toEqual(["⏎ retry", "esc fold"])
+  expect(words(ALL, "chatLanded")).toEqual(["[ ] marks", "c answer", "esc hide", "j k scroll"])
+  expect(modeOf("chatLanded")).toBe("doc")
+  expect(PINNED).toContain("chat")
+})
+
+test("c: AI group, spare, only with an ai block; off in zen and on the welcome page; the pill's keys have no help rows", () => {
+  expect(HELP_GROUPS.find((g) => g.title === "AI")!.entries.map((e) => e.keys)).toContain("c")
+  expect(keyDef("chat")).toMatchObject({ spare: true, when: "ai", group: "AI" })
+  expect(ZEN_OFF).toContain("chat")
+  expect(WELCOME_OFF).toContain("chat")
+  const pillIds = KEY_IDS.filter((id) => id.startsWith("chat") && id !== "chat")
+  expect(pillIds.filter((id) => keyDef(id).desc)).toEqual([])
+  expect(words({ ...ALL, ai: false })).not.toContain("c chat")
+})
+
+test("no key clash in the chat mode", () => {
+  const specs = KEY_IDS.filter((id) => keyDef(id).modes.includes("chat")).flatMap((id) => keyDef(id).keys)
+  expect(new Set(specs).size).toBe(specs.length)
 })
