@@ -3,6 +3,10 @@ title: Chat about the note
 description: "Press c to ask a question about the open note, read the answer over the text, and jump from each mark to the words it rests on."
 ---
 
+import Shot from "../../../components/Shot.astro"
+
+<Shot name="chat" alt="The chat card over stock.md: an answer to how long chicken broth should simmer, marks 1 to 3 after its claims, and a source row under each" />
+
 Press <kbd>c</kbd> to ask a question about the open note. A pill rises over the last rows of the text; type, press <kbd>⏎</kbd>, and the answer appears in a card above it, with a mark `¹ ² ³` after each claim. <kbd>↑</kbd> <kbd>↓</kbd> pick a mark and <kbd>⏎</kbd> takes you to the exact words in the note that the claim rests on.
 
 Nothing is sent until you press <kbd>⏎</kbd>. Nothing is written to disk.
