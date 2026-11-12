@@ -47,7 +47,7 @@
     "@biomejs/biome": "2.6.4",
     "@types/react": "^19.3.0",
     "bun-types": "^1.4.4",
-    "knip": "6.44.1",
+    "knip": "6.44.2",
     "typescript": "^7.0.2"
   }
 }
